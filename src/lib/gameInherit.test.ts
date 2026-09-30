@@ -52,16 +52,31 @@ describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
     expect(p.isAddon).toBeUndefined();
   });
 
-  it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · %·0 제외 · 1만 배 오기록 차단', () => {
+  it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · 0 제외 · 1만 배 오기록 차단 · %는 입력 단위 그대로(W-25)', () => {
     const prizes = clockPrizesFromSchedule(sched());
     expect(prizes).toEqual([
       { place: '1', amount: 1_000_000 },
       { place: '2', amount: 300_000 },
+      { place: '3', amount: 10, unit: '%' },
     ]);
   });
 
-  it('상금 전무 → null(기존 cfg.prizes 를 덮지 않도록)', () => {
-    expect(clockPrizesFromSchedule(sched({ rankingPrizes: [] }))).toBeNull();
+  // 🔴 W-13(2026-09-30 리드) — 계약을 뒤집었다: 예전엔 null 이라 지난 클락·기본값 상금표(1위 400…)가 TV 에 남았다.
+  //   포스터가 연결된 장부 시작에서만 부르므로 '시상 없음' 은 빈 표가 정답이다.
+  it('상금 전무 → 빈 표(지난 클락 상금표를 남기지 않는다, W-13)', () => {
+    expect(clockPrizesFromSchedule(sched({ rankingPrizes: [] }))).toEqual([]);
+    expect(clockPrizesFromSchedule(sched({ rankingPrizes: undefined }))).toEqual([]);
+  });
+
+  it('🔴 W-12 범위 순위는 자리 수만큼(count) · W-25 T·포인트는 입력 단위 그대로(원 환산 없음)', () => {
+    const rows = clockPrizesFromSchedule(sched({ rankingPrizes: [
+      { rank: '1st', amount: 400, unit: 'T' }, { rank: '11-15th', amount: 10, unit: 'T' }, { rank: '11~16th', amount: 30, unit: 'T' },
+      { rank: '13-18th', amount: 200_000, unit: ' 퀸포인트' }, { rank: '5', amount: 3, unit: '' },
+    ] }));
+    expect(rows).toEqual([
+      { place: '1st', amount: 400, unit: 'T' }, { place: '11-15th', amount: 10, unit: 'T', count: 5 },
+      { place: '11~16th', amount: 30, unit: 'T', count: 6 }, { place: '13-18th', amount: 200_000, unit: '퀸포인트', count: 6 },
+    ]);
   });
 });
 
@@ -101,8 +116,8 @@ describe('applyToClock · 프리셋 → 클락(PL2a)', () => {
     expect(p.maxLevel).toBe(18);
     expect(p.earlyDoubleLevel).toBe(1);
     expect(p.earlySingleLevel).toBe(4);
-    // 만원(amountWon 우선)·원 혼재 → 전부 원, % 제외
-    expect(p.prizes).toEqual([{ place: '1', amount: 1_000_000 }, { place: '2', amount: 300_000 }]);
+    // 만원(amountWon 우선)·원 혼재 → 원, 비화폐(%)는 입력 단위 그대로(W-25 — 포스터와 같은 규칙 clockPrizeRowsOf)
+    expect(p.prizes).toEqual([{ place: '1', amount: 1_000_000 }, { place: '2', amount: 300_000 }, { place: '3', amount: 10, unit: '%' }]);
   });
   it('부분 프리셋: 빈 프리셋 → 빈 패치(기존 cfg 를 아무것도 안 덮는다)', () => {
     expect(applyToClock({})).toEqual({});

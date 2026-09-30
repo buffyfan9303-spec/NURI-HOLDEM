@@ -46,9 +46,10 @@ describe('discountsFromPromotions', () => {
       p({ discountType: 'firstBuyin', title: '첫 바인 5만 할인', discountWon: 50_000 }),
       p({ discountType: 'firstBuyin', title: '첫 바인 5만 할인', discountWon: 50_000, level: 3 }),
     ]);
+    // W-28(2026-09-30) — 유형 '첫 바인' 은 장부의 적용 조건(kind)으로도 실린다.
     expect(r.discounts).toEqual([
-      { label: '첫 바인', amount: 50_000, level: 0 },
-      { label: '첫 바인', amount: 50_000, level: 3 },
+      { label: '첫 바인', amount: 50_000, level: 0, kind: 'firstBuyin' },
+      { label: '첫 바인', amount: 50_000, level: 3, kind: 'firstBuyin' },
     ]);
     expect(r.added).toBe(2);
   });

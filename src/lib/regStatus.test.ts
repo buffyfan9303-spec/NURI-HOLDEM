@@ -9,7 +9,8 @@ const B = (minutes: number) => ({ kind: 'break' as const, minutes, sb: 0, bb: 0,
 
 const clock = (over: Record<string, unknown> = {}): ClockState => ({
   venueId: 'v1', gameSeq: 1, sessionDate: '2026-08-26', title: '데일리 6만',
-  config: { title: '데일리 6만', levels: [L(20), L(20), B(10), L(20), L(20)], regCloseLevel: 4 },
+  // W-03(2026-09-30): '레지마감 3LV' = 3레벨 끝 + 뒤 브레이크까지 = 4레벨 시작 순간 마감(예전 뜻의 '4' 와 같은 시각).
+  config: { title: '데일리 6만', levels: [L(20), L(20), B(10), L(20), L(20)], regCloseLevel: 3 },
   currentIndex: 0, running: false, endsAt: null, remainingMs: 5 * 60_000,
   adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0,
   ...over,
@@ -21,12 +22,27 @@ const sched = (over: Record<string, unknown> = {}): Schedule => ({
 } as unknown as Schedule);
 
 describe('msToRegClose · 실효 index/remaining 기준 마감까지 남은 ms', () => {
-  it('브레이크를 포함해 마감 레벨 시작까지 누적한다 (L1 잔여5분 + L2 20 + 브레이크 10 + L3 20 = 55분)', () => {
+  it('브레이크를 포함해 마감 레벨 끝(= 다음 레벨 시작)까지 누적한다 (L1 잔여5분 + L2 20 + 브레이크 10 + L3 20 = 55분)', () => {
     expect(msToRegClose(clock(), 0, 5 * 60_000)).toBe(55 * 60_000);
   });
 
-  it('마감 레벨에 이미 도달했으면 0 (마감됨)', () => {
+  it('마감 다음 레벨(4)에 도달했으면 0 (마감됨)', () => {
     expect(msToRegClose(clock({ currentIndex: 4 }), 4, 10 * 60_000)).toBe(0);
+  });
+
+  it('🔴 W-03 — 마감 레벨(3) 진행 중에는 아직 열려 있다(예전 뜻은 여기서 0 = 마감이었다)', () => {
+    expect(msToRegClose(clock({ currentIndex: 3 }), 3, 7 * 60_000)).toBe(7 * 60_000);
+  });
+
+  it('🔴 W-03 — 마감 레벨 **뒤 브레이크**까지 등록 가능(레지마감 2LV · 브레이크 중 잔여 4분 → 4분 뒤 마감)', () => {
+    const g = clock({ config: { levels: [L(20), L(20), B(10), L(20)], regCloseLevel: 2 } });
+    expect(msToRegClose(g, 2, 4 * 60_000)).toBe(4 * 60_000);
+    expect(msToRegClose(g, 1, 3 * 60_000)).toBe((3 + 10) * 60_000);
+  });
+
+  it('마감 레벨이 마지막 레벨이면 구조가 끝나는 순간(뒤 레벨이 없다)', () => {
+    const g = clock({ config: { levels: [L(20), L(20)], regCloseLevel: 2 } });
+    expect(msToRegClose(g, 0, 5 * 60_000)).toBe(25 * 60_000);
   });
 
   it('마감 레벨이 구조 밖이면 null (판정 불가)', () => {

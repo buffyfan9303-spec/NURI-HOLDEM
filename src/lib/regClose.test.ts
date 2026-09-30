@@ -123,8 +123,9 @@ describe('다리가 이어졌다 — 포스터가 말하는 레벨과 라이브 
     const st = { ...emptyClockState('v1', cfg), sessionDate: '2026-09-13', running: true };
     // 12레벨 = 포스터 기준 아직 등록 가능 → 마감이 아니어야 한다(수정 전에는 0='마감'이었다)
     expect(msToRegClose(st, indexOfLevel(cfg.levels, 12), 60_000)).not.toBe(0);
-    // 16레벨 도달 = 마감
-    expect(msToRegClose(st, indexOfLevel(cfg.levels, 16), 60_000)).toBe(0);
+    // W-03(2026-09-30): '16LV' = 16레벨 끝 + 뒤 브레이크까지 등록 가능 → 16레벨 진행 중은 열림, 17레벨 도달 = 마감
+    expect(msToRegClose(st, indexOfLevel(cfg.levels, 16), 60_000)).not.toBe(0);
+    expect(msToRegClose(st, indexOfLevel(cfg.levels, 17), 60_000)).toBe(0);
   });
 });
 

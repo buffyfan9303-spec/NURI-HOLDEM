@@ -12,7 +12,7 @@ import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats,
-  countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies, clampAdjCount,
+  countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, getVenueClocks, effectiveLevel,
@@ -28,6 +28,9 @@ import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
+import { prizeTotalOf } from './prizeFit';
+/** 상금표가 가리키는 자리 수 — 범위 순위('11-15th' = 5)까지 센다(W-12). 순위 입력 빈 줄 수로 쓴다. */
+const prizePlaces = (prizes: readonly ClockPrizeRow[]) => prizes.reduce((n, p) => n + Math.max(1, p.count ?? 1), 0);
 import PresetPicker from '../PresetPicker';
 import { saveVenueRankings, getVenueRankings } from '../../../api/rankings';
 import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGame';
@@ -635,7 +638,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const handleEnd = () => {
     if (canManage && state.sessionDate && !finishRows) {
       setEndAfterFinish(true);
-      setFinishRows(seedFinishRows(cfg.prizes.length));
+      setFinishRows(seedFinishRows(prizePlaces(cfg.prizes)));
       return; // 모달에서 '순위 저장 후 종료' 또는 '입력 없이 종료'를 고른다
     }
     onEnd();
@@ -722,7 +725,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     if (cu.finished) {
       playChime('finish');
       if (canManage && state.sessionDate) {
-        setFinishRows(seedFinishRows(cfg.prizes.length));
+        setFinishRows(seedFinishRows(prizePlaces(cfg.prizes)));
       }
       return;
     }
@@ -1341,7 +1344,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const [bulkFrom, setBulkFrom] = useState(initial.regCloseLevel || 9); // 구간 시작 레벨
   const [bulkFromMin, setBulkFromMin] = useState(25); // 구간 듀레이션(분)
   // 모든 변경 시 얼리(레벨)→분 파생값 재계산 — 블라인드 길이가 바뀌어도 얼리 분이 항상 동기화됨.
-  const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly({ ...c, ...patch }));
+  const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly(applyEarlyEdit(c, patch)));   // W-04 — 두 칸 편집은 얼리 1·2단으로
   const totalLevels = countLevels(cfg.levels);
   // 게임 프리셋 적용 — PL2a: 어댑터(applyToClock)로 승격. 제목·블라인드·스택·상금(원 정규형)에 더해
   // clock 네임스페이스(레지레벨·최대레벨·얼리·바운티)까지. set() 경유라 얼리 분 파생도 재계산된다.
@@ -1629,20 +1632,23 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               <div className="relative flex-1">
                 <input type="number" inputMode="numeric" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
                   placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+                {/* W-25 — 포스터에서 온 T·GP·포인트 행은 그 단위를 그대로 보여 준다(원으로 환산하지 않는다). */}
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">{p.unit || '원'}{(p.count ?? 1) > 1 ? ` ×${p.count}` : ''}</span>
               </div>
               <button type="button" onClick={() => removePrize(i)} aria-label="상금 줄 삭제" className="hit grid h-8 w-11 shrink-0 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
         </div>
         {(() => {
-          const sum = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
-          return sum > 0 ? (
+          // W-12 — 범위 순위(×자리 수)까지 더한 합. 단위가 섞였으면 합계를 말하지 않는다(TV 와 같은 prizeTotalOf).
+          const t = prizeTotalOf(cfg.prizes.filter((p) => p.amount > 0));
+          if (!t || t.amount <= 0) return null;
+          return (
             <p className="text-right text-2xs text-ink-muted">
-              합계 <b className="text-ink-secondary tabular-nums">{sum.toLocaleString()}원</b>
-              {sum >= 10000 ? ` (${Math.round(sum / 10000).toLocaleString()}만원)` : ''}
+              합계 <b className="text-ink-secondary tabular-nums">{t.amount.toLocaleString()}{t.unit || '원'}</b>
+              {!t.unit && t.amount >= 10000 ? ` (${Math.round(t.amount / 10000).toLocaleString()}만원)` : ''}
             </p>
-          ) : null;
+          );
         })()}
         <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 상금</button>
       </section>

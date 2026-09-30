@@ -7,6 +7,7 @@ import { mustAffect } from './_mustAffect';
 import { resubscribeStatus } from '../lib/realtimeResync';
 import { msgOf } from '../lib/dbError';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
+import { earlyTierIndexAt, type EarlyTierWindow } from '../lib/chipRules';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
 export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
@@ -14,7 +15,17 @@ export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 
  *  level: 이 할인이 '자동 적용'되는 마감 레벨(1-based, 0/미지정=자동 적용 없음).
  *  예) 「1레벨 5만 할인」 = { label:'1레벨', amount:50_000, level:1 } — 1레벨 안에 바인하면 자동 선택.
  *  ⚠ jsonb 컬럼이라 필드 추가에 마이그레이션이 필요 없다. 기존 행은 level 없음 = 수기 선택(구 동작). */
-export interface DiscountPreset { label: string; amount: number; level?: number }
+export interface DiscountPreset { label: string; amount: number; level?: number;
+  /** W-28(2026-09-30) — 적용 조건. 'rebuy' = 리엔트리(2번째 이후 바인)에만 · 'firstBuyin' = 첫 바인에만 · 없음 = 아무 바인.
+   *  포스터 할인 유형(discountType)에서 온다. 서버 트리거(20260930e _ledger_buyin_discount_kind_guard)가 같은 규칙으로 막는다. */
+  kind?: DiscountKind }
+export type DiscountKind = 'rebuy' | 'firstBuyin';
+/** 이 할인을 이 바인(entryNo = 그 손님의 몇 번째 바인)에 쓸 수 있는가 — W-28 의 단일 규칙. */
+export function discountAllowed(d: Pick<DiscountPreset, 'kind'> | null | undefined, entryNo: number): boolean {
+  if (d?.kind === 'rebuy') return entryNo > 1;
+  if (d?.kind === 'firstBuyin') return entryNo === 1;
+  return true;
+}
 /** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
 export type VisitorType = 'new' | 'regular' | 'staff' | 'other';
 const VISITOR_KNOWN: Record<string, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
@@ -88,8 +99,13 @@ export interface LedgerSession {
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
   scheduleId?: string | null;   // 연결된 포스터(대회) 일정
   discounts: DiscountPreset[];  // 할인 프리셋(최대 5)
-  earlyDoubleMin: number;       // 스타트 후 ~분까지 더블얼리
-  earlySingleMin: number;       // 스타트 후 ~분까지 1얼리
+  earlyDoubleMin: number;       // 스타트 후 ~분 **전까지** 더블얼리(반열림, W-27)
+  earlySingleMin: number;       // 스타트 후 ~분 **전까지** 1얼리
+  /** W-04 — 포스터 얼리 단계를 장부 시작 시점 구조로 굳힌 창(최대 4). 있으면(비어 있지 않으면) 위 두 분 대신 이것만 쓴다.
+   *  undefined/null = 기존 두 칸 동작. 컬럼 early_tiers(20260930e). */
+  earlyTiers?: EarlyTierWindow[] | null;
+  /** W-06 — 애드온(부스터) 1회가 정산 엔트리에 더하는 값(게임별, 기본 0). 컬럼 addon_entry(20260930e). */
+  addonEntry?: number;
   tournamentStart?: string | null; // 토너먼트 스타트 시각(ISO, 없으면 openedAt 기준)
   openedBy?: string | null;     // 담당직원 대표(프로필 id, 하위호환)
   operators?: string[];         // 담당직원 목록(최대 10) — 직원 장부 접근 권한 기준
@@ -319,6 +335,12 @@ export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' 
     ? { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, tender }
     : { count: 1, revenue: amt, unpaid: 0, ticketWon: 0, tender };
 }
+/** W-06 — 이 행의 애드온이 정산 엔트리에 더하는 값 = 애드온 횟수 × 게임별 애드온 엔트리(기본 0 = 예전 동작).
+ *  바인 엔트리(buyinFinance.entry)와는 따로 더한다 — 그쪽 항등식 entry × 단가 = value 는 바인만의 것이다. */
+export function addonEntryOf(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>, s: { addonEntry?: number }): number {
+  const v = s.addonEntry ?? 0;
+  return v > 0 ? addonFinance(b).count * v : 0;
+}
 /** 애드온 합계 — 여러 행을 더한다. 화면·정산이 같은 함수를 쓴다. */
 export function addonTotals(buyins: readonly Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>[]): AddonFinance {
   const t: AddonFinance = { ...ZERO_ADDON, tender: { ...ZERO_TENDER } };
@@ -343,11 +365,11 @@ export function ticketUsedT(f: Pick<BuyinFinance, 'ticketPaid'>, a: Pick<AddonFi
  *  paid·unpaid 는 **애드온 포함**이다(정산 '완납 매출 = revenue + addon.revenue' 와 같은 정의, ledgerSettlement.ts).
  *  entry 는 바인만(애드온은 엔트리가 아니다). ticket 은 이용권 사용 T = 바인 + 애드온(ticketUsedT). 2026-09-29 F1: 대시보드만 애드온을 빼고 세서
  *  정산과 금액이 갈렸고, 애드온 미수만 있는 날엔 미수 배너가 아예 안 떴다. */
-export function ledgerMoney(buyins: readonly LedgerBuyin[], s: Parameters<typeof buyinFinance>[1]): { paid: number; unpaid: number; value: number; entry: number; ticket: number } {
+export function ledgerMoney(buyins: readonly LedgerBuyin[], s: Parameters<typeof buyinFinance>[1] & { addonEntry?: number }): { paid: number; unpaid: number; value: number; entry: number; ticket: number } {
   const m = { paid: 0, unpaid: 0, value: 0, entry: 0, ticket: 0 };
   for (const b of buyins) {
     const f = buyinFinance(b, s);
-    m.paid += f.paid; m.unpaid += f.unpaid; m.value += f.value; m.entry += f.entry; m.ticket += ticketUsedT(f, addonFinance(b));
+    m.paid += f.paid; m.unpaid += f.unpaid; m.value += f.value; m.entry += f.entry + addonEntryOf(b, s); m.ticket += ticketUsedT(f, addonFinance(b));
   }
   const a = addonTotals(buyins);
   m.paid += a.revenue; m.unpaid += a.unpaid;
@@ -563,13 +585,14 @@ export function discountAmountOf(s: { discounts?: DiscountPreset[] }, idx: numbe
  *  예) 1레벨 5만 · 2레벨 3만 → 1레벨 바인은 5만, 2레벨 바인은 3만, 3레벨 바인은 할인 없음.
  *  왜 '가장 작은 level' 인가: 얼리(더블→1얼리)와 같은 계단 규칙이라 운영자가 두 번 배우지 않아도 된다.
  *  ⚠ 자동은 어디까지나 초기값이다 — 결제 모달에서 언제든 다른 할인/없음으로 바꿀 수 있어야 한다(오너 #20). */
-export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, levelNo: number): number {
+export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, levelNo: number, entryNo?: number): number {
   if (!discounts?.length || levelNo <= 0) return 0;
   let best = 0, bestLv = Number.POSITIVE_INFINITY;
   for (let i = 0; i < discounts.length; i++) {
     const d = discounts[i];
     const lv = d?.level ?? 0;
     if (lv <= 0 || (d?.amount ?? 0) <= 0) continue;
+    if (entryNo != null && !discountAllowed(d, entryNo)) continue;   // W-28 — 적용 조건이 안 맞는 할인은 자동 선택하지 않는다
     if (levelNo > lv) continue;
     if (lv < bestLv) { bestLv = lv; best = i + 1; }
   }
@@ -734,11 +757,31 @@ export const rowToBuyin = (r: any): LedgerBuyin => ({
   addonAmount: r.addon_amount ?? 0,
 });
 
+/** 얼리 판정 창 — 두 칸(분) 또는 단계(earlyTiers). */
+type EarlyWindowIn = { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null; earlyTiers?: EarlyTierWindow[] | null };
+
+/** 바인 1건의 얼리 **단계 번호** — 0 = 가장 이른 단계(더블얼리) · 1 = 다음(1얼리) · … · -1 = 얼리 아님.
+ *  수기 지정은 'double' = 0 · 'single' = 1 · 'none' = -1 로 읽는다(3·4단은 자동 판정만).
+ *  세션에 단계(earlyTiers)가 있으면 그 창을, 없으면 두 칸(더블·1얼리 분)을 **같은 반열림 규칙**으로 본다(W-27). */
+export function earlyTierOf(b: LedgerBuyin, s: EarlyWindowIn): number {
+  // 2026-09-11: 수기 확정이 게이트(첫 바인)보다 먼저다 — 운영자가 눈으로 보고 누른 값이다.
+  if (b.earlyOverride === 'double') return 0;
+  if (b.earlyOverride === 'single') return 1;
+  if (b.earlyOverride === 'none') return -1;
+  // 자동 판정은 첫 바이인(entryNo=1)에만. 2번째부터는 리바인 — 얼리 아님(리바인 스택).
+  if (b.entryNo !== 1) return -1;
+  const start = s.tournamentStart || s.openedAt;
+  if (!start) return -1;
+  const wins: EarlyTierWindow[] = s.earlyTiers?.length
+    ? s.earlyTiers
+    : [{ min: s.earlyDoubleMin ?? 0, chips: 0 }, { min: s.earlySingleMin ?? 0, chips: 0 }];
+  // JS Date 는 밀리초 정밀도 — 서버(_clock_ledger_part)도 밀리초로 잘라 같은 경계를 쓴다.
+  const mins = (new Date(b.buyinAt).getTime() - new Date(start).getTime()) / 60_000;
+  return earlyTierIndexAt(mins, wins);
+}
+
 /** 바인 1건의 얼리 유형 — 수기지정 우선, 없으면 (바인시각 − 스타트) 경과분으로 자동판정 */
-export function earlyTypeOf(
-  b: LedgerBuyin,
-  s: { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null },
-): EarlyType {
+export function earlyTypeOf(b: LedgerBuyin, s: EarlyWindowIn): EarlyType {
   // 2026-09-11: **수기 확정이 게이트보다 먼저다.** 예전엔 entryNo 검사가 위에 있어,
   //   운영자가 2바인 셀에서 '더블얼리'를 눌러 저장까지 되고 토스트도 떴는데 판정은 'none' 이라
   //   같은 모달 안에서 버튼과 배지가 서로 다른 말을 했다(클락 얼리에도 반영되지 않았다).
@@ -749,15 +792,10 @@ export function earlyTypeOf(
   //   첫 바인이 취소되면 자동 판정이 안 된다(ledgerCounts 는 좌석키로 이미 넘겼다).
   //   이 경우 운영자가 위 수기 확정으로 지정하면 되고, 그 경로가 이제 실제로 동작한다.
   //   목록 전체를 받는 시그니처로 옮기려면 earlyTypeOf 호출부 전부(셀·클락)를 함께 바꿔야 한다.
-  if (b.entryNo !== 1) return 'none';
-  const dMin = s.earlyDoubleMin ?? 0, sMin = s.earlySingleMin ?? 0;
-  const start = s.tournamentStart || s.openedAt;
-  if (!start || (dMin <= 0 && sMin <= 0)) return 'none';
-  const mins = (new Date(b.buyinAt).getTime() - new Date(start).getTime()) / 60_000;
-  if (mins < 0) return 'none';
-  if (dMin > 0 && mins <= dMin) return 'double';
-  if (sMin > 0 && mins <= sMin) return 'single';
-  return 'none';
+  // W-27(2026-09-30): 경계는 반열림 한 규칙 — '2LV 시작 전' 창 끝(25:00)에 정확히 온 손님은 더블얼리가 아니다.
+  //   예전 `mins <= dMin` 은 levelNoAtMinutes(반열림)와 1분 경계에서 달랐다. 판정은 earlyTierOf 한 곳.
+  const k = earlyTierOf(b, s);
+  return k === 0 ? 'double' : k > 0 ? 'single' : 'none';
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -786,6 +824,8 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   discounts: Array.isArray(d?.discounts) ? d.discounts : [],
   earlyDoubleMin: d?.early_double_min ?? 0,
   earlySingleMin: d?.early_single_min ?? 0,
+  earlyTiers: Array.isArray(d?.early_tiers) ? d.early_tiers : undefined,   // 칸 없음(마이그레이션 전)·null = 기존 동작 · 저장 때 싣지 않는다
+  addonEntry: d?.addon_entry == null ? undefined : Number(d.addon_entry) || 0,
   tournamentStart: d?.tournament_start ?? null,
   voucherIssued: d?.voucher_issued ?? 0,
   voucherAccrualPerBin: d?.voucher_accrual_per_bin ?? 0,
@@ -1103,6 +1143,9 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
+    // W-04·W-06(20260930e) — 새 칸은 **값이 정해졌을 때만** 싣는다. 마이그레이션 전 서버에서도 기존 장부 저장이 깨지지 않게.
+    ...(s.earlyTiers !== undefined ? { early_tiers: (s.earlyTiers ?? null) as unknown as object } : {}),
+    ...(s.addonEntry !== undefined ? { addon_entry: Math.max(0, s.addonEntry || 0) } : {}),
     voucher_issued: s.voucherIssued ?? 0,
     voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0,
     updated_at: new Date().toISOString(),
@@ -1133,6 +1176,9 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
+    // W-04·W-06(20260930e) — 새 칸은 **값이 정해졌을 때만** 싣는다. 마이그레이션 전 서버에서도 기존 장부 저장이 깨지지 않게.
+    ...(s.earlyTiers !== undefined ? { early_tiers: (s.earlyTiers ?? null) as unknown as object } : {}),
+    ...(s.addonEntry !== undefined ? { addon_entry: Math.max(0, s.addonEntry || 0) } : {}),
     voucher_issued: s.voucherIssued ?? 0,
     voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0,
     opened_by: operatorId ?? user?.id ?? null, opened_at: new Date().toISOString(),

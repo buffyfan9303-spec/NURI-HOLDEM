@@ -205,11 +205,11 @@
    "expect": {
     "entries": 8,
     "rebuys": 2,
-    "earlies": 6,
-    "doubleEarlies": 4,
+    "earlies": 5,
+    "doubleEarlies": 2,
     "totalBuyins": 10,
     "addons": 0,
-    "earlyUnits": 10
+    "earlyUnits": 7
    }
   },
   {
@@ -465,6 +465,404 @@
     "totalBuyins": 2,
     "addons": 0,
     "earlyUnits": 1
+   }
+  },
+  {
+   "name": "KW1a W-27 반열림 — 창 끝 분 정각 도착은 그 단계가 아니다(25:00 → 1얼리, 108:00 → 없음)",
+   "buyins": [
+    {
+     "player_name": "a",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:24:59.940Z",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "b",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:25:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "c",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:47:59.940Z",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "d",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:48:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 25,
+    "early_single_min": 108,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000
+   },
+   "config": {
+    "earlyBonus": 5000,
+    "doubleEarlyBonus": 10000,
+    "startStack": 50000
+   },
+   "expect": {
+    "entries": 4,
+    "rebuys": 0,
+    "earlies": 3,
+    "doubleEarlies": 1,
+    "totalBuyins": 4,
+    "addons": 0,
+    "earlyUnits": 4
+   }
+  },
+  {
+   "name": "KW1a W-04 얼리 4단(키키 20k·15k·10k·5k, 4LV 뒤 브레이크 포함 128분) · 수기 1얼리 · 리바인 제외",
+   "buyins": [
+    {
+     "player_name": "p1",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:10:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p2",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:40:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p3",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:10:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p4",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T12:05:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p5",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T12:08:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p6",
+     "entry_no": 2,
+     "buyin_at": "2026-09-29T10:05:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "p7",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T13:20:00+00:00",
+     "early_override": "single",
+     "addon_method": null
+    },
+    {
+     "player_name": "p8",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:05:00+00:00",
+     "early_override": "none",
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 0,
+    "early_single_min": 0,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000,
+    "early_tiers": [
+     {
+      "min": 30,
+      "chips": 20000
+     },
+     {
+      "min": 60,
+      "chips": 15000
+     },
+     {
+      "min": 90,
+      "chips": 10000
+     },
+     {
+      "min": 128,
+      "chips": 5000
+     }
+    ]
+   },
+   "config": {
+    "earlyBonus": 15000,
+    "doubleEarlyBonus": 20000,
+    "startStack": 60000
+   },
+   "expect": {
+    "entries": 8,
+    "rebuys": 0,
+    "earlies": 5,
+    "doubleEarlies": 1,
+    "totalBuyins": 8,
+    "addons": 0,
+    "earlyChips": 65000,
+    "earlyUnits": 13
+   }
+  },
+  {
+   "name": "KW1a W-04 얼리 없음(빈 단계 배열) = 두 칸 동작(분 0 → 얼리 0)",
+   "buyins": [
+    {
+     "player_name": "q1",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:01:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "q2",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:50:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 0,
+    "early_single_min": 0,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000,
+    "early_tiers": []
+   },
+   "config": {
+    "earlyBonus": 5000,
+    "doubleEarlyBonus": 10000,
+    "startStack": 50000
+   },
+   "expect": {
+    "entries": 2,
+    "rebuys": 0,
+    "earlies": 0,
+    "doubleEarlies": 0,
+    "totalBuyins": 2,
+    "addons": 0,
+    "earlyUnits": 0
+   }
+  },
+  {
+   "name": "KW1a W-05 부스터데이 1얼리 창 108분(4LV 뒤 브레이크 포함) — 103분 도착 = 1얼리",
+   "buyins": [
+    {
+     "player_name": "r1",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:05:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "r2",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:43:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "r3",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:48:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 0,
+    "early_single_min": 0,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000,
+    "early_tiers": [
+     {
+      "min": 25,
+      "chips": 10000
+     },
+     {
+      "min": 108,
+      "chips": 5000
+     }
+    ]
+   },
+   "config": {
+    "earlyBonus": 5000,
+    "doubleEarlyBonus": 10000,
+    "startStack": 50000
+   },
+   "expect": {
+    "entries": 3,
+    "rebuys": 0,
+    "earlies": 2,
+    "doubleEarlies": 1,
+    "totalBuyins": 3,
+    "addons": 0,
+    "earlyChips": 15000,
+    "earlyUnits": 3
+   }
+  },
+  {
+   "name": "KW1a W-10 계단 리엔트리 스택 — 회차별 인원(이름 공백은 같은 좌석)",
+   "buyins": [
+    {
+     "player_name": "갑",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:50:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "갑",
+     "entry_no": 2,
+     "buyin_at": "2026-09-29T12:00:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "갑",
+     "entry_no": 3,
+     "buyin_at": "2026-09-29T13:20:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "갑",
+     "entry_no": 4,
+     "buyin_at": "2026-09-29T15:00:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "을",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:00:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "을",
+     "entry_no": 2,
+     "buyin_at": "2026-09-29T11:30:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": " 병 ",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T11:10:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "병",
+     "entry_no": 2,
+     "buyin_at": "2026-09-29T11:20:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "정",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:10:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 0,
+    "early_single_min": 0,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000
+   },
+   "config": {
+    "earlyBonus": 0,
+    "doubleEarlyBonus": 0,
+    "startStack": 50000,
+    "rebuyStack": 70000,
+    "rebuyStacks": [
+     70000,
+     70000,
+     80000
+    ]
+   },
+   "expect": {
+    "entries": 4,
+    "rebuys": 5,
+    "earlies": 0,
+    "doubleEarlies": 0,
+    "totalBuyins": 9,
+    "addons": 0,
+    "rebuyOrd": [
+     3,
+     1,
+     1
+    ],
+    "earlyUnits": 0
+   }
+  },
+  {
+   "name": "KW1a W-10 계단 칸이 0 뿐이면 rebuyOrd 를 싣지 않는다(기존 동작)",
+   "buyins": [
+    {
+     "player_name": "갑",
+     "entry_no": 1,
+     "buyin_at": "2026-09-29T10:50:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    },
+    {
+     "player_name": "갑",
+     "entry_no": 2,
+     "buyin_at": "2026-09-29T12:00:00+00:00",
+     "early_override": null,
+     "addon_method": null
+    }
+   ],
+   "session": {
+    "early_double_min": 0,
+    "early_single_min": 0,
+    "tournament_start": "2026-09-29T10:00:00+00:00",
+    "opened_at": null,
+    "buyin_amount": 100000
+   },
+   "config": {
+    "earlyBonus": 0,
+    "doubleEarlyBonus": 0,
+    "startStack": 50000,
+    "rebuyStack": 70000,
+    "rebuyStacks": [
+     0
+    ]
+   },
+   "expect": {
+    "entries": 1,
+    "rebuys": 1,
+    "earlies": 0,
+    "doubleEarlies": 0,
+    "totalBuyins": 2,
+    "addons": 0,
+    "earlyUnits": 0
    }
   }
  ]

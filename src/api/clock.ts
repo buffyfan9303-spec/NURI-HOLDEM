@@ -3,10 +3,11 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import { serverNow } from '../lib/serverTime';   // D1 — 클락 시각은 서버 기준(lib/serverTime)
 import { resubscribeStatus } from '../lib/realtimeResync';
-import { earlyTypeOf, ledgerCounts, addonTotals, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
+import { earlyTierOf, ledgerCounts, addonTotals, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
+import { rebuyChipsOf, tierUnitChips, tierUnits, windowEndMinute, normalizeEarlyTiers, mergeLegacyEarly, type EarlyTier, type EarlyTierWindow } from '../lib/chipRules';
 
-/** 얼리 판정에 필요한 세션 정보 */
-export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
+/** 얼리 판정에 필요한 세션 정보. earlyTiers 가 있으면(비어 있지 않으면) 두 분 값 대신 그것만 쓴다(W-04). */
+export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null; earlyTiers?: EarlyTierWindow[] | null }
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 export interface ClockLevel {
@@ -17,7 +18,9 @@ export interface ClockLevel {
   minutes: number;
   label?: string; // 브레이크 라벨(예: "BREAK 8Min.")
 }
-export interface ClockPrizeRow { place: string; amount: number }
+/** 클락 상금 한 줄. unit 없음 = 원(기존 행). unit 있음 = 매장이 입력한 단위 그대로(T·GP·포인트 — W-25, 원 환산 안 함).
+ *  count = 이 줄이 가리키는 자리 수('11-15th' = 5). 없으면 1. 총액은 amount × count 의 합이다(W-12). */
+export interface ClockPrizeRow { place: string; amount: number; unit?: string; count?: number }
 
 export interface ClockConfig {
   title: string;
@@ -27,7 +30,7 @@ export interface ClockConfig {
   isAddon: boolean;       // 애드온 게임 여부(라이브에 ADD-ON 표시)
   earlyBonus: number;     // 1얼리 보너스 칩
   doubleEarlyBonus: number; // 더블얼리 보너스 칩
-  regCloseLevel: number;  // 등록 마감 레벨(이 레벨 시작 시 마감)
+  regCloseLevel: number;  // 등록 마감 레벨 — 이 레벨이 끝나고 뒤 브레이크까지 등록 가능(W-03, 2026-09-30)
   maxLevel: number;       // 최대 레벨(블라인드 자동 생성 기준)
   earlyDoubleLevel: number; // ~레벨 N까지 도착 = 더블얼리
   earlySingleLevel: number; // ~레벨 M까지 도착 = 1얼리
@@ -36,6 +39,10 @@ export interface ClockConfig {
   mysteryBounty: number;  // 미스터리 바운티 금액(표시용)
   prizes: ClockPrizeRow[];
   levels: ClockLevel[];
+  /** 포스터 얼리 단계(최대 4, W-04). 있으면 얼리 칩·단위의 정본이고 earlyBonus/doubleEarlyBonus 는 1·2단 거울값이다. */
+  earlyTiers?: EarlyTier[];
+  /** 회차별 리엔트리 스택(W-10). 비어 있지 않으면 rebuyStack 보다 우선(마지막 값 반복). */
+  rebuyStacks?: number[];
 }
 
 export interface ClockPreset {
@@ -67,6 +74,9 @@ export interface ClockLedgerPart {
   addons?: number;
   /** earlyUnitTotal(파생, 설정) — 서버 RPC clock_adjust_counts 가 얼리 보정 하한(−자동 몫)에 쓴다. */
   earlyUnits: number;
+  /** W-04 단계 얼리 칩 합(세션에 단계가 있을 때만) · W-10 회차별 리엔트리 수(클락에 계단 스택이 있을 때만). */
+  earlyChips?: number;
+  rebuyOrd?: number[];
 }
 
 export interface ClockState {
@@ -85,6 +95,8 @@ export interface ClockState {
   adjAddons: number;
   eliminations: number;       // 아웃된 인원
   liveStats?: ClockLiveStats | null; // 라이브 보드용 통계 스냅샷(파생값 저장 → 보드에서 ledger 없이 표시)
+  /** 행의 마지막 쓰기 시각(읽기 전용 — 저장하지 않는다). W-14 '남은 흔적' 판정에 쓴다. */
+  updatedAt?: string | null;
 }
 
 export const PRESET_LIMIT = 50;
@@ -161,8 +173,15 @@ export function currentLevelNo(
 
 /** 레벨 번호 → 얼리 유형. null = 이 게임은 얼리를 안 쓴다(자동판정에 맡김). */
 export function earlyTypeAtLevel(
-  cfg: Pick<ClockConfig, 'earlyDoubleLevel' | 'earlySingleLevel'>, levelNo: number,
+  cfg: Pick<ClockConfig, 'earlyDoubleLevel' | 'earlySingleLevel'> & { earlyTiers?: EarlyTier[] }, levelNo: number,
 ): EarlyType | null {
+  // W-04 — 얼리 단계가 있으면 단계로(3·4단도 '1얼리' 로 보인다 — 칩은 장부 몫이 단계대로 센다).
+  if (Array.isArray(cfg.earlyTiers)) {
+    const t = normalizeEarlyTiers(cfg.earlyTiers);
+    if (!t.length || levelNo <= 0) return null;
+    const k = t.findIndex((x) => levelNo <= x.level);
+    return k === 0 ? 'double' : k > 0 ? 'single' : 'none';
+  }
   const d = cfg.earlyDoubleLevel ?? 0, sg = cfg.earlySingleLevel ?? 0;
   if (d <= 0 && sg <= 0) return null;
   if (levelNo <= 0) return null;
@@ -177,13 +196,38 @@ export function withDerivedEarly(cfg: ClockConfig): ClockConfig {
   const total = countLevels(cfg.levels);
   const dLv = Math.max(0, Math.min(cfg.earlyDoubleLevel ?? 0, total));
   const sLv = Math.max(0, Math.min(cfg.earlySingleLevel ?? 0, total));
+  // W-04 — 얼리 단계(최대 4)가 있으면 **단계가 정본**이고 두 칸(더블·1얼리)은 1·2단 거울값이다. 두 칸을 사람이 고친 경우는
+  //   applyEarlyEdit 가 먼저 1·2단에 옮겨 둔다 — 여기서 두 칸을 다시 단계로 밀어 넣으면 거울값이 낡은 입력이 단계를 덮는다.
+  if (Array.isArray(cfg.earlyTiers)) {
+    const t = normalizeEarlyTiers(cfg.earlyTiers).filter((x) => x.level <= total);
+    return {
+      ...cfg, earlyTiers: t,
+      earlyDoubleLevel: t[0]?.level ?? 0, doubleEarlyBonus: t[0]?.chips ?? 0,
+      earlySingleLevel: t[1]?.level ?? 0, earlyBonus: t[1]?.chips ?? 0,
+      earlyDoubleMin: windowEndMinute(cfg.levels, t[0]?.level ?? 0),
+      earlySingleMin: windowEndMinute(cfg.levels, t[1]?.level ?? 0),
+    };
+  }
   return {
     ...cfg,
     earlyDoubleLevel: dLv,
     earlySingleLevel: sLv,
-    earlyDoubleMin: dLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, dLv) : 0,
-    earlySingleMin: sLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, sLv) : 0,
+    // W-05(2026-09-30 오너): "N레벨 시작 전" = N-1레벨까지 + **그 뒤 브레이크 포함** → 창 끝 = 다음 레벨 시작 분.
+    earlyDoubleMin: windowEndMinute(cfg.levels, dLv),
+    earlySingleMin: windowEndMinute(cfg.levels, sLv),
   };
+}
+
+/** 두 칸(더블·1얼리) 편집을 설정에 반영한다 — 얼리 단계가 있으면 그 1·2단을 바꾸고 3·4단은 그대로 둔다(W-04).
+ *  두 칸을 고치는 화면(클락 설정 · 장부 시작 폼)은 이 함수를 거친 뒤 withDerivedEarly 로 분을 다시 맞춘다. */
+export function applyEarlyEdit(cfg: ClockConfig, patch: Partial<ClockConfig>): ClockConfig {
+  const next = { ...cfg, ...patch };
+  const touched = (['earlyBonus', 'doubleEarlyBonus', 'earlyDoubleLevel', 'earlySingleLevel'] as const).some((k) => k in patch);
+  if (!Array.isArray(next.earlyTiers) || !touched || 'earlyTiers' in patch) return next;
+  return { ...next, earlyTiers: normalizeEarlyTiers(mergeLegacyEarly(next.earlyTiers, {
+    doubleLevel: next.earlyDoubleLevel ?? 0, doubleChips: next.doubleEarlyBonus ?? 0,
+    singleLevel: next.earlySingleLevel ?? 0, singleChips: next.earlyBonus ?? 0,
+  })) };
 }
 
 /** 등록마감·최대레벨 기준 블라인드 구조 자동 생성. 레지 마감 후에는 레벨 시간만 단축(postDur 적용). */
@@ -232,6 +276,16 @@ export function clockHasProgress(s: ClockState | null | undefined): boolean {
     || s.eliminations > 0
     || s.adjEntries !== 0 || s.adjRebuys !== 0 || s.adjEarlies !== 0 || s.adjAddons !== 0
     || s.remainingMs < fullMs;
+}
+
+/** W-14(2026-09-30 리드) — 진행 흔적은 있지만 **오늘 대회가 아닌** 클락인가(지난 날 멈춘 채 남은 행).
+ *  장부 시작은 이런 행을 포스터 설정으로 새로 채워도 된다. 오늘 대회(같은 장부 날짜·오늘 만진 행)나 돌고 있는 클락은 아니다 —
+ *  그건 여전히 보호한다(clockHasProgress 가 참이면 덮지 않는다).
+ *  판정: 멈춤 · 연결 장부 날짜 ≠ 이 장부 날짜 · 마지막 쓰기(KST 날짜) ≠ 이 장부 날짜. 마지막 쓰기 시각을 모르면 보호(false). */
+export function clockIsLeftover(s: ClockState | null | undefined, sessionDate: string): boolean {
+  if (!s || s.running || s.sessionDate === sessionDate || !s.updatedAt) return false;
+  const t = Date.parse(s.updatedAt);
+  return Number.isFinite(t) && kstToday(t) !== sessionDate;
 }
 
 // ── 레벨 이동 / 되돌리기 ───────────────────────────────────────────────────────
@@ -443,6 +497,7 @@ function rowToStateRaw(r: any): ClockState {
     adjEarlies: r.adj_earlies ?? 0, adjAddons: r.adj_addons ?? 0,
     eliminations: r.eliminations ?? 0,
     liveStats: null,
+    updatedAt: r.updated_at ?? null,
   };
 }
 // 🔴 K1(2026-09-29) — 읽는 즉시 합성한다. 그래서 TV·라이브 탭·홈 카드·대시보드·일정 카드처럼 `liveStats` 를 읽기만 하는
@@ -748,22 +803,45 @@ export function subscribeRunningClocks(onChange: () => void): () => void {
 export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number;
   /** 장부에 기록된 애드온 수(오너 결정 #3, 2026-09-29) — 클락·TV 애드온과 총칩이 이만큼 자동으로 오른다.
    *  optional 인 이유: 이 필드 이전에 저장된 장부 몫(live_stats.ledger)에는 없다 — 없으면 0(= 예전 동작). */
-  addons?: number; }
+  addons?: number;
+  /** W-04 — 세션에 얼리 단계(earlyTiers)가 있을 때만: 얼리 칩 합 · 얼리 단위 합. 없으면 기존 두 칸 식. */
+  earlyChips?: number; earlyUnits?: number;
+  /** W-10 — 클락에 회차별 리엔트리 스택(rebuyStacks)이 있을 때만: rebuyOrd[j] = j+1 번째 리엔트리를 한 사람 수. */
+  rebuyOrd?: number[]; }
 
 /** 장부 바인 기록에서 플레이어/리바인/얼리 자동 집계. 얼리는 세션 스타트·구간(또는 바인 수기지정)으로 판정.
  *
  *  횟수(플레이어·리바인·총 바이인)는 **장부와 같은 함수**(ledgerCounts)를 쓴다(2026-09-11) —
  *  각자 세면 이름 공백 처리 하나만 달라도 클락과 장부가 다른 수를 말하게 된다.
  *  할인·결제수단은 이 수에 영향을 주지 않는다. */
-export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): DerivedCounts {
+export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow, opts?: { rebuyStacks?: number[] | null }): DerivedCounts {
   const c = ledgerCounts(buyins);
-  let earlies = 0, doubleEarlies = 0;
+  const tiers = early.earlyTiers?.length ? early.earlyTiers : null;
+  const unit = tiers ? tierUnitChips(tiers) : 0;
+  let earlies = 0, doubleEarlies = 0, earlyChips = 0, earlyUnits = 0;
   for (const b of buyins) {
-    const et = earlyTypeOf(b, early);
-    if (et === 'double') { earlies++; doubleEarlies++; }
-    else if (et === 'single') earlies++;
+    const k = earlyTierOf(b, early);
+    if (k < 0) continue;
+    earlies++;
+    if (k === 0) doubleEarlies++;
+    if (tiers) { const ch = tiers[k]?.chips ?? 0; earlyChips += ch; earlyUnits += tierUnits(ch, unit); }
   }
-  return { entries: c.players, rebuys: c.rebuys, earlies, doubleEarlies, totalBuyins: c.totalBuyins, addons: addonTotals(buyins).count };
+  const out: DerivedCounts = { entries: c.players, rebuys: c.rebuys, earlies, doubleEarlies, totalBuyins: c.totalBuyins, addons: addonTotals(buyins).count };
+  if (tiers) { out.earlyChips = earlyChips; out.earlyUnits = earlyUnits; }
+  if (opts?.rebuyStacks?.some((n) => n > 0)) out.rebuyOrd = rebuyOrdOf(buyins);
+  return out;
+}
+
+/** 회차별 리엔트리 수 — 같은 게임·같은 이름(trim, ledgerCounts 좌석 키와 같은 규칙)의 n 번째 기록이 n-1 번째 리엔트리다. */
+export function rebuyOrdOf(buyins: readonly LedgerBuyin[]): number[] {
+  const per = new Map<string, number>();
+  for (const b of buyins) {
+    const k = `${b.sessionDate}\u0000${b.gameSeq}\u0000${(b.playerName ?? '').trim()}`;
+    per.set(k, (per.get(k) ?? 0) + 1);
+  }
+  const ord: number[] = [];
+  for (const n of per.values()) for (let j = 1; j < n; j++) ord[j - 1] = (ord[j - 1] ?? 0) + 1;
+  return ord;
 }
 
 // ── 얼리 '카운트' 산정(#21) ────────────────────────────────────────────────────
@@ -774,7 +852,8 @@ export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): De
 
 /** 얼리 카운트 1단위(칩) = 설정된 얼리 보너스 중 가장 작은 값 = 오너가 말한 '기준'.
  *  둘 다 0(얼리 미설정)이면 0 — 이때는 구 동작(1건=1)으로 떨어진다. */
-export function earlyUnitChips(cfg: Pick<ClockConfig, 'earlyBonus' | 'doubleEarlyBonus'>): number {
+export function earlyUnitChips(cfg: Pick<ClockConfig, 'earlyBonus' | 'doubleEarlyBonus'> & { earlyTiers?: EarlyTier[] }): number {
+  if (cfg.earlyTiers?.length) return tierUnitChips(cfg.earlyTiers);   // W-04 단계가 있으면 단계 중 최소
   const pos = [Math.max(0, cfg.earlyBonus ?? 0), Math.max(0, cfg.doubleEarlyBonus ?? 0)].filter((n) => n > 0);
   return pos.length ? Math.min(...pos) : 0;
 }
@@ -875,7 +954,8 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   const rebuys = derived.rebuys + st.adjRebuys;
   // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.
   // 클램프 전 값을 함께 남긴다 — 보정 하한(earlyAutoOf)의 기준이 된다.
-  const earlyAuto = earlyUnitTotal(derived, cfg);
+  // W-04 — 단계 얼리(earlyChips 가 실린 장부 몫)면 단위·칩을 장부 몫에서 그대로 쓴다(세션에 굳힌 창 기준).
+  const earlyAuto = derived.earlyChips != null ? (derived.earlyUnits ?? 0) : earlyUnitTotal(derived, cfg);
   const earliesRaw = earlyAuto + st.adjEarlies;
   const earlies = Math.max(0, earliesRaw);
   // #3(2026-09-29) — 애드온도 엔트리와 같은 구조: 장부 몫 + 수기 보정. 예전엔 보정 열만 봐서 장부 애드온 3건이 TV 에 0 이었다.
@@ -891,8 +971,12 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   //   칩은 클램프되지 않아 둘이 갈렸다. 자동 0 에서 [얼리 −] 1회 → 얼리 0 인데 총 칩 **−5,000**(오너 보고).
   //   실제로 반영된 보정분(= 클램프 뒤 카운트 − 장부 파생분)으로 환산해야 두 값이 같은 것을 말한다.
   const adjChips = (earlies - earlyAuto) * (earlyUnitChips(cfg) || cfg.earlyBonus);
-  const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
-    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus + adjChips;
+  const earlyChips = derived.earlyChips != null ? derived.earlyChips : dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus;
+  // W-10 — 회차별 리엔트리 스택이 있고 장부 몫이 회차를 실었으면 계단으로, 아니면 단일값. 수기 보정 리바인은 단일값.
+  const rebuyChips = derived.rebuyOrd && cfg.rebuyStacks?.some((n) => n > 0)
+    ? rebuyChipsOf(derived.rebuyOrd, cfg.rebuyStacks, cfg.rebuyStack) + st.adjRebuys * cfg.rebuyStack
+    : rebuys * cfg.rebuyStack;
+  const totalStack = entries * cfg.startStack + rebuyChips + addons * cfg.addonStack + earlyChips + adjChips;
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
   return { entries, rebuys, earlies, earliesRaw, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
 }
@@ -915,6 +999,7 @@ export function earlyWindowOf(
     return {
       earlyDoubleMin: session.earlyDoubleMin ?? 0, earlySingleMin: session.earlySingleMin ?? 0,
       tournamentStart: session.tournamentStart ?? null, openedAt: session.openedAt ?? null,
+      earlyTiers: session.earlyTiers ?? null,
     };
   }
   return { earlyDoubleMin: cfg?.earlyDoubleMin ?? 0, earlySingleMin: cfg?.earlySingleMin ?? 0, tournamentStart: null, openedAt: null };
@@ -943,8 +1028,8 @@ export function composeLiveStats(g: Pick<ClockState, 'sessionDate' | 'config' | 
 export function ledgerLiveStats(
   s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null }) | null,
 ): ClockLiveStats {
-  const d = deriveClockCounts(buyins, earlyWindowOf(s.config, session));
-  const ledger: ClockLedgerPart = { ...d, earlyUnits: earlyUnitTotal(d, s.config) };
+  const d = deriveClockCounts(buyins, earlyWindowOf(s.config, session), { rebuyStacks: s.config?.rebuyStacks });
+  const ledger: ClockLedgerPart = { ...d, earlyUnits: d.earlyUnits ?? earlyUnitTotal(d, s.config) };
   return { ...computeLiveStats(s, d, s.config), buyInAmount: session?.buyinAmount ?? null, ledger };
 }
 

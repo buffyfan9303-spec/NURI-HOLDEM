@@ -190,13 +190,16 @@ describe('TV 클락의 호출 형태로 — 마감 레벨 미설정은 null(—)
     expect(msToRegClose(s, s.currentIndex, 5 * 60_000)).toBeNull();
   });
 
-  it('regCloseLevel 4 · 레벨 1: 양수(잔여 5 + 20 + 20 = 45분) — 과잉 차단이 아니다', () => {
-    const s = state(4);
+  // W-03(2026-09-30 오너): 'N LV' = N레벨 끝 + 뒤 브레이크까지 → N+1레벨 시작 순간 마감.
+  it('regCloseLevel 3 · 레벨 1: 양수(잔여 5 + 20 + 20 = 45분 뒤 4레벨 시작) — 과잉 차단이 아니다', () => {
+    const s = state(3);
     expect(msToRegClose(s, s.currentIndex, 5 * 60_000)).toBe(45 * 60_000);
   });
 
-  it('regCloseLevel 2 · 레벨 2 에 도달: 0(마감)', () => {
-    const s = state(2, 1);
+  it('regCloseLevel 1 · 레벨 2 에 도달: 0(마감) · regCloseLevel 2 · 레벨 2: 아직 열림', () => {
+    const s = state(1, 1);
     expect(msToRegClose(s, s.currentIndex, 5 * 60_000)).toBe(0);
+    const open = state(2, 1);
+    expect(msToRegClose(open, open.currentIndex, 5 * 60_000)).toBe(5 * 60_000);
   });
 });

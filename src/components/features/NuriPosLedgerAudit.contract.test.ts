@@ -22,12 +22,15 @@ import { join } from 'node:path';
 
 const SRC = readFileSync(join(__dirname, 'NuriPosLedger.tsx'), 'utf-8');
 const code = SRC.replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.*$/gm, '');
+const LIB = readFileSync(join(__dirname, '../../lib/ledgerStart.ts'), 'utf-8').replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.*$/gm, '');
 
 describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스로 만든다', () => {
+  // 2026-09-30 KW-1a(W-14): 새 행 만들기·지난 흔적 정리·보호 판정이 lib/ledgerStart(clockStartAction·clockStartRow)로 옮겨졌다.
+  //   지킬 것은 같다 — 새 클락은 emptyClockState 를 펼치고, SessionForm 은 그 함수로만 행을 만든다.
   it('🔴 emptyClockState 를 import 하고 SessionForm 의 새 클락이 그것을 펼친다', () => {
-    expect(code).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/\.\.\/api\/clock';/);
-    // 2026-09-17: 모양이 바뀌었다(아래 F2b 참고) — 지켜야 할 것은 **emptyClockState 를 펼친다**는 사실이다.
-    expect(code).toMatch(/\{ \.\.\.emptyClockState\(base\.venueId, cfg, base\.gameSeq\), title: base\.title \?\? '' \}/);
+    expect(LIB).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/api\/clock';/);
+    expect(LIB).toMatch(/return \{ \.\.\.emptyClockState\(venueId, cfg, gameSeq\), title \};/);
+    expect(code).toMatch(/const row = clockStartRow\(action, fresh, cfg, base\.venueId, base\.gameSeq, base\.title \?\? ''\);/);
   });
 
   // 🔴 F2b (2026-09-17) — 새로 생긴 계약이다. 여기서 쓰던 clockState 는 폼 마운트 시 한 번 읽은 스냅샷이라
@@ -35,7 +38,10 @@ describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스
   //   **진행 중인 대회가 0 으로 초기화된다.** 쓰기 직전 재조회 + 진행 흔적 검사를 계약으로 박아 둔다.
   it('🔴 클락 설정 쓰기 전에 다시 읽고, 진행 중이면 덮지 않는다', () => {
     expect(code, '쓰기 직전 재조회가 사라졌다').toMatch(/const fresh = await getClockState\(base\.venueId, base\.gameSeq\);/);
-    expect(code, '진행 흔적 검사가 사라졌다').toMatch(/fresh\.running \|\| clockHasProgress\(fresh\)/);
+    expect(code, '판정 호출이 사라졌다').toMatch(/const action = clockStartAction\(fresh, base\.sessionDate\);/);
+    expect(code, '보호(null)일 때 쓰지 않는 분기가 사라졌다').toMatch(/if \(!row\) \{[^}]*return;\s*\}\s*await saveClockState\(row\);/);
+    expect(LIB, '진행 흔적 검사가 사라졌다').toMatch(/if \(!fresh\.running && !clockHasProgress\(fresh\)\) return 'update';/);
+    expect(LIB, '오늘 대회 보호가 사라졌다').toMatch(/return clockIsLeftover\(fresh, sessionDate\) \? 'reset' : 'protect';/);
   });
 
   it('🔴 `remainingMs: 0` 인라인 리터럴이 파일에 없다 — 있으면 시작 전 클락이 PAUSED 가 된다', () => {

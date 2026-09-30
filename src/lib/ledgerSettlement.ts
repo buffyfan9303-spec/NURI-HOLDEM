@@ -17,7 +17,7 @@
 //   기준 매출 = 기준 엔트리 × 현금 단가,  차액 = 완납 매출 − 기준 매출.
 // 이걸 순이익이라 부르지 않는다 — 없는 비용을 아는 척하면 그 숫자로 오판한다.
 import {
-  addonFinance, buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
+  addonEntryOf, addonFinance, buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
   type AddonFinance, type LedgerBuyin, type LedgerPlayer, type LedgerSession, type Tender, type DiscountSummary,
 } from '../api/ledger';
 
@@ -200,14 +200,16 @@ export function settlementReport(
     const kept: LedgerBuyin[] = [];
     for (const b of mine) {
       const f = buyinFinance(b, s);
+      // W-06 — 애드온(부스터) 엔트리(게임별, 기본 0)는 바인 엔트리 옆에 따로 더한다(value·buyinCount 에는 섞지 않는다).
+      const ae = addonEntryOf(b, s);
       if (isBuyinExcluded(b, ex, (n) => visitorOf.get(n))) {
-        g.removed.count += 1; g.removed.entries += f.entry; g.removed.value += f.value; g.removed.revenue += f.paid;
+        g.removed.count += 1; g.removed.entries += f.entry + ae; g.removed.value += f.value; g.removed.revenue += f.paid;
         continue;
       }
       kept.push(b);
       keptAll.push(b);
       g.buyinCount += 1;
-      g.entries += f.entry;      // 금액 엔트리(소수 가능) — 횟수는 바로 위 buyinCount 가 센다
+      g.entries += f.entry + ae; // 금액 엔트리(소수 가능) + 애드온 엔트리 — 횟수는 바로 위 buyinCount 가 센다
       g.revenue += f.paid;
       g.unpaid += f.unpaid;
       g.ticketWon += f.tender.ticket;
