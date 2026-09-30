@@ -13,7 +13,7 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
-  getPendingGroups, approveGroup, rejectGroup, logActivity, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
+  getPendingGroups, getPendingVenues, approveGroup, rejectGroup, logActivity, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
   adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
   adminSetPostBlinded, adminSetPostPinned, type Shout, type PostCategory } from '../../api/community';
 import { getNotices, deleteNotice, setNoticeOrder, type MarketplaceNotice } from '../../api/marketplace';
@@ -1040,8 +1040,10 @@ function ErrorLogPanel() {
   );
 }
 
-// ── 그룹 개설 승인(운영자) ────────────────────────────────────────────────────
-function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
+// ── 입점·그룹 개설 승인(운영자) ──────────────────────────────────────────────
+// 점검 A-03(2026-10-01): 그룹(kind≠venue)만 나열해서, 승인 업주가 만든 **새 매장**은 승인할 곳이 없었다.
+//   이제 매장·그룹을 한 대기열에서 승인/반려한다(서버는 원래 관리자 승인을 허용한다).
+function PendingGroupsPanel({ users, onChanged }: { users: User[]; onChanged: () => void }) {
   const toast = useToast();
   const [groups, setGroups] = useState<Venue[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -1050,27 +1052,32 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const reload = () => {
     setLoading(true);
-    getPendingGroups().then((g) => { setErr(null); setGroups(g); }).catch((e) => { setErr(e); setGroups([]); }).finally(() => setLoading(false));
+    Promise.all([getPendingVenues(), getPendingGroups()])
+      .then(([v, g]) => { setErr(null); setGroups([...v, ...g]); })
+      .catch((e) => { setErr(e); setGroups([]); })
+      .finally(() => setLoading(false));
   };
   useEffect(() => { reload(); }, []);
+  const isVenue = (g: Venue) => g.kind === 'venue';
+  const ownerOf = (g: Venue) => { const u = users.find((x) => x.id === g.ownerId); return u ? (u.nickname ?? u.name) : null; };
   const approve = async (g: Venue) => {
     if (busy) return;
     setBusy(g.id);
     try {
       await approveGroup(g.id);
-      await logActivity({ action: 'approve', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `그룹 개설 승인 · ${g.name}` });
-      toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged();
+      await logActivity({ action: 'approve', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 승인 · ${g.name}` });
+      toast.show(`'${g.name}' ${isVenue(g) ? '매장' : '그룹'}을 승인했습니다`, 'success'); reload(); onChanged();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
     finally { setBusy(null); }
   };
   const reject = async (g: Venue) => {
     if (busy) return;
-    if (!confirm(`'${g.name}' 개설 신청을 반려하시겠습니까? 신청은 삭제되지 않고 '숨김'으로 남습니다.`)) return;
+    if (!confirm(`'${g.name}' ${isVenue(g) ? '입점' : '개설'} 신청을 반려하시겠습니까? 신청은 삭제되지 않고 '숨김'으로 남습니다.`)) return;
     setBusy(g.id);
     try {
       await rejectGroup(g.id);
-      await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `그룹 개설 반려 · ${g.name}` });
+      await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 반려 · ${g.name}` });
       toast.show('반려했습니다', 'info'); reload();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
@@ -1080,32 +1087,34 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   return (
     <section className="rounded-card border border-accent-400/30 bg-surface-low p-3 space-y-2">
       {/* 실패했을 때 '(0)' 은 거짓말이라 개수를 감춘다 — 아래 실패 카드가 이유를 말한다 */}
-      <h3 className="text-sm font-bold text-accent-300">그룹 개설 승인{err == null ? ` (${groups.length})` : ''}</h3>
+      <h3 className="text-sm font-bold text-accent-300">입점·그룹 개설 승인{err == null ? ` (${groups.length})` : ''}</h3>
       {err != null ? (
-        <LoadErrorCard error={err} what="그룹 개설 신청" onRetry={reload} compact />
+        <LoadErrorCard error={err} what="입점·그룹 개설 신청" onRetry={reload} compact />
       ) : groups.length === 0 ? (
-        <p className="text-2xs text-ink-muted py-1">대기 중인 그룹 개설 신청이 없습니다</p>
+        <p className="text-2xs text-ink-muted py-1">대기 중인 입점·그룹 개설 신청이 없습니다</p>
       ) : (
         <ul className="space-y-2">
           {groups.map((g) => (
             <li key={g.id} className="rounded-input border border-border-default bg-surface-high p-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
+                <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{isVenue(g) ? '홀덤펍 입점' : GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
                 <span className="text-sm font-semibold text-ink-primary">{g.name}</span>
                 {g.region && <span className="text-2xs text-ink-muted">{g.region}</span>}
+                {ownerOf(g) && <span className="text-2xs text-ink-muted">· 업주 {ownerOf(g)}</span>}
               </div>
-              {/* 가입 방식 — 자동가입 그룹이 더 위험한데 예전엔 이 정보 없이 승인하고 있었다 */}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {isVenue(g) && g.address && <p className="mt-1 text-2xs text-ink-secondary"><b className="text-ink-primary">주소</b> {g.address}</p>}
+              {/* 가입 방식 — 자동가입 그룹이 더 위험한데 예전엔 이 정보 없이 승인하고 있었다(매장은 해당 없음) */}
+              {!isVenue(g) && <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold',
                   g.joinApproval === false ? 'bg-danger/15 text-danger-light' : 'chip-aura'].join(' ')}>
                   {g.joinApproval === false ? '자동 가입' : '승인제'}
                 </span>
-              </div>
+              </div>}
               {/* 개설 목적 — 승인 판단의 근거. 없으면 그 사실을 드러낸다(구 클라이언트로 신청한 건) */}
-              <p className="mt-1 text-2xs text-ink-secondary">
+              {!isVenue(g) && <p className="mt-1 text-2xs text-ink-secondary">
                 <b className="text-ink-primary">목적</b>{' '}
                 {g.openPurpose?.trim() ? g.openPurpose : <span className="text-ink-muted">미기재 — 신청자에게 확인 필요</span>}
-              </p>
+              </p>}
               {g.description && <p className="mt-1 text-2xs text-ink-muted line-clamp-2">소개 · {g.description}</p>}
               <div className="mt-1.5 flex gap-1.5">
                 <button type="button" disabled={busy != null} onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1 disabled:opacity-50">{busy === g.id ? '처리 중…' : '승인'}</button>
@@ -1130,7 +1139,7 @@ const ADMIN_DESC: Record<Section, string> = {
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
   switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
   users: '회원 검색 · 제재 · 섀도우밴 · 닉네임 변경 · 활동점수(구매 환불 · 지급)',
-  venues: '매장 생성 · 인증 · 그룹 승인',
+  venues: '매장 생성 · 인증 · 입점·그룹 개설 승인',
   events: '제휴 이벤트 캠페인 · 카드판 구성(서버 셔플) · 검증 · 공개/종료 · 경품 이용권 집계',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',
@@ -1290,7 +1299,7 @@ export default function AdminTab({
           {section === 'analytics' && <PlatformStatsCard />}
           {section === 'venues' && (
             <div className="space-y-3">
-              <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
+              <PendingGroupsPanel users={users} onChanged={() => onReloadVenues?.()} />
               <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
             </div>
           )}

@@ -1150,6 +1150,16 @@ export async function getPendingGroups(): Promise<Venue[]> {
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
+/** 운영자: **홀덤펍(kind='venue') 입점 승인 대기** — 점검 A-03(2026-10-01).
+ *  승인된 업주가 만든 새 매장은 create_my_venue 가 approved=false 로 만들고 관리자에게 "승인해 주세요" 알림을 보낸다.
+ *  그런데 위 getPendingGroups 는 `.neq('kind','venue')` 라 이 매장이 어느 화면에도 없었다(운영 1건이 20일째 대기).
+ *  서버는 이미 관리자 승인을 허용한다(RLS venues_update admin + guard_venue_verification 는 admin 통과). */
+export async function getPendingVenues(): Promise<Venue[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venues').select('*').eq('kind', 'venue').eq('approved', false).neq('status', 'hidden').order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToVenue);
+}
 /** 그룹 가입 방식 변경 — 서버가 is_group_manager 로 권한을 강제한다(운영진 가능). */
 export async function setGroupJoinApproval(groupId: string, value: boolean): Promise<void> {
   if (IS_MOCK) return;

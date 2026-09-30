@@ -55,4 +55,11 @@ describe('대기열 조회', () => {
     expect(f).toContainEqual(['eq', 'approved', false]);
     expect(f).toContainEqual(['neq', 'status', 'hidden']);
   });
+  it('🔴 새 매장(kind=venue) 미승인도 대기열에 들어온다 — 예전엔 .neq(kind,venue) 때문에 어디에도 안 보였다', async () => {
+    await community.getPendingVenues();
+    const f = calls[0].filters;
+    expect(f).toContainEqual(['eq', 'kind', 'venue']);
+    expect(f).toContainEqual(['eq', 'approved', false]);
+    expect(f).toContainEqual(['neq', 'status', 'hidden']);
+  });
 });
