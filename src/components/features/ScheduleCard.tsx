@@ -153,6 +153,7 @@ function PosterArea({
         {/* ⚡ 첫 화면 상단 카드(priority)는 lazy 를 쓰지 않는다 — lazy 이미지는 프리로드 스캐너가 미리
             받지 못해 LCP(가장 큰 콘텐츠 표시)가 1왕복 늦어진다. 상위 몇 장만 eager+high 로 당긴다. */}
         <img
+          // 썸네일은 원본 비율(lib/imageUrl 기본 contain) — 틀 맞춤 자르기는 아래 object-cover 가 한다.
           src={thumbUrl(posterUrl, thumbWidth)}
           srcSet={thumbSrcSet(posterUrl, thumbWidth)}
           alt={`${title} 포스터`}
@@ -319,6 +320,11 @@ export function titleWithoutGtd(title: string, hasGtdColumn: boolean): string {
     // "… GTD 1000만"
     .replace(/[\s·,|/-]*(?:GTD|gtd|Gtd)\s*\d[\d,]*\s*(?:억|만)?\s*$/u, '')
     .trim();
+  // W-24(2026-09-30): 떼고 남은 것이 제목 구실을 못 하면 원문을 쓴다 — '퀸 2,410만 GTD'→'퀸',
+  //   '3만에 1200GTD'→'3만에' 처럼 뜻이 끊겼다. 한 글자뿐이거나 조사(에·의·로·와·과·도)로 끝나면
+  //   GTD 가 문장의 일부였다는 뜻이다.
+  // ponytail: 글자 수·조사 휴리스틱 — 매장명만 남는 2글자 이상('로티')은 못 잡는다. 필요하면 pubName 비교를 더한다.
+  if (cut.replace(/\s/g, '').length < 2 || /(?:에|의|로|와|과|도)$/u.test(cut)) return title;
   return cut || title;
 }
 

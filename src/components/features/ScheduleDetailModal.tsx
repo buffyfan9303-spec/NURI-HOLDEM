@@ -30,6 +30,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 import { gameTypeLabel } from '../../lib/gameTypeLabel';
+import { startChips, reentryText, reentryPriceWon, breakText } from '../../lib/scheduleDetailText';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -434,7 +435,7 @@ export default function ScheduleDetailModal({
               상품 가격 정보라 표시를 유지한다. */}
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t">
             {/* 바이인 미입력(0)은 가격 정보가 아니다 — 카드·표와 같은 '—' 문법(§28은 실제 금액에만 적용) */}
-            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} />
+            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} sub={reentryPriceLine(schedule)} testId="sched-sum-buyin" />
             <SummaryCell
               // [D] 하드코딩 금지 — 목록 카드(ScheduleCard)가 이미 prizeParts() 를 정본으로 쓴다. 여기만
               //   따로 '상금 보장(GTD)' 를 적어 두 화면이 다른 문구를 말했다(오너 2026-09-18 은 'GTD' 로
@@ -455,8 +456,8 @@ export default function ScheduleDetailModal({
             />
             <SummaryCell label="시작" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) ${schedule.startTime}`} />
             <SummaryCell label="등록 마감" value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'} />
-            <SummaryCell label="스타팅 칩" value={schedule.structure?.startingChips != null ? schedule.structure.startingChips.toLocaleString() : '현장 안내'} />
-            <SummaryCell label="리엔트리" value={rebuyText(schedule)} />
+            <SummaryCell label="스타팅 칩" value={startChips(schedule)?.toLocaleString() ?? '현장 안내'} testId="sched-sum-start" />
+            <SummaryCell label="리엔트리" value={reentryText(schedule)} testId="sched-sum-reentry" />
           </div>
           {schedule.guaranteed && (
             <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
@@ -497,9 +498,10 @@ export default function ScheduleDetailModal({
             {schedule.startTime && <InfoRow label="시작 시간" value={schedule.startTime} />}
             <InfoRow label="유형" value={`${schedule.format} · ${schedule.guaranteed ? 'GTD 보장' : '예상 상금'}`} />
             <InfoRow label="참가비" value={buyinDetailText(schedule)} />
-            <InfoRow label="리엔트리" value={rebuyText(schedule)} />
-            {schedule.structure?.startingChips != null && <InfoRow label="스타팅 칩" value={schedule.structure.startingChips.toLocaleString()} />}
-            {schedule.structure?.rebuyStack != null && <InfoRow label="리바이 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
+            {/* 오너 2026-09-30: '리엔트리' = 리엔트리 스택(칩). 종전 '리바이 칩' 행은 이 행과 같은 값이라 합쳤고,
+                가격은 위 '참가비' 행으로 옮겼다(lib/scheduleDetailText). */}
+            <InfoRow label="리엔트리" value={reentryText(schedule)} />
+            {startChips(schedule) != null && <InfoRow label="스타팅 칩" value={startChips(schedule)!.toLocaleString()} />}
             {schedule.structure?.blindLevelMinutes != null && <InfoRow label="블라인드 타임" value={`${schedule.structure.blindLevelMinutes}분`} />}
             {/* [D] '등록 마감' — 같은 schedule.regCloseTime 을 이 화면 안(요약 카드 442행)에서는 '등록 마감',
                 여기서는 '레지 마감'이라 부르고 있었다(2026-09-19 스윕 D). 같은 값 두 이름 금지 — '등록 마감'으로 통일. */}
@@ -651,7 +653,7 @@ export default function ScheduleDetailModal({
                 </span>
               ) : undefined}
             />
-            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} />
+            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} sub={reentryPriceLine(schedule)} />
           </div>
           {schedule.guaranteed && (
             <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
@@ -694,6 +696,22 @@ export default function ScheduleDetailModal({
           <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs leading-relaxed text-ink-muted">
             순위별 상금표가 아직 등록되지 않았습니다 — 배분은 매장 현장 안내를 따릅니다.
           </p>
+        )}
+
+        {/* W-21: 포스터 폼 '시상' 목록(= seats: 시드권·티켓) — 저장은 되는데 상세 어디에도 없었다.
+            폼은 'N석' 이 없는 항목도 count 1 로 저장한다(App.tsx handleSubmitPoster) → 1석은 적지 않는다(트로피 1석 방지). */}
+        {schedule.seats && schedule.seats.length > 0 && (
+          <section data-testid="sched-seats">
+            <Head icon="ticket" tile="-fuchsia">시상 · 시드권</Head>
+            <ul className="divide-y divide-border-subtle overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
+              {schedule.seats.map((st, i) => (
+                <li key={i} className="flex items-start justify-between gap-3 px-3 py-1.5 text-xs">
+                  <span className="min-w-0 break-keep wrap-anywhere font-semibold text-ink-primary">{st.label}</span>
+                  {st.count > 1 && <span className="shrink-0 whitespace-nowrap font-bold tabular-nums text-ink-secondary">{st.count}석</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </>)}
 
@@ -1421,8 +1439,8 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
   const dur = schedule.structure?.blindLevelMinutes || 20;
   const custom = schedule.structure?.levels;
   // 포스터별 저장된 커스텀 레벨이 있으면 그걸, 없으면 파이널롤백 기반 자동 생성
-  const levels: { kind: 'level' | 'break'; sb: number; bb: number; ante: number; minutes: number }[] = custom && custom.length
-    ? custom.map((l) => ({ kind: l.isBreak ? 'break' : 'level', sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes }))
+  const levels: { kind: 'level' | 'break'; sb: number; bb: number; ante: number; minutes: number; label?: string }[] = custom && custom.length
+    ? custom.map((l) => ({ kind: l.isBreak ? 'break' : 'level', sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes, label: l.label?.trim() || undefined }))
     : generateBlinds(regClose, 25, dur, dur).map((l) => ({ kind: l.kind, sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes }));
 
   let levelNo = 0;
@@ -1466,7 +1484,10 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
                 if (l.kind === 'break') {
                   return (
                     <tr key={i} className="bg-accent-300/6 border-t border-border-subtle">
-                      <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-accent-300">BREAK · {l.minutes}분</td>
+                      {/* W-15: 업주가 적은 브레이크 원문(칩 레이스·디너·레지마감)을 그대로 — 원문에 시간이 없을 때만 분을 붙인다 */}
+                      <td colSpan={4} data-testid="sched-break-row" className="py-1.5 px-2 text-center font-bold text-accent-300 break-keep wrap-anywhere">
+                        {breakText(l.label, l.minutes)}
+                      </td>
                     </tr>
                   );
                 }
@@ -1485,7 +1506,10 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
               })}
             </tbody>
           </table>
-          <p className="bg-surface-base px-2 py-1.5 text-2xs text-ink-muted">※ 매장 기본 구조 예시입니다. 실제 운영 시 변동될 수 있습니다.</p>
+          {/* W-22: 업주가 올린 표를 '예시'라 부르지 않는다 — 예시는 자동 생성 표뿐이다 */}
+          <p data-testid="sched-blind-note" className="bg-surface-base px-2 py-1.5 text-2xs text-ink-muted">
+            {custom && custom.length ? '※ 매장이 등록한 구조입니다. 실제 운영 시 변동될 수 있습니다.' : '※ 매장 기본 구조 예시입니다. 실제 운영 시 변동될 수 있습니다.'}
+          </p>
         </div>
       )}
     </section>
@@ -1514,11 +1538,12 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 //   ① 고정 높이는 '55,000원'처럼 조금만 길어도 값을 상자 밖으로 밀거나 마퀴로 흘려보냈다.
 //   ② 마퀴는 참가비·등록 마감을 **읽으려면 기다려야 하는** 값으로 만든다.
 //   지금은 min-h(=종전 h-14 와 같은 3.5rem)로 행 리듬만 지키고, 넘치면 자연 줄바꿈으로 늘어난다.
-function SummaryCell({ label, value, badge, accent = false }: {
+function SummaryCell({ label, value, badge, accent = false, sub, testId }: {
   label: string; value: string; badge?: React.ReactNode; accent?: boolean;
+  /** 값 아래 보조 한 줄(예: 참가비 칸의 '리엔트리 10T') */ sub?: string; testId?: string;
 }) {
   return (
-    <div className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
+    <div data-testid={testId} className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <span className={`min-w-0 flex-1 break-keep wrap-anywhere text-sm font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
@@ -1526,18 +1551,18 @@ function SummaryCell({ label, value, badge, accent = false }: {
         </span>
         {badge}
       </div>
+      {sub && <span className="whitespace-nowrap text-2xs font-semibold leading-none tabular-nums text-ink-secondary">{sub}</span>}
     </div>
   );
 }
 
-// 리엔트리 요약(요약 그리드) — 리바이 유무·한도. 정보 없으면 프리즈아웃.
-function rebuyText(s: Schedule): string {
-  const b = s.buyIn;
-  if (b.rebuy === undefined) return '프리즈아웃';
-  return `리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`;
+// 리엔트리 가격 한 줄 — 참가비와 다를 때만(lib/scheduleDetailText). 참가비와 같은 표기(buyInText).
+function reentryPriceLine(s: Schedule): string | undefined {
+  const won = reentryPriceWon(s);
+  return won ? `리엔트리 ${buyInText(won)}` : undefined;
 }
 
-// 바이인 상세(정보 행) — 금액 + 게임종류·리바이·애드온 한 줄(넘치면 마퀴)
+// 바이인 상세(정보 행) — 금액 + 게임종류·리엔트리 가격·애드온 한 줄
 function buyinDetailText(s: Schedule): string {
   const b = s.buyIn;
   const parts: string[] = [];
@@ -1545,9 +1570,10 @@ function buyinDetailText(s: Schedule): string {
   if (b.amount > 0) parts.push(b.amount.toLocaleString());
   // 장부 코드값(gtd·entry)이 그대로 들어온 행이 있다 — 사람 말로(자유 입력은 그대로 · lib/gameTypeLabel)
   if (b.gameType?.trim()) parts.push(gameTypeLabel(b.gameType));
-  if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
+  const re = reentryPriceWon(s);
+  if (re) parts.push(`리엔트리 ${re.toLocaleString()}`);
   if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
-  // 프리즈아웃 추론은 기존 의미 보존: '금액만 있고 리바이 정보가 없다'일 때만
-  if (b.amount > 0 && parts.length === 1) parts.push('프리즈아웃');
-  return parts.length > 0 ? parts.join(' · ') : '—';
+  // W-23: 리바이 정보가 없다고 '프리즈아웃'을 붙이지 않는다(미입력 ≠ 프리즈아웃).
+  // 조각 안은 줄바꿈 없는 공백 — '(50,000칩)' 만 다음 줄로 떨어지는 고아를 막는다(줄은 ' · ' 에서만 접힌다).
+  return parts.length > 0 ? parts.map((x) => x.replace(/ /g, '\u00a0')).join(' · ') : '—';
 }

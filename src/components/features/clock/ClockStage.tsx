@@ -211,7 +211,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               <CenterPanel g={g} />
               <div className="flex min-h-0 w-full flex-1 basis-0 flex-col justify-start">
                 {/* 진행률 바 → CURRENT 라벨 간격 7cqmin(종전 실측 6.3cqmin) — 오너 #3 "살짝 아래로". 높이는 내용대로(타이머 y 와 무관). */}
-                <div className="mt-[7cqmin] w-full shrink-0">
+                {/* data-amb-avoid: 모션 테마가 글자 뒤를 흐린 유리·그늘로 누르는 영역(CURRENT/NEXT·ANTE 라벨까지 한 덩어리) */}
+                <div data-amb-avoid className="mt-[7cqmin] w-full shrink-0">
                   <BlindsRow g={g} />
                 </div>
               </div>
@@ -242,7 +243,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               3줄로 접혀 칸 높이(38 → 52px)가 레일(12cqmin = 43~47px)을 넘으면, 고정 높이는 내용을 스테이지 밖으로 흘렸다 —
               전체화면에선 화면 아래로 잘리고, 창 모드에선 보드 아래 법정 고지 줄을 덮었다. 넘칠 때만 레일이 자라고 본문(flex-1)이 그만큼 준다.
               TV·PC 는 내용이 12cqmin 안이라 픽셀이 종전과 같다. 인라인인 이유는 CSS 예산(여유 0%). */}
-          <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]" style={{ minHeight: '12cqmin' }}>
+          <div data-amb-avoid className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]" style={{ minHeight: '12cqmin' }}>
             {qr ? (
               <div className="flex min-w-0 items-center gap-[1cqmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6cqmin] bg-white" style={{ width: 'clamp(34px, 5cqmin, 78px)', height: 'auto' }} />
