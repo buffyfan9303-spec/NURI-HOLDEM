@@ -41,6 +41,8 @@ describe('법적 텍스트 정합 (LEGAL-1)', () => {
   it('책임게임·연령 고지(1336·19세)가 노출 소스에 있다', () => {
     expect(notice).toContain('1336');
     expect(notice).toContain('1488');
+    // 오너 결정 2026-09-30 ⑦ — PR #68 에서 뺐던 근거 문장을 되살렸다. 다시 지우지 않는다.
+    expect(notice).toContain('국민체육진흥법 제2조 (체육의 정의). 홀덤은 신체 활동이 아닌 두뇌 경기로서 마인드 스포츠로 통칭됩니다');
     expect(footer).toContain('1336');
     expect(footer).toContain('만 19세 미만');
   });
