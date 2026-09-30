@@ -36,8 +36,11 @@ export default function MarqueeText({ text, children, className = '', testId }: 
   }, [text]);
   const body = children ?? text;
   const GAP = 32; // 복제본 사이 간격(px) — pr-8 과 일치해야 -50% 지점이 정확히 맞물린다
+  // 흐를 때만 좌우 14px 를 서서히 사라지게 한다(M-12, 2026-10-01) — 칸 경계에서 반쪽 글자가 잘려 보이던 것.
+  //   motion-safe 한정: 동작 줄이기에서는 index.css 가 정적 말줄임으로 되돌리므로 첫 글자가 흐려지면 안 된다.
+  const edgeFade = loopW > 0 ? ' motion-safe:[mask-image:linear-gradient(90deg,transparent,#000_14px,#000_calc(100%-14px),transparent)]' : '';
   return (
-    <span ref={viewportRef} data-testid={testId} className={`relative block min-w-0 overflow-hidden ${className}`}>
+    <span ref={viewportRef} data-testid={testId} className={`relative block min-w-0 overflow-hidden${edgeFade} ${className}`}>
       {/* 측정 전용(불가시) 상주 — 마퀴 전환 뒤에도 '더는 안 넘침' 복귀 판정이 가능하다 */}
       <span ref={measureRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{body}</span>
       {loopW > 0 ? (
