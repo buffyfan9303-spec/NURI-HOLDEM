@@ -1470,6 +1470,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     );
   }
 
+  // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(인원−아웃)
+  // ⚠ 추정치의 기준은 '엔트리'가 아니라 **인원**이다(2026-09-07). stats.entries 는 리바인을 포함한
+  //   총 바인 수라, 6명이 리바인을 돌린 판에서 '생존(추정) 41' 같은 숫자가 나왔다. 클락이 붙는
+  //   순간 실집계(alive=인원 기준)로 바뀌면서 같은 타일이 41 → 6 으로 튀는 것도 같은 원인이다.
+  //   인원 정의는 아래 마감 대조 줄(new Set(buyins.map(b => b.playerName)).size)과 같은 것을 쓴다.
+  // P-02(2026-10-01) — 게임 요약 띠(모바일)와 PC 정산 바가 같은 칸을 쓰도록 위로 올렸다(계산 동일).
+  const aliveLive = clockLinked && clock?.liveStats ? clock.liveStats.alive : null;
+  const aliveHeads = new Set(buyins.map((b) => b.playerName)).size;
+  const aliveEst = Math.max(0, aliveHeads - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
+  const aliveMetric = <Metric label={aliveLive != null ? '생존' : '생존(추정)'} value={`${aliveLive != null ? aliveLive : aliveEst}`} />;
+
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3 pb-48 lg:pb-28">
@@ -1508,27 +1519,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
       {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용).
           탭하면 정산바의 '정산 마감' 을 지목한다(정산바는 fixed 라 이미 화면에 있다 — 스크롤이 아니다).
+          P-02(2026-10-01): PC(lg+)는 이 띠를 숨긴다 — 아래 고정 정산 바가 같은 숫자(엔트리·완납·미수)를 이미 보여 준다.
+          띠에만 있던 '생존' 은 정산 바 칸으로 옮겼다(aliveMetric). 모바일(<1024)은 그대로.
           F4(2026-09-29): PC(lg+)는 헤더 밑에 상단 메뉴줄(GNB)이 하나 더 있어 --header-now 에 붙으면 띠가 통째로 가려졌다
           (1280·1440 실측 y60~107, 5점 모두 GNB). 내 매장 사이드바·대시보드 바와 같은 --stack-top(헤더+GNB 실측)에 붙인다. */}
       {!closed && (
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-(--header-now) lg:top-[var(--stack-top,6.0625rem)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4">
+          className="sticky top-(--header-now) lg:top-[var(--stack-top,6.0625rem)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4 lg:hidden">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
-          {(() => {
-            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(인원−아웃)
-            // ⚠ 추정치의 기준은 '엔트리'가 아니라 **인원**이다(2026-09-07). stats.entries 는 리바인을 포함한
-            //   총 바인 수라, 6명이 리바인을 돌린 판에서 '생존(추정) 41' 같은 숫자가 나왔다. 클락이 붙는
-            //   순간 실집계(alive=인원 기준)로 바뀌면서 같은 타일이 41 → 6 으로 튀는 것도 같은 원인이다.
-            //   인원 정의는 아래 마감 대조 줄(new Set(buyins.map(b => b.playerName)).size)과 같은 것을 쓴다.
-            const live = clockLinked && clock?.liveStats ? clock.liveStats.alive : null;
-            const heads = new Set(buyins.map((b) => b.playerName)).size;
-            const est = Math.max(0, heads - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
-            const alive = live != null ? live : est;
-            return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
-          })()}
+          {aliveMetric}
           <Metric label="미수" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone={stats.unpaid + stats.addon.unpaid > 0 ? 'danger' : undefined} />
         </div>
       )}
@@ -2012,13 +2014,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div className="flex items-center gap-2">
           {/* ⚠ 2026-09-14 실측(375): 4열이면 칸이 좁아 값이 숫자 중간에서 끊겼다("7,194 / .44만").
               가장 좁은 폭만 2×2 로 내린다 — sm 이상은 종전 4열 그대로(PC 렌더 불변). */}
-          <div className="grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4">
+          <div className={['grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4', !closed ? 'lg:grid-cols-5' : ''].join(' ')}>
             {/* 2026-09-11: 이 줄은 상시 떠 있는 기준선이다. 엔트리(금액 기준·소수)만 세워 두면
                 '3명 앉았는데 2.5' 가 인원으로 오독된다 — 마감 모달·대시보드처럼 **횟수를 주로**,
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
             <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
               sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
+            {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
+            {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
             {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
