@@ -324,7 +324,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
               const on = excludeTypes.has(code);
               return (
                 <button key={code} type="button" onClick={() => toggleExclude(code)}
-                  className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors lg:h-[32px] lg:px-[12px] lg:py-0',
+                  className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors lg:min-h-[32px] lg:px-[12px] lg:py-0',
                     on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base lg:bg-transparent text-ink-secondary border-border-default lg:border-current hover:text-ink-primary'].join(' ')}>
                   {label}
                 </button>
