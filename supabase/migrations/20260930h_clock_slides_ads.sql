@@ -1,6 +1,7 @@
 -- 2026-09-30 K단계 — 클락 슬라이드 광고(clock_ads) + 추가 페이지·시상 문구 서버 상한
 --
--- ⚠ 초안 — 라이브 미적용. 리드(nuri-lead)가 begin … rollback 리허설 뒤 MCP execute_sql 로 적용한다.
+-- ✅ 2026-09-30 라이브 적용 완료(리드, execute_sql 1회 · 파일 md5 4c46b2d6 본문 §①~③ 그대로). 사후: 버킷 1·트리거 2·정책 4·기존 clock_states 전 행 재저장 통과·_clock_config_limits authenticated 실행 불가·보안 어드바이저 ERROR 0.
+-- (이전 표기) 초안 — 라이브 미적용. 리드(nuri-lead)가 begin … rollback 리허설 뒤 MCP execute_sql 로 적용한다.
 --   클라이언트는 표가 없으면 빈 광고 목록으로 읽고(src/api/clockAds.ts isMissingTable), 추가 페이지·시상 문구는
 --   clock_states.config(jsonb) 에 그대로 실리므로 이 파일 없이도 동작한다. 이 파일이 더하는 것은 ① 광고 표·버킷 ② 서버 상한.
 --
