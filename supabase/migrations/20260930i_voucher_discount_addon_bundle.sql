@@ -1,74 +1,82 @@
 -- ⏳ 초안(미적용) — store-team 2026-09-30. 적용은 리드(MCP execute_sql, 이 파일 §A~§2 본문 그대로 한 번에).
--- 20260930i — 이용권 장수와 분납: ③ 할인 바인은 할인만큼 덜 받는다 · ④ 애드온 = 애드온 금액 ÷ 1만 장(포스터 N 설정 게임만) ·
---             ⑤ 이용권이 모자라면 거절 대신 '이용권 k장 + 남은 금액(현금·카드·계좌·미수)' 분납으로 받는다.
+-- 20260930i — 이용권 장수와 분납: ③ 할인 바인은 할인만큼 덜 받는다 · ④ 애드온 = 애드온 금액 기준(포스터 N 설정 게임만) ·
+--             ⑤ 이용권은 **만원 단위로만** 받고, 모자라거나 만원 미만 나머지가 있으면 '이용권 k장 + 남은 금액(현금·카드·계좌·미수)' 분납.
 --   요구 원문: .claude/agent-memory-local/nuri-lead/project_owner_decisions_0930.md 오후 결정 ③④ + 리드 결정(④는 N 설정 게임만) +
---             오너 추가 결정 2026-09-30(모자라면 분납 — 예: 5만 애드온에 3장 → 3장(3만) + 2만 다른 결제 · 10장 게임 7장 → 7장 + 3만).
+--             오너 추가 결정 2026-09-30(모자라면 분납) + 리드 결정(critical·Fable 검토 반영 2026-09-30:
+--             .claude/agent-memory-local/critical-reviewer/voucher_disc_addon_0930i_review.md — ① 분납 애드온 '티켓' 전환 틈 ② 접수대 행 이용권 장수 잠금
+--             ③ 만원 단위(floor)·금액 우선 ④ N×1만 > 참가비 막다른 길 → 필요한 장수만 묶고 나머지 장은 대기).
 --   ①(참가비≠N×1만 경고만)·②(N 미설정 게임 = 1장 = 참가 1회, 애드온도 1장)는 그대로.
 --
 -- 지금(라이브 20260930g, approve md5 458be576…): 할인이 붙어도 N장을 다 묶는다(장부 5T 인데 이용권 10장) · 애드온은 금액과 무관하게 1장 ·
---   모자라면 23514 거절뿐(분납 불가).
+--   모자라면 23514 거절뿐(분납 불가) · 8만 게임·N=10 은 10장이 아니면 승인 불가.
 --
 -- 이 파일이 바꾸는 것
 --   §A ledger_buyins.addon_ticket_count smallint default 0 (+ CHECK ≥ 0) — 애드온 분납의 이용권 몫(T). 바인 분납은 **기존 칸**
 --      (is_split · ticket_count(T) · cash/card/transfer_amount · unpaid_amount · is_unpaid)을 그대로 쓴다. 기존 행 0 = 예전 동작.
 --   §B _ledger_buyins_addon_request_guard — 화면(authenticated/anon)이 addon_ticket_count 도 못 바꾼다(트리거 칸 목록에 추가).
---   §C _ledger_buyin_addon_rule — 애드온을 지우면 이용권 몫 0 · 이용권 몫 × 1만 < 애드온 금액(남은 금액 > 0) 검사. 금액 스냅샷 규칙 불변.
---   §D _ledger_buyins_addon_voucher_restore — 이용권 몫이 남은 분납 애드온은 남은 금액 수단을 바꿔도(미수→현금 등) 이용권을 유지,
---      애드온 제거·행 삭제면 예전처럼 전부 되돌리고 몫을 0 으로.
+--   §C _ledger_buyin_addon_rule — 애드온을 지우면 이용권 몫 0 · 몫 > 0 이면 'ticket' 으로 못 바꾼다(23514) · 몫 × 1만 < 금액 검사.
+--   §D _ledger_buyins_addon_voucher_restore — 몫이 남은 분납 애드온은 남은 금액 수단을 바꿔도(미수→현금 등) 이용권 유지,
+--      애드온 제거·행 삭제면 예전처럼 전부 되돌리고 몫 0.
+--   §E _ledger_buyins_client_guard — 접수대 이용권 승인 행(request_id 있고 ticket_count > 0)의 ticket_count·is_split 을 화면이 못 바꾼다(42501).
+--      남은 금액 수단(미수→현금)은 그대로 바꿀 수 있다. 나머지 본문은 라이브(20260925g)와 같다.
 --   §1 approve_buyin_request(같은 10인자 서명 · create or replace → ACL 보존, REVOKE/GRANT 재기재)
---      · ③ 티켓 바인 행을 먼저 넣고 트리거가 확정한 discount_index 를 RETURNING 으로 읽는다(할인 종류 규칙 = kind_guard 한 곳).
---        필요 장수 = ceil(N × (참가비 − 할인) / 참가비), 최소 1 · N=1(미설정)·참가비 0 은 N 그대로.
---      · ④ 애드온 금액은 트리거가 세션 가격으로 스냅샷한 addon_amount(RETURNING, 클라 값 불신) · 필요 장수 = ceil(금액/1만) —
---        같은 매장 연결 포스터에 N(voucherPerEntry ≥ 1)이 있을 때만, 없으면 1장.
---      · 묶음(바인·애드온 한 벌): 같은 손님·영업일·매장의 대기 이용권 요청을 오래된 순 필요−1 개 잠금 → bundle_request_id = 이 요청.
---      · ⑤ 모자라면(k = 받은 장수 < 필요):
+--      · 바인: 티켓 행을 먼저 넣고 트리거가 확정한 discount_index 를 RETURNING 으로 읽는다(할인 종류 규칙 = kind_guard 한 곳).
+--        N > 1 게임이면 금액 = 참가비 − 할인, 필요 장수 = floor(금액 / 1만)(만원 단위, 금액 우선 — 할인 0·참가비 = N×1만 이면 곧 N).
+--        N ≤ 1(미설정)은 예전처럼 1장.
+--      · 애드온: 금액 = 트리거가 스냅샷한 addon_amount(RETURNING, 클라 값 불신), N 설정 게임만 필요 장수 = floor(금액 / 1만). 아니면 1장.
+--      · 금액이 1만 미만이면 이용권으로 받지 않는다(23514 — 요청 그대로).
+--      · 묶음: 같은 손님·영업일·매장의 대기 이용권 요청을 오래된 순 **필요−1 개까지만** 잠금(나머지 장은 대기로 남는다) → bundle_request_id.
+--      · 받은 k장 × 1만 < 금액이면(장수 모자람이든 만원 미만 나머지든) 남은 금액 = 금액 − k × 1만(서버 계산):
 --          p_record_buyin=false(기본) → 23514 · hint 'VOUCHER_SHORT' · detail {"need","have","ticketWon","remainder","use"} — 화면이 분납 선택을 띄운다.
---          p_record_buyin=true        → 분납 승인. 남은 금액 = (바인: 참가비−할인 / 애드온: 애드온 금액) − k×1만 을 **서버가** 정한다.
---            p_pay_method ∈ cash·card·transfer·unpaid(미수). 바인은 p_split 로 cash/card/transfer 금액을 나눠 받을 수 있고
---            합계는 _ledger_buyin_apply_amount_rule 이 검사(≠ 이면 23514). 애드온은 한 가지 방법만(addon_method + addon_unpaid).
---          k장 전부 그 행에 묶이고(바인 request_id / 애드온 addon_request_id + bundle_request_id) 취소·삭제·애드온 제거 때 전부 복원.
---          이용권이 넉넉하면 p_record_buyin=true 여도 이용권만(분납 아님).
+--          p_record_buyin=true        → 분납 승인. p_pay_method ∈ cash·card·transfer·unpaid. 바인은 기존 분납 칸 + _ledger_buyin_apply_amount_rule
+--            합계 검사, 애드온은 addon_method(+addon_unpaid) + addon_ticket_count. k장 전부 그 행에 묶이고 취소·삭제·애드온 제거 때 전부 복원.
 --      · 현금 요청(이용권 아님)의 현금·카드·이체·분납 바인, 권한·마감·세션 검사는 그대로.
 --   정산·통계: 바인 분납 행 = 1행 = 바인 1회(엔트리 = 가치/정가, 기존 buyinFinance·_ledger_buyin_tiers 식) — 이용권 kT + 나머지 수단.
---      애드온 분납 = 애드온 1회(클락 addons 는 addon_method 가 있는 행 수라 불변) — 이용권 kT + 나머지 수단(ledger.ts addonFinance 가 나눈다).
+--      애드온 분납 = 애드온 1회(클락 addons 는 addon_method 가 있는 행 수라 불변) — 이용권 kT + 나머지(ledger.ts addonFinance 가 나눈다).
 --
 -- 적용 전 확인(쓰기 없음, 리드):
 --   ① select proname, md5(prosrc) from pg_proc where proname in ('approve_buyin_request','_ledger_buyins_addon_request_guard',
---        '_ledger_buyin_addon_rule','_ledger_buyins_addon_voucher_restore');
+--        '_ledger_buyin_addon_rule','_ledger_buyins_addon_voucher_restore','_ledger_buyins_client_guard');
 --      → approve 458be576a8c8bb25de6563d5e989935c · guard c9fdce5879e80c6f4778b3677f71459b · rule c3104ae31d0e253f9aa2cf0cb6d918b5 ·
---        restore 8330ce1c4338157a7c839ab4ee5762b9 (2026-09-30 실측). 다르면 누군가 먼저 바꾼 것 — 대조 뒤 적용.
+--        restore 8330ce1c4338157a7c839ab4ee5762b9 · client_guard c99d897bed2e0f5b90551578becd600a (2026-09-30 실측). 다르면 대조 뒤 적용.
 --   ② select count(*) from information_schema.columns where table_name='ledger_buyins' and column_name='addon_ticket_count'; → 0
 --   ③ bundle_request_id 칸 존재(20260930g) → 1
 --   🔴 클라이언트보다 먼저 적용한다(새 화면의 분납 승인은 이 서버가 있어야 동작 — 옛 서버는 hint 가 없어 분납 선택이 안 뜬다).
 --
--- 리허설(라이브 한 방 트랜잭션 + 끝 RAISE 로 전량 롤백, 2026-09-30 store-team · 하네스 scratchpad kw1i/common.sql + scen2.sql).
+-- 리허설(라이브 한 방 트랜잭션 + 끝 RAISE 로 전량 롤백, 2026-09-30 store-team · 하네스 scratchpad kw1i/common.sql·scen2.sql·scen3.sql).
 --   계정: 업주 = 키키홀덤펍 소유자(admin) · 손님 = 본인인증 일반 회원 · 음성 = 다른 매장(E2E) 업주. 참가비 10만 · 포스터 N=10(트랜잭션 안에서만).
---   | 시나리오                                | PRE(라이브)                                  | POST(이 파일)                                                         |
---   | A 첫 리바인 50%, 5장                      | 23514(10장 필요) · 0행                FAIL   | ok · 2행 [1:d0 2:d1] · 5장 used/buyin · 취소 → 5장 active       PASS |
---   | C 할인 0, 10장                            | 1행                                          | 1행(불변)                                                             |
---   | D 애드온 5만(N 설정), 5장                  | 1장만 씀 · 4장 '이미 애드온'          FAIL   | 5장 used/addon · 대기 0 · 취소 → 5장 active                     PASS |
---   | I 애드온 5만, N 미설정 게임                | 1장 · 대기 1                                  | 1장 · 대기 1(불변, 결정 ②)                                      PASS |
---   | S1 10장 게임 7장 · 그냥 승인               | 23514                                        | 23514 hint VOUCHER_SHORT '7장(70000원)에 남은 30000원…'               |
---   | S1 7장 + 현금                              | 23514                                 FAIL   | 1행 split tk=7 cash=30000 · tiers {3만,10만,10만} · 승인 7 · 묶임 6  PASS |
---   | S1 그 바인 취소                            | —                                            | 7장 active                                                      PASS |
---   | S4 7장 + 미수                              | 23514                                 FAIL   | pm=ticket split tk=7 unpaid=30000 is_unpaid · tiers {0,7만,10만}  PASS |
---   | S2 애드온 5만 3장 + 카드                   | 1장만 씀 · 나머지 '이미 애드온'        FAIL   | add=card/50000 tk=3 · 3장 used/addon                            PASS |
---   | S2 화면이 addon_ticket_count 변경          | (칸 없음)                                    | 42501                                                           PASS |
---   | S2 화면이 수단 카드→현금                   | (1장 복원)                                    | tk=3 유지 · 3장 used/addon                                      PASS |
---   | S2 화면이 애드온 제거                      | —                                            | tk=0 · 3장 active                                               PASS |
---   | S3 애드온 3장 + 미수 → 미수 해제 → 행 삭제  | 1장만 씀                              FAIL   | cash/50000 tk=3 unpaid → unpaid 해제(3장 유지) → 삭제 3장 active PASS |
---   | S5 10장 넉넉 + 현금 지정                   | 1행 ticket                                   | 1행 ticket(분납 아님)                                           PASS |
---   | F 양성: N 미설정 + 할인 2장                 | 2행 d1,d1                                    | 동일                                                                  |
---   | G 양성: 현금 바인 할인(N=10 게임)            | cash 50000 d1                                | 동일                                                                  |
---   | H 음성: 다른 매장 업주 · 비로그인            | 권한 없음 · 42501                              | 동일                                                                  |
---   | ACL approve anon/auth                      | f/t                                          | f/t · 내부 함수 3개 authenticated=f(§2 자가검사 통과)                 |
---   적용 직후 md5(prosrc) — 파일 본문과 일치: approve 14e1868265e7f84a072c235003027c68 · guard fad4fc8e9e673805e310855d87f1a2e4 ·
---     rule ccc88ca6bcb3c77c9af065cd3610905e · restore f1d77776be662d4deeef8c357dca3f12.
---   롤백 확인: 프로브 없음 · addon_ticket_count 칸 0 · 네 함수 md5 적용 전 값 그대로 · 포스터 buy_in md5 348ae304…(그대로) · 리허설 이용권 0.
+--   PRE = 라이브 함수, POST = 이 파일 본문(§A~§2). POST 는 두 번(기존 반례 / 새 반례) — 둘 다 네 함수 md5 가 파일과 일치.
+--   | 시나리오                                   | PRE(라이브)                             | POST(이 파일)                                                          |
+--   | A 첫 리바인 50%, 5장                         | 23514 · 0행                     FAIL    | 2행 [d0, d1] · 5장 used/buyin · 취소 → 5장 active                PASS |
+--   | B 50% 리바인 4장                             | 23514                                   | 23514 VOUCHER_SHORT '5장까지 · 받은 4장 · 남은 1만'                    |
+--   | C 할인 0, 10장                               | 1행                                     | 1행(불변)                                                              |
+--   | D 애드온 5만(N 설정), 5장                     | 1장만 씀                        FAIL    | 5장 used/addon · 취소 → 5장 active                               PASS |
+--   | E 애드온 5만, 3장                             | 1장으로 애드온                  FAIL    | 23514 VOUCHER_SHORT '받은 3장(3만) · 남은 2만'                   PASS |
+--   | I 애드온 5만, N 미설정 게임                   | 1장 · 대기 1                             | 1장 · 대기 1(불변, 결정 ②)                                       PASS |
+--   | S1 10장 게임 7장 + 현금 · 취소                | 23514                           FAIL    | split tk=7 cash=3만 · tiers {3만,10만,10만} · 취소 → 7장 active   PASS |
+--   | S4 7장 + 미수                                 | 23514                           FAIL    | pm=ticket split tk=7 unpaid=3만 · tiers {0,7만,10만}             PASS |
+--   | S2 애드온 3장 + 카드 · 몫 변경 · 카드→현금 · 제거 | 1장만 씀                    FAIL    | card/5만 tk=3 · 몫 변경 42501 · 수단 변경 3장 유지 · 제거 3장 active PASS |
+--   | S3 애드온 3장 + 미수 → 미수 해제 → 삭제        | 1장만 씀                        FAIL    | cash/5만 tk=3 미수 → 해제(3장 유지) → 삭제 3장 active           PASS |
+--   | S5 10장 넉넉 + 현금 지정                      | 1행 ticket                               | 1행 ticket(분납 아님)                                                  |
+--   | N1 첫 리바인 3.5만 할인(6.5만) · 7장          | 23514                           FAIL    | 23514 VOUCHER_SHORT '6장까지 · 남은 5천' → +현금: split tk=6 cash=5천 · tiers {5천,6.5만,6.5만} · 1장 대기 PASS |
+--   | N2 8만 게임·N=10 · 9장                        | 23514(막다른 길)                FAIL    | 1행 ticket · 8장만 묶음 · 1장 대기 · tiers {0,8만,8만}            PASS |
+--   | N3 분납 애드온을 화면이 티켓 완납/미수로        | ok(전액 이용권으로 셈)          FAIL    | 23514 '티켓으로 바꿀 수 없습니다' · 행 card/5만 tk=3 그대로      PASS |
+--   | N4 분납 바인을 화면이 3장·현금 7만 / 분납 해제   | ok                              FAIL    | 42501 둘 다 · 행 tk=7 cash=3만 그대로                            PASS |
+--   | N5 양성: 7장 + 미수 → 화면이 미수를 현금 수납    | (분납 불가)                              | ok · tk=7 cash=3만 · tiers {3만,10만,10만}                       PASS |
+--   | N6 금액 5천(9.5만 할인) 바인 1장                | 23514(10장 필요)                         | 23514 '1만 원보다 작아 이용권으로 받을 수 없습니다' · 요청 대기  PASS |
+--   | F 양성: N 미설정 + 할인 2장                    | 2행 d1,d1                                | 동일                                                                   |
+--   | G 양성: 현금 바인 할인(N=10 게임)               | cash 5만 d1                              | 동일                                                                   |
+--   | H 음성: 다른 매장 업주 · 비로그인               | 권한 없음 · 42501                          | 동일                                                                   |
+--   | 정산 합계(게임 15~19, _ledger_buyin_tiers 합)    | 15 {0,10만,10만} 17 {0,10만,10만}         | 15 {5천,16.5만,16.5만} 16 {0,8만,8만} 17 {0,10만,10만} 18 {3만,10만,10만} 19 {3만,10만,10만} |
+--   | §2 자가검사(ACL·트리거 3·client_guard authenticated=f) | —                                  | 통과                                                                   |
+--   적용 직후 md5(prosrc) — 파일 본문과 일치: approve 0ad50eb63b99e610281bc5ff9586db2b · guard fad4fc8e9e673805e310855d87f1a2e4 ·
+--     rule 35e7504abaae6d7c62ce93f3eaebdfde · restore f1d77776be662d4deeef8c357dca3f12 · client_guard eee44d4d0c9c53e9fda390227d5f30c2.
+--   롤백 확인: 프로브 없음 · addon_ticket_count 칸 0 · 다섯 함수 md5 적용 전 값 그대로 · 포스터 buy_in md5 348ae304…(그대로) · 리허설 이용권 0.
 --   NOT_RUN: 두 접수대 동시 승인(deadlock) · 바인 분납의 p_split 금액 나눔(화면은 단일 수단만 보냄 — 합계 검사는 기존 함수) ·
---            N×1만 > 참가비 게임에서 k장이 이미 금액 이상인 경계(서버가 23514 로 막는다, 리허설 미실행).
---   관찰(범위 밖, 기존 동작): 바인 취소로 active 복원된 이용권의 used_for 가 남는다(PRE 도 동일) — 후속 과제.
--- 적용 후 기대 md5(prosrc): 위 네 값(파일 본문 그대로 적용했을 때).
+--            N=1 로 명시한 포스터의 애드온(N 설정이라 금액 규칙이 켜진다 — 바인은 1장 그대로).
+--   남은 틈(범위 밖, 기존): 전액 이용권 바인 행(ticket_count 0)을 화면이 현금으로 바꾸는 것(§E 는 분납 행만 잠근다) ·
+--            update_ledger_buyin_reduce(비밀번호 RPC, definer)는 client_guard 를 건너뛴다 · 취소로 복원된 이용권의 used_for 잔존.
+-- 적용 후 기대 md5(prosrc): 위 다섯 값(파일 본문 그대로 적용했을 때).
 
 -- §A ── 애드온 이용권 분납 칸 ──────────────────────────────────────────────────────────────
 --   바인 분납은 기존 칸(is_split·ticket_count·cash/card/transfer·unpaid_amount)을 그대로 쓴다. 애드온은 수단 칸이 하나뿐이라
@@ -129,7 +137,11 @@ begin
     end if;
     new.addon_amount := v_price;
   end if;
-  if new.addon_method <> 'ticket' and coalesce(new.addon_ticket_count, 0) > 0
+  if new.addon_method = 'ticket' and coalesce(new.addon_ticket_count, 0) > 0 then
+    raise exception '이용권 분납 애드온은 티켓으로 바꿀 수 없습니다 — 남은 금액의 수단만 바꾸거나, 애드온을 지우고 다시 승인하세요'
+      using errcode = '23514';
+  end if;
+  if coalesce(new.addon_ticket_count, 0) > 0
      and new.addon_ticket_count::int * 10000 >= new.addon_amount then
     raise exception '애드온 이용권 몫(%원)이 애드온 금액(%원) 이상입니다', new.addon_ticket_count::int * 10000, new.addon_amount
       using errcode = '23514';
@@ -173,6 +185,65 @@ drop trigger if exists trg_ledger_buyins_addon_voucher_restore on public.ledger_
 create trigger trg_ledger_buyins_addon_voucher_restore before update of addon_method, addon_request_id, addon_ticket_count or delete on public.ledger_buyins
   for each row execute function public._ledger_buyins_addon_voucher_restore();
 
+-- §E ── 화면 가드: 접수대 이용권 승인 행의 이용권 장수(ticket_count)·분납 여부는 화면이 못 바꾼다 ─────────────
+--   묶인 이용권 k장(request_id + bundle_request_id)과 장부 T(ticket_count)가 갈리지 않게. 남은 금액 수단(미수→현금 등)은 그대로 바꿀 수 있다.
+--   나머지는 라이브 본문(20260925g, md5 c99d897b…)과 한 글자도 다르지 않다.
+create or replace function public._ledger_buyins_client_guard()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+declare v_price numeric; v_discs jsonb; o bigint[]; n bigint[];
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.request_id is not null then
+      raise exception '바인 요청 연결은 서버만 설정할 수 있습니다' using errcode = '42501';
+    end if;
+    new.created_by := auth.uid();
+    new.buyin_at := now();
+    if coalesce(public.can_access_ledger(new.venue_id), false) then
+      new := public._ledger_buyin_apply_amount_rule(new);
+    end if;
+  else
+    if new.request_id is distinct from old.request_id
+       or new.created_by is distinct from old.created_by
+       or new.buyin_at is distinct from old.buyin_at
+       or new.venue_id is distinct from old.venue_id
+       or new.session_date is distinct from old.session_date then
+      raise exception '기록자·기록 시각·매장·요청 연결은 바꿀 수 없습니다' using errcode = '42501';
+    end if;
+    if new.game_seq is distinct from old.game_seq then
+      raise exception '기록의 게임 번호는 바꿀 수 없습니다' using errcode = '42501';
+    end if;
+    if new.player_name is distinct from old.player_name or new.entry_no is distinct from old.entry_no then
+      raise exception '바인의 손님·순번은 직접 바꿀 수 없습니다 — 이름 변경은 플레이어 이름 수정으로 하세요' using errcode = '42501';
+    end if;
+    if old.request_id is not null and coalesce(old.ticket_count, 0) > 0
+       and (new.ticket_count is distinct from old.ticket_count or new.is_split is distinct from old.is_split) then
+      raise exception '접수대에서 이용권으로 승인한 바인의 이용권 장수는 바꿀 수 없습니다 — 남은 금액의 수단만 바꾸거나, 바인을 취소하고 다시 승인하세요'
+        using errcode = '42501';
+    end if;
+    if (new.payment_method, new.is_unpaid, new.is_split, new.cash_amount, new.card_amount, new.transfer_amount,
+        new.ticket_count, new.unpaid_amount, new.discount_index)
+       is distinct from
+       (old.payment_method, old.is_unpaid, old.is_split, old.cash_amount, old.card_amount, old.transfer_amount,
+        old.ticket_count, old.unpaid_amount, old.discount_index) then
+      new := public._ledger_buyin_apply_amount_rule(new);
+    end if;
+    select s.buyin_amount, s.discounts into v_price, v_discs
+      from public.ledger_sessions s
+     where s.venue_id = old.venue_id and s.session_date = old.session_date and s.game_seq = old.game_seq;
+    o := public._ledger_buyin_tiers(old, v_price, v_discs);
+    n := public._ledger_buyin_tiers(new, v_price, v_discs);
+    if n[1] < o[1] or n[2] < o[2] or n[3] < o[3] then
+      raise exception '매출이 줄어드는 수정은 업주 취소 비밀번호가 필요합니다'
+        using errcode = '42501', hint = 'LEDGER_REDUCE_NEEDS_PASSWORD';
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function public._ledger_buyins_client_guard() from public, anon, authenticated;
+
 -- §1 ── 승인(할인 바인 = 덜 받음 · 애드온 = 금액 ÷ 1만 장 · 모자라면 분납) ─────────────────────
 create or replace function public.approve_buyin_request(
   p_request_id uuid, p_game_seq smallint default 1, p_record_buyin boolean default false, p_pay_method text default 'cash'::text,
@@ -208,6 +279,7 @@ declare
   v_rem int;
   v_row ledger_buyins;
   v_pm_short boolean := false;
+  v_val int;
 begin
   select * into r from ledger_buyin_requests where id = p_request_id for update;
   if not found then raise exception '요청을 찾을 수 없습니다'; end if;
@@ -294,10 +366,11 @@ begin
       end if;
       update ledger_buyins set addon_method = 'ticket', addon_unpaid = false, addon_request_id = r.id where id = v_target
         returning addon_amount into v_addon_amt;
-      -- ④ 애드온 이용권 장수 = 애드온 금액(트리거가 세션 가격으로 스냅샷한 값) ÷ 1만, 올림, 최소 1.
+      -- ④ 애드온 이용권 = 애드온 금액(트리거가 세션 가격으로 스냅샷한 값)의 **만원 단위**만(floor). 만원 미만 나머지는 분납.
       --    포스터에 N 이 설정된 게임에서만. N 미설정 게임은 예전처럼 1장(결정 ②).
       if v_n_set then
-        v_need := greatest(1, ceil(greatest(0, coalesce(v_addon_amt, 0))::numeric / 10000))::int;
+        v_val := greatest(0, coalesce(v_addon_amt, 0));
+        v_need := greatest(1, floor(v_val / 10000.0))::int;
       end if;
     else
       select coalesce(max(entry_no), 0) + 1 into v_entry
@@ -311,17 +384,25 @@ begin
       if coalesce(v_row_idx, 0) > 0 and jsonb_typeof(v_discounts) = 'array' and jsonb_array_length(v_discounts) >= v_row_idx then
         v_row_disc := least(v_amt, greatest(0, round(coalesce((v_discounts -> (v_row_idx - 1) ->> 'amount')::numeric, 0))))::int;
       end if;
+      -- ③ 이용권은 **만원 단위로만** 받는다(리드 결정 2026-09-30): 필요 장수 = floor((참가비 − 할인) / 1만), 만원 미만 나머지는 분납.
+      --    N 과 금액이 다르면 금액이 우선. 할인 0·참가비 = N×1만 이면 floor 가 곧 N 이다. N ≤ 1(미설정)은 예전처럼 1장(결정 ②).
       if v_n > 1 and v_amt > 0 then
-        v_need := greatest(1, ceil(v_n::numeric * (v_amt - v_row_disc) / v_amt))::int;
+        v_val := greatest(0, v_amt - v_row_disc);
+        v_need := greatest(1, floor(v_val / 10000.0))::int;
       else
         v_need := v_n;
       end if;
     end if;
 
+    if v_val is not null and v_val < 10000 then
+      raise exception '이 %은 금액(%원)이 1만 원보다 작아 이용권으로 받을 수 없습니다 — 요청을 거절하고 다른 결제로 받으세요',
+        case when v_use = 'addon' then '애드온' else '바인' end, v_val using errcode = '23514';
+    end if;
     if v_need > 1 then
       if r.user_id is null then
         raise exception '이 요청은 손님 계정이 없어 이용권을 묶을 수 없습니다' using errcode = '23514';
       end if;
+      -- 필요한 장수까지만 잠근다 — 더 쓴 장은 대기로 남는다(과다 차감 없음).
       select coalesce(array_agg(x.id order by x.created_at, x.id), '{}'::uuid[]) into v_bundle
         from (select q.id, q.created_at
                 from ledger_buyin_requests q
@@ -332,60 +413,58 @@ begin
                limit v_need - 1
                for update) x;
       v_got := coalesce(array_length(v_bundle, 1), 0);
-      if v_got < v_need - 1 then
-        -- 모자람 — 받은 k장(1장 = 1만)에 남은 금액을 다른 수단으로 받는 분납(오너 결정 2026-09-30). 금액은 서버가 정한다.
-        v_k := v_got + 1;
-        v_rem := case when v_use = 'addon' then coalesce(v_addon_amt, 0) else greatest(0, v_amt - v_row_disc) end - v_k * 10000;
-        if not v_pm_short then
-          raise exception '이용권이 모자랍니다 — 이 %은 이용권 %장인데 받은 사용 요청은 %장입니다. 이용권 %장(%원)에 남은 %원을 현금·카드·계좌·미수로 받아 승인할 수 있습니다',
-            case when v_use = 'addon' then '애드온' else '바인' end, v_need, v_k, v_k, v_k * 10000, greatest(v_rem, 0)
-            using errcode = '23514', hint = 'VOUCHER_SHORT',
-                  detail = json_build_object('need', v_need, 'have', v_k, 'ticketWon', v_k * 10000, 'remainder', greatest(v_rem, 0), 'use', v_use)::text;
-        end if;
-        if v_rem <= 0 then
-          raise exception '받은 이용권 %장(%원)이 이미 금액 이상입니다 — 남은 사용 요청을 모두 받은 뒤 승인하세요', v_k, v_k * 10000
-            using errcode = '23514';
-        end if;
-        if v_pm not in ('cash', 'card', 'transfer', 'unpaid') then
-          raise exception '남은 금액의 결제 방법이 올바르지 않습니다' using errcode = '22023';
-        end if;
-        if v_use = 'addon' then
-          if p_split then
-            raise exception '애드온의 남은 금액은 한 가지 방법으로 받습니다' using errcode = '22023';
-          end if;
-          -- 애드온 = addon_method(남은 금액 수단) + addon_ticket_count(이용권 k장). 미수는 addon_unpaid.
-          update ledger_buyins
-             set addon_method = case when v_pm = 'unpaid' then 'cash' else v_pm end,
-                 addon_unpaid = (v_pm = 'unpaid'), addon_ticket_count = v_k
-           where id = v_target;
-        else
-          -- 바인 = 기존 분납 행(is_split · ticket_count(T) · cash/card/transfer · unpaid_amount). 합계는 금액 규칙 함수가 검사한다.
-          select * into v_row from ledger_buyins where id = v_bid;
-          v_row.is_split := true;
-          v_row.ticket_count := v_k;
-          v_row.cash_amount := 0; v_row.card_amount := 0; v_row.transfer_amount := 0; v_row.unpaid_amount := 0;
-          if p_split then
-            v_row.cash_amount := coalesce(p_cash, 0); v_row.card_amount := coalesce(p_card, 0); v_row.transfer_amount := coalesce(p_transfer, 0);
-          elsif v_pm = 'unpaid' then v_row.unpaid_amount := v_rem;
-          elsif v_pm = 'card' then v_row.card_amount := v_rem;
-          elsif v_pm = 'transfer' then v_row.transfer_amount := v_rem;
-          else v_row.cash_amount := v_rem;
-          end if;
-          v_row.is_unpaid := v_row.unpaid_amount > 0;
-          -- 대표 수단 = ledger.ts upsertBuyinSplit 과 같은 규칙(돈이 0 이고 이용권뿐이면 ticket).
-          v_row.payment_method := case
-            when v_row.cash_amount + v_row.card_amount + v_row.transfer_amount = 0 then 'ticket'
-            when v_row.card_amount >= v_row.cash_amount and v_row.card_amount >= v_row.transfer_amount and v_row.card_amount > 0 then 'card'
-            when v_row.transfer_amount > v_row.cash_amount and v_row.transfer_amount > 0 then 'transfer'
-            else 'cash' end;
-          v_row := public._ledger_buyin_apply_amount_rule(v_row);   -- 합계 ≠ 참가비−할인이면 23514
-          update ledger_buyins
-             set is_split = true, ticket_count = v_row.ticket_count, cash_amount = v_row.cash_amount, card_amount = v_row.card_amount,
-                 transfer_amount = v_row.transfer_amount, unpaid_amount = v_row.unpaid_amount, is_unpaid = v_row.is_unpaid,
-                 payment_method = v_row.payment_method
-           where id = v_bid;
-        end if;
+    end if;
+    v_k := v_got + 1;
+    -- 남은 금액 = 금액 − k × 1만(금액 기준 게임에서만). 모자란 장수든 만원 미만 나머지든 같은 분납 경로로 받는다.
+    v_rem := case when v_val is null then 0 else v_val - v_k * 10000 end;
+    if v_rem > 0 then
+      if not v_pm_short then
+        raise exception '남은 금액이 있습니다 — 이 %은 이용권 %장까지 받습니다(만원 단위). 받은 사용 요청 %장(%원) · 남은 %원을 현금·카드·계좌·미수로 받아 승인하세요',
+          case when v_use = 'addon' then '애드온' else '바인' end, v_need, v_k, v_k * 10000, v_rem
+          using errcode = '23514', hint = 'VOUCHER_SHORT',
+                detail = json_build_object('need', v_need, 'have', v_k, 'ticketWon', v_k * 10000, 'remainder', v_rem, 'use', v_use)::text;
       end if;
+      if v_pm not in ('cash', 'card', 'transfer', 'unpaid') then
+        raise exception '남은 금액의 결제 방법이 올바르지 않습니다' using errcode = '22023';
+      end if;
+      if v_use = 'addon' then
+        if p_split then
+          raise exception '애드온의 남은 금액은 한 가지 방법으로 받습니다' using errcode = '22023';
+        end if;
+        -- 애드온 = addon_method(남은 금액 수단) + addon_ticket_count(이용권 k장). 미수는 addon_unpaid.
+        update ledger_buyins
+           set addon_method = case when v_pm = 'unpaid' then 'cash' else v_pm end,
+               addon_unpaid = (v_pm = 'unpaid'), addon_ticket_count = v_k
+         where id = v_target;
+      else
+        -- 바인 = 기존 분납 행(is_split · ticket_count(T) · cash/card/transfer · unpaid_amount). 합계는 금액 규칙 함수가 검사한다.
+        select * into v_row from ledger_buyins where id = v_bid;
+        v_row.is_split := true;
+        v_row.ticket_count := v_k;
+        v_row.cash_amount := 0; v_row.card_amount := 0; v_row.transfer_amount := 0; v_row.unpaid_amount := 0;
+        if p_split then
+          v_row.cash_amount := coalesce(p_cash, 0); v_row.card_amount := coalesce(p_card, 0); v_row.transfer_amount := coalesce(p_transfer, 0);
+        elsif v_pm = 'unpaid' then v_row.unpaid_amount := v_rem;
+        elsif v_pm = 'card' then v_row.card_amount := v_rem;
+        elsif v_pm = 'transfer' then v_row.transfer_amount := v_rem;
+        else v_row.cash_amount := v_rem;
+        end if;
+        v_row.is_unpaid := v_row.unpaid_amount > 0;
+        -- 대표 수단 = ledger.ts upsertBuyinSplit 과 같은 규칙(돈이 0 이고 이용권뿐이면 ticket).
+        v_row.payment_method := case
+          when v_row.cash_amount + v_row.card_amount + v_row.transfer_amount = 0 then 'ticket'
+          when v_row.card_amount >= v_row.cash_amount and v_row.card_amount >= v_row.transfer_amount and v_row.card_amount > 0 then 'card'
+          when v_row.transfer_amount > v_row.cash_amount and v_row.transfer_amount > 0 then 'transfer'
+          else 'cash' end;
+        v_row := public._ledger_buyin_apply_amount_rule(v_row);   -- 합계 ≠ 참가비−할인이면 23514
+        update ledger_buyins
+           set is_split = true, ticket_count = v_row.ticket_count, cash_amount = v_row.cash_amount, card_amount = v_row.card_amount,
+               transfer_amount = v_row.transfer_amount, unpaid_amount = v_row.unpaid_amount, is_unpaid = v_row.is_unpaid,
+               payment_method = v_row.payment_method
+         where id = v_bid;
+      end if;
+    end if;
+    if v_got > 0 then
       -- 묶인 장들: 같은 바인 1회(또는 애드온 1회)의 몫. 행을 만들지 않는다(취소·제거하면 _restore_voucher_for_request 가 함께 되돌린다).
       update ledger_buyin_requests
          set status = 'approved', game_seq = p_game_seq, resolved_at = now(), resolved_by = auth.uid(), bundle_request_id = r.id
@@ -451,7 +530,8 @@ begin
   if has_function_privilege('authenticated', 'public._ledger_buyins_addon_request_guard()', 'execute')
      or has_function_privilege('authenticated', 'public._ledger_buyin_addon_rule()', 'execute')
      or has_function_privilege('authenticated', 'public._ledger_buyins_addon_voucher_restore()', 'execute')
-     or has_function_privilege('anon', 'public._ledger_buyins_addon_voucher_restore()', 'execute') then
+     or has_function_privilege('anon', 'public._ledger_buyins_addon_voucher_restore()', 'execute')
+     or has_function_privilege('authenticated', 'public._ledger_buyins_client_guard()', 'execute') then
     raise exception 'ABORT: 애드온 내부 함수가 화면에서 실행 가능하다';
   end if;
   if (select count(*) from pg_trigger where tgrelid = 'public.ledger_buyins'::regclass and not tgisinternal

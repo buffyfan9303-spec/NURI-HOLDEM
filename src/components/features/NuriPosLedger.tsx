@@ -3731,7 +3731,8 @@ function AddonRow({ buyin, amount, busy, onSet }: {
         onChange={(e) => { const o = ADDON_OTHER.find((x) => x.key === e.target.value); if (o) onSet({ method: o.method, unpaid: o.unpaid }); }}
         className="input h-11 w-full text-xs disabled:opacity-50">
         <option value="">다른 수단 (카드·이체·티켓)</option>
-        {ADDON_OTHER.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        {/* 20260930i — 이용권 분납 애드온은 '티켓' 으로 바꿀 수 없다(서버도 막는다). 남은 금액 수단만 고른다. */}
+        {ADDON_OTHER.filter((o) => !((buyin?.addonTicketCount ?? 0) > 0 && o.method === 'ticket')).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
       </select>
       {!buyin && <p className="whitespace-nowrap text-2xs text-ink-muted">바인을 먼저 기록하면 애드온을 붙일 수 있어요.</p>}
       {buyin && amount <= 0 && <p className="text-2xs text-ink-muted">‘세션 정보 수정’에서 애드온 가격을 넣어 주세요.</p>}

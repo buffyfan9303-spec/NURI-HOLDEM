@@ -48,6 +48,11 @@ describe('20260930i 애드온 분납 — 5만 애드온에 이용권 3장', () =
     const a = addonFinance(row({ ...base, addon_method: 'cash', addon_unpaid: true, addon_ticket_count: 3 }));
     expect(a).toMatchObject({ count: 1, revenue: 0, unpaid: 20_000, ticketWon: 30_000 });
   });
+  it('이용권 몫이 남은 채 수단이 ticket·미수인 행(옛 데이터·서버 차단 전): 이용권 3만 · 미수 2만 — 이용권을 금액 전부로 세지 않는다', () => {
+    const a = addonFinance(row({ ...base, addon_method: 'ticket', addon_unpaid: true, addon_ticket_count: 3 }));
+    expect(a).toMatchObject({ count: 1, revenue: 0, unpaid: 20_000, ticketWon: 30_000 });
+    expect(a.tender).toMatchObject({ ticket: 30_000, unpaid: 20_000 });
+  });
   it('기존 동작 유지: 전액 이용권 · 현금 완납 · 현금 미수', () => {
     expect(addonFinance(row({ ...base, addon_method: 'ticket', addon_unpaid: false }))).toMatchObject({ revenue: 0, ticketWon: 50_000, unpaid: 0 });
     expect(addonFinance(row({ ...base, addon_method: 'cash', addon_unpaid: false }))).toMatchObject({ revenue: 50_000, ticketWon: 0 });

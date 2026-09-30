@@ -337,8 +337,9 @@ export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' 
   const amt = Math.max(0, Math.round(b.addonAmount ?? 0));
   const tender: Tender = { ...ZERO_TENDER };
   // 20260930i — 이용권 분납 애드온: 이용권 k장(k × 1만)은 이미 받았고, 남은 금액만 addon_method(또는 미수)다.
-  //   (addon_method = 'ticket' 이면 전액 이용권이라 이 칸은 0.) 서버 트리거가 k × 1만 < 금액을 보장한다.
-  const tk = m === 'ticket' ? 0 : Math.min(amt, Math.max(0, Math.round(b.addonTicketCount ?? 0)) * TICKET_WON);
+  //   수단과 무관하게 이용권 몫을 먼저 뗀다(Fable·critical 2026-09-30) — 전액 이용권(ticket 완납)만 금액 전부가 이용권이다.
+  //   서버는 몫 > 0 인 애드온을 'ticket' 으로 못 바꾸게 막고(20260930i §C) 몫 × 1만 < 금액을 보장한다.
+  const tk = Math.min(amt, Math.max(0, Math.round(b.addonTicketCount ?? 0)) * TICKET_WON);
   const rest = amt - tk;
   tender.ticket = tk;
   if (b.addonUnpaid) { tender.unpaid = rest; return { count: 1, revenue: 0, unpaid: rest, ticketWon: tk, tender }; }
