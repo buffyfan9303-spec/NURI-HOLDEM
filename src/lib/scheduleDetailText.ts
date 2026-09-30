@@ -34,14 +34,28 @@ export function reentryText(s: S): string {
   return `${stacks.map((n) => n.toLocaleString()).join(' → ')}${limit ? ` · 최대 ${limit}회` : ''}`;
 }
 
+/** 칩 축약 — 값이 바뀌지 않을 때만 K/M(70,000→70K · 1,500,000→1.5M · 72,555→72,555).
+ *  라이브 탭 blindShort 와 같은 규칙(소수 2자리로 되돌려 원값과 같을 때만). 칩 수라 금액이 아니다(§28 무관). */
+export function chipShort(n: number): string {
+  for (const [div, u] of [[1_000_000, 'M'], [1_000, 'K']] as const) {
+    if (n < div) continue;
+    const r = Math.round((n / div) * 100) / 100;
+    if (Math.abs(r * div - n) < 0.5) return `${r}${u}`;
+  }
+  return n.toLocaleString();
+}
+
 /** 상세 요약 칸(390·360·320 에서 **한 줄**)용 — 값은 한 줄에 들어가는 길이만, 나머지는 보조 줄.
- *  · 단계 2개 이하: `70,000 → 80,000` · 3개 이상: `70,000 → 100,000`(첫 값 → 마지막 값) + 보조 줄에 `4단계`.
+ *  · 단계 2개 이하: `70K → 80K` · 3개 이상: `70K → 100K`(첫 값 → 마지막 값) + 보조 줄에 `4단계`.
+ *  · 화살표 값은 chipShort 로 축약한다. 2026-09-30 실측(Pretendard, 요약 칸 글자 공간 117.6px@320):
+ *    `70,000 → 100,000` 은 윈도우 여유 0.95px·CI 리눅스 −5px(넘침), `1,000,000 → 1,500,000` 은 390 에서도 −21px.
+ *  · 단일 값은 전체 숫자(`1,000,000` 도 76.6px 로 들어간다).
  *  · 한도(`최대 N회`)는 값이 아니라 항상 보조 줄로 — 폭이 좁아지는 320 에서도 값이 접히지 않게.
- *  · 전체 계단은 reentryText(게임 정보 행 — 여러 줄 허용)가 그대로 보인다. */
+ *  · 전체 계단은 reentryText(게임 정보 행 — 여러 줄 허용)가 전체 숫자로 그대로 보인다. */
 export function reentrySummary(s: S): { value: string; sub?: string } {
   const stacks = reentryStacks(s);
   if (stacks.length === 0) return { value: reentryText(s) };
-  const fmt = (n: number) => n.toLocaleString();
+  const fmt = stacks.length >= 2 ? chipShort : (n: number) => n.toLocaleString();
   const limit = s.buyIn?.rebuyLimit;
   const sub = [stacks.length >= 3 ? `${stacks.length}단계` : '', limit ? `최대 ${limit}회` : ''].filter(Boolean).join(' · ');
   return { value: stacks.length >= 3 ? `${fmt(stacks[0])} → ${fmt(stacks[stacks.length - 1])}` : stacks.map(fmt).join(' → '), sub: sub || undefined };

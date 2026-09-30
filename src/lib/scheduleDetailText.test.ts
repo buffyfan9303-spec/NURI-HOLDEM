@@ -1,6 +1,6 @@
 // KW-3(2026-09-30) — 일정 상세·카드 표시 계층. 입력은 운영 시드 12건(d0e20929-5eed-…)의 실제 모양이다.
 import { describe, it, expect } from 'vitest';
-import { startChips, reentryText, reentrySummary, reentryPriceWon, breakText } from './scheduleDetailText';
+import { startChips, reentryText, reentrySummary, chipShort, reentryPriceWon, breakText } from './scheduleDetailText';
 import { titleWithoutGtd } from '../components/features/ScheduleCard';
 
 const s = (buyIn: Record<string, unknown>, structure?: Record<string, unknown>) =>
@@ -30,12 +30,20 @@ describe('리엔트리 = 스택(오너 2026-09-30) · W-23 미입력 단정 금�
 });
 
 describe('요약 칸 — 한 줄에 들어가는 길이만(3개 이상은 첫 → 마지막 + 단계 수), 한도는 보조 줄', () => {
-  it('2단계 이하는 전부', () => expect(reentrySummary(s({ rebuyStacks: [70000, 80000] }))).toEqual({ value: '70,000 → 80,000', sub: undefined }));
+  it('2단계 이하는 전부', () => expect(reentrySummary(s({ rebuyStacks: [70000, 80000] }))).toEqual({ value: '70K → 80K', sub: undefined }));
   it('3단계 이상은 첫 → 마지막 + 단계 수(중복은 먼저 접는다)', () =>
-    expect(reentrySummary(s({ rebuyStacks: [70000, 70000, 80000, 90000, 100000] }))).toEqual({ value: '70,000 → 100,000', sub: '4단계' }));
+    expect(reentrySummary(s({ rebuyStacks: [70000, 70000, 80000, 90000, 100000] }))).toEqual({ value: '70K → 100K', sub: '4단계' }));
   it('한도는 값이 아니라 보조 줄로', () => {
-    expect(reentrySummary(s({ rebuyStacks: [70000, 80000, 90000, 100000], rebuyLimit: 3 }))).toEqual({ value: '70,000 → 100,000', sub: '4단계 · 최대 3회' });
+    expect(reentrySummary(s({ rebuyStacks: [70000, 80000, 90000, 100000], rebuyLimit: 3 }))).toEqual({ value: '70K → 100K', sub: '4단계 · 최대 3회' });
     expect(reentrySummary(s({ rebuyStack: 70000, rebuyLimit: 3 }))).toEqual({ value: '70,000', sub: '최대 3회' });
+  });
+  it('화살표 값은 값이 바뀌지 않을 때만 K/M — 320 에서 넘치던 백만 단위', () => {
+    expect(reentrySummary(s({ rebuyStacks: [1000000, 1500000] })).value).toBe('1M → 1.5M');
+    expect(reentrySummary(s({ rebuyStacks: [72555, 100000] })).value).toBe('72,555 → 100K');
+    expect(reentrySummary(s({ rebuyStack: 1000000 })).value).toBe('1,000,000');
+  });
+  it('chipShort 는 반올림하지 않는다', () => {
+    expect([999, 1000, 1500, 12345, 12350, 1250000, 1234567].map(chipShort)).toEqual(['999', '1K', '1.5K', '12,345', '12.35K', '1.25M', '1,234,567']);
   });
   it('스택이 없으면 종전 문구', () => expect(reentrySummary(s({ amount: 30000 }))).toEqual({ value: '현장 안내' }));
   it('전체 계단은 reentryText(게임 정보 행)가 그대로', () =>
