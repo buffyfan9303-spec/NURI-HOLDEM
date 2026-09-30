@@ -86,7 +86,7 @@ export interface Schedule {
   grade?: 'daily' | 'satellite' | 'series' | null;
   blinds?: string;         // 블라인드 구조(선택) — 직접 입력
   buyIn: BuyInInfo; seats?: SeatVoucher[];
-  structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
+  structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean; /** 브레이크 원문(예: 'DINNER BREAK 20MIN') — 서버는 저장한다(W-15) */ label?: string }[] };
   description?: string;
   sideEvents?: SideEvent[]; rankingPrizes?: RankingPrize[];
   partners?: string[]; promotions?: Promotion[]; paymentMethods?: string[]; rules?: string[];
@@ -222,6 +222,7 @@ export async function createSchedule(
     reg_close_time: payload.regCloseTime,
     buy_in: payload.buyIn, structure: payload.structure,
     description: payload.description, payment_methods: payload.paymentMethods,
+    side_events: payload.sideEvents, rules: payload.rules, // KW-2 — 폼이 입력한다(없으면 키 생략 = 컬럼 기본값)
     partners: payload.partners,
     // ⚠ seats(시상/시드권)가 insert에서 빠져 있어 '신규 등록'한 포스터만 시상이 저장되지 않았다
     //   (수정 시엔 updateSchedule이 저장 → 등록 후 수정해야 나타나는 기이한 동작).
@@ -272,6 +273,8 @@ export async function updateSchedule(id: string, patch: SchedulePatch): Promise<
     ...(patch.posterUrl     !== undefined && { poster_url:      patch.posterUrl }),
     ...(patch.posterColor   !== undefined && { poster_color:    patch.posterColor }),
     ...(patch.description   !== undefined && { description:     patch.description }),
+    ...(patch.sideEvents    !== undefined && { side_events:     patch.sideEvents }),
+    ...(patch.rules         !== undefined && { rules:           patch.rules }),
     ...(patch.paymentMethods!== undefined && { payment_methods: patch.paymentMethods }),
     ...(patch.partners      !== undefined && { partners:        patch.partners }),
     ...(patch.rankingPrizes !== undefined && { ranking_prizes:  patch.rankingPrizes }),

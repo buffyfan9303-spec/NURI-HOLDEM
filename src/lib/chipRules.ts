@@ -25,6 +25,8 @@ export interface PosterChipRules {
   rebuyStacks?: number[];
   /** 애드온(부스터) 1회가 정산 엔트리에 더하는 값(예: 0.5). 기본 0. */
   addonEntry?: number;
+  /** 이 게임 참가 1회에 쓰는 매장 이용권 장수(예: 키키 10장). 없으면 기존 동작(1장 = 1회) — 서버·장부 소비는 KW-1b(W-01). */
+  voucherPerEntry?: number;
 }
 
 interface LevelLike { kind?: 'level' | 'break'; minutes?: number }

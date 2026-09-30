@@ -19,6 +19,8 @@ import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import Icon from '../atoms/Icon';
 import { regCloseLevelFromText } from '../../lib/regClose';
+import { posterFormFromSchedule, posterSaveParts, sameJson, type PosterLevel, type PosterSaveForm, type PosterSaveParts } from '../../lib/posterPayload';
+import { MAX_EARLY_TIERS } from '../../lib/chipRules';
 
 /** 포스터 저장의 **실제 결과**. 반복 등록이 있어 '성공/실패' 두 값으로는 부족하다 —
  *  3주 중 2주만 나간 경우를 사용자가 구별할 수 있어야 한다(App 이 이미 그렇게 판정하고 있었다). */
@@ -48,7 +50,7 @@ interface PosterFormModalProps {
   storeVenueId?: string | null;
 }
 
-export interface PosterFormData {
+export interface PosterFormData extends PosterSaveForm {
   grade: 'daily' | 'satellite' | 'series' | null;
   id?: string;
   title: string;
@@ -77,8 +79,10 @@ export interface PosterFormData {
   events: Promotion[];
   /** 주간 반복 등록 횟수(생성 시에만 사용, 1=반복 없음) */
   repeatWeeks?: number;
-  /** 포스터별 커스텀 블라인드 표(비우면 기본 자동 생성 표시) */
-  blindLevels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[];
+  /** 포스터별 커스텀 블라인드 표(비우면 기본 자동 생성 표시). 브레이크 행은 원문 label(W-15)을 가진다. */
+  blindLevels?: PosterLevel[];
+  /** 제출 때 폼이 만든 저장 부분(lib/posterPayload) — App 은 **이것만** 싣는다(W-02: 저장본 병합·바뀐 칸만). */
+  saveParts?: PosterSaveParts;
   /** `null` = **이미지를 지운다**. `undefined` = 이 항목을 건드리지 않는다.
    *  둘을 한 값(undefined)으로 쓰던 때는 '이미지 제거'가 App 의 `!== undefined` 게이트에서
    *  통째로 걸러져 서버에도 화면에도 반영되지 않았다(2026-09-17). 두 뜻은 두 값이어야 한다. */
@@ -94,6 +98,7 @@ const MAX_PARTNERS = 10;
 const MAX_PRIZES = 10;
 const MAX_RANKS = 20;
 const MAX_EVENTS = 10;
+const MAX_SIDE_EVENTS = 5;
 
 export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [], storeVenueId = null }: PosterFormModalProps) {
   const toast  = useToast();
@@ -121,6 +126,14 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const startStackId = useId();
   const rebuyStackId = useId();
   const regionId     = useId();
+  const rebuyPriceId = useId();
+  const rebuyLimitId = useId();
+  const addonEntryId = useId();
+  const voucherPerEntryId = useId();
+  const rebuyStacksId = useId();
+  const earlyModeId  = useId();
+  const rulesId      = useId();
+  const descriptionId = useId();
 
   const empty: PosterFormData = {
     title: '', date: new Date().toLocaleDateString('en-CA'),
@@ -131,7 +144,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     paymentMethods: ['현금'], partners: [], prizes: [],
     rankingPrizes: [], events: [], repeatWeeks: 1, blindLevels: [],
     venueId: '', pubName: '',
+    rebuyPrice: 0, rebuyLimit: 0, rebuyStacks: [], earlyTiers: undefined, addonEntry: 0, voucherPerEntry: 0,
+    description: '', rules: [], sideEvents: [],
   };
+  /** 수정 폼을 열었을 때의 값 — 저장 때 '바뀐 칸만' 싣는 기준(W-02). 신규는 null. */
+  const [initial, setInitial] = useState<PosterFormData | null>(null);
 
   const [form,       setForm]       = useState<PosterFormData>(empty);
   const [imgFile,    setImgFile]    = useState<File | null>(null);
@@ -151,36 +168,25 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     const rc = Math.min(Math.max(parseInt(regLevel, 10) || 16, 1), 25);
     setBlinds(() => generateBlinds(rc, 25, 20, 20).map((l) => ({ sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes, isBreak: l.kind === 'break' })));
   };
-  const setBlindRow = (i: number, patch: Partial<{ sb: number; bb: number; ante: number; minutes: number; isBreak: boolean }>) =>
+  const setBlindRow = (i: number, patch: Partial<PosterLevel>) =>
     setBlinds((arr) => arr.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   const addBlindRow = (isBreak: boolean) =>
     setBlinds((arr) => [...arr, isBreak ? { sb: 0, bb: 0, ante: 0, minutes: 8, isBreak: true } : { sb: 0, bb: 0, ante: 0, minutes: 20 }]);
   const removeBlindRow = (i: number) => setBlinds((arr) => arr.filter((_, idx) => idx !== i));
   const fileRef = useRef<HTMLInputElement>(null);
+  // 세부 규칙 접힘 — 무언가 입력돼 있으면 머리에 개수를 보여 준다(접힌 채로도 '비어 있지 않음'을 안다)
+  const [moreOpen, setMoreOpen] = useState(false);
+  const prizeListed = form.rankingPrizes.some((r) => r.amount > 0) || form.prizes.length > 0;
+  const moreCount = [form.rebuyPrice > 0, form.rebuyLimit > 0, form.addonEntry > 0, form.voucherPerEntry > 0,
+    form.rebuyStacks.length > 0, form.earlyTiers !== undefined, form.sideEvents.length > 0,
+    form.rules.some((r) => r.trim()), form.description.trim() !== ''].filter(Boolean).length;
 
   useEffect(() => {
     if (schedule) {
-      setForm({
-        id: schedule.id, title: schedule.title, date: schedule.date,
-        startTime: schedule.startTime,
-        regCloseTime: schedule.regCloseTime ?? '',
-        duration: schedule.duration ?? '',
-        blinds: schedule.blinds ?? '',
-        prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
-        prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
-        prizePercent: schedule.prizePercent ?? 0,
-        buyIn: schedule.buyIn.amount, gameType: schedule.buyIn.gameType ?? '', addonStack: schedule.buyIn.addonStack ?? 0, addonCost: schedule.buyIn.addon ?? 0, startStack: schedule.buyIn.startStack ?? 0, rebuyStack: schedule.buyIn.rebuyStack ?? 0, region: schedule.region,
-        isCompetition: schedule.isCompetition ?? false,
-        grade: schedule.grade ?? null,
-        paymentMethods: schedule.paymentMethods ?? ['현금'],
-        partners: schedule.partners ?? [],
-        prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
-        rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
-        events: schedule.promotions ?? [], // 전 필드 왕복(detail·할인액·LV 포함) — 좁혀 담으면 수정 때마다 사라진다
-        blindLevels: schedule.structure?.levels ?? [],
-        posterUrl: schedule.posterUrl,
-        venueId: schedule.venueId, pubName: schedule.pubName,
-      });
+      const loaded = { ...posterFormFromSchedule(schedule, schedule.date), id: schedule.id };
+      setInitial(loaded);
+      setForm(loaded);
+      setImgFile(null);
       setImgPreview(schedule.posterUrl ?? '');
       // 기존 레지마감 문자열에서 레벨/시간 분리
       const rc = schedule.regCloseTime ?? '';
@@ -189,6 +195,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setRegLevel(lv ? String(lv) : '');
       setRegTime(tm ? tm[1] : '');
     } else if (open) {
+      setInitial(null);
       setForm(empty);
       setImgFile(null);
       setImgPreview('');
@@ -207,28 +214,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 12);
   const applyPast = (s: Schedule) => {
-    setForm({
-      title: s.title, date: new Date().toLocaleDateString('en-CA'),
-      startTime: s.startTime,
-      regCloseTime: s.regCloseTime ?? '',
-      duration: s.duration ?? '',
-      blinds: s.blinds ?? '',
-      prizeType: s.guaranteed ? 'GTD' : 'ENTRY',
-      prizeAmount: s.prizePool ? Math.round(s.prizePool / 10000) : 0,
-      prizePercent: s.prizePercent ?? 0,
-      buyIn: s.buyIn.amount, gameType: s.buyIn.gameType ?? '', addonStack: s.buyIn.addonStack ?? 0, addonCost: s.buyIn.addon ?? 0, startStack: s.buyIn.startStack ?? 0, rebuyStack: s.buyIn.rebuyStack ?? 0, region: s.region,
-      isCompetition: s.isCompetition ?? false,
-      grade: s.grade ?? null,
-      paymentMethods: s.paymentMethods ?? ['현금'],
-      partners: s.partners ?? [],
-      prizes: s.seats?.map((x) => `${x.label} ${x.count}석`) ?? [],
-      rankingPrizes: s.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
-      events: s.promotions ?? [], // 지난 포스터 불러오기도 전 필드 그대로(할인액·LV 포함)
-      repeatWeeks: 1,
-      blindLevels: s.structure?.levels ?? [],
-      posterUrl: s.posterUrl, // 포스터 이미지도 그대로 재사용
-      venueId: s.venueId, pubName: s.pubName,
-    });
+    // 전 필드 그대로(할인액·LV·새 칸 포함), 날짜만 오늘. 포스터 이미지도 그대로 재사용.
+    setForm(posterFormFromSchedule(s, new Date().toLocaleDateString('en-CA')));
     setImgFile(null);
     setImgPreview(s.posterUrl ?? '');
     const rc = s.regCloseTime ?? '';
@@ -258,7 +245,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
   // PL3: 등록 직후 프리셋 저장(부산물 authoring) — 체크 시 제출과 함께 게임 프리셋으로도 저장
   const [alsoPreset, setAlsoPreset] = useState(false);
-  useEffect(() => { if (open) setAlsoPreset(false); }, [open]);
+  useEffect(() => { if (open) { setAlsoPreset(false); setMoreOpen(false); } }, [open]);
 
   // ── 이미지 선택 ──────────────────────────────────────────────────────────
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,7 +278,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (!form.region.trim())    return failAt(regionId, '지역을 선택해 주세요');
     if (form.buyIn <= 0)        return failAt(buyInId, '참가비 금액을 입력해 주세요');
     if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return failAt(prizeAmountId, '보장 상금 금액을 입력해 주세요');
-    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return failAt(prizePercentId, '상금 비율(%)을 입력해 주세요');
+    // 비율 없이 순위별 시상(대회초대권·이용권)만 거는 엔트리 게임이 있다(키키) — 시상표가 있으면 비율을 비워도 된다.
+    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0 && !prizeListed) return failAt(prizePercentId, '상금 비율(%) 또는 순위별 상금을 입력해 주세요');
     const regClose = [regLevel.trim() ? `${regLevel.trim()}LV` : '', regTime.trim()].filter(Boolean).join(' ');
     if (!regClose)              return failAt(regLevelId, '레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요');
     // 과거 날짜 가드 — 신규 등록이 어제로 잡히면 첫 화면에서 '종료'로 시작한다(오타 사고 방지)
@@ -330,7 +318,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     setSaving(true);
     let res: PosterSubmitResult | void;
     try {
-      res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl });
+      res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl, saveParts: posterSaveParts(schedule ?? null, isEdit ? initial : null, form) });
     } catch {
       // onSubmit 이 던지는 경우까지 막는다 — 던져도 폼은 열린 채 남아야 한다.
       res = { ok: false, saved: 0, total: 1 };
@@ -352,7 +340,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
 
   // 서버(prevent_self_approve_poster)와 같은 여섯 칸을 App 의 patch 규칙(prizePool = GTD ? 만원×10,000 : 0)으로 비교한다.
-  const reReview = isEdit && !isAdmin && !!schedule?.approved && posterCoreChanged(form, schedule);
+  //   ⚠ 서버는 buy_in 을 **통째로** 비교한다 — 리엔트리·스택·얼리처럼 참가비 외 칸을 바꿔도 재심사다. 실제로 실릴 buy_in 으로 판정한다.
+  const reReview = isEdit && !isAdmin && !!schedule?.approved && (posterCoreChanged(form, schedule)
+    || (() => { const bi = posterSaveParts(schedule, initial, form).buyIn; return !!bi && !sameJson(bi, schedule.buyIn); })());
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? '포스터 수정' : '새 포스터 등록'} maxWidth="md" variant="sheet" dismissOnBackdrop={false}>
@@ -524,7 +514,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                     <div key={i} className="flex items-center gap-1">
                       <span className="w-5 shrink-0 text-center text-2xs text-ink-muted">{l.isBreak ? '–' : (form.blindLevels!.slice(0, i + 1).filter((x) => !x.isBreak).length)}</span>
                       {l.isBreak ? (
-                        <span className="flex-1 text-2xs font-bold text-accent-300">BREAK</span>
+                        <input value={l.label ?? ''} onChange={(e) => setBlindRow(i, { label: e.target.value })} maxLength={60}
+                          aria-label={`브레이크 ${i + 1} 이름`} placeholder="BREAK (예: DINNER BREAK · 칩 레이스)"
+                          className="input min-w-0 flex-1 px-1.5 py-1 text-2xs font-bold text-accent-300" />
                       ) : (
                         <>
                           <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setBlindRow(i, { sb: parseInt(e.target.value, 10) || 0 })} placeholder="SB" className="input min-w-0 flex-1 px-1.5 py-1 text-2xs tabular-nums" />
@@ -614,8 +606,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
             </FieldWrap>
           ) : (
-            <FieldWrap label="상금" suffix="%" required htmlFor={prizePercentId}>
-              <input id={prizePercentId} type="number" inputMode="numeric" required min={0} max={100} value={form.prizePercent || ''}
+            <FieldWrap label="상금" suffix="%" required={!prizeListed} htmlFor={prizePercentId}>
+              <input id={prizePercentId} type="number" inputMode="numeric" required={!prizeListed} min={0} max={100} value={form.prizePercent || ''}
                 onChange={(e) => update('prizePercent', Number(e.target.value))} placeholder="예: 90" className="input" />
             </FieldWrap>
           )}
@@ -662,6 +654,102 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
               onChange={(e) => update('rebuyStack', Number(e.target.value))} placeholder="예: 70000" className="input" />
           </FieldWrap>
         </div>
+
+        {/* 세부 규칙(선택) — W-16: 포스터 5장이 폼만으로 입력되게. 대부분의 게임은 안 쓰므로 접어 둔다. */}
+        <FieldWrap label="세부 규칙 (선택)">
+          <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-accent-300 transition-colors">
+            <span className="min-w-0 truncate">{moreCount > 0 ? `세부 규칙 ${moreCount}개 입력됨` : '리엔트리 가격·한도 · 얼리칩 · 이용권 · 규정 · 설명'}</span>
+            <span className="shrink-0 text-2xs text-accent-300">{moreOpen ? '▲' : '▼'}</span>
+          </button>
+          <Fold open={moreOpen}>
+            <div className="mt-2 space-y-3 rounded-input border border-border-subtle bg-surface-base p-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <FieldWrap label="리엔트리 참가비" suffix="원" htmlFor={rebuyPriceId}>
+                  <input id={rebuyPriceId} type="number" inputMode="numeric" min={0} value={form.rebuyPrice || ''}
+                    onChange={(e) => update('rebuyPrice', Number(e.target.value))} placeholder="참가비와 같으면 비움" className="input" />
+                </FieldWrap>
+                <FieldWrap label="리엔트리 최대" suffix="회" htmlFor={rebuyLimitId}>
+                  <input id={rebuyLimitId} type="number" inputMode="numeric" min={0} value={form.rebuyLimit || ''}
+                    onChange={(e) => update('rebuyLimit', parseInt(e.target.value, 10) || 0)} placeholder="제한 없으면 비움" className="input" />
+                </FieldWrap>
+                <FieldWrap label="애드온 1회 엔트리" htmlFor={addonEntryId}>
+                  <input id={addonEntryId} type="number" inputMode="decimal" step="0.1" min={0} value={form.addonEntry || ''}
+                    onChange={(e) => update('addonEntry', Math.max(0, parseFloat(e.target.value) || 0))} placeholder="예: 0.5" className="input" />
+                </FieldWrap>
+                <FieldWrap label="참가 1회 = 이용권" suffix="장" htmlFor={voucherPerEntryId}>
+                  <input id={voucherPerEntryId} type="number" inputMode="numeric" min={0} value={form.voucherPerEntry || ''}
+                    onChange={(e) => update('voucherPerEntry', parseInt(e.target.value, 10) || 0)} placeholder="예: 10" className="input" />
+                </FieldWrap>
+              </div>
+              <FieldWrap label="회차별 리엔트리 스택 (마지막 값 반복)" suffix="칩" htmlFor={rebuyStacksId}>
+                <NumListInput id={rebuyStacksId} value={form.rebuyStacks} onChange={(v) => update('rebuyStacks', v)}
+                  placeholder="예: 70000, 70000, 80000" />
+              </FieldWrap>
+              <FieldWrap label={`얼리칩 (최대 ${MAX_EARLY_TIERS}단)`} htmlFor={earlyModeId}>
+                <select id={earlyModeId} className="input w-full text-sm"
+                  value={form.earlyTiers === undefined ? 'unset' : form.earlyTiers.length === 0 ? 'none' : 'tiers'}
+                  onChange={(e) => update('earlyTiers', e.target.value === 'unset' ? undefined : e.target.value === 'none' ? [] : [{ level: 1, chips: 0 }])}>
+                  <option value="unset">포스터에 없음 (클락 설정 그대로)</option>
+                  <option value="none">얼리칩 없음</option>
+                  <option value="tiers">단계 입력</option>
+                </select>
+                {(form.earlyTiers?.length ?? 0) > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {form.earlyTiers!.map((t, i) => (
+                      <li key={i} className="flex items-center gap-1.5 text-2xs text-ink-muted">
+                        <input type="number" inputMode="numeric" min={1} value={t.level || ''} aria-label={`얼리 ${i + 1}단 마지막 레벨`}
+                          onChange={(e) => update('earlyTiers', form.earlyTiers!.map((x, k) => (k === i ? { ...x, level: parseInt(e.target.value, 10) || 0 } : x)))}
+                          className="input w-16 shrink-0 text-sm tabular-nums" />
+                        <span className="shrink-0">LV까지 +</span>
+                        <input type="number" inputMode="numeric" min={0} value={t.chips || ''} aria-label={`얼리 ${i + 1}단 추가 칩`} placeholder="칩"
+                          onChange={(e) => update('earlyTiers', form.earlyTiers!.map((x, k) => (k === i ? { ...x, chips: parseInt(e.target.value, 10) || 0 } : x)))}
+                          className="input min-w-0 flex-1 text-sm tabular-nums" />
+                        <button type="button" aria-label={`얼리 ${i + 1}단 삭제`} onClick={() => update('earlyTiers', form.earlyTiers!.filter((_, k) => k !== i))}
+                          className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+                      </li>
+                    ))}
+                    {form.earlyTiers!.length < MAX_EARLY_TIERS && (
+                      <li><button type="button" className="btn-ghost w-full py-1 text-2xs"
+                        onClick={() => update('earlyTiers', [...form.earlyTiers!, { level: (form.earlyTiers!.at(-1)?.level ?? 0) + 1, chips: 0 }])}>+ 단계 추가</button></li>
+                    )}
+                  </ul>
+                )}
+                <p className="mt-1 text-2xs text-ink-muted">'N LV까지' = N레벨이 끝나고 뒤 브레이크까지 입장한 손님 (포스터의 'N+1LV 시작 전')</p>
+              </FieldWrap>
+              <FieldWrap label={`사이드 이벤트 (${form.sideEvents.length}/${MAX_SIDE_EVENTS})`}>
+                <div className="space-y-1">
+                  {form.sideEvents.map((ev, i) => {
+                    const setEv = (patch: Partial<typeof ev>) => update('sideEvents', form.sideEvents.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+                    return (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <input value={ev.name} onChange={(e) => setEv({ name: e.target.value })} maxLength={20} aria-label={`사이드 이벤트 ${i + 1} 이름`} placeholder="이름 (예: 핀볼)" className="input min-w-0 flex-1 text-sm" />
+                        <input value={ev.startBefore} onChange={(e) => setEv({ startBefore: e.target.value })} maxLength={20} aria-label={`사이드 이벤트 ${i + 1} 시작`} placeholder="예: 17LV 시작 전" className="input min-w-0 flex-1 text-sm" />
+                        <input value={ev.note ?? ''} onChange={(e) => setEv({ note: e.target.value })} maxLength={30} aria-label={`사이드 이벤트 ${i + 1} 메모`} placeholder="메모" className="input min-w-0 flex-1 text-sm" />
+                        <button type="button" aria-label={`사이드 이벤트 ${i + 1} 삭제`} onClick={() => update('sideEvents', form.sideEvents.filter((_, k) => k !== i))}
+                          className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+                      </div>
+                    );
+                  })}
+                  {form.sideEvents.length < MAX_SIDE_EVENTS && (
+                    <button type="button" className="btn-ghost w-full py-1 text-2xs"
+                      onClick={() => update('sideEvents', [...form.sideEvents, { name: '', startBefore: '' }])}>+ 사이드 이벤트</button>
+                  )}
+                </div>
+              </FieldWrap>
+              <FieldWrap label="운영 규정 (한 줄에 하나)" htmlFor={rulesId}>
+                <textarea id={rulesId} rows={4} value={form.rules.join('\n')}
+                  onChange={(e) => update('rules', e.target.value.split('\n'))}
+                  placeholder={'예: 2블라인드 자리비울시 먹처리됩니다.\n예: TDA 를 기준으로 하우스 룰을 우선 적용'} className="input w-full text-sm leading-relaxed" />
+              </FieldWrap>
+              <FieldWrap label="상세 설명" htmlFor={descriptionId}>
+                <textarea id={descriptionId} rows={3} maxLength={1000} value={form.description}
+                  onChange={(e) => update('description', e.target.value)}
+                  placeholder="포스터 문구·문의처 등 손님에게 보여 줄 설명" className="input w-full text-sm leading-relaxed" />
+              </FieldWrap>
+            </div>
+          </Fold>
+        </FieldWrap>
 
         {/* 지역 — 일정탐색 지역에서 선택 (직접입력 없음) */}
         <FieldWrap label="지역" required htmlFor={regionId}>
@@ -814,7 +902,7 @@ function RankingPrizeList({ prizes, onChange }: {
           {prizes.map((p, i) => (
             <li key={i} className="flex items-center gap-1.5">
               <input value={p.rank} onChange={(e) => setAt(i, { rank: e.target.value })} maxLength={12}
-                placeholder={`${i + 1}위`} className="input w-16 text-sm shrink-0" />
+                placeholder={`${i + 1}위`} className="input w-24 text-sm shrink-0" />
               <input type="number" inputMode="numeric" value={p.amount || ''}
                 onChange={(e) => setAt(i, { amount: parseInt(e.target.value, 10) || 0 })}
                 placeholder="값" className="input flex-1 text-sm tabular-nums min-w-0" />
@@ -851,7 +939,9 @@ function PromotionEditor({ items, onChange, buyIn }: {
     //   할인액 칸의 의미와 같다. 문구에 '할인'을 붙이는 것은 뜻을 바꾸는 게 아니라,
     //   제목 줄만 따로 공유될 때 '참가비가 5만'으로 읽히지 않게 못 박는 것이다.
     { discountType: 'level',      badge: '5만', title: '1LV 바인 5만 할인', discountWon: 50_000, level: 1 },
-    { discountType: 'firstBuyin', badge: '7만', title: '첫 바인 7만 할인', discountWon: 70_000 },
+    // W-18 — 포스터 문구 '첫바인은 무조건 7만' 은 **7만에 들어온다**는 뜻이다 = 10만 게임에서 3만 할인(0.7엔트리).
+    //   예전 프리셋은 '7만 할인'을 넣어 3만 수납·0.3엔트리가 됐다. 할인액 칸은 '깎아 주는 금액'이다.
+    { discountType: 'firstBuyin', badge: '3만', title: '첫 바인 3만 할인', discountWon: 30_000 },
     { discountType: 'advance',    badge: '얼리칩', title: '사전예약 얼리칩' },
     { discountType: 'custom',     badge: 'NEW', title: '신규 이벤트' },
     { discountType: 'custom',     badge: '할인', title: '할인 이벤트' },
@@ -888,7 +978,7 @@ function PromotionEditor({ items, onChange, buyIn }: {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <input value={p.badge ?? ''} onChange={(e) => setAt(i, { badge: e.target.value })} maxLength={6}
-                    placeholder="배지" className="input w-16 shrink-0 text-center text-sm font-bold text-accent-300" />
+                    placeholder="배지" className="input w-20 shrink-0 text-center text-sm font-bold text-accent-300" />
                   <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} maxLength={40}
                     placeholder="내용 (예: 첫 방문 50% 할인)" className="input flex-1 min-w-0 text-sm" />
                 </div>
@@ -934,6 +1024,23 @@ function PromotionEditor({ items, onChange, buyIn }: {
         ))}
       </div>
     </div>
+  );
+}
+
+// 쉼표로 구분한 숫자 목록 입력 — 입력 중인 글자(끝의 쉼표 등)는 따로 들고, 바깥 값이 바뀌었을 때만 다시 쓴다.
+function NumListInput({ id, value, onChange, placeholder }: {
+  id: string; value: number[]; onChange: (v: number[]) => void; placeholder: string;
+}) {
+  const parse = (t: string) => t.split(/[,\s/]+/).map((x) => parseInt(x.replace(/[^0-9]/g, ''), 10) || 0).filter((n) => n > 0);
+  const [draft, setDraft] = useState(value.join(', '));
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) { // 렌더 중 동기화(effect 없이) — 폼을 새로 불러왔을 때
+    setSeen(value);
+    if (parse(draft).join() !== value.join()) setDraft(value.join(', '));
+  }
+  return (
+    <input id={id} type="text" inputMode="numeric" value={draft} placeholder={placeholder} className="input w-full text-sm tabular-nums"
+      onChange={(e) => { setDraft(e.target.value); onChange(parse(e.target.value)); }} />
   );
 }
 

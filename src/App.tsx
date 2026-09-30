@@ -3640,12 +3640,14 @@ export default function App() {
         regCloseTime: data.regCloseTime,
         duration:     data.duration,
         blinds:       data.blinds,
-        ...(data.blindLevels && data.blindLevels.length ? { structure: { ...(schedules.find((s) => s.id === data.id)?.structure ?? {}), levels: data.blindLevels } } : {}),
         guaranteed:   data.prizeType === 'GTD',
         isCompetition: data.isCompetition,
         prizePool:    data.prizeType === 'GTD'   ? data.prizeAmount * 10_000 : 0,
         prizePercent: data.prizeType === 'ENTRY' ? data.prizePercent : 0,
-        buyIn:        { amount: data.buyIn, gameType: data.gameType?.trim() || undefined, addonStack: data.addonStack || undefined, addon: data.addonCost || undefined, startStack: data.startStack || undefined, rebuyStack: data.rebuyStack || undefined },
+        // 🔴 W-02 — buy_in·structure·규정·설명·사이드 이벤트는 폼이 만든 saveParts(lib/posterPayload)만 싣는다.
+        //   저장본을 펴고 폼 소유 키만 덮은 값이며, 바뀌지 않은 칸은 **키 자체가 없다**(서버 값 그대로 · 재심사 없음).
+        //   예전엔 여기서 buy_in 을 여섯 칸으로 새로 만들어 rebuy·rebuyLimit 가 무변경 저장에 사라졌다.
+        ...data.saveParts, // 값이 없는 칸은 키가 없다(lib/posterPayload.posterSaveParts)
         region:       data.region,
         paymentMethods: data.paymentMethods,
         partners:     data.partners,
@@ -3696,14 +3698,14 @@ export default function App() {
       startTime:      data.startTime,
       duration:       data.duration,
       blinds:         data.blinds,
-      structure:      data.blindLevels && data.blindLevels.length ? { levels: data.blindLevels } : undefined,
       regCloseTime:   data.regCloseTime,
       format:         'MTT' as const,
       guaranteed:     data.prizeType === 'GTD',
       isCompetition:  data.isCompetition,
       prizePool:      data.prizeType === 'GTD'   ? data.prizeAmount * 10_000 : 0,
       prizePercent:   data.prizeType === 'ENTRY' ? data.prizePercent : undefined,
-      buyIn:          { amount: data.buyIn, gameType: data.gameType?.trim() || undefined, addonStack: data.addonStack || undefined, addon: data.addonCost || undefined, startStack: data.startStack || undefined, rebuyStack: data.rebuyStack || undefined },
+      ...data.saveParts,
+      buyIn:          data.saveParts?.buyIn ?? { amount: data.buyIn }, // 신규는 참가비가 있어 saveParts 가 늘 buy_in 을 만든다
       paymentMethods: data.paymentMethods,
       partners:       data.partners,
       rankingPrizes:  data.rankingPrizes.filter((r) => r.amount > 0),
