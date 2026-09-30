@@ -16,10 +16,10 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
-  setBuyinAddon, addonFinance, addonTotals, type AddonMethod, type AddonFinance,
+  setBuyinAddon, addonFinance, addonEntryOf, addonTotals, type AddonMethod, type AddonFinance,
   splitMismatch,
   
-  discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
+  discountAmountOf, autoDiscountIndex, discountAllowed, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -34,11 +34,12 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
+import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
+import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, composeLiveStats, earlyWindowOf, writeLedgerStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, composeLiveStats, earlyWindowOf, writeLedgerStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { clockPhase, formatCountdown } from '../../lib/clockLevel';
 import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
@@ -1052,7 +1053,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       const f = buyinFinance(b, session);
       const targets = isExcluded(b) ? [all] : [all, kept];
       for (const t of targets) {
-        t.totalBuyins++; t.entries += f.entry; t.revenue += f.paid; t.unpaid += f.unpaid;
+        t.totalBuyins++; t.entries += f.entry + addonEntryOf(b, session); t.revenue += f.paid; t.unpaid += f.unpaid;
         t.ticket += f.ticketPaid; t.ticketUnpaid += f.ticketUnpaid; t.support += f.support; t.value += f.value;
         t.gross += f.gross; t.disc += f.disc;
         t.tender.cash += f.tender.cash; t.tender.card += f.tender.card; t.tender.transfer += f.tender.transfer;
@@ -2577,6 +2578,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 스택 setter 는 아래 '연동 클락 얼리 설정' 블록에서 선언되므로 ref 로 지연 배선한다.
   const applySchedInheritRef = useRef<(sc: Schedule) => void>(() => {});
   const posterStackRef = useRef(false);   // A1 — 포스터가 스택을 채웠는가(늦게 온 클락 설정 조회가 덮지 않게)
+  const posterEarlyRef = useRef(false);   // W-04 — 포스터가 얼리 단계를 채웠는가(같은 이유)
+  const [addonEntry, setAddonEntry] = useState<number | undefined>(base.addonEntry); // W-06 — 포스터 애드온 엔트리(폼 칸은 KW-2)
   const [todayPick, setTodayPick] = useState<Schedule[]>([]); // 당일 포스터 2개+ — 침묵 대신 선택 칩(§13-B)
   // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
   // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
@@ -2607,10 +2610,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       if (!alive) return;
       const c = st?.config ?? defaultClockConfig();
       setClockState(st);
-      setEarlyBonus(c.earlyBonus ?? 0);
-      setDoubleEarlyBonus(c.doubleEarlyBonus ?? 0);
-      setEarlyDoubleLevel(c.earlyDoubleLevel ?? 1);
-      setEarlySingleLevel(c.earlySingleLevel ?? 4);
+      // W-04 — 포스터가 얼리 단계를 말했으면(빈 배열 = 얼리 없음) 늦게 온 클락 설정이 그 값을 덮지 않는다(A1 과 같은 이유).
+      if (!posterEarlyRef.current) {
+        setEarlyBonus(c.earlyBonus ?? 0);
+        setDoubleEarlyBonus(c.doubleEarlyBonus ?? 0);
+        setEarlyDoubleLevel(c.earlyDoubleLevel ?? 1);
+        setEarlySingleLevel(c.earlySingleLevel ?? 4);
+      }
       // A1 — 포스터 상속이 이미 스택을 채웠으면 늦게 온 클락 설정이 덮지 않는다(자동 연동·수동 선택·seed 가 이 조회보다 먼저 끝날 수 있다).
       if (!posterStackRef.current) {
         setStartStack(c.startStack ?? 50000);
@@ -2634,6 +2640,18 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     if (rebuy) setRebuyStack(rebuy);
     if (sc.buyIn?.addonStack) { setIsAddon(true); setAddonStack(sc.buyIn.addonStack); }
     if (sc.buyIn?.addon) { setIsAddon(true); setAddonAmount(sc.buyIn.addon); }   // 포스터 애드온 비용 → 장부 애드온 가격
+    // W-04 — 포스터 얼리 단계의 1·2단을 폼 두 칸에 보여 준다(단계 없음 = 0). 3·4단은 제출 때 포스터에서 그대로 온다.
+    const cp = clockPatchFromSchedule(sc);
+    posterEarlyRef.current = Array.isArray(cp.earlyTiers);
+    if (posterEarlyRef.current) {
+      setDoubleEarlyBonus(cp.doubleEarlyBonus ?? 0); setEarlyDoubleLevel(cp.earlyDoubleLevel ?? 0);
+      setEarlyBonus(cp.earlyBonus ?? 0); setEarlySingleLevel(cp.earlySingleLevel ?? 0);
+    }
+    if (cp.rebuyStack) setRebuyStack(cp.rebuyStack);   // W-10 — 계단 스택이 있으면 첫 리엔트리 값
+    // W-19 — 기준 엔트리 = GTD ÷ 참가비 · W-06 애드온 엔트리(포스터가 말할 때만)
+    const lp = sessionPatchFromSchedule(sc);
+    if (lp.targetEntries) setTarget(lp.targetEntries);
+    setAddonEntry(lp.addonEntry);
     // B2(2026-09-28) — 포스터의 시작 시간을 장부의 '대회 시작 시각'으로 잇는다. 얼리 자동 판정의 기준이 이 값이고,
     //   비어 있으면 '장부를 연 시각'이 기준이 돼 개설 17:30·스타트 19:00 대회의 19:05 첫 바인이 얼리가 아니게 됐다.
     //   (포스터에 시간이 없으면 클락이 처음 돌 때 서버 기준 시각으로 채운다 — api/clock noteTournamentStart.)
@@ -2813,6 +2831,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     //   세션의 earlyDoubleMin/earlySingleMin 이 0 인 채로 남아, 바인 시각 자동판정이 전부 '없음'이 되고
     //   마감 스냅샷의 얼리도 0 으로 굳었다 — 설정은 적혀 있는데 숫자만 안 올라가는 상태.
     let earlyDMin = base.earlyDoubleMin ?? 0, earlySMin = base.earlySingleMin ?? 0;
+    let earlyTiers = base.earlyTiers;   // W-04 — 진행 중 클락이면 기존 창 그대로(아래 분기에서만 다시 계산)
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
       // PL3: '지난 게임 그대로 열기'로 불러온 완성 클락 설정이 있으면 그게 베이스(빈 기본값보다 우선)
@@ -2820,13 +2839,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       // PL1a+b: 연동 포스터의 구조(레벨·레지레벨·애드온)와 상금(원 정규형)을 클락에 함께 병합 —
       // '클락 설정 단계가 일상 운영에서 사라진다'(§13-B 최고 ROI 두 곳 중 ②). 폼에서 고친 값이 우선.
       const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
-      const schedPatch = linkedSched ? clockPatchFromSchedule(linkedSched) : {};
-      const prizeRows = linkedSched ? clockPrizesFromSchedule(linkedSched) : null;
-      // withDerivedEarly 경유 필수 — 레벨→분 파생을 안 돌리면 블라인드 길이가 바뀌어도 얼리 분이 옛값에 묶인다.
-      const cfg = withDerivedEarly({ ...baseCfg, ...schedPatch, ...(prizeRows ? { prizes: prizeRows } : {}),
-        ...(inheritClockRef.current.patch ?? {}), // PL2c: 게임 프리셋의 클락 몫(부분 패치)
-        earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
-      earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin;
+      // 병합(포스터 구조·레지·얼리 단계·계단 스택·상금 → 프리셋 패치 → 폼)과 레벨→분 환산은 lib/ledgerStart 한 곳.
+      //   clockPatchFromSchedule(linkedSched) · withDerivedEarly 가 그 안에서 돈다(포스터 등록 기준 — 클락 #1).
+      const cfg = ledgerStartClockConfig(baseCfg, linkedSched, inheritClockRef.current.patch,
+        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
+      const early = sessionEarlyOf(cfg);
+      earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin; earlyTiers = early.earlyTiers;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
       //   'paused' 로 읽어 시작도 안 한 대회가 TV 에 PAUSED 로 뜨고, '계속하기' 를 누르면 endsAt=now 로 1레벨이 통째로 건너뛰었다.
       // 🔴 2026-09-17: 여기서 쓰던 `clockState` 는 이 폼이 **마운트될 때 한 번** 읽은 스냅샷이다(:2185, 구독 없음).
@@ -2840,13 +2858,16 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       void (async () => {
         try {
           const fresh = await getClockState(base.venueId, base.gameSeq);
-          if (fresh && (fresh.running || clockHasProgress(fresh))) {
+          // W-14 — 지난 날 멈춘 채 남은 클락(연결 장부 날짜·마지막 쓰기가 오늘이 아님)은 포스터 설정으로 새로 채운다.
+          //   오늘 대회로 돌고 있거나 멈춘 클락은 예전처럼 보호한다(clockHasProgress). 판정은 lib/ledgerStart 한 곳.
+          const action = clockStartAction(fresh, base.sessionDate);
+          const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '');
+          if (!row) {
             formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
             return;
           }
-          await saveClockState(fresh
-            ? { ...fresh, config: cfg }
-            : { ...emptyClockState(base.venueId, cfg, base.gameSeq), title: base.title ?? '' });
+          await saveClockState(row);
+          if (action === 'reset') formToast.show('지난 게임의 클락 기록을 정리하고 오늘 포스터 설정으로 새로 채웠습니다', 'info');
         } catch (e) {
           formToast.show(ledgerErrorText(e, '클락 설정 저장에 실패했습니다'), 'error');
         }
@@ -2863,8 +2884,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       //   filter로 빈 칸을 없애면 3번 할인을 쓰던 기존 바인이 2번 금액으로 바뀌거나 할인이 증발한다.
       //   빈 칸은 amount 0으로 자리만 남겨 두고(계산은 0원), 선택 목록에서만 감춘다.
       //   level(자동 적용 레벨)도 함께 보존한다 — 떨어뜨리면 세션 수정 한 번에 자동 적용이 조용히 꺼진다(#20).
-      discounts: discs.map((d) => ({ label: d.label ?? '', amount: d.amount > 0 ? d.amount : 0, level: d.level && d.level > 0 ? d.level : 0 })),
+      // W-28 — 적용 조건(kind)도 보존한다. 떨어뜨리면 세션 수정 한 번에 '리바인 전용' 이 아무 바인 할인으로 풀린다.
+      discounts: discs.map((d) => ({ label: d.label ?? '', amount: d.amount > 0 ? d.amount : 0, level: d.level && d.level > 0 ? d.level : 0, ...(d.kind ? { kind: d.kind } : {}) })),
       earlyDoubleMin: earlyDMin, earlySingleMin: earlySMin, tournamentStart: tStart,
+      ...(earlyTiers !== undefined ? { earlyTiers } : {}),
+      ...(addonEntry !== undefined ? { addonEntry } : {}),
     });
   };
 
@@ -3299,10 +3323,14 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   // 분납 셀도 저장된 할인 이벤트를 그대로 복원한다.
   // ⚠ 과거엔 분납이면 무조건 0으로 시작해, 금액만 고쳐 재저장할 때마다 할인 기록이 지워졌다.
   // #20: 신규 기록은 '지금 레벨의 할인'을 미리 골라 둔다(자동 적용). 기존 기록은 저장값이 정본.
-  const [discIdx, setDiscIdx] = useState<number>(cell.buyin ? cell.buyin.discountIndex : autoDiscIdx);
-  // 자동으로 골라준 값을 사람이 그대로 두고 있는가 — 배지 문구를 '자동/직접'으로 정직하게 가른다.
-  const autoKept = !cell.buyin && autoDiscIdx > 0 && discIdx === autoDiscIdx;
   const discs = session.discounts ?? [];
+  // W-28 — 할인의 적용 조건(리엔트리 전용·첫 바인 전용)이 이 칸의 순번과 안 맞으면 고를 수 없다(서버 트리거도 같은 규칙으로 막는다).
+  //   이미 저장된 행의 할인은 조건이 안 맞아도 보여 준다(기록을 숨기면 무엇이 적용됐는지 모른다).
+  const discOk = (i: number) => discountAllowed(discs[i], cell.entryNo) || cell.buyin?.discountIndex === i + 1;
+  const autoOk = autoDiscIdx > 0 && discountAllowed(discs[autoDiscIdx - 1], cell.entryNo) ? autoDiscIdx : 0;
+  const [discIdx, setDiscIdx] = useState<number>(cell.buyin ? cell.buyin.discountIndex : autoOk);
+  // 자동으로 골라준 값을 사람이 그대로 두고 있는가 — 배지 문구를 '자동/직접'으로 정직하게 가른다.
+  const autoKept = !cell.buyin && autoOk > 0 && discIdx === autoOk;
   // 수납 상태(완납/미수)를 먼저 고르고 수단을 누른다 — 8버튼 격자를 4+토글로 접는다(#22).
   // 티켓·가게지원까지 같은 규칙 아래 모여, '이 조합이 가능한가'를 매번 외우지 않아도 된다.
   const [unpaidMode, setUnpaidMode] = useState<boolean>(cell.buyin?.isUnpaid ?? false);
@@ -3433,7 +3461,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                       className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
                         discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>없음</button>
                     {/* 비운 자리(0원)는 감추되 인덱스는 그대로 둔다 — 자리번호가 바인 계산의 기준이라 재배열 불가 */}
-                    {discs.map((d, i) => (d.amount <= 0 ? null : (
+                    {discs.map((d, i) => (d.amount <= 0 || !discOk(i) ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
                           discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
@@ -3446,8 +3474,8 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                       ? <span className="text-accent-300">
                           {autoFromLevel ? `LV ${levelNo} 자동 적용` : '보드 상단에서 고른 기본 할인'} — 다른 할인이나 ‘없음’으로 바꿔도 됩니다.
                         </span>
-                      : (autoDiscIdx > 0 && !cell.buyin)
-                        ? <>{autoFromLevel ? '자동 적용' : '기본값'}({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
+                      : (autoOk > 0 && !cell.buyin)
+                        ? <>{autoFromLevel ? '자동 적용' : '기본값'}({discs[autoOk - 1]?.label || `할인${autoOk}`})을 직접 바꿨습니다.</>
                         : '할인액만큼 금액에서만 차감합니다 — 바인은 1회, 엔트리는 그 비율만큼 줄어듭니다.'}
                   </p>
                 </div>
@@ -3558,7 +3586,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                         discIdx === 0 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
                       없음
                     </button>
-                    {discs.map((d, i) => (d.amount <= 0 ? null : (
+                    {discs.map((d, i) => (d.amount <= 0 || !discOk(i) ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['tap-y-44 min-h-[32px] rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
                           discIdx === i + 1 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>

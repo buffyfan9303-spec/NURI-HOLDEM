@@ -5,6 +5,7 @@
 //   '../api/clock' 에서 가져오면 그 모듈이 api/ledger 를 물고 있어 업주 전용 장부 청크가
 //   첫 화면 임계 경로로 딸려 온다(실측으로 잡은 회귀). ClockState 는 타입이라 안전하다.
 import { effectiveLevel, fieldCounts } from './clockLevel';
+import { msToRegCloseAt } from './chipRules';
 import type { ClockState } from '../api/clock';
 import type { Schedule } from '../api/schedules';
 
@@ -53,12 +54,10 @@ export function msToRegClose(s: ClockState, index: number, remaining: number): n
   //   browse 카드는 '등록 마감', 홈 '지금 등록 가능' 에서는 탈락, 상세는 '레지 마감'.
   //   **마감 규칙이 없다는 것은 마감이 아니라 판정 불가다.** null 은 모든 소비처가 이미
   //   '배지 생략 / 추정 폴백' 으로 처리하는 값이라 소비처 수정 없이 올바른 쪽으로 떨어진다.
-  if (target <= 0) return null;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
-  if (num >= target) return 0;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
-  return null;
+  // ⚠ W-03(2026-09-30 오너): "레지마감 N LV" = N레벨이 끝나고 **뒤 브레이크까지** 등록 가능.
+  //   예전엔 N레벨 **시작** 순간 마감이라 포스터 5장 모두 32~45분 일찍 '등록 마감' 이라 말했다.
+  //   규칙은 lib/chipRules.msToRegCloseAt 한 곳 — 여기는 설정을 풀어 넘기기만 한다.
+  return msToRegCloseAt(lv, target, index, remaining);
 }
 
 /** browse 카드·상세가 소비하는 레지 상태 — 추정(scheduleStatus)이 아니라 클락 실측이다. */

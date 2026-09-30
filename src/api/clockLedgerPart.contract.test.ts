@@ -6,18 +6,21 @@
 //   · SQL 쪽: 이 파일의 `SQL_BODY_SHA` 가 R1 리허설(픽스처 전 케이스를 함수 본문 그대로 SELECT 로 돌려 expect 와 jsonb = 비교)을
 //     통과한 본문의 해시다. 본문이나 픽스처를 바꾸면 해시가 달라져 빨개진다 — 다시 R1 을 돌리고 해시를 갱신하라
 //     (재실행 절차: 보고서 logic-report.md 'K3 R1' · 스크립트 scratchpad/k3sql.cjs).
-// 음성 대조: ledger.ts ledgerCounts 의 `.trim()` 을 빼면 '이름 공백' 케이스가, earlyTypeOf 의 `mins <= dMin` 을 `<` 로 바꾸면 '경계' 케이스가 빨개진다.
+// 음성 대조: ledger.ts ledgerCounts 의 `.trim()` 을 빼면 '이름 공백' 케이스가, chipRules.earlyTierIndexAt 의 `mins < min` 을 `<=` 로 되돌리면
+//   'W-27 반열림' 케이스가, clock.ts rebuyOrdOf 의 trim 을 빼면 'W-10 계단' 케이스가 빨개진다.
+// 2026-09-30 KW-1a: SQL 정본이 20260930e(얼리 단계·반열림·계단 스택)로 옮겨졌다. JS 쪽은 화면 작성기와 **같은 함수**(ledgerLiveStats)로 잰다.
 // 실행: npx vitest run src/api/clockLedgerPart.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { deriveClockCounts, earlyUnitTotal, earlyWindowOf, defaultClockConfig, sameLedgerPart, type ClockConfig, type ClockLiveStats } from './clock';
+import { ledgerLiveStats, emptyClockState, defaultClockConfig, sameLedgerPart, type ClockConfig, type ClockLiveStats } from './clock';
+import type { EarlyTierWindow } from '../lib/chipRules';
 import type { LedgerBuyin, EarlyType } from './ledger';
 import fx from './clockLedgerPart.fixtures.json';
 
 type Row = { player_name: string | null; entry_no: number; buyin_at: string; early_override: string | null; addon_method: string | null };
-type Sess = { early_double_min: number; early_single_min: number; tournament_start: string | null; opened_at: string | null } | null;
+type Sess = { early_double_min: number; early_single_min: number; tournament_start: string | null; opened_at: string | null; early_tiers?: EarlyTierWindow[] | null } | null;
 
 // DB 행 → 화면 모델(rowToBuyin 과 같은 칸만)
 const toBuyin = (r: Row, i: number): LedgerBuyin => ({
@@ -29,25 +32,25 @@ const toBuyin = (r: Row, i: number): LedgerBuyin => ({
 // 화면 작성기와 같은 창: 세션 행이 없으면 getLedgerSession 의 빈 세션(분 0 · 시작 시각 없음)
 const toWindow = (s: Sess) => ({
   earlyDoubleMin: s?.early_double_min ?? 0, earlySingleMin: s?.early_single_min ?? 0,
-  tournamentStart: s?.tournament_start ?? null, openedAt: s?.opened_at ?? null,
+  tournamentStart: s?.tournament_start ?? null, openedAt: s?.opened_at ?? null, earlyTiers: s?.early_tiers ?? null,
 });
 
 export function jsLedgerPart(buyins: Row[], session: Sess, config: Partial<ClockConfig>) {
   const cfg = { ...defaultClockConfig(), ...config } as ClockConfig;
-  const d = deriveClockCounts(buyins.map(toBuyin), earlyWindowOf(cfg, toWindow(session)));
-  return { ...d, earlyUnits: earlyUnitTotal(d, cfg) };
+  return ledgerLiveStats({ ...emptyClockState('v', cfg, 1), sessionDate: '2026-09-29' }, buyins.map(toBuyin), toWindow(session)).ledger;
 }
 
 const sqlBody = () => {
-  const s = readFileSync(join(__dirname, '../../supabase/migrations/20260929t_clock_ledger_stats_trigger.sql'), 'utf8').replace(/\r\n/g, '\n');
+  const s = readFileSync(join(__dirname, '../../supabase/migrations/20260930e_chip_rules_early_tiers.sql'), 'utf8').replace(/\r\n/g, '\n');
   const m = s.match(/_clock_ledger_part\(p_buyins jsonb, p_session jsonb, p_config jsonb\)[\s\S]*?as \$fn\$([\s\S]*?)\$fn\$;/);
   return m?.[1] ?? '';
 };
-// R1(라이브 읽기 전용 SELECT, 2026-09-29) 로 전 케이스 일치를 확인한 본문+픽스처의 해시.
-const SQL_BODY_SHA = '688229c5eb3a7b33';
+// R1 로 전 케이스 일치를 확인한 본문+픽스처의 해시. 2026-09-29 는 라이브 읽기 전용 SELECT,
+//   2026-09-30(KW-1a, 20260930e) 은 PGlite(Postgres 17 WASM) 에 §2 본문 그대로 만들어 15케이스 jsonb = 비교(scratchpad/kw1a/r1-pglite.mjs).
+const SQL_BODY_SHA = '90e39d7764962f49';
 
 describe('K3 장부 몫 — JS 식 == 픽스처 == SQL 식', () => {
-  for (const c of fx.cases as { name: string; buyins: Row[]; session: Sess; config: Partial<ClockConfig>; expect?: Record<string, number> }[]) {
+  for (const c of fx.cases as unknown as { name: string; buyins: Row[]; session: Sess; config: Partial<ClockConfig>; expect?: Record<string, unknown> }[]) {
     it(c.name, () => {
       expect(c.expect, '픽스처에 expect 가 없다').toBeTruthy();
       expect(jsLedgerPart(c.buyins, c.session, c.config)).toEqual(c.expect);
@@ -74,5 +77,12 @@ describe('K3 장부 몫 — JS 식 == 픽스처 == SQL 식', () => {
       expect(s).toContain(`revoke all on function public.${f} from public, anon, authenticated;`);
     }
     expect(s.match(/security definer\s+set search_path = public, pg_temp/g)?.length).toBe(2);
+  });
+  it('KW-1a(20260930e): 세션 얼리 단계 변경도 클락을 다시 계산하고, 할인 조건 트리거 함수는 실행 권한이 회수된다', () => {
+    const s = readFileSync(join(__dirname, '../../supabase/migrations/20260930e_chip_rules_early_tiers.sql'), 'utf8').replace(/^\s*--.*$/gm, '');
+    expect(s).toMatch(/update of early_double_min, early_single_min, early_tiers, tournament_start, opened_at, buyin_amount on public\.ledger_sessions/);
+    expect(s).toMatch(/before insert or update of discount_index, entry_no on public\.ledger_buyins/);
+    expect(s).toContain('revoke all on function public._ledger_buyin_discount_kind_guard() from public, anon, authenticated;');
+    expect(s).toContain('revoke all on function public._clock_ledger_part(jsonb, jsonb, jsonb) from public, anon, authenticated;');
   });
 });

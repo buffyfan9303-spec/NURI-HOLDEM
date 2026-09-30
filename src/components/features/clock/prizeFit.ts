@@ -58,7 +58,20 @@ export const PRIZE_SPECS: readonly PrizeSpec[] = [
   { key: 'compact', minH: 2.6,  gap: 0.3,  place: 1.6,  amount: 1.75, leadPlace: 1.85, leadAmount: 2.05 },
 ];
 
-export type PrizeRow = { place: string; amount: number };
+export type PrizeRow = { place: string; amount: number; unit?: string; count?: number };
+
+/** 화면에 그리는 금액 문자열 — 단위가 있으면(T·GP·포인트) 입력한 단위 그대로 붙인다(W-25, 원 환산 병기 없음). */
+export function prizeAmountText(p: Pick<PrizeRow, 'amount' | 'unit'>): string {
+  return `${p.amount.toLocaleString()}${p.unit ?? ''}`;
+}
+
+/** 총 프라이즈 = Σ amount × count(범위 순위 '11-15th' = 5자리, W-12). 단위가 섞이면 합칠 수 없어 null. */
+export function prizeTotalOf(prizes: readonly PrizeRow[]): { amount: number; unit: string } | null {
+  if (!prizes.length) return null;
+  const unit = prizes[0].unit ?? '';
+  if (prizes.some((p) => (p.unit ?? '') !== unit)) return null;
+  return { amount: prizes.reduce((s, p) => s + p.amount * Math.max(1, p.count ?? 1), 0), unit };
+}
 
 /** 화면에 실제로 그려지는 등수 문자열 — ClockStage 의 렌더와 **같은 규칙**이어야 한다. */
 export function prizePlaceText(place: string): string {
@@ -111,7 +124,8 @@ export function prizeWorst(prizes: readonly PrizeRow[]): PrizeWorst {
     const t = prizePlaceText(p.place);
     const f = placeWidthFactor(t);
     if (f > placeFactor) { placeFactor = f; placeText = t; }
-    const n = p.amount.toLocaleString().length;
+    // 단위 글자(한글)는 숫자보다 넓다 — 보수적으로 1.5자로 센다(글자 폭 계수 W_UNIT/W_AMT ≈ 1.49).
+    const n = p.amount.toLocaleString().length + Math.ceil((p.unit ?? '').length * 1.5);
     if (n > amountChars) amountChars = n;
   }
   const leadPlaceText = prizes.length ? prizePlaceText(prizes[0].place) : '';

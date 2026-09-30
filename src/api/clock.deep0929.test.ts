@@ -18,7 +18,7 @@ describe('K4 · 얼리 판정 창 한 벌(장부 세션 기준)', () => {
   const session = { earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: start, openedAt: null, buyinAmount: 100_000 };
 
   it('🔴 세션이 있으면 세션이 이긴다 — 클락 설정의 분은 쓰지 않는다', () => {
-    expect(earlyWindowOf(cfg, session)).toEqual({ earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: start, openedAt: null });
+    expect(earlyWindowOf(cfg, session)).toEqual({ earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: start, openedAt: null, earlyTiers: null });
     expect(deriveClockCounts([b('2026-09-29T10:05:00.000Z')], earlyWindowOf(cfg, session)).earlies).toBe(0);
   });
   it('세션이 없을 때만 클락 설정', () => {

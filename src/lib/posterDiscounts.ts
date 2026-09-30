@@ -58,7 +58,9 @@ export function discountsFromPromotions(
     const level = Math.max(0, Math.round(p.level ?? 0));
     if (discounts.some((d) => d.amount === amount && (d.label ?? '') === label && (d.level ?? 0) === level)) { duplicates++; continue; }
     if (discounts.length >= MAX_LEDGER_DISCOUNTS) { skipped++; continue; }
-    discounts.push({ label, amount, level });
+    // W-28 — 포스터 할인 유형이 '리바인'·'첫 바인' 이면 그것이 장부의 **적용 조건**이 된다(라벨만이 아니다).
+    const kind = p.discountType === 'rebuy' || p.discountType === 'firstBuyin' ? p.discountType : undefined;
+    discounts.push(kind ? { label, amount, level, kind } : { label, amount, level });
     added++;
   }
   return { discounts, added, skipped, duplicates };

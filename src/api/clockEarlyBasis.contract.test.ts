@@ -40,6 +40,8 @@ describe('클락 #1 얼리 기준 = 등록 시점(장부 세션) 스냅샷', () 
     expect(body).toMatch(/let earlyDMin = base\.earlyDoubleMin \?\? 0, earlySMin = base\.earlySingleMin \?\? 0;/);
     expect(body).toMatch(/if \(!clockState\?\.running\) \{[\s\S]*earlyDMin = cfg\.earlyDoubleMin; earlySMin = cfg\.earlySingleMin;/);
     // 포스터 구조(레벨 길이)가 등록 때 분 환산에 들어간다 — 포스터 등록 기준
-    expect(body).toMatch(/clockPatchFromSchedule\(linkedSched\)/);
+    // 2026-09-30 KW-1a: 병합은 lib/ledgerStart 로 옮겼다 — 주석 속 이름에 걸리지 않게 실제 호출 모양을 본다.
+    expect(body).toMatch(/const cfg = ledgerStartClockConfig\(baseCfg, linkedSched, /);
+    expect(src('../lib/ledgerStart.ts')).toMatch(/const schedPatch = sched \? clockPatchFromSchedule\(sched\) : \{\};/);
   });
 });

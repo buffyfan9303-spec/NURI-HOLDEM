@@ -10,6 +10,27 @@ import type { LedgerSession } from '../api/ledger';
 import type { PosterFormData } from '../components/features/PosterFormModal';
 import { manToWon, presetPrizeWon, rankingPrizeWon } from './units';
 import { regCloseLevelOf } from './regClose';
+import { normalizeEarlyTiers, prizePlaceCount, targetEntriesOf, type PosterChipRules } from './chipRules';
+
+/** 포스터 buy_in 의 새 칸(얼리 단계·계단 스택·애드온 엔트리)을 읽는다 — 없으면 undefined(= 기존 동작). */
+export function posterChipRules(sc: Pick<Schedule, 'buyIn'>): PosterChipRules {
+  const b = (sc.buyIn ?? {}) as PosterChipRules;
+  return {
+    earlyTiers: Array.isArray(b.earlyTiers) ? normalizeEarlyTiers(b.earlyTiers) : undefined,
+    rebuyStacks: Array.isArray(b.rebuyStacks) ? b.rebuyStacks.map((n) => Math.round(Number(n) || 0)).filter((n) => n > 0) : undefined,
+    addonEntry: b.addonEntry != null && Number(b.addonEntry) >= 0 ? Number(b.addonEntry) : undefined,
+  };
+}
+
+/** 포스터 → 장부 세션 칸(W-06 애드온 엔트리 · W-19 기준 엔트리 = GTD ÷ 참가비). '있는 것만' 키를 만든다. */
+export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> {
+  const p: Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> = {};
+  const target = targetEntriesOf(sc.guaranteed, sc.prizePool, sc.buyIn?.amount);
+  if (target > 0) p.targetEntries = target;
+  const ae = posterChipRules(sc).addonEntry;
+  if (ae !== undefined) p.addonEntry = ae;
+  return p;
+}
 
 /** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
 export function posterLevelsToClock(
@@ -46,16 +67,48 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
   const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
   if (rebuy) p.rebuyStack = rebuy;
   if (sc.buyIn?.addonStack) { p.addonStack = sc.buyIn.addonStack; p.isAddon = true; }
+  // W-10 — 회차별 리엔트리 스택. 포스터에 없으면 **빈 배열로 지운다** — 지난 포스터의 계단이 이 게임으로 새지 않게(단일값 = 기존 동작).
+  const rules = posterChipRules(sc);
+  p.rebuyStacks = rules.rebuyStacks ?? [];
+  if (rules.rebuyStacks?.length) p.rebuyStack = rules.rebuyStacks[0];
+  // W-04 — 얼리 단계. 포스터가 말하면(빈 배열 = 얼리 없음) 그것이 정본이고 두 칸(더블·1얼리)은 1·2단 거울값이다.
+  //   포스터가 말하지 않으면 키를 undefined 로 **명시해** 지난 포스터의 단계를 지운다(두 칸 = 기존 동작).
+  if (rules.earlyTiers) {
+    const t = rules.earlyTiers;
+    p.earlyTiers = t;
+    p.earlyDoubleLevel = t[0]?.level ?? 0; p.doubleEarlyBonus = t[0]?.chips ?? 0;
+    p.earlySingleLevel = t[1]?.level ?? 0; p.earlyBonus = t[1]?.chips ?? 0;
+  } else {
+    p.earlyTiers = undefined;
+  }
   return p;
 }
 
-/** PL1b 금액 상속 — 포스터 순위별 상금(만원 표기) → 클락 prizes(원).
- *  단위가 돈이 아닌 항목(%·pts·이용권 등)은 오환산 위험이라 제외한다. */
-export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] | null {
-  const rows = (sc.rankingPrizes ?? [])
-    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
-    .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
-  return rows.length > 0 ? rows : null;
+/** 순위 상금 행 → 클락 상금 행 — 포스터·프리셋이 같은 규칙을 쓴다.
+ *  · 만원·원(또는 단위 없음)은 원으로 정규화한다(기존 동작 — 1만 배 오기록 차단).
+ *  · 그 밖의 단위(T·GP·포인트·초대권…)는 **입력한 단위 그대로**(W-25, 원 환산 병기 안 함 — §28).
+ *  · 빈 문자열 단위('')는 돈으로도 단위로도 추측하지 않고 뺀다(PL1b).
+ *  · '11-15th' 같은 범위 순위는 자리 수를 count 로 싣는다 — 총액 = Σ amount × count(W-12). */
+export function clockPrizeRowsOf(rows: readonly { rank: string; amount?: number; unit?: string; amountWon?: number }[] | null | undefined): ClockPrizeRow[] {
+  const out: ClockPrizeRow[] = [];
+  for (const r of rows ?? []) {
+    const unit = (r.unit ?? '').trim();
+    // T 행은 프리셋에서 amountWon(원 환산)을 함께 달고 온다 — 단위가 돈이 아니면 amountWon 이 있어도 단위를 따른다.
+    const money = r.unit == null || unit === '만원' || unit === '원' || (!unit && r.amountWon != null);
+    if (!money && !unit) continue;
+    const amount = money ? rankingPrizeWon(r) : Math.round(Number(r.amount) || 0);
+    if (!(amount > 0)) continue;
+    const count = prizePlaceCount(r.rank);
+    out.push({ place: r.rank, amount, ...(money ? {} : { unit }), ...(count > 1 ? { count } : {}) });
+  }
+  return out;
+}
+
+/** PL1b 금액 상속 — 포스터 순위별 상금 → 클락 prizes.
+ *  🔴 W-13(2026-09-30 리드): 시상이 없거나 전부 뺄 단위면 **빈 배열**을 돌려준다(예전엔 null → 지난 클락·기본값 상금표가 TV 에 남았다).
+ *  소비처는 포스터가 연결됐을 때만 이 값을 쓴다 — 포스터 없는 장부는 부르지 않는다. */
+export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] {
+  return clockPrizeRowsOf(sc.rankingPrizes);
 }
 
 /** PL3 생성 경로 역전 — '지난 게임(포스터)에서 프리셋 만들기'.
@@ -116,9 +169,7 @@ function dropEmpty<T extends object>(o: T): T | undefined {
 /** 돈 단위 순위상금만(%·pts 등 제외) — 클락 prizes(원) 행으로.
  *  ⚠ 빈 단위('')는 돈으로 추측하지 않는다(PL1b와 동일 규칙) — 자유입력 단위의 만원 오추정이 곧 1만 배 사고다. */
 function moneyPrizeRows(d: GamePresetData): ClockPrizeRow[] {
-  return (d.rankingPrizes ?? [])
-    .filter((r) => ((r.amountWon ?? r.amount) ?? 0) > 0 && (r.amountWon != null || r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
-    .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
+  return clockPrizeRowsOf(d.rankingPrizes);
 }
 
 /** 프리셋 → 클락 설정 패치. TournamentClock.applyGamePreset(PL1a③)을 승격 + clock 네임스페이스 반영.
@@ -212,9 +263,12 @@ export function applyToLedger(d: GamePresetData): Partial<LedgerSession> & { tou
 
 /** 구 clock_presets 1건 → 게임 프리셋 데이터(1회 변환 버튼용). 클락 prizes(원) → 정규형 병기. */
 export function presetFromClockConfig(cfg: ClockConfig): GamePresetData {
+  // 단위가 있는 행(T·GP·포인트 — W-25)은 그 단위 그대로 옮긴다. 원 행만 만원 표시 + amountWon 병기.
   const prizes = (cfg.prizes ?? [])
     .filter((p) => (p.amount ?? 0) > 0)
-    .map((p) => ({ rank: p.place, amount: Math.round(p.amount / 10_000), unit: '만원', amountWon: p.amount }));
+    .map((p) => (p.unit
+      ? { rank: p.place, amount: p.amount, unit: p.unit }
+      : { rank: p.place, amount: Math.round(p.amount / 10_000), unit: '만원', amountWon: p.amount }));
   return {
     title: cfg.title || undefined,
     startStack: cfg.startStack || undefined,

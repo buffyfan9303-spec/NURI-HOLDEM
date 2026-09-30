@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, addonFinance, addonTotals, ticketUsedT, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
+  wonToMan, buyinFinance, addonFinance, addonEntryOf, addonTotals, ticketUsedT, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import Icon from '../atoms/Icon';
@@ -189,7 +189,9 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
       // 애드온(2026-09-28)은 **돈에만** 더한다 — 엔트리·바인 횟수·얼리에는 절대 안 들어간다(ledger.ts addonFinance).
       const bf = fin(b), a = addonFinance(b);
       const f = { ...bf, paid: bf.paid + a.revenue, unpaid: bf.unpaid + a.unpaid, ticketPaid: ticketUsedT(bf, a) };
-      revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
+      // W-06 — 애드온 엔트리(게임별, 기본 0)만 엔트리에 더한다. 정산(ledgerSettlement)과 같은 규칙.
+      const ae = addonEntryOf(b, sessionByKey.get(bkey(b)) ?? {});
+      revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry + ae;
       if (b.gameSeq > 1) { sideBuyins += 1; sideRev += f.paid; sideGames.add(bkey(b)); }
       else { mainBuyins += 1; mainRev += f.paid; }
       const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { mainRev: 0, sideRev: 0, mainB: 0, sideB: 0, players: new Set<string>() });
@@ -210,7 +212,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
       const w = new Date(b.sessionDate + 'T00:00:00').getDay();
       if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, target: 0, dates: new Set(), players: new Set(), sideE: 0, sideRev: 0 };
       if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionsByDate.get(b.sessionDate) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0); // 날짜별(전 게임) 기준엔트리 1회만 합산
-      dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
+      dow[w].entries += f.entry + ae; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
       dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
       if (b.gameSeq > 1) { dow[w].sideE += 1; dow[w].sideRev += f.paid; }
     }

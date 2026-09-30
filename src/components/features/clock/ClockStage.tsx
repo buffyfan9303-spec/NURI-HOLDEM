@@ -20,7 +20,7 @@ import { clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, f
 import { useClockSecond } from '../../../lib/clockTick';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
-  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, type PrizeRow,
+  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, type PrizeRow,
 } from './prizeFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
@@ -99,7 +99,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
   };
   const prizes = (g.config?.prizes ?? []).filter((p) => p.amount > 0);
-  const totalPrize = prizes.reduce((sum, p) => sum + p.amount, 0);
+  // W-12·W-25 — 범위 순위는 자리 수만큼, 단위는 입력한 그대로. 단위가 섞이면 합계를 말하지 않는다(null).
+  const totalPrize = prizeTotalOf(prizes);
   const hasCounts = !!g.liveStats
     || (ls.entries > 0 || ls.alive > 0 || ls.rebuys > 0 || ls.earlies > 0 || ls.addons > 0 || ls.eliminations > 0);
   // BB 병기 — 브레이크 중엔 직전 플레이 레벨의 BB
@@ -297,7 +298,7 @@ const PRIZE_SLIDE_MS = 400;
  *
  * 초당 틱이 아니라 7초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다(언마운트·장 수 변화에서 정리).
  */
-function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]; totalPrize: number; mysteryBounty: number }) {
+function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null; mysteryBounty: number }) {
   const pages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -327,7 +328,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
             </span>
             <span className="font-extrabold tabular-nums"
               style={{ fontSize: cq(lead ? spec.leadAmount : spec.amount), color: 'var(--clk-prize, #F5C451)' }}>
-              {p.amount.toLocaleString()}
+              {prizeAmountText(p)}
             </span>
           </li>
         );
@@ -338,10 +339,12 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
       <p className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</p>
-      <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
-        style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
-        {totalPrize.toLocaleString()}
-      </p>
+      {totalPrize && (
+        <p data-testid="clk-prize-total" className="mt-[0.3cqmin] font-black leading-none tabular-nums"
+          style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
+          {prizeAmountText(totalPrize)}
+        </p>
+      )}
       {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다). */}
       <div className="mt-[1.4cqmin] overflow-x-hidden border-t border-white/8 pt-[1.2cqmin]">
         <div data-testid="clk-prize-track" className="flex transition-transform ease-out motion-reduce:transition-none"
