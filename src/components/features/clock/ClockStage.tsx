@@ -14,13 +14,15 @@
 //   · 운영자 16:9 박스 — cqmin = 박스의 짧은 변. 그래서 같은 마크업이 박스 안에서 그대로 축소된다.
 //   뷰포트 기준(vmin·md:·landscape:)으로 돌아가면 둘 중 하나가 반드시 틀린다(2026-09-11 실측 2회).
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useReducer, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
 import { clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
 import { useClockSecond } from '../../../lib/clockTick';
+import { serverNow } from '../../../lib/serverTime';
+import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
-  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, type PrizeRow,
+  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
@@ -66,6 +68,7 @@ const LABEL = 'font-bold uppercase tracking-[0.14em]';
 const LABEL_SIZE = 'text-[max(9px,1.5cqmin)]';
 // #10(FULL-RECHECK-2/C) — 같은 9px 하한을 상태 바(Total Time)·ANTE·BB 보조·프라이즈 라벨·QR 캡션에도 건다.
 //   1024 운영자 전체화면에서 7.3~8.9px 로 내려가 읽을 수 없었다. TV(짧은 변 1080)는 전부 9px 을 넘어 그대로다.
+const NO_ADS: readonly string[] = [];
 const DIM = { color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' } as const;
 const SOFT = { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' } as const;
 
@@ -83,13 +86,15 @@ export interface ClockStageProps {
   sponsor?: string | null;
   /** 스폰서 배너 크기(운영자 설정). */
   adSize?: 'sm' | 'md' | 'lg';
+  /** K단계 — 왼쪽 칸 슬라이드에 끼울 광고 이미지(지금 이 매장에 걸 것만, 순번대로). 없으면 광고 장을 건너뛴다. */
+  ads?: readonly string[];
 }
 
 /**
  * 보드 본체 — 상태 바 / 본문 3열 / 하단 레일.
  * 데이터를 읽지 않는다(구독·폴링·저장 0). 받은 ClockState 를 그리기만 한다.
  */
-export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm' }: ClockStageProps) {
+export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm', ads = NO_ADS }: ClockStageProps) {
   const lvls = g.config?.levels ?? [];
   // 손님 기기라 DB 를 고치지 않고 '지금 진짜 레벨' 을 계산해 표시한다(DB 전진은 운영자 화면 책임).
   const eff = effectiveLevel(g);
@@ -98,7 +103,9 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
   };
-  const prizes = (g.config?.prizes ?? []).filter((p) => p.amount > 0);
+  // K단계 — 금액이 없어도 업장 문구(text)가 있는 줄은 그린다.
+  const prizes = (g.config?.prizes ?? []).filter(prizeRowShown);
+  const extras = visibleExtraPages(g.config?.extraPages);
   // W-12·W-25 — 범위 순위는 자리 수만큼, 단위는 입력한 그대로. 단위가 섞이면 합계를 말하지 않는다(null).
   const totalPrize = prizeTotalOf(prizes);
   const hasCounts = !!g.liveStats
@@ -188,7 +195,10 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
           <div className="clk-cols min-h-0 flex-1 gap-[2cqmin] px-[3cqmin]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
-            {prizes.length > 0 ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} /> : <span className="clk-wide-land" />}
+            {/* K단계 — 시상이 없어도 추가 페이지·광고가 있으면 같은 칸이 선다(순서표 lib/clockSlides). */}
+            {prizes.length > 0 || extras.length > 0 || ads.length > 0
+              ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} extras={extras} ads={ads} />
+              : <span className="clk-wide-land" />}
 
             {/* 중앙 — LEVEL / 타이머 히어로 / 블라인드.
                 2026-09-19 오너 지시 #3·#9: 카운트다운이 **본문의 세로 중앙**에 서고, LEVEL 은 알약이 아니라 큰 글자로
@@ -268,17 +278,12 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   );
 }
 
-/** 한 장이 머무는 시간. 두 경계에 끼어 있다 — 실측으로 7초를 골람다.
- *  · 위: 멀티게임 자동 순환이 15초다(ClockDisplay.tsx:146). 2장짜리(21~40등) 대회에서 한 게임이
- *    송출되는 동안 두 장이 다 보이려면 `2 × (머무름 + 전환) ≤ 15,000` → 머무름 ≤ 7,100ms.
- *  · 아래: 20줄을 눈으로 훑는 데 필요한 시간. 자기 등수를 찾는 읽기라 줄당 0.3초 ≈ 6초가 바닥이다.
- *  7,000 + 400 = 7,400 → 2장 14.8초(15초 안) · 200등(10장) 한 바퀴 74초. */
-const PRIZE_PAGE_MS = 7_000;
-/** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다. */
+/** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다.
+ *  (한 장 머무름 7초 · 매장 페이지 30초 · 광고 10초는 lib/clockSlides 상수 — 순서표와 한 벌이다.) */
 const PRIZE_SLIDE_MS = 400;
 
 /**
- * PrizeColumn — 총 프라이즈 + 순위별 표. 한 장 **20줄(좌단 1~10 · 우단 11~20)**, 넘으면 **옆으로 밀린다**.
+ * PrizeColumn — 왼쪽 칸 슬라이드. 시상표 장(20줄씩) → 추가 페이지(최대 2) → 광고 1장을 **한 트랙**에 늘어놓고 translateX 로 민다.
  *
  * 왜 잘라내지 않나: 종전에는 `prizes.slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**.
  *   상금 구조를 200등까지 잡은 대회에서 참가자가 "내 등수는 얼마인가"를 확인할 방법이 화면에 없었다.
@@ -287,29 +292,55 @@ const PRIZE_SLIDE_MS = 400;
  * 2026-09-15 오너 지시 #13 — 세로 교체를 **가로 슬라이드**로 바꾸고 한 장을 20줄로 늘렸다.
  *   ① 모든 장을 가로로 늘어놓고 트랙을 translateX 로 민다 → 장마다 높이가 흔들리지 않는다
  *      (예전의 빈 줄 채우기 pad 가 필요 없어졌다 — 가장 긴 장이 높이를 정한다).
- *   ② **2단 × 10줄**이라 20줄을 넣고도 글자를 거의 안 줄인다. 1단 20줄은 세로가 195px 모자라
- *      글자를 17% 줄여야 했는데, 이 열은 폭 401px 중 잉크가 150px 뿐이라 **가로가 놀고 있었다**.
- *   ③ 규격은 `pickPrizeLayout` 이 **상금 자릿수·등수 자릿수로 계산해서** 고른다(prizeFit.ts).
- *      어떤 규격으로도 2단이 안 되면 **1단 20줄로 떨어진다** — 잘림은 구조적으로 나오지 않는다.
+ *   ② **2단 × 10줄**이라 20줄을 넣고도 글자를 거의 안 줄인다(prizeFit.ts).
+ *   ③ 어떤 규격으로도 2단이 안 되면 **1단 20줄로 떨어진다** — 잘림은 구조적으로 나오지 않는다.
+ *
+ * 2026-09-30 K단계 — 같은 트랙을 **확장**했다(두 벌 금지, PLAN-AB-exec §5-1).
+ *   순서·머무름은 lib/clockSlides 의 순수 함수 한 벌(slideSegments·slideAt)이 정한다: 시상 30초 → 추가 A 30초 → 추가 B 30초 → 광고 10초.
+ *   · 칸이 **하나뿐**(종전 = 시상만)이면 기준 시각이 이 칸이 뜬 순간이다 → 첫 장부터 7초 순환, 종전과 같은 화면.
+ *   · 칸이 **둘 이상**이면 기준이 서버 시각(epoch 0)이다 → 여러 TV 가 같은 장을 보이고, 새로고침해도 이어진다.
+ *   · 머리말(라벨 + 큰 줄)은 지금 칸을 따른다. 칸이 둘 이상일 때는 큰 줄 자리를 늘 예약해 장이 바뀌어도 열이 들썩이지 않는다.
  *
  * ⚠ 읽는 순서는 **위→아래, 좌→우**다(좌단 1~10등 · 우단 11~20등). 좌우로 번갈아 가면 안 된다.
  * ⚠ 접근성: `motion-reduce:transition-none` — 모션을 줄인 환경에서는 **즉시** 전환된다.
  *   멈추지는 않는다. 멈추면 21등 아래가 그 기기에서 영영 안 보여 기능 소실이 되기 때문이다.
  *
- * 초당 틱이 아니라 7초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다(언마운트·장 수 변화에서 정리).
+ * 초당 틱이 아니다 — 다음 전환 시각에 맞춘 setTimeout 한 개. 움직일 장이 없으면 타이머 자체를 걸지 않는다.
  */
-function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null; mysteryBounty: number }) {
-  const pages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
-  const [page, setPage] = useState(0);
+function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
+  prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null; mysteryBounty: number;
+  extras: ClockExtraPage[]; ads: readonly string[];
+}) {
+  const prizePages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
+  // 광고 — 미리 불러 보고, 못 불러오는 주소는 건너뛴다(빈 장을 TV 에 걸지 않는다).
+  const [failedAds, setFailedAds] = useState<ReadonlySet<string>>(() => new Set());
+  const adKey = ads.join('\n');
   useEffect(() => {
-    if (pages <= 1) { setPage(0); return; }
-    const t = setInterval(() => setPage((p) => (p + 1) % pages), PRIZE_PAGE_MS);
-    return () => clearInterval(t);
-  }, [pages]);
-  // 표가 짧아져 장 수가 줄면 현재 장이 범위를 벗어난다 — 빈 화면 대신 첫 장으로.
-  const cur = Math.min(page, pages - 1);
+    let alive = true;
+    for (const u of ads) {
+      const im = new Image();
+      im.onerror = () => { if (alive) setFailedAds((s) => (s.has(u) ? s : new Set(s).add(u))); };
+      im.src = u;
+    }
+    return () => { alive = false; };
+  }, [adKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const liveAds = ads.filter((u) => !failedAds.has(u));
+  const segs = slideSegments({ prizeSheets: prizePages, extraCount: extras.length, hasAd: liveAds.length > 0 });
+  const multi = segs.length > 1;
+  const [anchor] = useState(() => Date.now());
+  const [, rerender] = useReducer((x: number) => x + 1, 0);
+  const pos = slideAt(segs, multi ? serverNow() : Date.now() - anchor);
+  useEffect(() => {
+    if (!Number.isFinite(pos.msLeft)) return;
+    const t = setTimeout(rerender, pos.msLeft + 30);
+    return () => clearTimeout(t);
+  });
+  const seg = segs[pos.seg];
+  const cur = pos.sheet;
+  const total = sheetCount(segs);
+  const ad = liveAds.length ? liveAds[adIndexAt(liveAds.length, pos.cycle)] : null;
   const { spec, twoCol } = pickPrizeLayout(prizes);
-  const sheets = Array.from({ length: pages }, (_, i) => prizes.slice(i * PRIZES_PER_PAGE, (i + 1) * PRIZES_PER_PAGE));
+  const sheets = Array.from({ length: prizePages }, (_, i) => prizes.slice(i * PRIZES_PER_PAGE, (i + 1) * PRIZES_PER_PAGE));
   const cq = (n: number) => `${n}cqmin`;
 
   /** 한 단. `from` 은 전체 표에서의 시작 번호 — 1등 줄(큰 글자)을 그것으로 판정한다. */
@@ -321,7 +352,8 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
         return (
           // min-h 로 줄 높이를 고정한다 — 1등만 글자가 큰데, 그 줄이 있는 장과 없는 장의 높이가
           //   달라지면 세로 중앙 정렬 때문에 장이 바뀔 때마다 총액이 위아래로 튄다(실측 3.7px).
-          <li key={from + i} className="flex items-baseline justify-between gap-[1.2cqmin] leading-tight"
+          //   메모(K단계)가 있는 줄만 flex-wrap 으로 한 줄을 더 쓴다 — 메모 없는 표는 종전 마크업 그대로다.
+          <li key={from + i} className={`flex items-baseline justify-between gap-[1.2cqmin] leading-tight${p.note ? ' flex-wrap' : ''}`}
             style={{ minHeight: cq(spec.minH), marginTop: i === 0 ? undefined : cq(spec.gap) }}>
             <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: cq(lead ? spec.leadPlace : spec.place), ...DIM }}>
               {prizePlaceText(p.place)}
@@ -330,19 +362,49 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
               style={{ fontSize: cq(lead ? spec.leadAmount : spec.amount), color: 'var(--clk-prize, #F5C451)' }}>
               {prizeAmountText(p)}
             </span>
+            {p.note && <span className="w-full text-right leading-tight" style={{ fontSize: 'max(9px,1.3cqmin)', ...DIM }}>{p.note}</span>}
           </li>
         );
       })}
     </ul>
   );
 
+  /** 추가 페이지 한 장 — 이름표 · 내용 · 메모. team 은 팀 합산 점수로 정렬해 순위를 붙인다(W-11). */
+  const extraSheet = (pg: ClockExtraPage) => {
+    const rows = pg.kind === 'team'
+      ? teamStandings(pg.points ?? [], pg.rows).map((t) => ({ label: `${t.rank}. ${t.team}`, content: `${t.total} PTS`, note: t.note }))
+      : pg.rows.filter((r) => r.label.trim() || r.content.trim());
+    return (
+      <ul className="w-full">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-[1.2cqmin] leading-tight"
+            style={{ minHeight: cq(3.2), marginTop: i === 0 ? undefined : cq(0.6) }}>
+            <span className="shrink-0 font-bold" style={{ fontSize: cq(1.9), ...DIM }}>{r.label}</span>
+            <span className="min-w-0 break-keep text-right font-extrabold text-white" style={{ fontSize: cq(2.1) }}>{r.content}</span>
+            {r.note && <span className="w-full text-right leading-tight" style={{ fontSize: 'max(9px,1.3cqmin)', ...DIM }}>{r.note}</span>}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  // 머리말 — 지금 칸의 라벨과 큰 줄. 시상 칸의 큰 줄은 총액(clk-prize-total, 종전 그대로).
+  const head = !seg || seg.kind === 'prize'
+    ? { label: 'Prize Pool', big: totalPrize ? prizeAmountText(totalPrize) : null, gold: true }
+    : seg.kind === 'extra'
+      ? { label: EXTRA_KIND_BOARD[extras[seg.index].kind], big: extras[seg.index].title || null, gold: false }
+      : { label: 'Sponsor', big: null, gold: false };
+  let sheetNo = prizePages;
+
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-      <p className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</p>
-      {totalPrize && (
-        <p data-testid="clk-prize-total" className="mt-[0.3cqmin] font-black leading-none tabular-nums"
-          style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
-          {prizeAmountText(totalPrize)}
+      <p className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>{head.label}</p>
+      {(head.big || multi) && (
+        <p data-testid={seg?.kind === 'prize' && head.big ? 'clk-prize-total' : undefined}
+          // 칸이 하나(종전)면 종전 클래스 그대로. 둘 이상이면 모든 칸이 같은 줄 높이(leading-tight · 한 줄 말줄임)라 장이 바뀌어도 높이가 같다.
+          className={`mt-[0.3cqmin] font-black tabular-nums ${multi ? 'truncate leading-tight' : 'leading-none'}${head.big ? '' : ' invisible'}`}
+          style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: head.gold ? 'var(--clk-prize, #F5C451)' : '#FFFFFF' }}>
+          {head.big ?? ' '}
         </p>
       )}
       {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다). */}
@@ -365,6 +427,24 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
               </div>
             );
           })}
+          {extras.map((pg, ei) => {
+            const at = sheetNo++;
+            return (
+              <div key={`x${ei}`} data-extra-sheet={ei} aria-hidden={at !== cur ? true : undefined} className="w-full shrink-0">
+                {extraSheet(pg)}
+              </div>
+            );
+          })}
+          {ad && (() => {
+            const at = sheetNo++;
+            return (
+              <div key="ad" data-ad-sheet aria-hidden={at !== cur ? true : undefined} className="flex w-full shrink-0 justify-center">
+                {/* 840×1120(3:4) — 칸 폭과 52cqmin 중 작은 쪽에 맞춘다(비율 유지). */}
+                <img src={ad} alt="광고" className="block h-auto max-h-[52cqmin] w-auto max-w-full rounded-[1cqmin] object-contain"
+                  onError={() => setFailedAds((s) => (s.has(ad) ? s : new Set(s).add(ad)))} />
+              </div>
+            );
+          })()}
         </div>
       </div>
       {/* 미스터리 바운티 — 03cd8bb 에서 옛 보드가 사라지며 **함께 사라졌던** 값이다.
@@ -377,9 +457,9 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
           </p>
         </div>
       )}
-      {pages > 1 && (
+      {total > 1 && (
         <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[max(9px,1.5cqmin)] font-bold tabular-nums" style={DIM}>
-          {cur + 1} / {pages}
+          {cur + 1} / {total}
         </p>
       )}
     </aside>

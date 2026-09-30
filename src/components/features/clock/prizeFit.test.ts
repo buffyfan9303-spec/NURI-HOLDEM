@@ -137,3 +137,15 @@ describe('프라이즈 2단 규격 — 어떤 상금표에서도 넘치지 않�
     expect(fitsTwoColumns(PRIZE_SPECS[0], prizeWorst([]))).toBe(true);
   });
 });
+
+describe('K단계 시상 문구(text) — 금액 대신 그대로, 합계에서 빠진다', () => {
+  it('문구가 있으면 문구, 없으면 금액+단위', async () => {
+    const { prizeAmountText, prizeTotalOf, prizeRowShown } = await import('./prizeFit');
+    expect(prizeAmountText({ amount: 0, text: ' 시드권 ' })).toBe('시드권');
+    expect(prizeAmountText({ amount: 400, unit: 'T' })).toBe('400T');
+    expect(prizeRowShown({ place: '1', amount: 0, text: '트로피' })).toBe(true);
+    expect(prizeRowShown({ place: '1', amount: 0 })).toBe(false);
+    expect(prizeTotalOf([{ place: '1', amount: 0, text: '트로피' }, { place: '2', amount: 300_000 }])).toEqual({ amount: 300_000, unit: '' });
+    expect(prizeTotalOf([{ place: '1', amount: 0, text: '트로피' }])).toBeNull();
+  });
+});

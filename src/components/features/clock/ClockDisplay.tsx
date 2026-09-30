@@ -34,6 +34,7 @@ import { ambIsolation } from './ambience/ambiencePresets';
 import Icon from '../../atoms/Icon';
 import { BIZ_REQUIRED, AGE_HELPLINE } from '../BusinessFooter';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
+import { useClockAds } from './useClockAds';
 
 export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void;
@@ -75,6 +76,8 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   // 광고 **크기**도 전역 설정이다. 종전엔 이 화면이 크기를 아예 안 읽어, 관리자가 '크게' 로 바꿔도
   //   TV 는 늘 같은 크기로 띄웠다 — 컨트롤은 있는데 닿는 곳이 없는 죽은 설정이었다(2026-09-11 점검).
   const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm');   // 기본값 = 종전 하드코딩 크기
+  // K단계 — 왼쪽 칸 슬라이드 광고(관리자 등록 · 기간·대상 매장 · 순번). 우하단 스폰서(위)와 별개다.
+  const slideAds = useClockAds(venueId);
   const rootRef = useRef<HTMLDivElement>(null);
   const gamesRef = useRef<ClockState[]>([]);
 
@@ -227,7 +230,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           )}
         </>
       ) : (
-        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} headerRight={tvControls} />
+        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} ads={slideAds} headerRight={tvControls} />
       )}
     </div>
       {/* 사업자 정보는 요약(상호·사업자등록번호)만 — 5항목 전부는 앱 푸터가 싣는다. 좁으면 줄바꿈한다(잘라내지 않는다).

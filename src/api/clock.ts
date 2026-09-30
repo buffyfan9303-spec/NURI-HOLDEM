@@ -4,6 +4,7 @@ import { mustAffect } from './_mustAffect';
 import { serverNow } from '../lib/serverTime';   // D1 — 클락 시각은 서버 기준(lib/serverTime)
 import { resubscribeStatus } from '../lib/realtimeResync';
 import { earlyTierOf, ledgerCounts, addonTotals, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
+import type { ClockExtraPage } from '../lib/clockSlides';
 import { rebuyChipsOf, tierUnitChips, tierUnits, windowEndMinute, normalizeEarlyTiers, mergeLegacyEarly, type EarlyTier, type EarlyTierWindow } from '../lib/chipRules';
 
 /** 얼리 판정에 필요한 세션 정보. earlyTiers 가 있으면(비어 있지 않으면) 두 분 값 대신 그것만 쓴다(W-04). */
@@ -20,7 +21,13 @@ export interface ClockLevel {
 }
 /** 클락 상금 한 줄. unit 없음 = 원(기존 행). unit 있음 = 매장이 입력한 단위 그대로(T·GP·포인트 — W-25, 원 환산 안 함).
  *  count = 이 줄이 가리키는 자리 수('11-15th' = 5). 없으면 1. 총액은 amount × count 의 합이다(W-12). */
-export interface ClockPrizeRow { place: string; amount: number; unit?: string; count?: number }
+export interface ClockPrizeRow {
+  place: string; amount: number; unit?: string; count?: number;
+  /** K단계 — 업장이 직접 쓰는 시상 문구(예: '시드권 + 트로피'). 있으면 TV 는 금액 대신 이 글자를 그린다(P·원 표기 없음). */
+  text?: string;
+  /** K단계 — 줄 아래 작은 메모. */
+  note?: string;
+}
 
 export interface ClockConfig {
   title: string;
@@ -43,6 +50,8 @@ export interface ClockConfig {
   earlyTiers?: EarlyTier[];
   /** 회차별 리엔트리 스택(W-10). 비어 있지 않으면 rebuyStack 보다 우선(마지막 값 반복). */
   rebuyStacks?: number[];
+  /** K단계 — 매장이 켜는 추가 페이지(최대 2, lib/clockSlides). 없으면 종전 화면 그대로. */
+  extraPages?: ClockExtraPage[];
 }
 
 export interface ClockPreset {

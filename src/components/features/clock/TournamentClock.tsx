@@ -2,7 +2,7 @@
 // 토너먼트 클락 — 설정/프리셋 + 라이브 디스플레이(블라인드 타이머) + 수기 컨트롤 + 일시정지.
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
 import { Fold } from '../../atoms/Fold';
-import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
@@ -28,7 +28,6 @@ import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
-import { prizeTotalOf } from './prizeFit';
 /** 상금표가 가리키는 자리 수 — 범위 순위('11-15th' = 5)까지 센다(W-12). 순위 입력 빈 줄 수로 쓴다. */
 const prizePlaces = (prizes: readonly ClockPrizeRow[]) => prizes.reduce((n, p) => n + Math.max(1, p.count ?? 1), 0);
 import PresetPicker from '../PresetPicker';
@@ -52,6 +51,10 @@ import { lazyWithReload } from '../../../lib/lazyWithReload';
 //   보통은 lazy 를 거치지 않고 동기로 그린다(lazyWithReload.preload). 폴백 = 패널 자신의 로딩 상자와 같은 높이(CLS 0).
 const ClockThemePanel = lazyWithReload(() => import('./ClockThemePanel'));
 import ClockStage from './ClockStage';
+import ClockPagesEditor from './ClockPagesEditor';
+import { useClockAds } from './useClockAds';
+import { clampExtraPages, type ClockExtraPage } from '../../../lib/clockSlides';
+const ClockAdsManager = lazyWithReload(() => import('./ClockAdsManager'));
 import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../../lib/serverTime';
 import { useClockSecond } from '../../../lib/clockTick';
 import { useResyncOnWake } from '../../../lib/realtimeResync';
@@ -440,6 +443,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const [adImg, setAdImg] = useState<string | null>(null);
   const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm'); // 운영자 조절(기본 작게)
   const [adBusy, setAdBusy] = useState(false);
+  // K단계 — 왼쪽 칸 슬라이드 광고(TV 와 같은 목록 · 미리보기 = TV 축소판).
+  const slideAds = useClockAds(state.venueId, active);
+  const [adsOpen, setAdsOpen] = useState(false);
   useEffect(() => {
     const loadAd = () => {
       getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {});
@@ -493,6 +499,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
   // C10(2026-09-25) — 진행 중 블라인드 구조 수정 시트(레벨·엔트리·탈락·경과 보존).
   const [structOpen, setStructOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(false);
 
   // D1(2026-09-25) — 다른 접수대의 **바인 취소**는 필터 구독에 안 온다. 지금 집계 중인 바인 id 면 삭제 알림으로도 다시 읽는다
   //   (안 그러면 취소한 손님이 클락·TV 엔트리에 그대로 남는다).
@@ -972,8 +979,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   //   다시 그리면 콘솔 숫자가 그만큼 늦게 바뀐다. 콘솔은 즉시, 보드는 다음 여유 렌더에서 같은 값으로 따라온다.
   //   tick 을 의존성에 넣는 이유: 보드 머리(effectiveLevel·curBB)는 시각에 따라 바뀌므로 초 틱마다 다시 그려야 한다(종전과 같다).
   const deferredStage = useDeferredValue(stageState);
-  const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} />,
-    [deferredStage, tick, venueName, adImg, adSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} ads={slideAds} />,
+    [deferredStage, tick, venueName, adImg, adSize, slideAds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // C10 — 진행 중 구조 적용. 규칙 판정은 저장 **직전** 지금 시각으로 다시 한다(편집 중 레벨이 넘어갔으면 거절).
   //   쓰기는 persist → 바뀐 칸 저장기(config 한 칸, 끝난 대회 이어 가기면 +레벨 4필드). realtime 으로 TV·리모컨·장부·라이브 탭이 다시 읽는다.
@@ -1149,6 +1156,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
               크기(min-h 2.4rem · leading-none · 1px 테두리)는 .btn 과 같게 둔다 — 이 바 높이가 바뀌면 아래 스테이지의 cqmin 이 바뀐다. */}
           <button type="button" onClick={toggleFs}
             className={fs ? 'inline-flex min-h-[2.4rem] items-center rounded-[8px] border border-white/15 bg-white/10 px-2.5 py-1 text-2xs font-semibold leading-none text-white/80 hover:bg-white/20 hover:text-white' : 'btn-ghost text-2xs px-2.5 py-1'}>{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
+          {isAdmin && !fs && <button type="button" data-testid="clk-slide-ads" onClick={() => startTransition(() => setAdsOpen(true))} title="TV 왼쪽 칸에 10초씩 끼는 광고(여러 개 · 기간 · 대상 매장)" className="btn-ghost text-2xs px-2.5 py-1">슬라이드 광고</button>}
+          {canManage && !fs && <button type="button" data-testid="clk-edit-pages" onClick={() => setPagesOpen(true)} title="진행 중에도 레벨·인원을 건드리지 않고 시상 문구·추가 페이지를 바꿉니다" className="btn-ghost text-2xs px-2.5 py-1">TV 페이지</button>}
           {canManage && !fs && <button type="button" onClick={() => setStructOpen(true)} data-testid="clk-edit-structure" title="진행 중에도 레벨·엔트리·탈락을 지우지 않고 앞으로 올 레벨을 고치거나 덧붙입니다" className="btn-ghost text-2xs px-2.5 py-1">블라인드 수정</button>}
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
@@ -1268,6 +1277,15 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
              finishRows 상태는 그대로 두므로 클락 섹션으로 돌아오면 정상적으로 뜬다. */}
       {structOpen && active && canManage && (
         <LiveLevelsEditor state={state} onClose={() => setStructOpen(false)} onApply={applyStructure} />
+      )}
+      {pagesOpen && active && canManage && (
+        <LivePagesModal state={state} onClose={() => setPagesOpen(false)}
+          onApply={(prizes, extraPages) => { persist({ config: { ...stateRef.current.config, prizes, extraPages } }); toast.show('TV 페이지를 바꿨습니다. TV·리모컨에 바로 반영됩니다', 'success'); setPagesOpen(false); }} />
+      )}
+      {adsOpen && active && isAdmin && (
+        <Suspense fallback={null}>
+          <ClockAdsManager venueId={state.venueId} venueName={venueName} onClose={() => setAdsOpen(false)} />
+        </Suspense>
       )}
       {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="입상 순위 입력" maxWidth="md" variant="sheet">
@@ -1421,9 +1439,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const addBreak = () => set({ levels: [...cfg.levels, { kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK' }] });
   const removeLevel = (i: number) => set({ levels: cfg.levels.filter((_, idx) => idx !== i) });
 
-  const setPrize = (i: number, patch: Partial<ClockPrizeRow>) => set({ prizes: cfg.prizes.map((p, idx) => idx === i ? { ...p, ...patch } : p) });
-  const addPrize = () => set({ prizes: [...cfg.prizes, { place: `${cfg.prizes.length + 1}위`, amount: 0 }] });
-  const removePrize = (i: number) => set({ prizes: cfg.prizes.filter((_, idx) => idx !== i) });
 
   const loadPreset = (p: ClockPreset) => { setCfg(p.config); toast.show(`"${p.name}" 프리셋을 불러왔습니다`, 'info'); };
   const delPreset = async (p: ClockPreset) => {
@@ -1630,38 +1645,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </>)}</Fold>
       </section>
 
-      {/* 프라이즈 */}
-      <section className="rounded-aura border card-aura p-3 space-y-2">
-        <p className="text-2xs font-semibold text-ink-secondary">상금 <span className="font-normal text-ink-muted">· 금액은 원 단위로 입력 (예: 50만원 → 500000)</span></p>
-        <div className="space-y-1">
-          {cfg.prizes.map((p, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <input value={p.place} onChange={(e) => setPrize(i, { place: e.target.value })} className="input w-20 text-sm shrink-0" />
-              {/* 단위 표시가 없어 '50'(만원)과 '500000'(원)이 뒤섞였다 → 단위를 명시한다.
-                  (이 표는 클락 화면 표시용이다 — 2026-09-05 부터 순위 저장으로 흐르지 않는다.) */}
-              <div className="relative flex-1">
-                <input type="number" inputMode="numeric" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
-                  placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />
-                {/* W-25 — 포스터에서 온 T·GP·포인트 행은 그 단위를 그대로 보여 준다(원으로 환산하지 않는다). */}
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">{p.unit || '원'}{(p.count ?? 1) > 1 ? ` ×${p.count}` : ''}</span>
-              </div>
-              <button type="button" onClick={() => removePrize(i)} aria-label="상금 줄 삭제" className="hit grid h-8 w-11 shrink-0 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
-            </div>
-          ))}
-        </div>
-        {(() => {
-          // W-12 — 범위 순위(×자리 수)까지 더한 합. 단위가 섞였으면 합계를 말하지 않는다(TV 와 같은 prizeTotalOf).
-          const t = prizeTotalOf(cfg.prizes.filter((p) => p.amount > 0));
-          if (!t || t.amount <= 0) return null;
-          return (
-            <p className="text-right text-2xs text-ink-muted">
-              합계 <b className="text-ink-secondary tabular-nums">{t.amount.toLocaleString()}{t.unit || '원'}</b>
-              {!t.unit && t.amount >= 10000 ? ` (${Math.round(t.amount / 10000).toLocaleString()}만원)` : ''}
-            </p>
-          );
-        })()}
-        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 상금</button>
-      </section>
+      {/* 프라이즈 + 추가 페이지(K단계) — 라이브의 [TV 페이지] 와 같은 편집기 한 벌 */}
+      <ClockPagesEditor prizes={cfg.prizes} extraPages={cfg.extraPages ?? []} onChange={(p) => set(p)} />
 
       {/* TV 송출 화면 — 테마·배경 이미지(매장 단위 설정이라 즉시 저장 · 이 폼의 '시작'과 무관) */}
       <Suspense fallback={<section className="rounded-aura border card-aura p-3" style={{ minHeight: 300 }} aria-busy="true" />}>
@@ -1676,6 +1661,23 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         {linkDate && <button type="button" onClick={() => onStart(cfg, null)} className="btn-ghost flex-1 text-sm">단독으로 시작</button>}
       </div>
     </div>
+  );
+}
+
+/** 진행 중 [TV 페이지] — config.prizes·extraPages 만 바꾼다(레벨·시간·인원 불변 · 새로 시작 없음). 저장은 ClockLive.persist(바뀐 칸 = config 만). */
+function LivePagesModal({ state, onClose, onApply }: { state: ClockState; onClose: () => void; onApply: (prizes: ClockPrizeRow[], extraPages: ClockExtraPage[]) => void }) {
+  const [prizes, setPrizes] = useState<ClockPrizeRow[]>(() => (state.config?.prizes ?? []).map((p) => ({ ...p })));
+  const [pages, setPages] = useState<ClockExtraPage[]>(() => clampExtraPages(state.config?.extraPages));
+  return (
+    <Modal open onClose={onClose} title="TV 페이지 — 시상 · 추가 페이지" maxWidth="lg">
+      <div className="space-y-3 p-4">
+        <ClockPagesEditor prizes={prizes} extraPages={pages} onChange={(p) => { if (p.prizes) setPrizes(p.prizes); if (p.extraPages) setPages(p.extraPages); }} />
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost flex-1 text-sm">취소</button>
+          <button type="button" data-testid="clk-pages-apply" onClick={() => onApply(prizes, clampExtraPages(pages))} className="btn-primary flex-1 text-sm">TV 에 적용</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
