@@ -135,7 +135,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
               className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
-                on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
+                // P-10(2026-10-01) — 위험 구역은 일상 탭과 2px 거리였다(오클릭). 줄 오른쪽 끝으로 뗀다(승인된 After 이미지 그대로 — 구분선은 그림에 없다). DOM·키보드 순서 불변,
+                // 탭이 넘쳐 가로 스크롤이 생기면 ml-auto 는 0 이 된다.
+                t.id === 'danger' ? 'ml-auto' : ''].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
           );
