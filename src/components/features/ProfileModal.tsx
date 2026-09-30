@@ -25,7 +25,6 @@ import ActivityBadges from '../atoms/ActivityBadges';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import Icon from '../atoms/Icon';
 import TierBadge, { tierProgress, tierCss, tierVividVar } from '../atoms/TierBadge';
-import TitleChip from '../atoms/TitleChip';
 import IdentityVerificationButton from './IdentityVerificationButton';
 import LocationPrivacyCard from './LocationPrivacyCard';
 import { useIdentityEnabled } from '../../lib/identityFlag';
@@ -900,7 +899,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, cov
         <div className="flex max-w-full items-center gap-1.5">
           <span className="min-w-0 truncate text-base font-bold text-ink-primary">{displayName}</span>
           <TierBadge points={points} admin={isAdmin} size={16} />
-          <TitleChip points={points} />
+          {/* 칭호 칩은 뺐다(M-11, 2026-10-01) — 바로 아래 'Lv N · 칭호' 줄이 같은 말이다. */}
         </div>
         {verified && (
           <span className="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-400">
