@@ -19,6 +19,7 @@ export function posterChipRules(sc: Pick<Schedule, 'buyIn'>): PosterChipRules {
     earlyTiers: Array.isArray(b.earlyTiers) ? normalizeEarlyTiers(b.earlyTiers) : undefined,
     rebuyStacks: Array.isArray(b.rebuyStacks) ? b.rebuyStacks.map((n) => Math.round(Number(n) || 0)).filter((n) => n > 0) : undefined,
     addonEntry: b.addonEntry != null && Number(b.addonEntry) >= 0 ? Number(b.addonEntry) : undefined,
+    voucherPerEntry: Number.isInteger(Number(b.voucherPerEntry)) && Number(b.voucherPerEntry) >= 1 ? Number(b.voucherPerEntry) : undefined,
   };
 }
 

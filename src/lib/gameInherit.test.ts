@@ -223,7 +223,7 @@ describe('프리셋 두 입구 동치 · 포스터 폼 ≡ 저장된 포스터 (
       prizeType: 'GTD', prizeAmount: 110, prizePercent: 0, buyIn: 60_000, gameType: '', addonStack: 0, addonCost: 0,
       startStack: 0, rebuyStack: 0, region: '서울', isCompetition: false, grade: null,
       paymentMethods: ['현금'], partners: [], prizes: [],
-      rankingPrizes: [], events: [], blindLevels: [],
+      rankingPrizes: [], events: [], blindLevels: [], rebuyPrice: 0, rebuyLimit: 0, rebuyStacks: [], addonEntry: 0, voucherPerEntry: 0, description: '', rules: [], sideEvents: [],
     });
     const fromRow = presetFromSchedule(sched({ regCloseTime: '9LV' } as unknown as Record<string, unknown>));
     expect(applyToClock(fromForm).regCloseLevel).toBe(applyToClock(fromRow).regCloseLevel);
@@ -244,7 +244,7 @@ describe('presetFromSchedule / presetFromPosterForm · 왕복 단위 무손실(1
       prizeType: 'GTD', prizeAmount: 110, prizePercent: 0, buyIn: 60_000, gameType: '', addonStack: 0, addonCost: 0,
       startStack: 0, rebuyStack: 0, region: '서울', isCompetition: false, grade: null,
       paymentMethods: ['현금'], partners: [], prizes: [],
-      rankingPrizes: [{ rank: '1', amount: 50, unit: '만원' }], events: [], blindLevels: [],
+      rankingPrizes: [{ rank: '1', amount: 50, unit: '만원' }], events: [], blindLevels: [], rebuyPrice: 0, rebuyLimit: 0, rebuyStacks: [], addonEntry: 0, voucherPerEntry: 0, description: '', rules: [], sideEvents: [],
     });
     expect(d.prizeAmountWon).toBe(1_100_000);
     expect(d.buyInWon).toBe(60_000);
