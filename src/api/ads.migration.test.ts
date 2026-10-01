@@ -112,10 +112,11 @@ const DECLARED = body
 const INTENTIONAL: Record<string, string> = {
   blinded: '서버가 where 로 이미 거른다 — 블라인드 글은 애초에 안 온다(rowToPost 가 false 로 접는 것이 맞다)',
   // 2026-10-01 시안 A: 게시판 목록은 post_spots 를 끼워 받아 SPOT 글을 테이블 그림으로 보인다.
-  //   광고 RPC 는 아직 안 싣는다 → 키가 없으면 rowToPost 가 undefined('모름')로 두고, 카드는 예전 본문 발췌로 그린다
-  //   (값을 0/빈 값으로 접어 거짓 표시하지 않는다). ⚠ 승격된 SPOT 글은 광고 자리에서 피드와 모양이 다르다 —
-  //   광고 RPC 에 공개 열 3개(spot·reveal_villain·reveal_result)를 싣는 마이그레이션이 후속 과제다(리드 판단).
-  post_spots: '광고 RPC 미포함(후속) — undefined 로 남아 본문 발췌로 그린다',
+  //   광고 RPC 는 아직 안 싣는다 → 키가 없으면 rowToPost 가 undefined('모름')로 두고,
+  //   api/ads.ts attachSpots 가 광고 글 id 들로 post_spots 를 **한 번** 받아 채운다(임시 · 검토 보완 2026-10-01).
+  //   그 조회가 실패하면 undefined 그대로 → 카드는 예전 본문 발췌로 그린다(값을 0/빈 값으로 접어 거짓 표시하지 않는다).
+  //   정식은 광고 RPC 에 공개 열 3개(spot·reveal_villain·reveal_result)를 싣는 마이그레이션이다(리드 판단).
+  post_spots: '광고 RPC 미포함 — ads.ts attachSpots 가 한 번 조회로 채운다(임시)',
 };
 
 describe('20260911a — 광고 행은 일반 피드와 같은 모양이다', () => {

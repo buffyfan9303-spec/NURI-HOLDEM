@@ -117,8 +117,10 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
   );
 }, samePostProps);
 
-/** 스팟 카드의 콘텐츠 박스 추정 높이(px) — 390px 실측으로 맞춘다(실측 2026-10-01 390px: 카드 457 − 패딩·보더 23 = 434 · 320px 폭은 364~382). */
-const SPOT_CARD_CIS = 434;
+/** 스팟 카드의 콘텐츠 박스 추정 높이(px) — 390px 실측으로 맞춘다.
+ *  2026-10-01 검토 보완(테이블을 줄 배치·내용 높이로): 390 카드 310~328 − 패딩·보더 23 ≈ 303 · 320 은 326~344.
+ *  (구현 1차는 정사각 테이블이라 457 − 23 = 434 였다.) */
+const SPOT_CARD_CIS = 303;
 
 export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, promoted = false, adSlot }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 카드 높이·레이아웃은 일반 글과 같다 */ promoted?: boolean; adSlot?: number }) {
   // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
