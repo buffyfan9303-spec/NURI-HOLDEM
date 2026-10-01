@@ -32,7 +32,7 @@ function fontContract(html: string) {
 }
 
 /** 페이지별 본문 이미지 수 — 0장이 돼도 조용히 통과하지 않게 수로 고정한다(사용설명서는 텍스트판 — 2026-07 오너 요청). */
-const PAGES: [string, number][] = [['about.html', 4], ['guide/owner.html', 6], ['guide/manual.html', 0]];
+const PAGES: [string, number][] = [['about.html', 4], ['guide/owner.html', 10], ['guide/manual.html', 0]];
 
 describe.each(PAGES)('%s', (page, imgCount) => {
   const html = stripComments(read(page));

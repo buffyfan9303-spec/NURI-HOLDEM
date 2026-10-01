@@ -61,7 +61,8 @@
   .pre .cap { flex-basis:100%; }
 
   /* 단계 — 왼쪽 설명(짧게) · 오른쪽 실제 화면 */
-  .step { display:grid; grid-template-columns:minmax(0,4fr) minmax(0,8fr); gap:48px; align-items:center;
+  /* 그림 칸 8.5fr — 1440 에서 ≈771px. 캡처(1100 폭 본문 840px)의 가장 작은 앱 글자 10px 가 9px 아래로 줄지 않는다(2026-10-01 실측) */
+  .step { display:grid; grid-template-columns:minmax(0,3.5fr) minmax(0,8.5fr); gap:48px; align-items:center;
     padding:56px 0; border-top:1px solid var(--line); scroll-margin-top:72px; }
   .wrap > .step:first-of-type { margin-top:56px; }
   .step .key { font-size:18px; color:var(--ink); margin-top:10px; }
@@ -81,6 +82,9 @@
   figure.phone .shot { border-radius:20px; }
   figcaption { margin-top:8px; text-align:center; }
 
+  .news { padding:56px 0; border-top:1px solid var(--line); }
+  .news .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px 32px; margin-top:24px; align-items:start; }
+  .news figure:nth-child(n+3) { grid-column:1 / -1; }
   .end { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding-top:56px; border-top:1px solid var(--line); }
   .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
   .box h2 { font-size:22px; margin-bottom:14px; }
@@ -97,7 +101,7 @@
   @media (max-width:860px) {
     h1 { font-size:32px; } h2 { font-size:24px; }
     .wrap { padding:32px 20px 56px; } .bar .in { padding:0 16px; }
-    .step, .end { grid-template-columns:1fr; gap:24px; } .step { padding:40px 0; }
+    .step, .end, .news .grid { grid-template-columns:1fr; gap:24px; } .step { padding:40px 0; }
     figure.phone { width:min(320px,80%); }
   }
   @media (max-width:560px) {
@@ -110,6 +114,8 @@
     :root { --bg:#fff; --card:#f5f6f8; --card2:#eceef2; --ink:#111; --sub:#333; --mute:#555; --line:#ccc;
       --gold:#7a5a12; --ok:#0f6b44; --warn:#7c5300; --link:#4a36c4; --teal:#0e6f80; }
     .step { break-inside:avoid; }
+    /* 인쇄 폭(A4 ≈ 794px)에서는 860 이하 접힘이 걸려 세로로 긴 새 기능 사진 두 장이 각각 한 쪽을 차지했다 — 인쇄에서는 두 칸으로 */
+    .news .grid { grid-template-columns:1fr 1fr; } .news figure { break-inside:avoid; }
   }
 </style>
 </head>
@@ -157,7 +163,7 @@
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 포스터 <i>›</i> + 새 게임</span>
       <p class="tip">인증 매장은 운영자 승인 없이 즉시 게시됩니다. 게시 뒤 참가비 칸을 고치면 다시 심사를 받습니다.</p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-poster.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster.webp" width="1480" height="834" loading="lazy" decoding="async"
+    <figure><a class="shot" href="/guide/img/owner-poster.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster.webp" width="1680" height="1324" loading="lazy" decoding="async"
       alt="포스터 화면 — 날짜별 게임 목록과 게임마다 예약관리·장부·손님화면·수정·삭제 버튼"></a>
       <figcaption class="cap">포스터 목록 — 게임마다 예약·장부로 바로 이동</figcaption></figure>
   </section>
@@ -192,9 +198,9 @@
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 장부</span>
       <p class="tip w">게임이 끝나면 <b>마감</b>하세요 — 마감해야 순위·정산이 정확해집니다.</p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-ledger.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ledger.webp" width="1480" height="834" loading="lazy" decoding="async"
-      alt="장부 화면 — 오늘 날짜, 게임 선택, 엔트리·완납 매출·생존·미수 요약과 플레이어별 바인 표"></a>
-      <figcaption class="cap">장부 — 위 요약 줄이 바인과 함께 바로 바뀝니다</figcaption></figure>
+    <figure><a class="shot" href="/guide/img/owner-ledger.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ledger.webp" width="1680" height="1108" loading="lazy" decoding="async"
+      alt="장부 화면 — 날짜, 게임 선택, 플레이어 검색과 플레이어별 바인 표(칸마다 결제 수단과 시각)"></a>
+      <figcaption class="cap">장부 — 칸을 누르면 결제 방법을 골라 기록합니다</figcaption></figure>
   </section>
 
   <section class="step" id="s4">
@@ -212,7 +218,7 @@
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 클락</span>
     </div>
     <figure><a class="shot" href="/guide/img/owner-tv.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-tv.webp" width="1480" height="833" loading="lazy" decoding="async"
-      alt="TV 송출 클락 화면 — 레벨 2, 남은 시간 12분 33초, 현재·다음 블라인드, 참가 인원과 리바인 수"></a>
+      alt="TV 송출 클락 화면 — 왼쪽 칸에 바운티 안내 추가 페이지(시상·추가 페이지·광고가 차례로 넘어감), 레벨 2와 남은 시간, 현재·다음 블라인드, 참가 인원과 리바인 수"></a>
       <figcaption class="cap">TV 송출 화면</figcaption></figure>
   </section>
 
@@ -229,7 +235,7 @@
       </ul>
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 순위</span>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-ranking.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ranking.webp" width="1480" height="834" loading="lazy" decoding="async"
+    <figure><a class="shot" href="/guide/img/owner-ranking.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ranking.webp" width="1680" height="1324" loading="lazy" decoding="async"
       alt="순위 화면 — 입력할 게임 선택과 그날 장부 명단(닉네임별 바인 수) 칩"></a>
       <figcaption class="cap">순위 — 장부 명단에서 골라 담기</figcaption></figure>
   </section>
@@ -246,9 +252,28 @@
       </ul>
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 정산</span>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-settle.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-settle.webp" width="1480" height="834" loading="lazy" decoding="async"
-      alt="정산 화면 — 완납 매출·미수금·총 바인·참여 인원 카드와 기준 엔트리 대비 표"></a>
+    <figure><a class="shot" href="/guide/img/owner-settle.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-settle.webp" width="1680" height="1324" loading="lazy" decoding="async"
+      alt="정산 화면 — 완납 매출·미수금·총 바인·참여 인원 카드와 기준 엔트리 대비"></a>
       <figcaption class="cap">정산 — 장부 기록에서 자동 계산</figcaption></figure>
+  </section>
+
+  <section class="news" id="new">
+    <p class="kicker">새로 생긴 기능</p>
+    <h2>이번에 바뀐 화면</h2>
+    <div class="grid">
+      <figure><a class="shot" href="/guide/img/owner-poster-rules.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster-rules.webp" width="932" height="1338" loading="lazy" decoding="async"
+        alt="포스터 등록 창의 세부 규칙 — 리엔트리 참가비·최대, 참가 1회 = 이용권 10장, 회차별 리엔트리 스택, 얼리칩"></a>
+        <figcaption class="cap">포스터 › 세부 규칙 — 참가 1회 = 이용권 N장</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-clock-pages.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-clock-pages.webp" width="1088" height="1584" loading="lazy" decoding="async"
+        alt="클락 TV 페이지 편집 창 — 등수별 금액(원 단위)과 시상 문구, 바운티 안내 추가 페이지"></a>
+        <figcaption class="cap">클락 › TV 페이지 — 시상 문구 · 추가 페이지</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-voucher-split.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-voucher-split.webp" width="1634" height="326" loading="lazy" decoding="async"
+        alt="장부 접수대의 이용권 요청 카드 — 10장 중 7장만 있어 남은 30,000원의 결제 방법(현금·카드·계좌·미수)을 고르는 칸"></a>
+        <figcaption class="cap">장부 › 이용권이 모자라면 남은 금액을 분납</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-staff-punch.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-staff-punch.webp" width="2164" height="228" loading="lazy" decoding="async"
+        alt="직원 화면 맨 위 오늘 출퇴근 줄 — 출근 전 상태와 출근·퇴근 버튼"></a>
+        <figcaption class="cap">직원 화면 맨 위 — 출근·퇴근 버튼</figcaption></figure>
+    </div>
   </section>
 
   <div class="end">

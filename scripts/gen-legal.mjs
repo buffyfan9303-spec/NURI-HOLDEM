@@ -37,9 +37,9 @@ export const DOCS = [
   },
   {
     slug: 'privacy', export: 'privacy',
-    title: '개인정보 수집·이용 동의',
+    title: '개인정보처리방침',
     consent: '필수 동의',
-    desc: 'NURI HOLDEM 개인정보처리방침 및 개인정보 수집·이용 동의 — 회원가입 시 필수 동의 항목입니다.',
+    desc: 'NURI HOLDEM 개인정보처리방침 — 회원가입 시 개인정보 수집·이용 동의(필수)의 대상 문서입니다.',
   },
   {
     slug: 'anti-gambling', export: 'antiGambling',
