@@ -41,7 +41,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import { type LedgerLinkTarget } from '../../lib/ledgerLink';
-import { rankingEventOf, gameSeqOfEvent } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
+import { rankingEventOf, gameSeqOfEvent, mainEventChip } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -1746,6 +1746,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 그날 장부의 실제 게임 번호(gameSeq) — '장부 보기' 패널이 지금 고른 게임(eventName)의
   // 진짜 gameSeq 를 찾는 데 쓴다(아래 currentGameSeq). dayGames 는 이름만 갖고 있어 번호를 못 준다.
   const [dayLedgerGames, setDayLedgerGames] = useState<LedgerGame[]>([]);
+  // S-10 — 칩·저장본이 **지금 (매장·날짜)** 의 것인지. 날짜를 바꾼 직후 앞 날짜 값으로 메인 이름을 옮기지 않게.
+  const [dayGamesKey, setDayGamesKey] = useState('');
+  const [entriesKey, setEntriesKey] = useState('');
   useEffect(() => {
     // E(2026-09-28) — 매장·날짜 전환 가드: 앞 매장(또는 앞 날짜) 게임 칩이 늦게 도착해 지금 칩을 덮으면
     //   B 매장 순위가 A 매장 게임 이름으로 저장될 수 있었다.
@@ -1776,6 +1779,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       // 이름 중복 제거(먼저 등록된 분류 우선: main > side > ledger)
       const seen = new Set<string>();
       setDayGames(opts.filter((o) => (seen.has(o.name) ? false : (seen.add(o.name), true))));
+      setDayGamesKey(`${venueId}|${date}`);
     });
     return () => { alive = false; };
   }, [venueId, date]);
@@ -1783,6 +1787,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 항상 메인만 보던 결함의 근본 수정(F04, 2026-09-26). 판정 규칙은 lib/rankingGame.ts 에 한 번만 둔다.
   const currentGameSeq = useMemo(() => gameSeqOfEvent(eventName, dayLedgerGames), [eventName, dayLedgerGames]);
   const [loading, setLoading] = useState(true);
+  // S-10(2026-10-01) — 메인 게임 칩 한 개. 제목 = 그날 메인 장부(1번) 제목, 장부가 없으면 메인 포스터가 하나일 때 그 제목.
+  const mainChip = useMemo(() => {
+    const ledgerMain = dayLedgerGames.find((g) => g.gameSeq <= 1)?.title;
+    const posterMains = [...new Set(dayGames.filter((g) => g.kind === 'main').map((g) => g.name))];
+    return mainEventChip(ledgerMain || (posterMains.length === 1 ? posterMains[0] : ''), allEntries.map((e) => e.eventName));
+  }, [dayLedgerGames, dayGames, allEntries]);
   const [saving, setSaving] = useState(false);
   // ⚠ 조회 실패를 삼키면 **데이터가 사라진다**(F1, 2026-09-13). 예전 `.catch(() => setAllEntries([]))` 는 실패를
   //   '저장된 순위 0건' 으로 바꿔 빈 줄 하나를 그렸고, 거기에 3명을 치고 저장하면 서버 save_venue_rankings 가
@@ -1790,6 +1800,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   //   같은 파일 StaffWageManager 와 같은 패턴 — 실패 중에는 저장을 막는다.
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [rankTick, setRankTick] = useState(0);
+  // S-10 — 메인을 ''(장부 마감 초안)·제목(게임 칩) 어느 쪽으로 들어와도 저장 이름 하나로 모은다.
+  //   안 모으면 이미 저장된 칸이 아닌 빈 칸이 열려 다시 치고 저장 → 같은 대회가 두 벌이 된다. 조회 성공 뒤에만(실패 중 판단 금지).
+  useEffect(() => {
+    const cur = `${venueId}|${date}`;
+    if (loading || loadErr || dayGamesKey !== cur || entriesKey !== cur || !mainChip || mainChip.split) return;
+    if ((eventName === '' || eventName === mainChip.label) && eventName !== mainChip.target) setEventName(mainChip.target);
+  }, [loading, loadErr, dayGamesKey, entriesKey, venueId, date, mainChip, eventName]);
   // 지류 양식 출력용 매장명 + 인증 여부(인증 펍만 지류 발급)
   const [venueName, setVenueName] = useState('');
   const [venueVerified, setVenueVerified] = useState(false);
@@ -1882,6 +1899,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       onSettled: () => setLoading(false),
     });
   }, [venueId, date, rankTick]);
+  // S-10 — 저장본이 이 (매장·날짜)의 것이 됐다는 표식. 늦은 앞 날짜 응답은 loadRankingsEffect 가 버리므로 여기 오는 것은 지금 날짜 것뿐이다.
+  useEffect(() => { setEntriesKey(`${venueId}|${date}`); }, [allEntries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드.
   // ⚠ 여기서 rows 를 통째로 갈아끼운다. 그래서 갈아끼우기 직전에 임시 초안을 먼저 본다.
@@ -2148,7 +2167,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       {/* 어떤 게임의 순위인지 — 메인(포스터)·사이드(사이드 포스터)·장부·기타로 구분해 선택 */}
       {(() => {
         const saved = new Set(allEntries.map((e) => e.eventName ?? ''));
-        const mains = [...new Set(dayGames.filter((g) => g.kind === 'main').map((g) => g.name))];
+        // S-10 — 메인 게임은 칩 하나(저장 이름은 클락 END 와 같은 rankingSaveTarget). mainChip 은 아래 effect 와 같은 값.
+        const mains = [...new Set(dayGames.filter((g) => g.kind === 'main').map((g) => g.name))]
+          .filter((n) => !mainChip || mainChip.split || n !== mainChip.label);
         const sides = [...new Set(dayGames.filter((g) => g.kind === 'side').map((g) => g.name))];
         const ledgers = [...new Set(dayGames.filter((g) => g.kind === 'ledger').map((g) => g.name))];
         const known = new Set<string>(['', ...mains, ...sides, ...ledgers]);
@@ -2180,12 +2201,18 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/5 p-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="target" size={12} className="shrink-0" />입력 중인 게임</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || '메인 게임(기본)'}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || (mainChip && !mainChip.split ? mainChip.label : '') || '메인 게임(기본)'}</span>
             </div>
 
             {/* 메인 게임 — 기본 + 그날 포스터 제목 */}
             <Section icon="trophy" label="메인 게임" hint="포스터 메인">
-              {chip('', 'g-main-base', '메인(기본)')}
+              {mainChip && !mainChip.split ? (
+                <button key="g-main" type="button" data-testid="rank-main-chip" onClick={() => setEventName(mainChip.target)}
+                  className={['inline-flex min-h-9 items-center text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
+                    eventName === '' || eventName === mainChip.label ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                  {mainChip.label}{saved.has('') || saved.has(mainChip.label) ? ' ✓' : ''}
+                </button>
+              ) : chip('', 'g-main-base', '메인(기본)')}
               {mains.map((n) => chip(n, 'g-m-' + n))}
             </Section>
 

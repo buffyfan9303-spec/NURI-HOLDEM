@@ -117,6 +117,24 @@ export function rankingSaveTarget(
 }
 
 /**
+ * 순위 화면의 **메인 게임 칩 한 개** 계획(S-10, 2026-10-01).
+ *
+ * 메인은 ''(기본)와 제목 둘 다 정상값이라, 칩을 둘 다 그리면 같은 대회가 두 칩으로 갈리고
+ * 한쪽엔 클락이, 다른 쪽엔 순위 화면이 저장해 **두 번 등재**됐다(목 화면 실측: '메인(기본) ✓' 와 제목 칩이 따로).
+ * 저장 이름은 클락 END 와 같은 규칙(rankingSaveTarget) 하나로 정한다 → 두 경로가 같은 행을 교체한다.
+ *  · 제목을 모르면 null(종전처럼 '메인(기본)' 칩만).
+ *  · split = 두 이름 모두에 이미 행이 있다(과거 두 벌) — 정리할 수 있게 두 칩을 그대로 보여 준다.
+ */
+export function mainEventChip(
+  mainTitle: string | null | undefined, savedEventNames: Iterable<string | null | undefined>,
+): { label: string; target: string; split: boolean } | null {
+  const label = normalizeEventName(mainTitle);
+  if (!label) return null;
+  const { eventName, leftover } = rankingSaveTarget({ gameSeq: 1, title: label }, savedEventNames);
+  return { label, target: eventName, split: leftover > 0 };
+}
+
+/**
  * 지금 고른 event 이름(rankingEventOf 결과)에 대응하는 실제 gameSeq — 장부 조회(getLedgerBuyins 등)는
  * event 이름이 아니라 gameSeq 로 게임을 가른다. 그날 게임 목록에서 이름이 같은 걸 찾고,
  * 메인('')이거나 못 찾으면 메인(1)으로 되돌린다(F04, 2026-09-26: 순위 패널이 게임 번호 없이 항상 메인만 봤다).
