@@ -724,6 +724,26 @@ export async function deleteVenue(venueId: string): Promise<void> {
   await mustAffect(supabase.from('venues').delete().eq('id', venueId));
 }
 
+/**
+ * 서버(20261001d 트리거 _guard_venue_hard_delete)가 "기록이 있는 매장은 삭제할 수 없습니다" 로 막은 삭제인가.
+ * 장부·이용권·출석 등 기록이 있으면 영구 삭제는 서버가 거부한다 — 화면은 이 오류를 '삭제 실패' 로 뭉개지 말고
+ * 숨김(보관, adminSetVenueArchived)으로 안내해야 한다.
+ */
+export function isVenueHasRecordsError(e: unknown): boolean {
+  // PostgREST 오류는 Error 인스턴스가 아닐 수 있다(mustAffect 가 `throw error` 그대로) — message 만 본다.
+  const msg = (e as { message?: unknown } | null)?.message;
+  return typeof msg === 'string' && /기록이 있는 매장은 삭제할 수 없습니다/.test(msg);
+}
+
+/** 운영자: 매장 숨김(보관)/해제 — 20261001d admin_set_venue_archived. 활성 매장만 보관, 숨김 매장만 해제, 감사 기록. */
+export async function adminSetVenueArchived(venueId: string, archived: boolean, reason?: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_set_venue_archived', {
+    p_venue_id: venueId, p_archived: archived, p_reason: reason ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 // ── 활동/삭제 감사 로그 ────────────────────────────────────────────────────────
 export interface ActivityLogInput {
   action: string;        // delete | hide | suspend | deactivate | restore | ad_on | ad_off

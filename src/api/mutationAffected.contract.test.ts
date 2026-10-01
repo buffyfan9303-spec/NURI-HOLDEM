@@ -39,8 +39,6 @@ const walk = (dir: string): string[] =>
 
 /** 확인 불필요로 판단한 변이 — 키: `파일::함수::연산:테이블`. 값: 이유. 새 항목은 이유 없이 못 올린다. */
 const ALLOW: Record<string, string> = {
-  'src/api/ads.ts::swapAdSlots::update:community_ads':
-    '슬롯 비우기(1단계). 바로 뒤 upsert 가 같은 RLS 에 걸려 오류로 드러나고, 슬롯 행이 아직 없으면 0행이 정상이다.',
   'src/api/auth.ts::approveOwner::update:venues':
     '연결된 매장이 아직 없으면 0행이 정상(코드 주석 ②). 오류만 보고 OwnerApprovalPartialError 로 부분 성공을 드러낸다.',
   'src/api/clock.ts::saveClockLevel::update:clock_states':
