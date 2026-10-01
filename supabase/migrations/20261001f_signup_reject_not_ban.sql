@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: admin_reject_signup 49dd88b8613071594bd35b3e518cd56e · tombstone_banned_ci 1e4021a849835c826b0a528f3c89424f(ACL postgres·service_role) · withdrawn_identities 0 · pending 회원 0.
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 --    ✔ 오너 결정(2026-10-01, 리드 전달): 거절 = 일반 회원으로 되돌리기(영구 정지 아님). 단 이미 있는 CI 차단은 풀지 않는다.
 --    ⚠ 적용만으로는 결함이 닫히지 않는다 — 화면(UserManagementTab.tsx:233 reject)이 admin_reject_signup 을 불러야 한다.

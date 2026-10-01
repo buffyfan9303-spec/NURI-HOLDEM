@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: swap_community_ad_slots 7b66799ae9cf624d042fdb1cdee18151 · ACL {postgres,authenticated,service_role} · community_ads 4행(채움 0) 불변.
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 --    ⚠ 적용만으로는 결함이 닫히지 않는다 — 화면 쪽 src/api/ads.ts swapAdSlots 가 이 RPC 한 번으로 바뀌어야 한다.
 -- 20261001g — A-13: 커뮤니티 광고 순서 교환이 두 요청(비우기 → upsert)이라 둘째가 실패하면 첫 슬롯이 '해제·꺼짐'으로

@@ -1,4 +1,6 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: admin_dismiss_report 734874aa1804be3fdd9551d66bf40bfa · admin_set_post_blinded 701c57dd1ceebf4a1bc79a46fa32b77e · auto_blind_reported_post 7208634f8d4128e69400ff208b76b383(ACL postgres·service_role)
+--    · community_posts 표 ACL anon=rdm·authenticated=rdm, 칸 권한 21칸×INSERT/UPDATE×2역할=84, blinded_source 0 · 숨김 글 3건 출처 admin.
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 --    ⚠ 적용만으로는 결함이 닫히지 않는다 — 화면(src/api/reports.ts updateReportStatus 의 '기각')이 admin_dismiss_report 로 바뀌어야 한다.
 -- 20261001e — A-06: 신고 '기각' 한 건이 다른 미처리 신고·관리자 블라인드와 무관하게 글 블라인드를 풀던 것.

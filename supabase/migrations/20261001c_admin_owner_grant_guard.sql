@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: admin_decide_venue_owner a3018af827c154f317d1d8fe1846afd1 · admin_create_venue 3978986402e11f049e9f4bccf5050af3 · admin_update_venue 120f85ae43072e79063ac56d032cb29e · transfer_venue_primary 8857ccde785bae5d5633f7b6abd43a09 · ACL 4개 모두 {postgres,authenticated,service_role}.
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 -- 20261001c — A-02: 관리자 승인·임명 RPC 가 요청 존재를 확인하지 않고, 대상이 관리자여도 역할을 venue_owner 로 덮어쓰던 것.
 --

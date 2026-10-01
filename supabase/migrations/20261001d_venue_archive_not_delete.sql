@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: _guard_venue_hard_delete 0029bdce87d31d97678ba98649c2378e(ACL postgres·service_role) · admin_set_venue_archived 49e8c994daa0c761a10e2e580310922a · 트리거 BEFORE DELETE 생성 · venues 7 · f35b42d1 바인 27 불변.
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 -- 20261001d — A-04: 관리자 '매장 삭제'가 venues 행 hard delete 라 ON DELETE CASCADE 44개 테이블(장부·이용권·출석·급여…)을
 --             confirm 한 번으로 영구삭제하던 것.

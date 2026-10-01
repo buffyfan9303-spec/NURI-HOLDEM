@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안(2026-10-01 · 서버 초안 담당). 적용은 리드가 MCP execute_sql 로 한다. 적용 뒤 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꿔라.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 실행 서버 초안 담당 Opus 5.5, MCP execute_sql). 적용 직전 게이트 md5 재조회 일치 · 자가검사 통과.
+--    사후 md5: venue_hidden_for_viewer 88a9bc59252dc7f6e752af70d9ba4741(anon 실행 의도) · venues_select 식 63dcf4b1798fe2a8c438f617d50ed463 · venue_reviews_read 식 d4756163e9a3cf7be00f112551e33274 · 비로그인 venues 6(승인 매장 전부).
 --    롤백 리허설: 이 파일 본문 + 맨 아래 REHEARSAL 블록을 한 트랜잭션으로 돌려 REHEARSAL_OK(raise 로 되돌림) 확인 — admin-srv-report.md 참고.
 --    20261001d(보관 = status 'hidden') 와 짝이다. 순서는 d 뒤가 자연스럽지만 서로 의존하지 않는다(hidden 은 이미 있는 enum 값).
 -- 20261001h — 오너 결정(2026-10-01, 리드 전달): 숨긴(hidden) 매장은 "매장 자체는 숨기고 순위 기록은 유지".
