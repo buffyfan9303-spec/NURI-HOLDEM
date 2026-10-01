@@ -722,10 +722,10 @@ export default function PostDetailModal({
             국소적으로 border-strong 실선(mid 위 2.71:1)으로 바꾼다. */}
         {!hidden && <hr className="border-t border-border-strong" aria-hidden="true" />}
 
-        {/* 신고 누적 자동 숨김 안내 — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
+        {/* 관리자 숨김 안내(오너 10-02: 신고만으로는 숨기지 않는다) — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
         {post.blinded && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/6 px-3 py-2">
-            <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />신고 누적으로 숨김 처리된 게시글입니다</span>
+            <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />운영자가 숨김 처리한 게시글입니다</span>
             {user?.role === 'admin' && (
               <button type="button"
                 onClick={async () => {

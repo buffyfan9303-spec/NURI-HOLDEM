@@ -84,7 +84,8 @@ function rowToSaved(r: any): SavedSpot | null {
 
 // ── 내 스팟 ───────────────────────────────────────────────────────────────────
 
-/** 최근순. 비로그인·마이그레이션 미적용은 빈 배열(화면을 깨뜨리지 않는다). */
+/** 최근순. 조회가 실패하면 **throw** 한다 — 빈 배열로 삼키면 '못 불러옴'이 '저장한 스팟 없음'으로 보인다(2026-10-01).
+ *  호출부: MySpotList(.catch→실패 문구를 그대로 보여 준다), CalendarPanel(`.catch(() => [])` — 보조 표시라 실패해도 캘린더는 정상 표시). */
 export async function listMySpots(limit = 50): Promise<SavedSpot[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
@@ -92,8 +93,8 @@ export async function listMySpots(limit = 50): Promise<SavedSpot[]> {
     .select('id, spot, coverage_kind, source_label, dataset_version, created_at, played_on')
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error || !data) return [];
-  return data.map(rowToSaved).filter((s): s is SavedSpot => s !== null);
+  if (error) throw error;
+  return (data ?? []).map(rowToSaved).filter((s): s is SavedSpot => s !== null);
 }
 
 /** playedOn 은 사용자가 저장 화면에서 고른 '이 스팟의 날짜'(YYYY-MM-DD, KST). 안 주면 서버 컬럼이 null 로 남고

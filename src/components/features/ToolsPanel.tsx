@@ -35,6 +35,8 @@ import type { DrillLink } from '../../lib/spotEvaluate';
 import type { DeepGtoInit } from './gto/useDeepGto';
 import type { HandReviewInit } from './gto/HandReviewTool';
 import type { SpotReview } from '../../lib/spot';
+import { matchesToolQuery } from '../../lib/toolSearch';
+import { josa } from '../../lib/josa';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
@@ -127,6 +129,7 @@ const TITLE_LINES: Partial<Record<ToolKey, readonly [string, string]>> = {
   pot:       ['팟 오즈', '계산기'],
 };
 
+const FAV_MAX = 6;
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
   // TDA 규칙이 첫 항목(오너 지시 2026-09-14: TDA 를 위로). 2026 판 — 데이터는 src/data/tdaRules.ts.
   { key: 'tda', cat: 'rules', name: '2026 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2026 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
@@ -144,7 +147,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'handrank', cat: 'rules', name: '홀덤 족보', desc: '10가지 족보 순서와 예시', keywords: '핸드 랭킹 족보 순위 로열 스트레이트 플러시 포카드 풀하우스 트리플 투페어 원페어 하이카드 키커 휠 스플릿', icon: 'crown' },
   // 스타팅 핸드 순위(오너 요청 2026-09-23 "규칙 · 대회 쪽에 핸드 순위 신설") — 두 장 169개의 강한 순서. 족보(5장)와 다른 도구다.
   //   값: tools/startingHandRank.data.ts(생성기 scripts/gen-starting-hand-rank.mjs → 에퀴티 엔진). 아이콘 medal = 순위.
-  { key: 'startrank', cat: 'rules', name: '스타팅 핸드 순위', desc: '두 장 169개의 강한 순서', keywords: '핸드 순위 시작 핸드 프리플랍 169 승률 에퀴티 랭킹 AA KK AK 72o 페어 수딧 오프수트 스타팅핸드', icon: 'medal' },
+  { key: 'startrank', cat: 'rules', name: '스타팅 핸드 순위', desc: '10인 테이블 기준 169개 핸드 순위(헤즈업 전환)', keywords: '순위 10인 헤즈업 헤즈업 전환 핸드 순위 시작 핸드 프리플랍 169 승률 에퀴티 랭킹 AA KK AK 72o 페어 수딧 오프수트 스타팅핸드', icon: 'medal' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
   // NURI SPOT — 카드·포지션·스택·액션을 **하나의 구조화된 스팟**으로 받아 분석·저장·토론까지 잇는다.
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
@@ -425,16 +428,22 @@ export default function ToolsPanel() {
   const [lane, setLane] = useState<ToolCat | 'all'>('all');
   const ql = q.trim().toLowerCase();
   // 검색도 카탈로그와 같은 범위(이관 도구·오늘의 드릴 제외)
-  const hits = ql ? TOOLS.filter((t) => !HIDDEN_SET.has(t.key) && (t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql) || (t.keywords ?? '').toLowerCase().includes(ql))) : null;
+  const hits = ql ? TOOLS.filter((t) => !HIDDEN_SET.has(t.key) && matchesToolQuery([t.name, t.desc, t.keywords], ql)) : null;
   // 즐겨찾기 — 레인 위에 상시 노출(최대 6개)
   const [favs, setFavs] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:fav-tools') || '[]'); } catch { return []; }
   });
-  const toggleFav = (k: ToolKey) => setFavs((prev) => {
-    const next = prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k].slice(-6);
+  const toggleFav = (k: ToolKey) => {
+    const next = favs.includes(k) ? favs.filter((x) => x !== k) : [...favs, k].slice(-FAV_MAX);
+    // 7번째를 추가하면 가장 오래된 것이 조용히 빠졌다(2026-10-01) — 어떤 항목이 빠졌는지 알린다.
+    const dropped = favs.includes(k) ? [] : favs.filter((x) => !next.includes(x));
+    if (dropped.length) {
+      const droppedName = TOOLS.find((t) => t.key === dropped[0])?.name ?? dropped[0];
+      toast.show(`즐겨찾기는 최대 ${FAV_MAX}개입니다. 가장 오래된 '${droppedName}'${josa(droppedName, '을')} 뺐습니다.`, 'info');
+    }
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
-    return next;
-  });
+    setFavs(next);
+  };
   const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)

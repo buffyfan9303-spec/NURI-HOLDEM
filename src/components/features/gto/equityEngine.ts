@@ -1,6 +1,7 @@
 // src/components/features/gto/equityEngine.ts
 // 에퀴티 계산기 (Hero 2장 vs Villain 2장/레인지, 보드 0~5장)
-// - 보드 3장 이상(잔여 ≤2장)은 전수계산, 그 외는 몬테카를로
+// - 카드를 모두 아는 쇼다운(헤즈업·멀티 모두)은 보드 0장부터 전수계산
+// - 상대 카드를 모르거나 레인지면 몬테카를로 — 시드 고정(DEFAULT_SEED)이라 같은 입력 = 같은 값
 import { RANKS, SUITS, type Card, type Rank } from './gto.types';
 
 const RANK_VALUE: Record<string, number> = (() => {
@@ -21,94 +22,141 @@ function toN(c: Card): NCard { return { r: RANK_VALUE[c.rank], s: SUITS.indexOf(
 function toCard(c: NCard): Card { return { rank: VALUE_RANK[c.r], suit: SUITS[c.s] }; }
 const keyOf = (c: NCard): number => c.r * 4 + c.s;
 
-// 5장 점수(높을수록 강함). 카테고리*가중 + 타이브레이크(내림차순)
-function score5(cs: NCard[]): number {
-  const ranks = cs.map((c) => c.r).sort((a, b) => b - a);
-  const flush = cs.every((c) => c.s === cs[0].s);
-  const distinct = new Set(ranks);
+// ── 족보 평가기 (2026-10-01 · 승률 표기 흔들림) ─────────────────────────────────────────────
+// 예전 정본은 `score5`(5장 1벌을 정렬·Map 으로 평가) + 7장이면 21조합 최대였다. 정답이지만 느려
+// 프리플랍 헤즈업을 전수(보드 1,712,304개)로 못 돌리고 2,500회 무작위 표본을 썼다 → 같은 핸드가 볼 때마다
+// 45~48% 로 흔들렸다(감사 F2: A♠K♠ vs Q♥Q♦ 정확값 46.21%).
+// 여기서는 **랭크 개수·무늬 마스크로 최고 5장을 바로 읽는다.** 값의 척도는 score5 와 완전히 같다
+//   (cat·15^5 + 타이브레이크 5칸, 랭크 2..14) — 옛 score5 는 테스트(equityStable.test.ts)로 옮겨
+//   5·6·7장 무작위 대조의 독립 오라클로 쓴다. **앱 안의 족보 평가는 이 함수 하나다.**
 
-  let straight = false;
-  let sHigh = 0;
-  if (distinct.size === 5) {
-    if (ranks[0] - ranks[4] === 4) { straight = true; sHigh = ranks[0]; }
-    else if (ranks[0] === 14 && ranks[1] === 5 && ranks[4] === 2) { straight = true; sHigh = 5; } // 휠 A2345
+/** 13비트 랭크 마스크(bit i = 랭크 i+2) → 스트레이트 최고 랭크(없으면 0). 휠 A-5 = 5. */
+const STRAIGHT_HIGH: Uint8Array = (() => {
+  const t = new Uint8Array(1 << 13);
+  for (let m = 0; m < t.length; m += 1) {
+    for (let h = 12; h >= 4; h -= 1) {
+      if (((m >> (h - 4)) & 31) === 31) { t[m] = h + 2; break; }
+    }
+    if (!t[m] && (m & 0x100f) === 0x100f) t[m] = 5;
   }
-
-  const freq = new Map<number, number>();
-  ranks.forEach((r) => freq.set(r, (freq.get(r) ?? 0) + 1));
-  const groups = [...freq.entries()].sort((a, b) => (b[1] - a[1]) || (b[0] - a[0]));
-  const counts = groups.map((g) => g[1]);
-  const groupRanks = groups.map((g) => g[0]);
-
-  let cat: number;
-  if (straight && flush) cat = 8;
-  else if (counts[0] === 4) cat = 7;
-  else if (counts[0] === 3 && counts[1] === 2) cat = 6;
-  else if (flush) cat = 5;
-  else if (straight) cat = 4;
-  else if (counts[0] === 3) cat = 3;
-  else if (counts[0] === 2 && counts[1] === 2) cat = 2;
-  else if (counts[0] === 2) cat = 1;
-  else cat = 0;
-
-  let tb: number[];
-  if (cat === 8 || cat === 4) tb = [sHigh];
-  else if (cat === 5 || cat === 0) tb = ranks;
-  else tb = groupRanks;
-
-  // 타이브레이크는 항상 5칸으로 고정(부족분 0 패딩) → 카테고리가 항상 우선
-  const tb5 = tb.slice(0, 5);
-  while (tb5.length < 5) tb5.push(0);
-  let v = cat;
-  for (let i = 0; i < 5; i += 1) v = v * 15 + tb5[i];
-  return v;
-}
-
-const COMBOS5: number[][] = (() => {
-  const res: number[][] = [];
-  for (let a = 0; a < 7; a += 1)
-    for (let b = a + 1; b < 7; b += 1)
-      for (let c = b + 1; c < 7; c += 1)
-        for (let d = c + 1; d < 7; d += 1)
-          for (let e = d + 1; e < 7; e += 1) res.push([a, b, c, d, e]);
-  return res;
+  return t;
 })();
 
-function best7(seven: NCard[]): number {
-  let best = -1;
-  for (const idx of COMBOS5) {
-    const s = score5([seven[idx[0]], seven[idx[1]], seven[idx[2]], seven[idx[3]], seven[idx[4]]]);
-    if (s > best) best = s;
-  }
-  return best;
-}
+const enc = (cat: number, a: number, b: number, c: number, d: number, e: number): number =>
+  ((((cat * 15 + a) * 15 + b) * 15 + c) * 15 + d) * 15 + e;
+
+/** 비트마스크의 최상위 랭크 값(2..14). 빈 마스크면 0. */
+const hiRank = (m: number): number => (m ? 33 - Math.clz32(m) : 0);   // bit i → 랭크 i+2 = (31−clz)+2
 
 /**
- * 🔴 G2(2026-09-20) — **5·6·7장 공용** 최고 5장 점수.
- *
- * 왜 필요한가: `best7` 의 `COMBOS5` 는 인덱스 0~6 **고정**이다. 플랍의 현재 패는 2+3=5장,
- * 턴은 2+4=6장이라 그대로 넘기면 없는 인덱스를 읽는다. 그런데 "지금 누가 앞서는가" 는
- * **미래 지분과 전혀 다른 질문**이고(아래 `currentStanding` 주석의 반례), 그 답을 내려면
- * 5·6장을 평가할 수 있어야 한다.
- *
- * ⚠ 점수 정본은 `score5` 하나다 — 새 족보 로직을 만들지 않는다(두 벌이면 한쪽만 고쳐지는 날이 온다).
- *   5장이면 그대로, 6·7장이면 모든 5장 조합 중 최대를 쓴다.
+ * 평가 상태(Int32Array 12칸) — [0..3] 랭크 다중도 마스크(m1=1장 이상 · m2=2장 이상 · m3=3장 이상 · m4=4장),
+ * [4..7] 무늬별 장수, [8..11] 무늬별 랭크 마스크. 전수 루프가 카드를 넣고 빼며 재사용한다.
+ * 카드 정수 = (랭크−2)·4 + 무늬. 13칸 랭크 스캔 대신 비트 연산으로 읽어 프리플랍 전수가 폰에서도 돈다.
  */
+type EvalState = Int32Array;
+const newState = (): EvalState => new Int32Array(12);
+function addCard(st: EvalState, c: number): void {
+  const bit = 1 << (c >> 2); const s = c & 3;
+  if (st[2] & bit) st[3] |= bit; else if (st[1] & bit) st[2] |= bit; else if (st[0] & bit) st[1] |= bit; else st[0] |= bit;
+  st[4 + s] += 1; st[8 + s] |= bit;
+}
+function removeCard(st: EvalState, c: number): void {
+  const bit = 1 << (c >> 2); const s = c & 3;
+  if (st[3] & bit) st[3] &= ~bit; else if (st[2] & bit) st[2] &= ~bit; else if (st[1] & bit) st[1] &= ~bit; else st[0] &= ~bit;
+  st[4 + s] -= 1; st[8 + s] &= ~bit;
+}
+const bitOf = (v: number): number => 1 << (v - 2);
+
+/** 5~7장 상태의 최고 5장 점수. 높을수록 강하다. */
+function evalState(st: EvalState): number {
+  const m1 = st[0]; const m2 = st[1]; const m3 = st[2]; const m4 = st[3];
+  const fs = st[4] >= 5 ? 0 : st[5] >= 5 ? 1 : st[6] >= 5 ? 2 : st[7] >= 5 ? 3 : -1;
+  if (fs >= 0) { const sf = STRAIGHT_HIGH[st[8 + fs]]; if (sf) return enc(8, sf, 0, 0, 0, 0); }
+  if (m4) { const q = hiRank(m4); return enc(7, q, hiRank(m1 & ~bitOf(q)), 0, 0, 0); }
+  if (m3) {
+    const t = hiRank(m3); const pr = m2 & ~bitOf(t);          // 남은 2장 이상 랭크(다른 트립 포함)
+    if (pr) return enc(6, t, hiRank(pr), 0, 0, 0);
+  }
+  if (fs >= 0) {
+    let m = st[8 + fs];
+    const a = hiRank(m); m &= ~bitOf(a); const b = hiRank(m); m &= ~bitOf(b); const c = hiRank(m); m &= ~bitOf(c);
+    const d = hiRank(m); m &= ~bitOf(d);
+    return enc(5, a, b, c, d, hiRank(m));
+  }
+  const sh = STRAIGHT_HIGH[m1];
+  if (sh) return enc(4, sh, 0, 0, 0, 0);
+  if (m3) {
+    const t = hiRank(m3); let k = m1 & ~bitOf(t);
+    const a = hiRank(k); k &= ~bitOf(a);
+    return enc(3, t, a, hiRank(k), 0, 0);
+  }
+  if (m2) {
+    const p1 = hiRank(m2); const rest = m2 & ~bitOf(p1);
+    if (rest) { const p2 = hiRank(rest); return enc(2, p1, p2, hiRank(m1 & ~bitOf(p1) & ~bitOf(p2)), 0, 0); }
+    let k = m1 & ~bitOf(p1);
+    const a = hiRank(k); k &= ~bitOf(a); const b = hiRank(k); k &= ~bitOf(b);
+    return enc(1, p1, a, b, hiRank(k), 0);
+  }
+  let k = m1;
+  const a = hiRank(k); k &= ~bitOf(a); const b = hiRank(k); k &= ~bitOf(b); const c = hiRank(k); k &= ~bitOf(c);
+  const d = hiRank(k); k &= ~bitOf(d);
+  return enc(0, a, b, c, d, hiRank(k));
+}
+
+const cardInt = (c: NCard): number => (c.r - 2) * 4 + c.s;
+
+/** 5·6·7장 최고 5장 점수(5장 미만·7장 초과는 −1). 표본 경로·현재 패 비교용. */
 function bestOf(cs: NCard[]): number {
   const n = cs.length;
   if (n < 5 || n > 7) return -1;
-  if (n === 5) return score5(cs);
-  let best = -1;
-  for (let a = 0; a < n; a += 1)
-    for (let b = a + 1; b < n; b += 1)
-      for (let c = b + 1; c < n; c += 1)
-        for (let d = c + 1; d < n; d += 1)
-          for (let e = d + 1; e < n; e += 1) {
-            const s = score5([cs[a], cs[b], cs[c], cs[d], cs[e]]);
-            if (s > best) best = s;
-          }
-  return best;
+  const st = newState();
+  for (const c of cs) addCard(st, cardInt(c));
+  return evalState(st);
 }
+const best7 = bestOf;
+/** 5~7장 족보 점수(높을수록 강함, 척도 = cat·15^5 + 타이브레이크). 평가기 대조 테스트용 공개 창구. */
+export const handScore = (cs: Card[]): number => bestOf(cs.map(toN));
+
+/**
+ * 카드를 모두 아는 쇼다운의 **전수** 집계 — 남은 보드 `need` 장(0~5)의 모든 조합을 돈다.
+ * 헤즈업 프리플랍 = C(48,5) = 1,712,304 보드. 히어로 몫은 공동 1등이면 1/승자수로 나눈다.
+ */
+function enumerateShowdown(players: number[][], board: number[], deck: number[], need: number) {
+  const n = players.length;
+  const shares = new Float64Array(n);
+  let heroTie = 0; let total = 0;
+  const st = newState();
+  for (const c of board) addCard(st, c);
+  const vals = new Float64Array(n);
+  const leaf = () => {
+    let max = -1; let winners = 0;
+    for (let p = 0; p < n; p += 1) {
+      const h = players[p];
+      addCard(st, h[0]); addCard(st, h[1]);
+      const v = evalState(st);
+      removeCard(st, h[0]); removeCard(st, h[1]);
+      vals[p] = v;
+      if (v > max) { max = v; winners = 1; } else if (v === max) winners += 1;
+    }
+    const share = 1 / winners;
+    for (let p = 0; p < n; p += 1) if (vals[p] === max) shares[p] += share;
+    if (winners > 1 && vals[0] === max) heroTie += 1;
+    total += 1;
+  };
+  const rec = (from: number, left: number) => {
+    if (left === 0) { leaf(); return; }
+    for (let i = from; i <= deck.length - left; i += 1) {
+      addCard(st, deck[i]);
+      rec(i + 1, left - 1);
+      removeCard(st, deck[i]);
+    }
+  };
+  rec(0, need);
+  return { shares, heroTie, total };
+}
+
+/** 표본 경로의 기본 시드 — 시드를 안 줘도 **같은 입력이면 같은 숫자**가 나온다(Math.random 을 쓰지 않는다). */
+export const DEFAULT_SEED = 0x2f6b_1c3d;
 
 /** 지금 보드까지의 **현재 패 우열**. 미래 지분(`computeEquity`)과 다른 값이다. */
 export type Standing = 'ahead' | 'behind' | 'tied';
@@ -210,11 +258,10 @@ function prepareCombos(range: WeightedCombo[], blockedKeys: ReadonlySet<number>)
 }
 
 /**
- * xorshift32 — `seed` 를 주면 **재현 가능한** 난수열이고, 없으면 `Math.random` 이다.
- * 무작위 테스트가 어쩌다 실패하는 것을 막으려면 테스트가 seed 를 줘야 한다.
+ * xorshift32 — 항상 **재현 가능한** 난수열이다. `seed` 를 안 주면 `DEFAULT_SEED`.
+ * (2026-10-01) 예전엔 seed 가 없으면 `Math.random` 이라 같은 입력도 열 때마다 다른 승률이 나왔다.
  */
-function makeRng(seed?: number): () => number {
-  if (seed === undefined) return Math.random;
+function makeRng(seed: number = DEFAULT_SEED): () => number {
   let s = seed >>> 0;
   if (s === 0) s = 0x9e3779b9;
   return () => {
@@ -226,7 +273,7 @@ function makeRng(seed?: number): () => number {
 }
 
 /** 누적가중 이분탐색으로 콤보 1개 가중 랜덤 샘플 */
-function sampleCombo(combos: NWCombo[], total: number, rnd: () => number = Math.random): NWCombo {
+function sampleCombo(combos: NWCombo[], total: number, rnd: () => number): NWCombo {
   const r = rnd() * total;
   let lo = 0;
   let hi = combos.length - 1;
@@ -239,57 +286,28 @@ function sampleCombo(combos: NWCombo[], total: number, rnd: () => number = Math.
 
 const NEUTRAL: EquityResult = { hero: 0.5, villain: 0.5, tie: 0, iterations: 0 };
 
+/**
+ * 히어로 2장 vs 빌런 2장 — **항상 전수 계산**(2026-10-01).
+ * 남은 보드를 모든 조합으로 깐다: 프리플랍 1,712,304 · 보드 1장 178,365 · 2장 15,180 · 플랍 990 · 턴 44 · 리버 1.
+ * 그래서 같은 입력이면 언제·어디서(GTO 분석·리플레이어·아웃츠) 불러도 같은 숫자다.
+ * 계산 자체는 `computeEquityMulti` 의 전수 경로 하나를 쓴다(같은 계산을 두 벌 두지 않는다).
+ */
 export function computeEquity(
   hero: [Card, Card],
   villain: [Card, Card],
   board: Card[],
-  iterations = 2500,
 ): EquityResult {
   // 겹친 카드 = 존재할 수 없는 핸드. 0.5 로 위장하지 않고 '계산 못 함' 을 싣는다(computeEquityVsRange 와 같은 모양).
   if (hasDuplicateCards(hero, villain, board)) return { ...NEUTRAL, kind: 'no_legal_combinations', accepted: 0, attempts: 0 };
-  const heroN = [toN(hero[0]), toN(hero[1])];
-  const villN = [toN(villain[0]), toN(villain[1])];
-  const boardN = board.map(toN);
-  const knownKey = new Set([...heroN, ...villN, ...boardN].map(keyOf));
-  const deck = buildDeck(knownKey);
-  const need = 5 - boardN.length;
-
-  let hw = 0; let vw = 0; let tie = 0; let total = 0;
-
-  const judge = (full: NCard[]) => {
-    const h = best7([...heroN, ...full]);
-    const v = best7([...villN, ...full]);
-    if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
-    total += 1;
-  };
-
-  if (need <= 0) {
-    // 리버: 단일 평가 (전수)
-    judge(boardN);
-  } else if (need === 1) {
-    // 턴: 잔여 덱 전 장 루프 (전수)
-    for (let i = 0; i < deck.length; i += 1) judge([...boardN, deck[i]]);
-  } else if (need === 2) {
-    // 플랍: 잔여 2장 전 조합(≈990) 루프 (전수) — 몬테카를로보다 정확하고 충분히 빠름
-    for (let i = 0; i < deck.length; i += 1)
-      for (let j = i + 1; j < deck.length; j += 1) judge([...boardN, deck[i], deck[j]]);
-  } else {
-    // 프리플랍/보드 1~2장: 몬테카를로
-    for (let i = 0; i < iterations; i += 1) {
-      // 부분 Fisher-Yates: 앞쪽 need 장만 랜덤 추출
-      for (let k = 0; k < need; k += 1) {
-        const j = k + Math.floor(Math.random() * (deck.length - k));
-        const tmp = deck[k]; deck[k] = deck[j]; deck[j] = tmp;
-      }
-      judge([...boardN, ...deck.slice(0, need)]);
-    }
-  }
-
+  const m = computeEquityMulti(hero, [villain], board);
   return {
-    hero: (hw + tie / 2) / total,
-    villain: (vw + tie / 2) / total,
-    tie: tie / total,
-    iterations: total,
+    hero: m.hero,
+    villain: m.villains[0],
+    tie: m.tie,
+    iterations: m.iterations,
+    kind: 'exact',
+    accepted: m.iterations,
+    attempts: m.iterations,
   };
 }
 
@@ -318,8 +336,9 @@ export interface MultiEquityResult {
  * 화면은 이 가정을 반드시 적어야 한다("카드를 넣지 않은 상대는 무작위 핸드로 계산") — 가정을 숨기고
  * 숫자만 보여 주는 것이 이 저장소가 금지하는 것이지, 가정을 밝힌 근사는 SourceBadge heuristic 선례대로 허용된다.
  *
- * 전수는 **상대 카드를 전부 알고 잔여 보드가 2장 이하**일 때만이다(플랍 C(45,2)=990 · 턴 44 · 리버 1).
+ * 전수는 **상대 카드를 전부 알 때**다 — 남은 보드 전 조합(2026-10-01: 프리플랍까지 확장, 예전엔 잔여 보드 2장 이하만).
  * 상대 카드가 한 장이라도 비면 표본이다 — 6인 프리플랍은 배분 순열이 ~10^13 이라 전수가 없다.
+ * 표본도 시드가 고정(DEFAULT_SEED)이라 같은 입력이면 같은 숫자다. 오차는 화면이 equityHalfWidthPct 로 적는다.
  * 실측(2026-09-19, node): 10,000회 = 2인 0.35s · 6인(5명 모름) 1.0~1.4s, 12회 반복 SD 0.51%p.
  * 25,000회는 3s 라 폰에서 너무 길다 — 표본이면 화면이 ±0.5%p 수준의 오차를 같이 적는다.
  *
@@ -361,35 +380,33 @@ export function computeEquityMulti(
     total += 1;
   };
 
-  let kind: MultiEquityResult['kind'];
-  if (draw === 0) {
-    kind = 'exact';
-    judge(boardN, villN);
-  } else if (unknownCards === 0 && need <= 2) {
-    kind = 'exact';
-    if (need === 1) {
-      for (let i = 0; i < deck.length; i += 1) judge([...boardN, deck[i]], villN);
-    } else {
-      for (let i = 0; i < deck.length; i += 1)
-        for (let j = i + 1; j < deck.length; j += 1) judge([...boardN, deck[i], deck[j]], villN);
+  if (unknownCards === 0) {
+    // 상대 카드를 전부 안다 — 남은 보드 전 조합 전수(프리플랍 헤즈업 1,712,304 · 3인 1,370,754).
+    const e = enumerateShowdown([heroN, ...villN].map((h) => h.map(cardInt)), boardN.map(cardInt), deck.map(cardInt), need);
+    return {
+      hero: e.shares[0] / e.total,
+      tie: e.heroTie / e.total,
+      villains: villains.map((_, i) => e.shares[i + 1] / e.total),
+      iterations: e.total,
+      kind: 'exact',
+      unknownCards,
+    };
+  }
+
+  for (let it = 0; it < iterations; it += 1) {
+    // 부분 Fisher-Yates: 앞쪽 draw 장만 무작위 추출 → 상대 손(모자란 장수) → 보드 순으로 배분
+    for (let k = 0; k < draw; k += 1) {
+      const j = k + Math.floor(rnd() * (deck.length - k));
+      const tmp = deck[k]; deck[k] = deck[j]; deck[j] = tmp;
     }
-  } else {
-    kind = 'monte_carlo';
-    for (let it = 0; it < iterations; it += 1) {
-      // 부분 Fisher-Yates: 앞쪽 draw 장만 무작위 추출 → 상대 손(모자란 장수) → 보드 순으로 배분
-      for (let k = 0; k < draw; k += 1) {
-        const j = k + Math.floor(rnd() * (deck.length - k));
-        const tmp = deck[k]; deck[k] = deck[j]; deck[j] = tmp;
-      }
-      let p = 0;
-      const hands = villN.map((v, i) => {
-        if (missing[i] === 0) return v;
-        const hand = [...v, ...deck.slice(p, p + missing[i])];
-        p += missing[i];
-        return hand;
-      });
-      judge([...boardN, ...deck.slice(p, p + need)], hands);
-    }
+    let p = 0;
+    const hands = villN.map((v, i) => {
+      if (missing[i] === 0) return v;
+      const hand = [...v, ...deck.slice(p, p + missing[i])];
+      p += missing[i];
+      return hand;
+    });
+    judge([...boardN, ...deck.slice(p, p + need)], hands);
   }
 
   if (total === 0) return { hero: 0, tie: 0, villains: vw, iterations: 0, kind: 'exact', unknownCards };
@@ -398,14 +415,14 @@ export function computeEquityMulti(
     tie: ht / total,
     villains: vw.map((x) => x / total),
     iterations: total,
-    kind,
+    kind: 'monte_carlo',
     unknownCards,
   };
 }
 
 /** Hero 특정 핸드 vs 빌런 레인지 — 매 반복 가중 랜덤 콤보 샘플 + 보드 완성 몬테카를로.
  *  `seed` 를 주면 재현 가능한 난수열(makeRng)을 쓴다 — 스타팅 핸드 순위 생성기(scripts/gen-starting-hand-rank.mjs)가
- *  '무작위 한 손' 레인지(1326콤보)로 이 함수를 그대로 불러 169개 값을 결정적으로 만든다. 없으면 종전대로 Math.random. */
+ *  '무작위 한 손' 레인지(1326콤보)로 이 함수를 그대로 불러 169개 값을 결정적으로 만든다. 없으면 DEFAULT_SEED(같은 입력 = 같은 값). */
 export function computeEquityVsRange(
   hero: [Card, Card],
   villainRange: WeightedCombo[],

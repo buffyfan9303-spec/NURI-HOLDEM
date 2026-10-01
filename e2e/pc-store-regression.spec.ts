@@ -17,7 +17,10 @@ import { bootOwner, openMyStore } from './_mockOwner';
 /** SectionHeader(atoms/SectionHeader.tsx) 만 고른다 — 앱 셸 헤더도 border-b 라 h2.text-fluid-lg 로 좁힌다. */
 const MEASURE = () => [...document.querySelectorAll<HTMLElement>('header')]
   // 2026-09-24: 모바일 대시보드는 섹션 헤더를 숨긴다(max-lg:hidden) — 숨은 헤더는 rect 가 0 이라 중심차 0 으로 잡혔다.
-  .filter((h) => h.querySelector('h2.text-fluid-lg') && h.getBoundingClientRect().height > 0)
+  // 2026-10-01: 레일 섹션은 헤더 사본을 같은 격자 칸에 겹친다(VenueManageTab data-step-header) — invisible 사본도 rect 가 있어
+  //   '액션 있는 헤더를 지나쳤다' 단언을 숨은 포스터 사본이 채울 수 있었다(독립 검토). 화면에 보이는 헤더만 센다.
+  //   visibility 는 상속되므로 invisible 래퍼 안의 header 도 computed 'hidden' 이다.
+  .filter((h) => h.querySelector('h2.text-fluid-lg') && h.getBoundingClientRect().height > 0 && getComputedStyle(h).visibility === 'visible')
   .map((h) => {
     const t2 = h.querySelector('h2')!.getBoundingClientRect();
     const tile = h.querySelector<HTMLElement>('span[aria-hidden]')?.getBoundingClientRect();

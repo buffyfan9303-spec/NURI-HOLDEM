@@ -47,9 +47,9 @@ const POSTER = {
 };
 
 /** 목킹 업주로 부팅 + 내 매장 진입. 못 열면 **실패**다(조용한 skip 통로를 만들지 않는다). */
-async function openStore(page: Page) {
+async function openStore(page: Page, viewport = { width: 412, height: 915 }) {
   await bootOwner(page, {
-    viewport: { width: 412, height: 915 },
+    viewport,
     extra: async (p) => {
       const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
       const isSingle = (r: import('@playwright/test').Route) =>
@@ -95,6 +95,39 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측(목킹 업주 ·
     expect(m.요약있음, '돌아오는 길(요약)이 바에 없다 — 그러면 왕복이 안 된다').toBe(true);
     expect(m.넘침, '단계 바가 넘쳐 마지막 단계가 잘린다').toBeLessThanOrEqual(0);
     expect(m.칸높이, '알약이 손가락에 비해 얇다').toBeGreaterThanOrEqual(32);
+
+    // D — 모바일(<1024). 🔴 오너 10-02 결정(PR #96): '매장 · 날짜 · ⟳' 표지판 줄은 바로 위 요약 줄(매장 › 날짜 › 오늘 게임)을
+    //   되풀이해 숨기고, 매장·날짜는 요약 줄이, 새로고침은 '오늘 장부 요약' 제목 줄이 맡는다. 옛 단언(표지판 줄의 매장명→날짜 거리)은
+    //   그 줄이 폭 0 이라 못 찾는다 — 느슨하게 푸는 게 아니라 새 계약으로 바꾼다. PC 계약은 아래 별도 테스트가 그대로 지킨다.
+    const sign = await page.evaluate((nm) => [...document.querySelectorAll('[data-tab="my-store"] span.truncate.text-base')]
+      .filter((e) => e.textContent?.trim() === nm).map((e) => Math.round(e.getBoundingClientRect().width)), MOCK_VENUE_NAME);
+    expect(sign.length, '표지판 줄(매장명)을 DOM 에서 못 찾았다 — 셀렉터가 화면과 어긋났다(숨긴 줄은 남아 있어야 한다)').toBeGreaterThan(0);
+    expect(sign.every((w) => w === 0), `모바일에서 표지판 줄이 숨겨져 있지 않다: ${sign}`).toBe(true);
+
+    const line = page.locator('[data-tab="my-store"] [data-summary-line]:visible');
+    await expect(line, '모바일 요약 줄(매장 › 날짜)이 보이지 않는다').toHaveCount(1);
+    const lm = await line.evaluate((el) => {
+      const name = [...el.querySelectorAll('span')].find((s) => s.classList.contains('truncate') && s.classList.contains('font-bold'));
+      const date = [...el.querySelectorAll('span')].find((s) => /\d+월\s*\d+일/.test(s.textContent || ''));
+      return { 매장: name?.textContent?.trim() ?? null, 매장폭: name ? Math.round(name.getBoundingClientRect().width) : 0,
+        날짜: date?.textContent?.trim() ?? null, 날짜폭: date ? Math.round(date.getBoundingClientRect().width) : 0 };
+    });
+    console.log('[D 모바일 요약 줄]', JSON.stringify(lm));
+    expect(lm.매장, '요약 줄에 매장명이 없다').toBe(MOCK_VENUE_NAME);
+    expect(lm.매장폭, '요약 줄의 매장명 폭이 0 이다').toBeGreaterThan(0);
+    expect(lm.날짜, '요약 줄에 날짜가 없다').not.toBeNull();
+    expect(lm.날짜폭, '요약 줄의 날짜 폭이 0 이다').toBeGreaterThan(0);
+
+    const head = page.locator('[data-tab="my-store"] [data-dash-head]');
+    await expect(head, "'오늘 장부 요약' 제목 줄이 보이지 않는다").toBeVisible();
+    await expect(head).toContainText('오늘 장부 요약');
+    await expect(head.getByRole('button', { name: '대시보드 새로고침' }), '제목 줄의 새로고침 버튼이 정확히 1개여야 한다').toHaveCount(1);
+    await expect(page.locator('[data-tab="my-store"] button[aria-label="대시보드 새로고침"]:visible'),
+      '화면에 보이는 새로고침이 제목 줄 하나뿐이어야 한다(표지판 줄 것은 숨김)').toHaveCount(1);
+  });
+
+  test('D(PC) — 대시보드: 헤더 날짜가 매장명 옆에 붙는다', async ({ page }) => {
+    await openStore(page, { width: 1280, height: 900 });
 
     // D — 스티키 헤더의 날짜가 매장명 옆에 붙어 있나(예전엔 619px 떨어져 있었다)
     // ⚠ '.truncate' 만으로는 페이지 제목('내 매장')이 잡힌다 — 매장명은 text-base·font-bold 다.

@@ -7,11 +7,12 @@ import UserManagementTab from './UserManagementTab';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { goSubTab } from '../../lib/subTabTransition';
 import { msgOf } from '../../lib/dbError';
+import { removeOrArchiveVenue } from '../../lib/venueRemove';
 import type { Schedule } from '../../api/schedules';
 import type { User, UserUpdateResult } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
 import {
-  getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
+  getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, getAllVenues,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
   getPendingGroups, getPendingVenues, approveGroup, rejectGroup, logActivity, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
   adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
@@ -1612,11 +1613,12 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
   };
 
   const remove = async () => {
-    if (!confirm(`'${venue.name}' 매장을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    // 서버는 장부·이용권·출석 등 기록이 있는 매장의 삭제를 거부한다(20261001d) — 그때는 숨김(보관)으로 안내한다.
     setBusy(true);
     try {
-      await deleteVenue(venue.id);
-      toast.show('매장을 삭제했습니다', 'info');
+      const r = await removeOrArchiveVenue(venue);
+      if (r === 'cancelled') return;
+      toast.show(r === 'archived' ? '숨김(보관) 처리했습니다 — 기록은 보존됩니다' : '매장을 삭제했습니다', 'info');
       onChanged();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');

@@ -546,6 +546,17 @@ export async function adminWithdrawUser(userId: string, reason: string): Promise
     : error.message);
 }
 
+// ── 관리자: 가입 심사 거절 ────────────────────────────────────────────────────
+// 오너 결정(2026-10-01): 거절 = 일반 회원으로 되돌리기(영구 정지 아님). 서버 RPC(20261001f admin_reject_signup)가
+// status='pending' 회원만 role=user·status=active·approved=false 로 돌리고 사유는 audit_log 에 남긴다.
+// ⚠ 예전처럼 profiles.status='banned' 로 저장하면 트리거가 그 CI 를 재가입 차단 목록에 올려
+//   본인인증 재가입까지 영구 차단된다 — 거절에 banned 를 쓰지 마라.
+export async function adminRejectSignup(userId: string, reason?: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_reject_signup', { p_user_id: userId, p_reason: reason ?? null });
+  if (error) throw new Error(error.message);
+}
+
 // ── 본인 비밀번호 확인(재인증) ────────────────────────────────────────────────
 // 같은 계정으로 signInWithPassword 를 시도해 비밀번호 일치 여부만 확인한다(세션은 본인이라 유지).
 // 탈퇴 등 민감 작업의 본인 확인용. true=일치.

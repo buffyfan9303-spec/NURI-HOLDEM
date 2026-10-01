@@ -135,25 +135,13 @@ export async function saveAdSlot(s: AdSlot): Promise<AdSlot> {
 /**
  * 두 슬롯의 **내용을 맞바꾼다**(자리 1~5 는 고정, 안에 든 광고만 위/아래로).
  *
- * ⚠ 요청은 **둘**이다 — 유니크 인덱스 탓에 한쪽 슬롯을 먼저 비운 뒤에야 두 행을 upsert 할 수 있다.
- *   둘째가 실패하면 첫 슬롯이 '해제·꺼짐'으로 남아 그 광고는 손님 화면에서 내려간다(관리 화면은
- *   move() 의 reload 로 그 상태를 드러낸다). 원자성은 클라이언트로 만들 수 없다 —
- *   swap_community_ad_slots RPC 한 트랜잭션으로 옮겨야 한다(nuri-migration).
- *   종전엔 Promise.all 로 두 요청을 따로 보내
- *   한쪽만 성공하면 같은 글이 두 슬롯에 남았다(그리고 UI 는 옛 순서를 계속 보여줬다).
- *   부분 유니크 인덱스(community_ads_active_post_uidx)가 그 상태를 이제 DB 에서도 거부한다.
+ * 서버 RPC 한 번(swap_community_ad_slots, 20261001g)이 한 트랜잭션으로 맞바꾼다 — 중간에 실패하면 전부
+ *   되돌아가므로 '슬롯 하나만 해제·꺼짐으로 남는' 상태가 없다. 부분 유니크 인덱스(community_ads_active_post_uidx)
+ *   때문에 서버 안에서 a 를 먼저 비우는 순서는 그대로다.
+ * ⚠ 예전의 두 요청(비우기 → upsert)으로 되돌리지 마라 — 둘째가 실패하면 광고가 손님 화면에서 내려간다.
  */
 export async function swapAdSlots(a: AdSlot, b: AdSlot): Promise<void> {
   if (IS_MOCK) return;
-  const stamp = new Date().toISOString();
-  const row = (dst: AdSlot, src: AdSlot) => ({
-    slot: dst.slot, post_id: src.postId, active: src.active,
-    starts_at: src.startsAt || null, expires_at: src.expiresAt || null, updated_at: stamp,
-  });
-  // 유니크 인덱스 충돌을 피하려면 먼저 한쪽을 비워야 한다(같은 post_id 가 잠깐 두 행에 존재할 수 없다).
-  const clear = await supabase.from('community_ads')
-    .update({ post_id: null, active: false, updated_at: stamp }).eq('slot', a.slot);
-  if (clear.error) throw new Error(clear.error.message);
-  const { error } = await supabase.from('community_ads').upsert([row(b, a), row(a, b)]);
+  const { error } = await supabase.rpc('swap_community_ad_slots', { p_slot_a: a.slot, p_slot_b: b.slot });
   if (error) throw new Error(error.message);
 }

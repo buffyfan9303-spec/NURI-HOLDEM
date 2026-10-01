@@ -6,7 +6,7 @@
 //   Chen 근사는 그 차트와 **정면으로 충돌했다** — 6맥스 LJ 오픈 100bb 에서 차트는 77·ATo 를 100% 오픈,
 //   Chen 은 폴드라고 했다. 같은 앱이 같은 상황에 반대로 답하면 둘 다 못 믿게 되므로,
 //   유일한 소비처였던 HandGtoModal 을 차트로 옮겼다.
-//   지금 남은 소비처는 표시 헬퍼뿐이다: cardsToLabel · labelToCards · RANK_PCT(핸드 강도 순위).
+//   지금 남은 소비처는 표시 헬퍼뿐이다: cardsToLabel · labelToCards. RANK_PCT(Chen 강도 순위)는 2026-10-01 소비처 0 — 모달이 순위 화면과 같은 데이터(tools/startingHandRank.ts)로 옮겼다.
 //   전략 함수(action·openPct·POSITIONS·STACKS·SCENARIOS)는 하위호환으로 남기되 **GTO·솔버·최적 표현을 쓰지 않는다**.
 //   evLossBb 는 제거했다 — 실제 action EV 없이 EV 손실을 숫자로 내놓는 것은 근거 없는 정밀함이다.
 

@@ -114,7 +114,9 @@ async function openDashboard(page: Page, theme: 'dark' | 'light' = 'dark') {
   await page.locator('button:visible').filter({ hasText: '내 매장' }).first().click({ timeout: 15_000 });
   await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
   // KPI 밴드가 그려질 때까지 — 여기서부터가 '대시보드가 실제로 산 상태'다.
-  await expect(page.locator('[data-tab="my-store"]').getByText('오늘 장부').first()).toBeVisible({ timeout: 25_000 });
+  // 2026-10-01: 대시보드 판으로 좁힌다 — 레일 머리 칸(VenueManageTab data-step-chrome)이 요약에서도 숨은 단계 헤더 사본을 깔아
+  //   장부 설명 '오늘 장부로 바로 들어갑니다'가 DOM 앞쪽에 생겼고, `.first()` 가 그 invisible 사본을 집어 거짓 FAIL 이 났다.
+  await expect(page.locator('[data-tab="my-store"] [data-pane="dashboard"]').getByText('오늘 장부').first()).toBeVisible({ timeout: 25_000 });
 }
 
 /** 페이지 전체 가로 스크롤 — 1px 반올림 오차는 허용(브라우저 서브픽셀).

@@ -75,7 +75,7 @@ describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
   it("'오늘의 드릴' 은 GTO 카탈로그·검색·즐겨찾기에서 빠졌다 — 딥링크 키는 남는다(2026-09-14 오너 지시)", () => {
     expect(TOOLS_PANEL).toContain("const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill', 'deal'])");
     expect(TOOLS_PANEL).toContain('t.cat === l.id && !HIDDEN_SET.has(t.key)');   // 카탈로그 섹션
-    expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && (t.name');            // 검색
+    expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && matchesToolQuery(');            // 검색
     expect(TOOLS_PANEL).not.toContain("open('drill')");                            // 상단 카드 진입 없음
     expect(entries.some((e) => e.key === 'drill'), '#tool=drill 딥링크가 죽었다').toBe(true);
   });
@@ -207,12 +207,22 @@ describe('프리플랍 전략의 단일 소스', () => {
 
   it('핸드 분석 모달이 차트(ranges.data)를 읽는다 — Chen 전략 함수를 쓰지 않는다', () => {
     expect(modal).toContain("from '../../lib/ranges.data'");
-    // 표시 헬퍼(cardsToLabel·RANK_PCT)만 preflop 에서 가져온다
+    // 표시 헬퍼(cardsToLabel)만 preflop 에서 가져온다 — 핸드 강도 순위(RANK_PCT, Chen)는 더 쓰지 않는다(아래 별도 검사)
     const imp = modal.match(/import \{([^}]*)\} from '\.\.\/\.\.\/lib\/preflop';/);
     expect(imp, 'preflop import 형태가 바뀌었다').toBeTruthy();
     for (const banned of ['action', 'openPct', 'POSITIONS', 'STACKS']) {
       expect(imp![1], `Chen 전략 함수 ${banned} 가 화면으로 돌아왔다`).not.toContain(banned);
     }
+  });
+
+  it('모달의 "상위 N%" 는 Chen(RANK_PCT)이 아니라 순위 화면과 같은 데이터·함수(startingHandRank)를 읽는다', () => {
+    const imp = modal.match(/import \{([^}]*)\} from '\.\.\/\.\.\/lib\/preflop';/);
+    expect(imp![1], 'Chen 순위(RANK_PCT)가 모달로 돌아왔다 — 순위 화면과 같은 핸드가 다른 상위 %가 된다').not.toContain('RANK_PCT');
+    expect(modal).toContain("from './tools/startingHandRank'");
+    expect(modal).toContain('STARTING_HAND_BY_HAND.ten'); // 기본 기준 = 10인(헤즈업이 아니다)
+    expect(modal).toContain('RANK_BASIS_LABEL.ten');
+    // 순위 화면도 같은 모듈 — 계산이 두 벌로 갈라지지 않는다
+    expect(readFileSync(join(ROOT, 'src/components/features/tools/StartingHandRankPanel.tsx'), 'utf-8')).toContain("from './startingHandRank'");
   });
 
   it('차트가 덮지 않는 스택은 결과를 만들지 않고 미지원이라고 말한다', () => {

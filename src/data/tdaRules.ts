@@ -5,9 +5,11 @@
  *  - 규칙 번호(TDA Rule N)마다 "그 규칙이 무엇을 어떻게 판정하는지"를 누리홀덤이 짧게 쓴 해설이다.
  *    원문의 번역·전재가 아니다. 판정 기준·숫자·순서는 원문 그대로이고, 문장은 우리가 썼다.
  *    권장 절차(RP)도 같은 방식이고, 실전 예제 부록은 원문 예제를 옮긴 것이 아니라 규칙별 '상황 → 판정' 예시를 우리가 만든 것이다.
- *  - 대조한 원문: POKER TOURNAMENT DIRECTORS ASSN. 「2026 Rules Version 1.0, Sept 6, 2026」(Longform)
+ *  - 대조한 원문: POKER TOURNAMENT DIRECTORS ASSN. 「2026 Rules, Version 1.0. Sept 7, 2026」(Longform)
  *    규칙 1~74 · 권장 절차 RP-1~29 · 실전 예제 부록 · 용어집, 26쪽 영문 PDF. 원문의 권리는 Poker TDA 에 있다
  *    (© 2026 Poker Tournament Directors Association, 사용 정책 PokerTDA.com). page 는 그 PDF 쪽수다.
+ *    출처 날짜(공식 페이지 https://www.pokertda.com/view-poker-tda-rules/ 2026-10-01 재확인): 규칙 본문 'Sept 7, 2026',
+ *    실전 예제·용어집 부록 'September 6, 2026', 권장 절차는 '2024 Recommended Procedures, Version 1.0, October 2024' 로 별도 표기된다.
  *  - ⚠ 2026-09-17 이전에는 제3자의 2024 한글 번역본을 허락 없이 싣고 있었다(오너 확인). 그 문장을 다시 넣지 말 것.
  *    2026-09-17 에 전 항목(125개)을 누리홀덤 해설로 교체했다.
  *  - 원문 자체의 번호 오타(2024 번호가 갱신되지 않은 상호참조)는 맞는 번호를 적되 원문 표기를 괄호로 같이 남긴다 —
@@ -268,7 +270,7 @@ export const TDA_RULES: TdaRule[] = [
   {
     no: 29,
     section: '기본적인 절차',
-    title: '리바이(Re-buys)',
+    title: '리바인(Re-buys)',
     body: '리바인하는 플레이어는 핸드를 건너뛸 수 없습니다. 핸드 전에 리바인 의사를 밝혔으면 그 칩이 뒤에 있는 것으로 치고 플레이하며, 반드시 리바인해야 합니다.',
     page: 5,
     keywords: ['리바인', '리바이', '재구매', '칩 추가', '핸드 건너뛰기', '선언했는데 취소', '뒤에서 칩 플레이', '플레잉 비하인드', '의무', '규칙 29'],
@@ -636,7 +638,7 @@ export const TDA_RULES: TdaRule[] = [
   {
     no: null,
     section: '권장 절차(Recommended Procedures)',
-    title: '2026 권장 절차 — 머리말',
+    title: '권장 절차 — 머리말(2024년 10월판 v1.0)',
     body: '권장 절차(RP)는 실수를 줄이고 운영을 매끄럽게 하기 위한 TDA의 권고입니다. 한 가지 규칙으로 다 담기 어려운 변칙 상황에도 씁니다. 그럴 때는 여러 규칙을 함께 보고 상황 전체를 따져, 규칙 1을 기준으로 가장 공정하게 판정합니다.',
     page: 13,
     keywords: ['권장 절차', 'RP', '리커멘디드', '운영 지침', '머리말', '변칙 상황', '규칙 1 우선', '공정한 결정', '대회 운영'],
@@ -1035,4 +1037,4 @@ export const TDA_RULES: TdaRule[] = [
   },
 ];
 
-export const TDA_VERSION = '2026년 규칙 버전 1.0 (2026년 9월 6일)';
+export const TDA_VERSION = '2026년 규칙 버전 1.0 (2026년 9월 7일)';
