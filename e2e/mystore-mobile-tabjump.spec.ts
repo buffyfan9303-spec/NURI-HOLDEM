@@ -9,14 +9,17 @@
 //   ① 게임 단계 5개의 정착 오프셋이 전부 같다(±1px) — 수정 전 빌드에서 32px 차로 빨갛다.
 //   ② 한 전환 안에서 새 판이 선 뒤 오프셋이 한 방향으로라도 1px 넘게 움직이지 않는다(오르내림 0).
 // 탭은 DOM click(page.evaluate) — Playwright click 의 자동 스크롤이 scrollY 를 오염시키지 않게.
-// 요약(대시보드 헤더 숨김, 2026-09-24 오너 결정)·이용권(게임 칩 줄 없음)은 다른 섹션이라 ①의 대상이 아니다 — 시계열만 기록한다.
+// 🔴 2026-10-01 오너 결정 「모든 탭 시작선을 같게」 — ①의 대상을 레일 7칸 전부(요약·포스터~정산·이용권)로 넓혔다.
+//   종전엔 요약 6 · 게임 172.5 · 이용권 97(390)이라 요약→포스터에서 판이 166px 내려갔다(독립 검토 review-tabjump-1001).
+//   고침: VenueManageTab.tsx data-step-chrome — 레일 섹션 3개가 같은 머리 칸(칩 바 + 헤더 겹침 격자)을 쓴다.
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_DAY, MOCK_VENUE } from './_mockOwner';
 
 const RAIL = '[data-mystore-rail]';
-const GAME = ['포스터', '장부', '클락', '순위', '정산'] as const;
-const SEQ = ['포스터', '장부', '클락', '순위', '정산', '이용권', '정산', '순위', '클락', '장부', '포스터', '요약'] as const;
+const TABS = ['요약', '포스터', '장부', '클락', '순위', '정산', '이용권'] as const;
+// 순방향(요약→…→이용권) · 역방향(→…→요약) · 양 끝 직행(요약↔이용권). 첫 '요약'은 이미 열린 판을 재는 기준값이다.
+const SEQ = [...TABS, ...TABS.slice(0, -1).reverse(), '이용권', '요약'] as const;
 
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const isSingle = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
@@ -64,7 +67,7 @@ const step = (page: Page, name: string) => page.evaluate(async ([sel, n]) => {
 const PANE: Record<string, string> = { 포스터: 'posters', 장부: 'ledger', 클락: 'clock', 순위: 'ranking', 정산: 'settle', 이용권: 'voucher', 요약: 'dashboard' };
 
 for (const [W, Y] of [[360, 0], [390, 0], [412, 0], [390, 600]] as const) {
-  test(`${W}px · scroll ${Y} — 게임 단계 전환에서 레일 아래 콘텐츠가 오르내리지 않는다`, async ({ page }) => {
+  test(`${W}px · scroll ${Y} — 레일 7칸 전환에서 레일 아래 콘텐츠 시작선이 같고 오르내리지 않는다`, async ({ page }) => {
     test.setTimeout(150_000);
     await open(page, W);
     const settled: Record<string, number[]> = {};
@@ -87,9 +90,10 @@ for (const [W, Y] of [[360, 0], [390, 0], [412, 0], [390, 600]] as const) {
     }
     expect(measured, '전환을 다 재지 못했다').toBe(SEQ.length);
     expect(osc, '전환 도중 레일 아래 판이 움직였다').toEqual([]);
-    // ① 게임 단계끼리 레일 아래 위치가 같다(정방향·역방향 양쪽 값 모두)
-    const g = GAME.flatMap((n) => settled[n] ?? []);
-    expect(g.length, '게임 단계 정착값이 모자란다').toBe(GAME.length * 2);
-    expect(Math.max(...g) - Math.min(...g), `게임 단계별 레일 아래 위치가 다르다: ${GAME.map((n) => `${n} ${settled[n]}`).join(' · ')}`).toBeLessThanOrEqual(1);
+    // ① 레일 7칸 전부 레일 아래 시작선이 같다(순·역방향·직행의 모든 정착값)
+    for (const n of TABS) expect(settled[n]?.length ?? 0, `«${n}» 정착값이 없다 — 빈 검사`).toBeGreaterThan(0);
+    const g = TABS.flatMap((n) => settled[n] ?? []);
+    expect(g.length, '정착값 수가 전환 수와 다르다').toBe(SEQ.length);
+    expect(Math.max(...g) - Math.min(...g), `탭별 레일 아래 시작선이 다르다: ${TABS.map((n) => `${n} ${settled[n]}`).join(' · ')}`).toBeLessThanOrEqual(1);
   });
 }

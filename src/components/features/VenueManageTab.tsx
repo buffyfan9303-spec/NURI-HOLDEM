@@ -1102,44 +1102,57 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   바가 29px 위아래로 튀었다(실측 top 239 ↔ 268). 같은 바가 같은 자리에 있어야 '판만 바뀌었다'로
                   읽히므로 **단계 바를 맨 위 고정**으로 올리고 이 줄을 그 아래로 내렸다.
                   읽는 순서는 '단계(어디로) → 대상(무엇을) → 작업'이 된다 — 내비게이션이 문맥보다 위인 통상 배치다. */}
-            {renderSection === 'game' && !dItem?.locked && (
-              <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
-                venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
-            )}
+            {/* 🔴 오너 2026-10-01 결정("모든 탭 시작선을 같게") — 레일의 7칸(요약·포스터~정산·이용권)이 **같은 머리 칸**을 쓴다.
+                종전엔 레일 아래 판까지 거리가 요약 6 · 게임 172.5 · 이용권 97(390 실측)이라 요약→포스터에서 판이 166px 내려갔다.
+                머리 칸 = [칩 바] + [헤더 겹침 격자]. 요약·이용권에서도 칩 바와 게임 헤더 5개를 **모바일에서 invisible 로 깔아**
+                칸 높이를 게임 단계와 같게 잡고(데이터에 따라 칩 줄이 생겨도 같은 사본이라 같이 자란다), 보이는 헤더는 같은 격자 칸에 겹친다.
+                요약 헤더는 2026-09-24 결정대로 모바일에서 계속 숨긴다(invisible — 칸만 예약, 같은 말 두 번 0). 그래서 요약은 레일 아래가 비어 있다.
+                구분선(헤더 border-b)은 모바일에서 헤더마다 그리지 않고 **격자 밑변 한 곳**에 그린다 — 짧은 헤더 밑에서 선이 오르내리던 것(검토 3c).
+                ⚠ PC(lg+)는 종전 그대로: 숨은 사본은 lg:hidden(display none), 헤더 테두리도 그대로(pc-store-regression 47.75 계약).
+                칩 바는 레일 섹션 사이에서 **한 인스턴스**로 유지된다(요약↔게임 왕복에 재마운트·빈 목록 0).
+                회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts(7칸 · 360/390/412 · 순·역방향) */}
+            {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (() => {
+              const isGame = renderSection === 'game';
+              const ghost = isGame ? '[grid-area:1/1] invisible' : '[grid-area:1/1] invisible lg:hidden';
+              return (
+                <div data-step-chrome="" className="space-y-3 max-lg:[&_header]:border-0 max-lg:[&_header]:pb-0">
+                  <div className={isGame ? undefined : 'invisible lg:hidden'} aria-hidden={isGame ? undefined : true} inert={!isGame}>
+                    <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
+                      canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
+                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
+                  </div>
+                  <div className="grid max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
+                    {GAME_STEPS.map((st) => {
+                      const on = isGame && st.id === renderGameStep;
+                      return (
+                        <div key={st.id} className={on ? '[grid-area:1/1]' : ghost} aria-hidden={on ? undefined : true} inert={!on}>
+                          <SectionHeader title={st.label} desc={SECTION_DESC[st.id]} icon={SECTION_ICON[st.id]}
+                            action={st.id === 'posters' && canPosters
+                              ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
+                              : undefined} />
+                        </div>
+                      );
+                    })}
+                    {/* 요약 헤더는 모바일에서 계속 숨긴다(2026-09-24 결정 — 단계 바 '요약'과 같은 말 두 번 금지, e2e store-nav).
+                        invisible 이라 칸은 그대로 예약되고 낭독·포커스에서도 빠진다. PC 는 그대로 보인다. */}
+                    {!isGame && (
+                      <div className={renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:invisible' : '[grid-area:1/1]'}>
+                        <SectionHeader title={dItem?.label ?? ''} desc={SECTION_DESC[renderSection]} icon={SECTION_ICON[renderSection]} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
               <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
             )}
-            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
-            {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처) — 모바일 대시보드에서는 이 헤더를 숨긴다(`max-lg:hidden`).
-                대시보드 헤더는 제목 '대시보드' 하나뿐이고(설명·액션 없음 — SECTION_DESC 에 키가 없다) 바로 위 단계 바의
-                활성 '요약' 알약이 같은 말을 한다. 남겨 두면 실제 내용(오늘 장부)이 58px 아래로 밀린다(390 실측).
-                ⚠ PC(≥1024)는 그대로다 — PC 는 단계 바 옆에 사이드바가 있고 섹션 헤더 높이 계약(pc-store-regression)이 있다.
-                ⚠ 다른 섹션은 설명·'+ 새 게임' 액션을 이 헤더에만 싣는다 — 대시보드만 숨긴다. */}
-            {/* 🔴 오너 2026-10-01("모바일 내 매장에서 요약·포스터·장부·클락 이렇게 움직이면 하단 전체 콘텐츠가 위로 올라갔다가 내려와").
-                원인(4174 실측 · 목킹 업주): 모바일에서는 설명이 제목 아래로 내려가 **단계마다 줄 수가 다르다** — 헤더 높이가
-                포스터·장부 78 · 클락 59(390) / 412 에선 78·78·46·59·46. 그래서 레일 아래 판 윗변이 172→172→140→154→140 으로
-                오르내렸다(PC 는 한 줄 48 고정이라 안 생긴다). 게임 단계 5개의 헤더를 **같은 격자 칸에 겹쳐 두고** 지금 단계만 보이게 해
-                칸 높이 = 다섯 헤더 중 최댓값으로 고정한다 — 폭·글꼴이 바뀌어도 CSS 가 직접 max 를 잡는다(수치 하드코딩 없음).
-                숨은 사본은 invisible + aria-hidden + inert(포커스·낭독·클릭 0). 회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts */}
-            {!dItem?.locked && renderSection === 'game' && (
-              <div className="grid" data-step-header="">
-                {GAME_STEPS.map((st) => {
-                  const on = st.id === renderGameStep;
-                  return (
-                    <div key={st.id} className={on ? '[grid-area:1/1]' : '[grid-area:1/1] invisible'} aria-hidden={on ? undefined : true} inert={!on}>
-                      <SectionHeader title={st.label} desc={SECTION_DESC[st.id]} icon={SECTION_ICON[st.id]}
-                        action={st.id === 'posters' && canPosters
-                          ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
-                          : undefined} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {!dItem?.locked && renderSection !== 'game' && (
-              <div className={renderSection === 'dashboard' ? 'max-lg:hidden' : undefined}>
+            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환).
+                레일 섹션(요약·게임 단계·이용권)의 헤더는 위 머리 칸(data-step-chrome)이 그린다.
+                🔴 오너 2026-10-01 — 게임 단계 헤더 높이가 설명 줄 수(1~3줄)로 갈려 판이 오르내린 원인과 겹침 격자 처방은 위 주석 참고. */}
+            {!dItem?.locked && renderSection !== 'game' && renderSection !== 'dashboard' && renderSection !== 'voucher' && (
+              <div>
               <SectionHeader
                 title={renderSection === 'settings'
                   ? (SETTINGS_TABS.find((t) => t.id === renderSettingsTab)?.label ?? '매장 설정')
