@@ -630,7 +630,7 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
 //   → ① 은 '전체 메뉴'(다른 섹션으로 가는 길) ③ 은 모바일 대시보드에서만 숨김. PC 헤더와 다른 섹션 헤더는 그대로.
 //   390 실측: 대시보드 판 top 327.1 → 268.7(−58.4px). 레일 아래 → 판 top 간격 71.2 → 12.8.
 test.describe('모바일 대시보드 — 같은 뜻의 머리글은 하나', () => {
-  test('390 — 섹션 헤더 없음 · 메뉴는 "전체 메뉴" · 판이 레일 바로 아래 · 다른 섹션 도달 가능', async ({ page }) => {
+  test('390 — 섹션 헤더 없음 · 메뉴는 "전체 메뉴" · 판 시작선이 포스터와 같다 · 다른 섹션 도달 가능', async ({ page }) => {
     await bootOwner(page, { viewport: { width: 390, height: 844 } });
     await openMyStore(page);
     const tab = page.locator('[data-tab="my-store"]');
@@ -640,12 +640,15 @@ test.describe('모바일 대시보드 — 같은 뜻의 머리글은 하나', ()
       '모바일 대시보드에 섹션 헤더 "대시보드" 가 남아 단계 바의 "요약" 과 같은 말을 두 번 한다').toBeHidden();
     const toggle = tab.getByTestId('mystore-menu-toggle');
     await expect(toggle).toHaveText(/^\s*전체 메뉴\s*$/);
-    const gap = await page.evaluate(() => {
+    // 🔴 2026-10-01 오너 결정 「모든 탭 시작선을 같게」 — 종전 '판이 레일 바로 아래(<20px)' 계약은 폐기됐다.
+    //   이제 요약 판은 게임 단계(포스터)와 **같은 시작선**이어야 한다(헤더는 위 단언대로 계속 숨김 — 칸만 예약).
+    //   전 탭 시작선 회귀는 e2e/mystore-mobile-tabjump.spec.ts 가 잡는다. 여기선 요약↔포스터 한 쌍만 본다.
+    const gapOf = (id: string) => page.evaluate((pid) => {
       const rail = [...document.querySelectorAll<HTMLElement>('[data-tab="my-store"] [data-mystore-rail]')].find((e) => e.offsetParent)!;
-      const p = document.querySelector<HTMLElement>('[data-tab="my-store"] [data-pane="dashboard"]')!;
+      const p = document.querySelector<HTMLElement>(`[data-tab="my-store"] [data-pane="${pid}"]`)!;
       return p.getBoundingClientRect().top - rail.getBoundingClientRect().bottom;
-    });
-    expect(gap, `레일 아래 → 대시보드 판 간격 ${gap}px — 사이에 머리글이 다시 끼었다`).toBeLessThan(20);
+    }, id);
+    const gap = await gapOf('dashboard');
     // 기능 소실 0 — 아코디언이 여전히 다른 섹션으로 데려간다.
     await toggle.evaluate((b) => (b as HTMLElement).click());
     await expect(tab.getByRole('button', { name: '매장 설정' }).first()).toBeVisible();
@@ -654,6 +657,8 @@ test.describe('모바일 대시보드 — 같은 뜻의 머리글은 하나', ()
     await tab.locator(`${RAIL} button`).filter({ hasText: /^포스터$/ }).first().evaluate((b) => (b as HTMLElement).click());
     await expect(tab.getByRole('heading', { level: 2, name: '포스터', exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(toggle).toHaveText(/^\s*전체 메뉴\s*$/);
+    const posterGap = await gapOf('posters');
+    expect(Math.abs(gap - posterGap), `요약 판 시작선 ${gap.toFixed(1)} ≠ 포스터 ${posterGap.toFixed(1)} — 요약→포스터에서 콘텐츠가 오르내린다`).toBeLessThanOrEqual(1);
   });
 
   test('1440 — PC 대시보드 섹션 헤더는 그대로 보인다', async ({ page }) => {

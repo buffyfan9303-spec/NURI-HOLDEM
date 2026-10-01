@@ -517,6 +517,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
     setLedgerFollow({ seq, n });
   }, []);
+  // 오너 2026-10-02 — 요약·이용권(모바일)의 칩: 같은 게임 선택 상태(onPickGame)를 그대로 쓰고 장부로 간다.
+  //   장부 이동은 레일 '장부'와 같은 길(onGotoStore + ledgerSeed{영업일, 그 게임})이다 — goStep('ledger') 만 하면
+  //   첫 진입 장부가 목록 모드로 열려 고른 게임 보드가 안 보였다(2026-10-02 실측: 스위처 선택 0개).
+  const onPickGameToLedger = useCallback((seq: number, title?: string) => {
+    onPickGame(seq, title);
+    onGotoStore({ section: 'ledger', date: businessDateOf(venueId), gameSeq: seq });
+  }, [onPickGame, onGotoStore, venueId]);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
@@ -592,7 +599,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
   // U1: 게임 진행 문맥 줄(매장 › 날짜 › 게임)도 같은 값을 쓴다 — 게임 스텝을 한 번이라도 열면 함께 조회.
   const [venueName, setVenueName] = useState('');
-  const needVenueName = visited.includes('page') || visited.some(isGameStep);
+  // 2026-10-01: 요약·이용권의 모바일 요약 줄(매장 › 날짜 › 오늘 게임)도 이 값을 쓴다 — 요약이 첫 화면이라 거기서도 조회한다.
+  //   memberVenues 에 있으면 조회 0회. 이름이 늦게 와도 한 줄(nowrap) 안의 칸이라 높이는 그대로다.
+  const needVenueName = visited.includes('page') || visited.includes('dashboard') || visited.includes('voucher') || visited.some(isGameStep);
   useEffect(() => {
     if (!venueId || !needVenueName) return;
     if (isAdmin) { setVenueName(adminVenues.find((v) => v.id === venueId)?.name ?? ''); return; }
@@ -836,6 +845,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const ctxGame = renderGameStep === 'ledger' ? (ledgerSeed?.title?.trim() || undefined)
     : renderGameStep === 'ranking' ? (rankingDraft ? (rankingDraft.event?.trim() || '메인') : undefined)
       : undefined;
+
+  // 🔴 오너 2026-10-01 "아래 빈공간이 너무 큰거 아니야?" — 모바일 레일 섹션 헤더의 설명은 한 줄(말줄임)로 접고, ⓘ 로 펼친다.
+  //   펼침은 지금 보이는 단계에만 걸리고 단계를 옮기면 접힌다 — 도착할 때의 시작선은 늘 같다(옮긴 뒤까지 펼쳐 두면 그 탭만 칸이 커진다).
+  const descKey = `${renderSection}|${renderGameStep}`;
+  const [descOpenKey, setDescOpenKey] = useState<string | null>(null);
+  if (descOpenKey !== null && descOpenKey !== descKey) setDescOpenKey(null);
+  const descOpen = descOpenKey === descKey;
+  // 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약 머리 칸의 '오늘 장부 요약' 제목 줄 오른쪽 자리.
+  //   StoreDashboard 가 자기 새로고침(갱신 시각·라이브·버튼)을 이 자리로 portal 한다(상태·동작은 대시보드에 그대로).
+  const [dashRefreshSlot, setDashRefreshSlot] = useState<HTMLElement | null>(null);
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -1102,38 +1121,100 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   바가 29px 위아래로 튀었다(실측 top 239 ↔ 268). 같은 바가 같은 자리에 있어야 '판만 바뀌었다'로
                   읽히므로 **단계 바를 맨 위 고정**으로 올리고 이 줄을 그 아래로 내렸다.
                   읽는 순서는 '단계(어디로) → 대상(무엇을) → 작업'이 된다 — 내비게이션이 문맥보다 위인 통상 배치다. */}
-            {renderSection === 'game' && !dItem?.locked && (
-              <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
-                venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
-            )}
+            {/* 🔴 오너 2026-10-01 결정("모든 탭 시작선을 같게") — 레일의 7칸(요약·포스터~정산·이용권)이 **같은 머리 칸**을 쓴다.
+                종전엔 레일 아래 판까지 거리가 요약 6 · 게임 172.5 · 이용권 97(390 실측)이라 요약→포스터에서 판이 166px 내려갔다.
+                머리 칸 = [칩 바] + [헤더 겹침 격자]. 요약·이용권에서도 칩 바와 게임 헤더 5개를 **모바일에서 invisible 로 깔아**
+                칸 높이를 게임 단계와 같게 잡고(데이터에 따라 칩 줄이 생겨도 같은 사본이라 같이 자란다), 보이는 헤더는 같은 격자 칸에 겹친다.
+                요약 헤더는 2026-09-24 결정대로 모바일에서 계속 숨긴다(invisible — 칸만 예약, 같은 말 두 번 0).
+                그 빈 띠는 오너 10-01 결정으로 칩 바의 문맥 줄 자리에 '매장 › 날짜(요일) › 오늘 게임' 요약 줄을 보여 채운다(GameChipBar summary).
+                구분선(헤더 border-b)은 모바일에서 헤더마다 그리지 않고 **격자 밑변 한 곳**에 그린다 — 짧은 헤더 밑에서 선이 오르내리던 것(검토 3c).
+                ⚠ PC(lg+)는 종전 그대로: 숨은 사본은 lg:hidden(display none), 헤더 테두리도 그대로(pc-store-regression 47.75 계약).
+                칩 바는 레일 섹션 사이에서 **한 인스턴스**로 유지된다(요약↔게임 왕복에 재마운트·빈 목록 0).
+                회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts(7칸 · 360/390/412 · 순·역방향) */}
+            {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (() => {
+              const isGame = renderSection === 'game';
+              const ghost = isGame ? '[grid-area:1/1] invisible' : '[grid-area:1/1] invisible lg:hidden';
+              // 🔴 오너 2026-10-01 "아래 빈공간이 너무 큰거 아니야?" — 머리 칸 높이는 다섯 단계 헤더 중 **가장 키 큰 것**이 정한다.
+              //   모바일에선 설명이 제목 아래로 2~3줄 내려가 그 칸이 78px(390)였고, 요약 줄 아래가 그만큼 비었다.
+              //   모바일 헤더를 **한 줄**(제목 + 설명 말줄임 + ⓘ)로 접어 칸 자체를 줄인다. 설명은 지우지 않는다 —
+              //   말줄임은 화면만 자르고 낭독기는 전문을 읽으며, ⓘ(aria-expanded)가 그 단계의 설명을 원래 줄바꿈 배치로 펼친다.
+              //   ⚠ 공용 atom(SectionHeader)은 건드리지 않는다 — 접힘은 이 래퍼의 자손 선택자로만 건다(PC lg+ 는 무관).
+              //   회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts(헤더 한 줄 · 요약 줄 아래 빈 칸 · ⓘ 키보드)
+              const oneLine = 'max-lg:[&_.flex-wrap]:flex-nowrap max-lg:[&_h2]:shrink-0 max-lg:[&_.t-desc]:min-w-0 max-lg:[&_.t-desc]:truncate';
+              const fold = (open: boolean) => (open ? '' : oneLine);
+              const descBtn = (id: string, open: boolean) => (SECTION_DESC[id as keyof typeof SECTION_DESC] ? (
+                <button type="button" className="relative lg:hidden text-ink-muted before:absolute before:-inset-y-[5px] before:inset-x-0" data-desc-toggle=""
+                  aria-expanded={open} aria-controls={`step-head-${id}`} aria-label={open ? '설명 접기' : '설명 펼치기'}
+                  onClick={() => setDescOpenKey(open ? null : descKey)}>
+                  <Icon name="info" size={16} />
+                </button>
+              ) : null);
+              return (
+                <div data-step-chrome="" className="space-y-3 max-lg:[&_header]:border-0 max-lg:[&_header]:pb-0">
+                  {/* 요약·이용권: 모바일은 문맥 줄 자리에 '오늘 요약 줄'(오너 10-01 결정), 그 아래 칩 줄은 게임 단계와 같이 보인다(10-02 결정).
+                      칩은 그 게임을 고른 채 장부로 간다(onPickGameToLedger). PC 는 종전대로 없음 */}
+                  <div className={isGame ? undefined : 'lg:hidden'}>
+                    <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
+                      canPosters={canPosters} onPick={isGame ? onPickGame : onPickGameToLedger} onNewGame={createPosterHere}
+                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame} />
+                  </div>
+                  {/* grid-cols-1 = minmax(0,1fr): auto 트랙은 가장 긴 설명 폭(390 에서 564px)까지 늘어나 말줄임이 화면 밖에서 일어났다 */}
+                  <div className="grid grid-cols-1 max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
+                    {GAME_STEPS.map((st) => {
+                      const on = isGame && st.id === renderGameStep;
+                      const open = on && descOpen;
+                      return (
+                        <div key={st.id} id={`step-head-${st.id}`} className={[on ? '[grid-area:1/1]' : ghost, fold(open)].join(' ')}
+                          aria-hidden={on ? undefined : true} inert={!on}>
+                          <SectionHeader title={st.label} desc={SECTION_DESC[st.id]} icon={SECTION_ICON[st.id]}
+                            action={<>
+                              {descBtn(st.id, open)}
+                              {st.id === 'posters' && canPosters && <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>}
+                            </>} />
+                        </div>
+                      );
+                    })}
+                    {/* '대시보드' 헤더는 모바일에서 계속 숨긴다(2026-09-24 결정 — 단계 바 '요약'과 같은 말 두 번 금지, e2e store-nav).
+                        그 칸은 아래 '오늘 장부 요약' 머리줄(모바일 전용)이 쓴다. PC 는 그대로 보인다. */}
+                    {!isGame && (
+                      <div id={`step-head-${renderSection}`}
+                        className={[renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:hidden' : '[grid-area:1/1]', fold(descOpen)].join(' ')}>
+                        <SectionHeader title={dItem?.label ?? ''} desc={SECTION_DESC[renderSection]} icon={SECTION_ICON[renderSection]}
+                          action={descBtn(renderSection, descOpen)} />
+                      </div>
+                    )}
+                    {/* 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약은 이 칸에 '오늘 장부 요약' 제목 + 새로고침.
+                        종전엔 이 칸이 invisible 로 비고(≈60px 빈 띠), 그 아래 대시보드 머리줄 '매장 · 날짜 · ⟳' 이
+                        바로 위 요약 줄(매장 › 날짜 › 오늘 게임)을 되풀이했다. 그 줄은 모바일에서 숨기고 새로고침만 여기로 올린다.
+                        제목은 단계 바 '요약' 과 같은 말이 아니게 '오늘 장부 요약'(store-nav '대시보드' 헤더 숨김 계약 유지).
+                        PC(lg+)는 종전 '대시보드' 헤더 + 대시보드 머리줄 그대로. */}
+                    {renderSection === 'dashboard' && (
+                      <div data-dash-head="" className={['[grid-area:1/1] lg:hidden', oneLine].join(' ')}>
+                        <SectionHeader title="오늘 장부 요약" icon={SECTION_ICON.dashboard}
+                          action={<span ref={setDashRefreshSlot} data-dash-refresh-slot="" className="flex items-center gap-1.5" />} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
               <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
             )}
-            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
-            {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처) — 모바일 대시보드에서는 이 헤더를 숨긴다(`max-lg:hidden`).
-                대시보드 헤더는 제목 '대시보드' 하나뿐이고(설명·액션 없음 — SECTION_DESC 에 키가 없다) 바로 위 단계 바의
-                활성 '요약' 알약이 같은 말을 한다. 남겨 두면 실제 내용(오늘 장부)이 58px 아래로 밀린다(390 실측).
-                ⚠ PC(≥1024)는 그대로다 — PC 는 단계 바 옆에 사이드바가 있고 섹션 헤더 높이 계약(pc-store-regression)이 있다.
-                ⚠ 다른 섹션은 설명·'+ 새 게임' 액션을 이 헤더에만 싣는다 — 대시보드만 숨긴다. */}
-            {!dItem?.locked && (
-              <div className={renderSection === 'dashboard' ? 'max-lg:hidden' : undefined}>
+            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환).
+                레일 섹션(요약·게임 단계·이용권)의 헤더는 위 머리 칸(data-step-chrome)이 그린다.
+                🔴 오너 2026-10-01 — 게임 단계 헤더 높이가 설명 줄 수(1~3줄)로 갈려 판이 오르내린 원인과 겹침 격자 처방은 위 주석 참고. */}
+            {!dItem?.locked && renderSection !== 'game' && renderSection !== 'dashboard' && renderSection !== 'voucher' && (
+              <div>
               <SectionHeader
-                title={renderSection === 'game'
-                  ? (GAME_STEPS.find((s) => s.id === renderGameStep)?.label ?? '게임 진행')
-                  : renderSection === 'settings'
+                title={renderSection === 'settings'
                   ? (SETTINGS_TABS.find((t) => t.id === renderSettingsTab)?.label ?? '매장 설정')
                   : (dItem?.label ?? '')}
-                desc={renderSection === 'game' ? SECTION_DESC[renderGameStep]
-                  : renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
+                desc={renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
                   : renderSection ? SECTION_DESC[renderSection] : ''}
-                icon={renderSection === 'game' ? SECTION_ICON[renderGameStep]
-                  : renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
+                icon={renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
                   : renderSection ? SECTION_ICON[renderSection] : undefined}
-                action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
-                  ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
-                  : undefined}
               />
               </div>
             )}
@@ -1156,7 +1237,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
-                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo}
+                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
@@ -1400,14 +1481,38 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
 // F5(2026-09-29) — 칩 목록 캐시(매장|영업일). GameChipBar 는 게임 단계에서만 마운트돼 들어올 때마다 games=[] 로 시작했고,
 //   조회가 끝난 뒤에야 칩 줄(46.75px)이 끼어 본문이 47px 밀렸다(1280 실측, 600ms 지연 CLS 0.0164).
 //   마지막으로 받은 목록으로 첫 렌더를 하고, 조회는 종전대로 다시 한다(stale-while-revalidate).
-const chipCache = new Map<string, LedgerGame[]>();
+// F1(2026-10-02) — 앱을 새로 열 때도 첫 화면(요약)에서 칩 줄이 뒤늦게 끼어 판이 46.7px 밀렸다(CLS 0.038). 같은 키로 sessionStorage 에도
+//   남겨 두고 첫 렌더에 읽는다. 키가 매장|영업일이라 다른 매장·다른 날 캐시는 읽히지 않는다. 서버 응답이 오면 덮어쓴다.
+//   저장소 접근은 전부 try/catch(사생활 보호 모드·차단 시 메모리 캐시만 쓴다). 첫 설치(캐시 없음) 1회 밀림은 남는다.
+const chipCache = {
+  m: new Map<string, LedgerGame[]>(),
+  has(k: string) { return this.get(k) !== undefined; },
+  get(k: string): LedgerGame[] | undefined {
+    const hit = this.m.get(k);
+    if (hit) return hit;
+    try {
+      const raw = sessionStorage.getItem(`nuri:chips:${k}`);
+      const v: unknown = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(v) && v.every((x) => x && typeof (x as LedgerGame).gameSeq === 'number')) { this.m.set(k, v as LedgerGame[]); return v as LedgerGame[]; }
+    } catch { /* 저장소 차단·깨진 값 — 캐시 없음으로 */ }
+    return undefined;
+  },
+  set(k: string, g: LedgerGame[]) {
+    this.m.set(k, g);
+    try { sessionStorage.setItem(`nuri:chips:${k}`, JSON.stringify(g)); } catch { /* 용량·차단 */ }
+  },
+};
 function warmGameChips(venueId: string) {
   const key = `${venueId}|${businessDateOf(venueId)}`;
   if (chipCache.has(key)) return;
   getLedgerGames(venueId, businessDateOf(venueId)).then((g) => { chipCache.set(key, g); }).catch(() => {});
 }
-const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame }: {
+const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
+  /** 🔴 오너 2026-10-01 — 요약·이용권(모바일)의 머리 칸 빈 띠를 '매장 › 날짜(요일) › 오늘 게임' 요약 줄로 채운다.
+   *  문맥 줄 자리·높이를 그대로 쓰고(시작선·구분선 불변), 칩 줄은 게임 단계와 같이 보인다(오너 10-02 결정).
+   *  날짜는 항상 영업일(오늘), 게임 칸은 오늘 게임 수(2개 이상) 또는 그 게임 이름(1개). 조회 전·실패는 같은 높이 자리표시. */
+  summary?: boolean;
   onPick: (seq: number, title?: string) => void;
   /** '+ 새 게임' = 기존 포스터 만들기(포스터 단계 헤더의 '+ 새 게임'과 같은 동작·카피) */
   onNewGame: () => void;
@@ -1421,12 +1526,16 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   // B1 — 칩은 **영업일**의 게임이다(자정 넘긴 토너의 어제 장부). 장부 판 followGame 도 같은 날짜로 간다.
   const biz = useBusinessDate(venueId, active);
   const [games, setGames] = useState<LedgerGame[]>(() => chipCache.get(`${venueId}|${biz}`) ?? []);
+  // 요약 줄 전용 — 목록을 실제로 받은 매장|영업일. 다르면 '조회 전'(자리표시)이다. 'x' 접미사 = 조회 실패.
+  const [gotFor, setGotFor] = useState(() => (chipCache.has(`${venueId}|${biz}`) ? `${venueId}|${biz}` : ''));
   // E(2026-09-28) — 매장·영업일 스탬프: A 매장 칩 응답이 B 로 바꾼 뒤 도착해도 B 칩 바를 덮지 않는다.
   const chipOwner = useRef('');
   chipOwner.current = `${venueId}|${biz}`;
   const reload = useCallback(() => {
     const owner = `${venueId}|${biz}`;
-    getLedgerGames(venueId, biz).then((g) => { chipCache.set(owner, g); if (chipOwner.current === owner) setGames(g); }).catch(() => {});
+    getLedgerGames(venueId, biz)
+      .then((g) => { chipCache.set(owner, g); if (chipOwner.current === owner) { setGames(g); setGotFor(owner); } })
+      .catch(() => { if (chipOwner.current === owner) setGotFor((v) => (v === owner ? v : `${owner}x`)); });
   }, [venueId, biz]);
   // step 은 갱신 트리거 — 장부에서 사이드를 새로 열고 다른 단계로 넘어오면 칩이 따라잡는다
   useEffect(() => { if (active) reload(); }, [active, step, reload]);
@@ -1441,19 +1550,25 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   // 게임: 셸이 아는 이름(포스터 제목/순위 이벤트) → 없으면 오늘 장부 게임 라벨(메인/사이드N + 제목).
   //   장부가 하나도 없는 날에도 '미개설' 같은 단정을 하지 않는다 — 선택된 게임 라벨만 말한다.
   const today = biz;
-  const d = ctxDate ?? today;
+  const d = summary ? today : (ctxDate ?? today);
   const dt = new Date(`${d}T00:00:00`);
   const dLabel = Number.isNaN(dt.getTime()) ? d
     : dt.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + (d === today ? ' · 오늘' : '');
   const cur = games.find((g) => g.gameSeq === current);
   const gLabel = (ctxGame ?? '').trim() || (cur?.title ? `${label(current)} · ${cur.title}` : label(current));
   const sep = <Icon name="chevron-right" size={11} className="shrink-0 text-ink-muted/60" />;
+  // 요약 줄의 게임 칸 — 받은 목록만 말한다. 조회 전(맥박)·실패(정지) 모두 같은 높이의 자리표시라 줄 높이가 바뀌지 않는다(CLS 0).
+  const myKey = `${venueId}|${biz}`;
+  const sumState = gotFor === myKey ? 'ok' : gotFor === `${myKey}x` ? 'fail' : 'loading';
+  const sumLabel = games.length === 0 ? '오늘 게임 없음'
+    : games.length === 1 ? (games[0].title ? `${label(games[0].gameSeq)} · ${games[0].title}` : label(games[0].gameSeq))
+    : `오늘 게임 ${games.length}개`;
   return (
     <div className="space-y-2">
       {/* 스텝 4개(포스터·장부·클락·순위) 공통 위치·공통 문법 — "지금 어느 대회를 만지는 중인가"를
           스텝을 옮겨도 같은 자리에서 계속 읽는다. 각 스텝의 날짜·게임 입력칸은 그대로 정본으로 남는다. */}
-      <p className="flex min-w-0 items-center gap-1 text-2xs">
-        <span className="sr-only">작업 대상 </span>
+      <p data-summary-line={summary ? '' : undefined} className="flex min-w-0 items-center gap-1 whitespace-nowrap text-2xs">
+        <span className="sr-only">{summary ? '오늘 요약 ' : '작업 대상 '}</span>
         <Icon name="store" size={12} className="shrink-0 text-ink-muted" />
         {/* ⚠ 2026-09-14 실측(375, 긴 매장명): 매장명이 폭을 **먼저** 다 먹어 게임명이 17px `메…` 로 소실됐다
             — 이 줄의 존재 이유("지금 어느 게임인가")가 사라지는 정보 소실이다.
@@ -1468,9 +1583,14 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
         {sep}
-        <span className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{gLabel}</span>
+        {!summary ? <span className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{gLabel}</span>
+          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{sumLabel}</span>
+          : <span data-summary-game="" role="img" aria-label={sumState === 'fail' ? '오늘 게임 정보 없음' : '오늘 게임 불러오는 중'}
+              className={['inline-block h-[1em] w-16 shrink-0 rounded-badge bg-surface-high', sumState === 'loading' ? 'animate-pulse' : ''].join(' ')} />}
       </p>
-      {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지) */}
+      {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지).
+          🔴 오너 2026-10-02 결정 「요약에도 오늘 게임 칩 표시」 — 요약 줄 모드(요약·이용권)에서도 같은 자리·같은 모양으로 보인다
+          (종전엔 invisible 로 높이만 예약해 빈 띠였다). 누르면 부모가 준 onPick 이 그 게임을 고른 채 장부로 데려간다. */}
       {games.length > 1 && (
         <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
           <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
