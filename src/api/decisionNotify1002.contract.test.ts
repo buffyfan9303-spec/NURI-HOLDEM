@@ -87,7 +87,7 @@ describe('보안 기본값 — 권한 줄·search_path', () => {
     'admin_decide_venue_event(uuid, boolean, text)', 'admin_decide_voucher_quota(uuid, boolean, text)', 'reject_buyin_request(uuid, text)'];
   for (const sig of rpcs) {
     it(`${sig}: PUBLIC·anon 회수 + authenticated 부여`, () => {
-      const esc = sig.replace(/[()]/g, '\\$&');
+      const esc = sig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       expect(sql).toMatch(new RegExp(`revoke all on function public\\.${esc} from public, anon;`));
       expect(sql).toMatch(new RegExp(`grant execute on function public\\.${esc} to authenticated, service_role;`));
     });
