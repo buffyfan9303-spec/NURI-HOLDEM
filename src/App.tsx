@@ -4765,7 +4765,8 @@ export default function App() {
       </Suspense>
 
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
-      <div className="reveal">
+      {/* data-shell-footer — 판 교체 첫 프레임 동안 tabCover 가 가린다(R-05 뒤로가기 CLS). 렌더·노출 조건은 그대로 — 상시 노출 유지. */}
+      <div className="reveal" data-shell-footer="">
         <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
       </div>
 

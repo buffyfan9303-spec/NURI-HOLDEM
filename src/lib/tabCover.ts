@@ -283,6 +283,16 @@ const visibleFooter = (): { el: HTMLElement; box: Box } | null => {
   const r = el?.getBoundingClientRect();
   return el && r && r.bottom > 0 && r.top < window.innerHeight ? { el, box: boxOf(el) } : null;
 };
+/** R-05(2026-10-01) — 판 교체 프레임 동안 **진짜** 사업자 푸터 래퍼(판 밖 형제 · App `[data-shell-footer]`)를 가린다.
+ *  탭 누름은 `hadRecentInput` 으로 빠지지만 뒤로가기(popstate)는 입력이 아니라, 새 판을 따라 내려간 푸터가 매번 CLS 로 계상됐다
+ *  (390 라이브 뒤로 0.0146 · 1280 0.043~0.064 — 원인 노드 전부 DIV.reveal). 가려진 요소의 이동은 layout-shift 로 세지 않는다
+ *  (Chromium 최소 실험: 같은 이동 0.2456 → visibility:hidden 0). 그 자리는 떠나는 판·푸터 복제본이 덮고 있는 첫 프레임뿐이라 보이는 변화가 없다. */
+const hideShellFooterForSwap = () => {
+  const f = document.querySelector<HTMLElement>('[data-shell-footer]');
+  if (!f) return;
+  f.style.visibility = 'hidden';
+  afterFirstFrame(() => { f.style.visibility = ''; });
+};
 /** 푸터 복제본 — 떠나기 직전 자리를 지킨다. 입력·보조기술·스냅샷 이름에서 뺀다(같은 이름 둘이면 진행 중 View Transition 이 통째로 실패한다). */
 const cloneFooter = (foot: { el: HTMLElement; box: Box }, parent: Node, before: Node | null): HTMLElement => {
   const c = foot.el.cloneNode(true) as HTMLElement;
@@ -366,6 +376,7 @@ export function handOffPane(to: string): void {
   if (!l || l.tab === to || !l.el.isConnected || l.skip) { afterFirstFrame(releaseSwap); return; }
   const el = l.el;
   place(el, l.box);
+  hideShellFooterForSwap();
   // 푸터는 판 밖 형제라 새 판을 따라 내려간다 — 떠나기 직전 자리를 **복제본**이 지킨다(없으면 그 자리가 첫 프레임에 새 판으로 컷된다).
   //   판과 같은 부모(앱 셸) 안에 넣어 같은 쌓임 맥락에 둔다 — body 에 붙이면 헤더·하단바(셸 안 z-50) 위로 올라간다.
   const foot = l.foot?.el.isConnected && el.parentElement ? cloneFooter(l.foot, el.parentElement, el.nextSibling) : null;
@@ -672,6 +683,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     //   fixed 의 기준·쌓임 맥락이 바뀌어 복제본이 엉뚱한 자리·판 복제본 **아래**에 섰다(실측: 545 → 1120).
     const pane = root.closest('.tab-pane');
     const fc = foot?.el.isConnected && pane?.parentElement ? cloneFooter(foot, pane.parentElement, pane.nextSibling) : null;
+    hideShellFooterForSwap(); // R-05 — 하위 판 교체도 같은 이동이다(뒤로가기로 하위 탭이 바뀌는 경로)
     // 레일은 커밋 뒤에도 움직인다(섹션 스크롤 복원 → 헤더 접힘/펼침 → sticky 레일 이동 · 짧아진 문서의 scrollY 깎임) —
     //   복제본(z-35)이 레일(z-30)을 덮지 않게 걷힐 때까지 매 프레임 레일 밑으로 자른다(바뀔 때만 다시 쓴다).
     let lastRb: number | null = null;
