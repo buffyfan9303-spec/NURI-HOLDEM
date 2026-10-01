@@ -432,10 +432,10 @@ describe('변이 전수 — 영향 행수 확인 계약', () => {
     expect(stripComments('/* 블록\n .upsert( \n*/ const b = 2;')).not.toContain('.upsert(');
   });
 
-  it('두 선례가 여전히 확인 경로에 있다 — approveOwner(profiles) · reports.updateReportStatus', () => {
+  it('두 선례가 여전히 확인 경로에 있다 — approveOwner(profiles) · deletePost(community_posts)', () => {
     const keys = sites.filter((s) => s.checked).map((s) => s.key);
     expect(keys).toContain('src/api/auth.ts::approveOwner::update:profiles');
-    expect(keys).toContain('src/api/reports.ts::updateReportStatus::update:reports');
+    // reports.updateReportStatus 는 20261002a 로 없어졌다 — 신고 결정은 RPC admin_decide_report(reportDecide.contract.test.ts).
     expect(keys).toContain('src/api/community.ts::deletePost::delete:community_posts');
   });
 });
