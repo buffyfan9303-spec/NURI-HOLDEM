@@ -14,7 +14,9 @@
 //
 // ── 손익을 어디까지 말하는가 ────────────────────────────────────────────────
 // 상금·인건비·임대료는 장부에 없다. 그래서 여기서 말하는 '손익'은 **기준 엔트리 대비**다:
-//   기준 매출 = 기준 엔트리 × 현금 단가,  차액 = 완납 매출 − 기준 매출.
+//   기준 매출 = 기준 엔트리 × 현금 단가,  차액 = (엔트리 − 기준 엔트리) × 현금 단가.
+//   2026-10-01(Fable 판정 ②) — 차액은 **달성률과 같은 모집단**(금액 엔트리: 이용권·미수·지원·애드온 엔트리 포함)이다.
+//   예전 '완납 매출 − 기준 매출' 은 현금성만 세서 한 카드에 "25% 달성 · −340만"(같은 날 가치 기준 −300만)이 섰다.
 // 이걸 순이익이라 부르지 않는다 — 없는 비용을 아는 척하면 그 숫자로 오판한다.
 import {
   addonEntryOf, addonFinance, buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
@@ -52,8 +54,10 @@ export interface GameSettlement {
    *  '수납 완료 가치' 는 revenue + ticketWon 이다 — 이용권은 바인 가치는 같지만 현금성 매출이 아니다. */
   revenue: number;
   unpaid: number;
-  /** 회수 이용권(원 환산). 1T = 1만원 — 바인 가치는 현금과 같지만 **현금성 수납과는 별도 항목**이다. */
+  /** 회수 이용권(원). 바인 가치는 현금과 같지만 **현금성 수납과는 별도 항목**이다. 장수는 ticketT 다. */
   ticketWon: number;
+  /** 회수 이용권 **장수**(T, 바인만) = Σ buyinFinance.ticketPaid. 원(ticketWon)과 다를 수 있다(12만·N=10 → 10장 · 12만). */
+  ticketT: number;
   /** 가게지원 **건수**(원이 아니다). 지원 금액은 tender.support 에 있다. */
   support: number;
   /** 총 정상가(원) — 할인 전 */
@@ -83,6 +87,9 @@ export interface GameSettlement {
   targetEntries: number;
   /** 기준 매출 = 기준 엔트리 × 현금 단가. targetEntries 가 0 이면 0. */
   targetRevenue: number;
+  /** 기준 대비 차액(원) = (entries − targetEntries) × 현금 단가 — 달성률(entries ÷ targetEntries)과 같은 모집단.
+   *  애드온 엔트리 0 인 날은 value − targetRevenue 와 같다. 합계는 게임별 합이다. */
+  gapWon: number;
   /** 정산에서 빠진 것 — 무엇이 빠졌는지 밝히지 않으면 합계가 거짓말이 된다.
    *  count 는 **횟수**, entries 는 **금액 엔트리**(소수 가능)다. */
   removed: { count: number; entries: number; value: number; revenue: number };
@@ -113,13 +120,13 @@ export interface SettlementReport {
 }
 
 const zeroGame = (): Omit<GameSettlement, 'gameSeq' | 'title' | 'closed'> => ({
-  revenue: 0, unpaid: 0, ticketWon: 0, support: 0, gross: 0, disc: 0, value: 0,
+  revenue: 0, unpaid: 0, ticketWon: 0, ticketT: 0, support: 0, gross: 0, disc: 0, value: 0,
   entries: 0, players: 0, firstBuyins: 0, rebuys: 0, buyinCount: 0,
   tender: { ...ZERO_TENDER },
   discount: { count: 0, total: 0, cashTotal: 0, entryLoss: 0 },
-  targetEntries: 0, targetRevenue: 0,
+  targetEntries: 0, targetRevenue: 0, gapWon: 0,
   removed: { count: 0, entries: 0, value: 0, revenue: 0 },
-  addon: { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: { ...ZERO_TENDER } },
+  addon: { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, ticketT: 0, tender: { ...ZERO_TENDER } },
 });
 
 /**
@@ -151,7 +158,7 @@ export function settlementReceipt(t: Pick<GameSettlement, 'tender' | 'gross' | '
 }
 
 function addAddon(into: AddonFinance, a: AddonFinance): void {
-  into.count += a.count; into.revenue += a.revenue; into.unpaid += a.unpaid; into.ticketWon += a.ticketWon;
+  into.count += a.count; into.revenue += a.revenue; into.unpaid += a.unpaid; into.ticketWon += a.ticketWon; into.ticketT += a.ticketT;
   for (const k of Object.keys(into.tender) as (keyof Tender)[]) into.tender[k] += a.tender[k];
 }
 
@@ -213,6 +220,7 @@ export function settlementReport(
       g.revenue += f.paid;
       g.unpaid += f.unpaid;
       g.ticketWon += f.tender.ticket;
+      g.ticketT += f.ticketPaid;
       g.support += f.support;
       g.gross += f.gross;
       g.disc += f.disc;
@@ -231,6 +239,7 @@ export function settlementReport(
       cur.paid += f.paid + a.revenue; cur.unpaid += f.unpaid + a.unpaid;
       byName.set(b.playerName, cur);
     }
+    g.gapWon = (g.entries - g.targetEntries) * s.buyinAmount;
     g.discount = discountSummary(kept, s);
     // 이 리포트 안의 횟수는 전부 ledgerCounts 로만 센다.
     // ⚠ 클락(deriveClockCounts)은 같은 함수를 쓰지만 **수기 보정(adjEntries)·정산 제외 미적용** 때문에
@@ -239,7 +248,8 @@ export function settlementReport(
     g.players = cnt.players; g.firstBuyins = cnt.firstBuyins; g.rebuys = cnt.rebuys;
     games.push(g);
 
-    total.revenue += g.revenue; total.unpaid += g.unpaid; total.ticketWon += g.ticketWon;
+    total.revenue += g.revenue; total.unpaid += g.unpaid; total.ticketWon += g.ticketWon; total.ticketT += g.ticketT;
+    total.gapWon += g.gapWon;
     total.support += g.support; total.value += g.value; total.entries += g.entries;
     total.gross += g.gross; total.disc += g.disc;
     total.firstBuyins += g.firstBuyins; total.rebuys += g.rebuys;
