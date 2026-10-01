@@ -403,7 +403,7 @@ const BLUFF_4BET = new Set(['A5s', 'A4s', 'A3s', 'A2s']);
 //   (b)가 있어야 목록이 스스로 줄어들고, 데이터를 조용히 바꾼 뮤턴트도 여기서 걸린다.
 const DOMINANCE_EXCEPTIONS: Record<string, string[]> = {
   // 오픈 레인지의 휠 에이스 블러프(A5s~A2s) — A6s~A8s 를 접으면서 이들만 연다
-  rfi_lj: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_hj: ['A5s', 'A4s', 'A3s', 'A2s'],
+  // rfi_lj·rfi_hj(·9인 사본)는 예외 0 — 2026-10-01 에 A6s~A8s 를 솔버대로 열어 역전 자체가 사라졌다.
   rfi_utg9: ['A5s', 'A4s'], rfi_utg1: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_mp9: ['A5s', 'A4s', 'A3s'],
   rfi_sb: ['A5o'],
   // 3벳 블러프
@@ -420,7 +420,7 @@ const DOMINANCE_EXCEPTIONS: Record<string, string[]> = {
   co_vs_sb3bet: ['A5s'], hj_vs_bb3bet: ['A5s'], hj_vs_btn3bet: ['A5s', 'A4s'],
   // bb_vs_* 는 예외 0 — BB 는 3벳 혼합의 잔여를 전부 콜로 받아 continue 가 100% 다.
   // ── 9인 보강(2026-09-02) — 9인 오픈 후기 5자리는 6맥스 표를 공유하므로 예외도 같다
-  rfi_lj9: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_hj9: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_sb9: ['A5o'],
+  rfi_sb9: ['A5o'],
   // 3벳 vs 얼리 — 블러프 휠 에이스(A6s~ 는 접는다). wide 0 = A5s A4s · wide 1/2 = +A3s
   utg1_3bet_utg: ['A5s', 'A4s'], mp_3bet_utg: ['A5s', 'A4s'], lj_3bet_utg: ['A5s', 'A4s'], hj_3bet_utg: ['A5s', 'A4s'],
   co_3bet_utg: ['A5s', 'A4s', 'A3s'], btn_3bet_utg: ['A5s', 'A4s', 'A3s'],
@@ -542,10 +542,11 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
       ['co_vs_btn3bet', 'call', 8.52], ['btn_vs_sb3bet', 'call', 9.28], ['btn_vs_bb3bet', 'call', 10.33],
       // 기존 표지만 ⑥(핸드 단위 단조성 역전) 수정으로 콜이 넓어진 노드
       ['sb_vs_btn', 'call', 9.2],
-      // 🔴 BB 수비 다섯 표 — 3벳 혼합의 잔여를 콜로 받는 규약 복구(예전엔 잔여가 통째로 비어
-      //    QJs 가 Q9s 보다, JJ 가 77 보다 덜 수비하는 도미네이션 역전이 있었다)
-      ['bb_vs_lj', 'call', 18.36], ['bb_vs_hj', 'call', 20.02], ['bb_vs_co', 'call', 22.10],
-      ['bb_vs_btn', 'call', 33.48], ['bb_vs_sb', 'call', 29.22],
+      // 🔴 BB 수비 다섯 표 — 2026-10-01 BeyondGTO 솔버 빈도(0.25 단위 반올림)로 재작성한 값으로 **대체**했다.
+      //    (예전 값 18.36 · 20.02 · 22.10 · 33.48 · 29.22 는 솔버보다 좁은 자체 제작 표의 값이었다.
+      //     출처 대비 ±1%p 는 아래 '온라인 대조 2차' describe 가 따로 잠근다.)
+      ['bb_vs_lj', 'call', 21.27], ['bb_vs_hj', 'call', 23.45], ['bb_vs_co', 'call', 26.70],
+      ['bb_vs_btn', 'call', 32.39], ['bb_vs_sb', 'call', 38.73],
       // KQo 누락(KJo 절반 3벳이 KQo 0% 를 지배) 보강
       ['btn_3bet_co', 'raise', 7.84],
     ];
@@ -689,5 +690,67 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
     // preflopQuiz RFI_LIST — 확장이 트레이너 출제 분포를 흔들지 않았는지(6맥스 5 + 9인 8 · 2026-09-02 후반 5 추가)
     expect(RANGE_SCENARIOS.filter((s) => s.group === 'rfi6')).toHaveLength(5);
     expect(RANGE_SCENARIOS.filter((s) => s.group === 'rfi9')).toHaveLength(8);
+  });
+});
+
+// ── 온라인 대조 2차(2026-10-01) — '틀림' 판정 표를 출처에 맞춘 뒤 다시 어긋나지 않게 잠근다 ──────────
+// 기준: BeyondGTO 공개 차트(6-max cash NL500 · 100bb · 오픈 2.5bb / SB 3bb) 의 핸드별 빈도를 콤보 가중한 % .
+//   https://beyondgto.com/ranges · https://beyondgto.com/defense (2026-10-01 재수집 값)
+// 앱 표는 0.25 단위 반올림이라 정확히 같을 수 없다 — 허용폭 ±1%p.
+describe('🔴 온라인 대조 2차 — 솔버 기준 표(6인 오픈 LJ~BTN · BB 수비 5표)', () => {
+  const byId = (id: string) => RANGE_SCENARIOS.find((s) => s.id === id)!;
+  const freq = (id: string, key: string) => buildFreq(byId(id).actions.find((a) => a.key === key)!.spec);
+  const cont = (id: string) => {
+    const m = new Map<string, number>();
+    for (const a of byId(id).actions) for (const [n, f] of buildFreq(a.spec)) m.set(n, (m.get(n) ?? 0) + f);
+    return m;
+  };
+  const SOURCE_PCT: [string, string, number][] = [
+    ['rfi_lj', 'raise', 17.17], ['rfi_hj', 'raise', 21.64], ['rfi_co', 'raise', 28.36], ['rfi_btn', 'raise', 42.37],
+    ['bb_vs_lj', 'raise', 6.05], ['bb_vs_lj', 'call', 21.46],
+    ['bb_vs_hj', 'raise', 7.52], ['bb_vs_hj', 'call', 23.06],
+    ['bb_vs_co', 'raise', 10.39], ['bb_vs_co', 'call', 26.32],
+    ['bb_vs_btn', 'raise', 13.37], ['bb_vs_btn', 'call', 31.75],
+    ['bb_vs_sb', 'raise', 16.88], ['bb_vs_sb', 'call', 38.66],
+  ];
+  it.each(SOURCE_PCT)('%s:%s 범위가 출처 ±1 퍼센트포인트 안 (출처 %s)', (id, key, want) => {
+    const got = rangeComboPct(freq(id, key));
+    expect(Math.abs(got - want), `${id}:${key} ${got.toFixed(2)}% vs 출처 ${want}%`).toBeLessThanOrEqual(1);
+  });
+
+  it('경계 핸드 — 출처 둘 이상이 같은 방향인 칸', () => {
+    const lj = freq('rfi_lj', 'raise'), hj = freq('rfi_hj', 'raise'), co = freq('rfi_co', 'raise'), btn = freq('rfi_btn', 'raise');
+    // LJ: A6s~A8s 는 연다(예전 0% — 드릴이 'LJ A7s 폴드' 를 정답으로 채점했다)
+    for (const h of ['A6s', 'A7s', 'A8s']) expect(lj.get(h), `LJ ${h} 오픈`).toBe(1);
+    // HJ: K7s 오픈 · CO: K4s·Q7s 오픈, Q9o 폴드
+    expect(hj.get('K7s'), 'HJ K7s 오픈').toBe(1);
+    expect(co.get('K4s'), 'CO K4s 오픈').toBe(1);
+    expect(co.get('Q7s'), 'CO Q7s 오픈').toBe(1);
+    expect(co.has('Q9o'), 'CO Q9o 는 폴드').toBe(false);
+    // BTN: 수딧 하단은 열고 오프수트 하단은 접는다
+    expect(btn.get('Q3s'), 'BTN Q3s 오픈').toBe(1);
+    expect(btn.get('Q2s') ?? 0, 'BTN Q2s 오픈(혼합)').toBeGreaterThan(0);
+    for (const h of ['76o', '87o', '97o', 'T7o', 'Q8o', 'A2o', '74s', '43s']) expect(btn.has(h), `BTN ${h} 는 폴드`).toBe(false);
+    // 9인 그룹의 같은 자리 표도 같은 값이어야 한다(스펙 공유)
+    for (const [six, nine] of [['rfi_lj', 'rfi_lj9'], ['rfi_btn', 'rfi_btn9']]) {
+      expect([...freq(nine, 'raise')].sort(), `${nine} ≠ ${six}`).toEqual([...freq(six, 'raise')].sort());
+    }
+  });
+
+  it('BB 수비 — 수딧 하단을 통째로 접던 구멍(vs SB·BTN·CO 의 K2s·Q2s) · 3벳 폭', () => {
+    for (const id of ['bb_vs_sb', 'bb_vs_btn', 'bb_vs_co']) {
+      for (const h of ['K2s', 'Q2s']) expect(cont(id).get(h) ?? 0, `${id} ${h} 수비`).toBeGreaterThan(0);
+    }
+    expect(cont('bb_vs_sb').get('J2s') ?? 0, 'bb_vs_sb J2s 수비').toBeGreaterThan(0);
+    // 3벳: vs BTN 12% 이상(deepfold ~12% · 솔버 13.4%) · vs SB 15% 이상(deepfold ~17% · 솔버 16.9%)
+    expect(rangeComboPct(freq('bb_vs_btn', 'raise'))).toBeGreaterThan(12);
+    expect(rangeComboPct(freq('bb_vs_sb', 'raise'))).toBeGreaterThan(15);
+    // BB vs BTN A2o 는 폴드(솔버 0 — 예전 표는 50% 콜)
+    expect(cont('bb_vs_btn').has('A2o'), 'bb_vs_btn A2o 폴드').toBe(false);
+  });
+
+  it('SB vs BTN 메모가 표와 모순되지 않는다 — 같은 스팟 수비 표에 콜이 있으면 "3벳 아니면 폴드" 라고 쓰지 않는다', () => {
+    expect(rangeComboPct(freq('sb_vs_btn', 'call'))).toBeGreaterThan(0);
+    expect(byId('sb_3bet_btn').note ?? '').not.toMatch(/3벳 아니면 폴드/);
   });
 });

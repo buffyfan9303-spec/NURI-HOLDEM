@@ -138,6 +138,12 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
         )}
       </div>
       <p className="text-2xs text-ink-muted">{scen.desc}</p>
+      {/* 표의 전제(온라인 대조 2차 G8, 2026-10-01) — 출처 솔버(BeyondGTO 6-max cash · 100bb · 2.5bb 오픈 / SB 3bb)와 같은 조건을
+          한 줄로 적는다. BB 수비 폭은 오픈 크기·레이크로 크게 바뀌어서, 전제가 안 보이면 다른 차트와 비교할 수가 없다.
+          한 줄 고정(nowrap) — 시나리오를 바꿔도 줄 수가 변하지 않아 카드 높이가 튀지 않는다. */}
+      <p data-testid="range-premise" className="whitespace-nowrap text-2xs text-ink-muted">
+        {scen.baseTableSize === 9 || scen.group === 'rfi9' ? '9인' : '6인'} · 100bb · 캐시 · 오픈 2.5bb (SB 3bb)
+      </p>
 
       {/* 출처는 결과 **바로 옆**에 붙인다 — 하단 ※ 고지는 스크롤 밖이라 읽히지 않았다(2026-09-11). */}
       <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
@@ -147,7 +153,8 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
         <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/6 border border-accent-400/20 px-2 py-1.5"><Icon name="target" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />{scen.note}</p>
       )}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 100bb 기준 자체 제작 표준 차트(학습용). %는 1326콤보 가중 — 실제 참여율 감각과 일치합니다.
+        ※ 6인 오픈(LJ~BTN)과 BB 수비는 공개 솔버 빈도(BeyondGTO · NL500)를 25% 단위로 반올림했고, 나머지 표는 자체 제작(학습용)입니다.
+        %는 1326콤보 가중 — 실제 참여율 감각과 일치합니다.
         숏스택(≤15bb)은 <b>푸시·폴드 차트</b>를 쓰세요.
       </p>
     </CalcCard>

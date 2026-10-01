@@ -82,10 +82,11 @@ describe('chart_nash — 검증된 표와 정확히 일치할 때만', () => {
   });
 
   it('BB 수비 — 상대 오픈 하나만 앞에 있으면 3벳·콜 갈래가 함께 나온다', () => {
-    // T9s 는 bb_vs_btn 표에서 3벳 25% 로 갈리는 핸드다(나머지는 콜·폴드) — 두 갈래를 함께 보려면 이런 핸드여야 한다.
+    // T8s 는 bb_vs_btn 표에서 3벳 75% · 콜 25% 로 갈리는 핸드다 — 두 갈래를 함께 보려면 이런 핸드여야 한다.
     // AKs 처럼 순수 3벳인 핸드를 고르면 call 이 0 이라 '콜 갈래가 있다' 를 증명하지 못한다.
+    // (2026-10-01 대체: 예전 입력 T9s 는 표를 솔버 빈도로 다시 만들며 순수 3벳 100% 가 됐다 — 단언은 그대로, 입력 핸드만 바꿨다.)
     const e = evaluateSpot(base({
-      tableSize: 6, heroPos: 'BB', villainPos: 'BTN', effectiveBb: 100, hero: ['Ts', '9s'],
+      tableSize: 6, heroPos: 'BB', villainPos: 'BTN', effectiveBb: 100, hero: ['Ts', '8s'],
       actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }],
     }));
     expect(e.kind).toBe('chart_nash');

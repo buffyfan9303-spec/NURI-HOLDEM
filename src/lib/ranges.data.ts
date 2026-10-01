@@ -1,6 +1,19 @@
-// 표준 프리플랍 레인지 차트 — 100bb 기준, 자체 제작(통설 합의 수치 기반, 학습용).
-// 어떤 상용 솔버/사이트의 표도 복제하지 않았다. 빈도(1/0.5/0.25)는 혼합전략의 학습용 단순화다.
+// 표준 프리플랍 레인지 차트 — 100bb 기준, 학습용.
 // 콤보 가중 %(1326 기준)가 각 차트 헤더에 표시된다 — 셀 수 %가 아니라 실제 VPIP 감각.
+//
+// ── 근거와 전제(2026-10-01 오너 승인 · 온라인 대조 2차 'gto-online-audit2-1001' 의 '틀림' 항목 수정) ──
+//   기준 출처: BeyondGTO 공개 차트(Crafty Penguin GTO solver · 6-max cash NL500 · 100bb ·
+//     오픈 2.5bb, SB 오픈 3bb) — https://beyondgto.com/ranges · https://beyondgto.com/defense
+//     (페이지의 핸드별 빈도를 2026-10-01 에 다시 읽어 확인. 값을 옮겨 적은 표가 아니라 근거 링크다.)
+//   교차 확인: PokerCoaching 6-max cash 100bb 오픈 목록(https://pokercoaching.com/preflop-charts/)
+//     · deepfold 3벳 가이드(https://deepfold.co/en/blog/three-bet-strategy-guide, BB 3벳 vs BTN ~12% · vs SB ~17%).
+//   이 출처로 고친 표: 6인 오픈 LJ·HJ·CO·BTN 의 경계 핸드(감사 A1~A4) · BB 수비 5표 전체(B1~B5).
+//     그 밖의 표(SB 오픈·SB 수비·3벳·vs 3벳·9인 얼리)는 같은 전제의 두 번째 1차 자료가 없어 **예전 자체 제작 값 그대로**다.
+//   🔢 반올림 규칙: 솔버 빈도를 앱의 표현 단위(0 · 0.25 · 0.5 · 0.75 · 1)에서 **가장 가까운 칸**으로 반올림한다
+//     (x.125 처럼 정확히 가운데면 위로). BB 수비는 '3벳'과 '3벳+콜(수비합)'을 각각 반올림하고 콜 = 수비합 − 3벳.
+//     수비합은 반올림 전에 같은 하이카드·같은 유형(수딧/오프)의 키커 사슬마다 비증가가 되도록 평균으로 누른다(PAV) —
+//     솔버 원값엔 'vs CO A7o 4% < A5o 56%' 같은 역전이 있는데, ranges.test.ts 의 도미네이션 단조성 계약을 지키려고
+//     콤보 편차가 가장 작은 쪽으로 편다. 표마다 범위 % 는 출처 대비 ±1%p 안이다(테스트가 잠근다).
 import type { RangeSpec } from './ranges';
 
 /** 액션 색 — 독자 팔레트(공격=앱 인디고, 콜=에메랄드, 4벳=바이올렛, 폴드=무채).
@@ -61,32 +74,41 @@ const RFI6: RangeScenario[] = [
   {
     id: 'rfi_lj', group: 'rfi6', hero: 'LJ', label: 'LJ (UTG)', desc: '6맥스 첫 포지션 · 앞에 아무도 없을 때 오픈 레이즈',
     actions: [{ key: 'raise', label: '오픈', spec: {
-      '1': '55+ A9s+ A5s A4s KTs+ QTs+ JTs T9s 98s ATo+ KQo',
+      // A6s~A8s 는 예전에 0%(폴드)였다 — A5s·A4s 는 100% 여는데 그 위 키커를 접는 표였다.
+      //   BeyondGTO 100% · PokerCoaching A3s+ · GTO Gecko A2s+ 셋 다 연다(2026-10-01 수정).
+      '1': '55+ A6s+ A5s A4s KTs+ QTs+ JTs T9s 98s ATo+ KQo',
       '0.5': '44 33 22 A3s A2s K9s Q9s J9s 87s 76s KJo',
     } }],
-    note: '뒤에 5명. 가장 타이트하게. 수딧 커넥터 하단·낮은 페어는 절반 빈도.',
+    note: '뒤에 5명. 가장 타이트하게. 수딧 에이스는 A6s~A8s 까지 다 열고, 수딧 커넥터 하단·낮은 페어는 절반 빈도.',
   },
   {
     id: 'rfi_hj', group: 'rfi6', hero: 'HJ', label: 'HJ', desc: '하이잭 오픈 레이즈',
     actions: [{ key: 'raise', label: '오픈', spec: {
-      '1': '44+ A7s+ A5s-A2s K9s+ Q9s+ J9s+ T9s 98s 87s ATo+ KJo+ QJo',
-      '0.5': '33 22 A6s K8s Q8s T8s 76s 65s A9o KTo',
+      // K8s·K7s·A6s 100% · K6s 절반(BeyondGTO K8s·K7s·A6s 100%, K6s 60% / PokerCoaching K6s+). 예전엔 K7s·K6s 0%.
+      '1': '44+ A2s+ K7s+ Q9s+ J9s+ T9s 98s 87s ATo+ KJo+ QJo',
+      '0.5': '33 22 K6s Q8s T8s 76s 65s A9o KTo',
     } }],
   },
   {
     id: 'rfi_co', group: 'rfi6', hero: 'CO', label: 'CO', desc: '컷오프 오픈 레이즈',
     actions: [{ key: 'raise', label: '오픈', spec: {
-      '1': '22+ A2s+ K8s+ Q9s+ J9s+ T8s+ 97s+ 87s 76s 65s A9o+ KTo+ QTo+ JTo',
-      '0.5': 'K7s K6s K5s Q8s J8s 54s A8o A7o K9o Q9o T9o',
+      // K4s~K7s·Q7s·Q8s·J8s 100%, Q9o 폴드(BeyondGTO 전부 100% / Q9o 0 · PokerCoaching K3s+ Q6s+ J8s+ QTo+).
+      //   예전엔 수딧 K4s·Q7s 를 접고 오프수트 Q9o 를 절반 여는 거꾸로 된 경계였다.
+      '1': '22+ A2s+ K4s+ Q7s+ J8s+ T8s+ 97s+ 87s 76s 65s A9o+ KTo+ QTo+ JTo',
+      '0.5': '54s A8o A7o K9o T9o',
     } }],
   },
   {
     id: 'rfi_btn', group: 'rfi6', hero: 'BTN', label: 'BTN', desc: '버튼 오픈 레이즈. 가장 넓다',
     actions: [{ key: 'raise', label: '오픈', spec: {
-      '1': '22+ A2s+ K4s+ Q6s+ J7s+ T7s+ 97s+ 86s+ 75s+ 65s 54s A4o+ K9o+ Q9o+ J9o+ T8o+ 98o',
-      '0.5': 'K3s K2s Q5s Q4s J6s J5s T6s 96s 85s 74s 64s 53s 43s A3o A2o K8o Q8o J8o T7o 97o 87o 76o',
+      // 2026-10-01 경계 수정 — 오프수트 하단(76o·87o·97o·T7o·Q8o·A2o)과 74s·43s 는 폴드, 수딧 하단(K2s·K3s·Q3s~Q5s·
+      //   J5s·J6s·T6s·96s)은 100%. BeyondGTO·PokerCoaching·Preflop Wizard 가 같은 방향이다. 예전 표는 % 는 비슷했지만
+      //   오프수트 쓰레기를 반쯤 열고 수딧을 접는 구성이었다. Q2s 는 BeyondGTO 70% → 0.75(PokerCoaching 은 Q3s 에서 끊는다).
+      '1': '22+ A2s+ K2s+ Q3s+ J5s+ T6s+ 96s+ 86s+ 75s+ 65s 54s A4o+ K9o+ Q9o+ J9o+ T8o+ 98o',
+      '0.75': 'Q2s',
+      '0.5': '85s 64s 53s A3o K8o J8o',
     } }],
-    note: '뒤에 블라인드 둘뿐. 포지션 우위로 절반은 “아무거나 그럴듯한” 핸드까지 연다.',
+    note: '뒤에 블라인드 둘뿐. 수딧은 Q2s·J5s·T6s 까지 넓게 열고, 오프수트는 98o·T8o·J9o·Q9o·K9o·A4o 위까지만 연다. 오프수트 하단(87o·76o 류)은 수딧보다 실현이 나빠 접는다.',
   },
   {
     id: 'rfi_sb', group: 'rfi6', hero: 'SB', label: 'SB', desc: '스몰블라인드 레이즈 퍼스트 인',
@@ -128,103 +150,108 @@ const RFI9: RangeScenario[] = [
 ];
 
 // ── 블라인드 수비 ───────────────────────────────────────────────
-// 오픈 포지션이 뒤로 갈수록(LJ→BTN) 상대 오픈이 넓어지므로 BB 의 수비도 넓어진다.
-// 3벳은 밸류(프리미엄) + 블러프(A5s류 블로커·수딧갭)의 양극(폴라) 구조. 오프수트 블로커까지 넣어
-// 콤보 가중 %가 통설(BB vs BTN ≈ 10~12%)에 닿게 한다 — 예전 5.5% 는 블러프를 수딧만 넣어 얇았다.
+// 오픈 포지션이 뒤로 갈수록(LJ→BTN→SB) 상대 오픈이 넓어지므로 BB 의 수비도 넓어진다.
 //
-// 🔒 BB 표의 잔여 규약(2026-08-30) — **3벳 혼합의 잔여 빈도는 전부 콜이다.**
-//   vs 3벳 그룹과 달리 여기엔 '잔여 폴드' 가 없다: BB 는 이미 1bb 를 넣어 팟오즈가 좋고,
-//   3벳에 넣을 만한 핸드는 예외 없이 콜 임계 위에 있다. 그래서 3벳 '0.5' 는 콜 '0.5' 로,
-//   3벳 '0.25' 는 콜 '0.75' 로 받아 continue 를 100% 로 채운다.
-//   예전엔 그 잔여가 통째로 비어 있었다 — QJs 가 3벳 0.25 뒤 폴드로 끝나 Q9s(콜 100%)보다
-//   덜 수비하고, JJ·TT 가 50% 인데 77 은 100% 인 도미네이션 역전이 다섯 표 전부에 있었다.
-//   ranges.test.ts 의 도미네이션 단조성이 이 구멍을 잠근다.
+// 🔄 BB 수비 5표(bb_vs_lj·hj·co·btn·sb)는 2026-10-01 에 **BeyondGTO 솔버 빈도로 다시 만들었다**(파일 머리의 반올림 규칙).
+//   예전 자체 제작 표는 다섯 표 모두 레이크가 있는 NL500 솔버보다도 좁았다 — 특히 vs SB 41.2% 대 55.5%,
+//   vs BTN 3벳 9.4% 대 13.4%. 수딧 하단(K2s·Q2s·J2s 류)을 통째로 접는 표였다.
+//   예전 규약 "3벳 혼합의 잔여는 전부 콜(continue 100%)" 은 솔버와 맞지 않아 내려놓았다 — 솔버는 K7o 같은
+//   하단 오프수트를 3벳 일부·콜 일부·폴드 일부로 섞는다. 대신 지배하는 핸드가 덜 수비하지 않는다는
+//   도미네이션 단조성(ranges.test.ts)은 그대로 지킨다(반올림 전 PAV 로 편다).
+//   혼합 핸드가 많아 스펙이 핸드 이름 나열이다 — 한 칸씩 손으로 고치지 말고 출처 빈도에 파일 머리의 반올림 규칙을
+//   다시 적용해 통째로 만든다. 결과 % 는 ranges.test.ts 가 출처 ±1%p 로 잠근다.
 const DEFEND: RangeScenario[] = [
   {
     id: 'bb_vs_lj', group: 'defend', hero: 'BB', vs: 'LJ', label: 'BB vs LJ 오픈', desc: 'LJ(UTG)가 2.5bb 오픈 · 얼리 오픈은 강해서 타이트하게 수비',
     actions: [
       { key: 'raise', label: '3벳', spec: {
-        '1': 'QQ+ AKs AKo AQs',
-        '0.5': 'JJ TT AJs KQs A5s A4s KJo AQo',
-        '0.25': '99 KJs A3s A2s',
+        '1': 'AA AKs AQs ATs KK KQs KJs QQ QJs',
+        '0.75': 'AJs',
+        '0.5': 'AKo A5s KTs JJ JTs T9s',
+        '0.25': 'A9s A8s A7s A4s K9s QTs TT T8s 99 98s 88 87s 77 76s 65s 54s',
       } },
       { key: 'call', label: '콜', spec: {
-        '1': 'AJo ATs ATo A9s A8s A7s A6s KQo KTs QJs QJo QTs JTs JTo J9s T9s 98s 88 87s 77 76s 66 65s 55 54s 44 33 22',
-        // 3벳 혼합의 잔여는 전부 여기로 — BB 는 이미 1bb 를 넣어 팟오즈가 좋고, 3벳 레인지 전체가 콜 임계 위다.
-        '0.75': '99 KJs A3s A2s',
-        '0.5': 'JJ TT AJs KQs A5s A4s KJo AQo KTo K9s K8s QTo Q9s Q8s J8s T9o T8s 97s 86s 75s 64s',
+        '1': 'AQo AJo ATo A6s A3s A2s KQo K8s K7s K6s K5s K4s Q9s Q8s Q7s J9s J8s T7s 97s 96s 86s 85s 75s 66 64s 55 53s 44 43s 33 22',
+        '0.75': 'A9s A8s A7s A4s KJo K9s K3s QJo QTs JTo TT T8s 99 98s 88 87s 77 76s 65s 54s',
+        '0.5': 'AKo A5s KTs JJ JTs J7s T9s',
+        '0.25': 'AJs KTo QTo Q6s Q5s T9o 74s',
       } },
     ],
-    note: '얼리 포지션 오픈 레인지는 강하다. 3벳은 프리미엄 위주(5.2%), 콜은 뒤로 잘 놀 수 있는 수딧·페어 중심. 총 수비 23.5%. JJ·TT·AJs·KQs 는 3벳 절반 + 콜 절반, 99·KJs 는 3벳 1/4 + 콜 3/4 로 컨티뉴 100% 를 채운다.',
+    note: '얼리 포지션 오픈은 강하다. 3벳은 프리미엄 + 수딧 브로드웨이(6.0%), 콜은 수딧 K·Q 하단과 페어·커넥터까지(21.3%). 총 수비 27.3%(솔버 27.5%). 오프수트는 AT·KQ 위 정도만 남긴다.',
   },
   {
     id: 'bb_vs_hj', group: 'defend', hero: 'BB', vs: 'HJ', label: 'BB vs HJ 오픈', desc: '하이잭이 2.5bb 오픈 · 조금 더 넓게 수비',
     actions: [
       { key: 'raise', label: '3벳', spec: {
-        '1': 'QQ+ AKs AKo AQs A5s',
-        '0.5': 'JJ TT AJs KQs KJs A4s A3s A2s KJo AQo',
-        '0.25': '99 KTs QJs A9o',
+        '1': 'AA AKs AQs ATs KK KQs KJs QQ QJs',
+        '0.75': 'AKo A9s KTs QTs JTs',
+        '0.5': 'AJs A5s JJ TT T9s',
+        '0.25': 'A8s A7s A6s A4s K7s Q9s Q8s J9s 99 98s 88 87s 86s 77 76s 66 65s 54s',
       } },
       { key: 'call', label: '콜', spec: {
-        '1': 'AJo ATs ATo A9s A8s A7s A6s KQo K9s QJo QTs Q9s JTs JTo J9s T9s 98s 88 87s 77 76s 66 65s 55 54s 44 33 22',
-        '0.75': '99 KTs QJs A9o',
-        // JTo 는 위 '1' 목록에 이미 있다(형제 표 bb_vs_lj·co·btn·sb 와 같이 100% 콜). 여기 중복돼 있던 것을 뺐다(감사 2026-09-19) —
-        // buildFreq 가 첫 지정을 우선해 계산값은 원래 100% 였고, 소스의 모순만 지운 것이다.
-        '0.5': 'JJ TT AJs KQs KJs A4s A3s A2s KJo AQo KTo K8s K7s QTo Q9o Q8s J8s T9o T8s 98o 97s 86s 75s 64s 53s',
+        '1': 'AQo AJo ATo A3s A2s KQo KJo K9s K8s K6s K5s K4s K3s QJo Q7s Q6s J8s J7s T8s T7s 97s 96s 85s 75s 64s 55 53s 44 43s 33 22',
+        '0.75': 'A8s A7s A6s A4s K7s K2s Q9s Q8s Q5s JTo J9s 99 98s 88 87s 86s 77 76s 74s 66 65s 54s',
+        '0.5': 'AJs A9o A5s KTo QTo Q4s JJ TT T9s T9o 63s 52s',
+        '0.25': 'AKo A9s KTs QTs JTs 98o 95s',
       } },
     ],
-    note: 'HJ 오픈은 LJ보다 약간 넓다. 3벳에 A5s~A2s 블러프를 더하고 콜 레인지도 확장(총 수비 25.9%). 3벳 혼합의 잔여는 전부 콜이라 QJs·KTs·A9o 도 컨티뉴 100% 다.',
+    note: 'HJ 오픈은 LJ보다 넓어 수비도 넓어진다. 3벳 7.2% + 콜 23.5% = 총 30.6%(솔버 30.6%). 수딧 K 는 K2s 까지, 수딧 Q 는 Q4s 까지 내려가 수비한다.',
   },
   {
     id: 'bb_vs_co', group: 'defend', hero: 'BB', vs: 'CO', label: 'BB vs CO 오픈', desc: '컷오프가 2.5bb 오픈 · 넓은 오픈이라 넓게 수비',
     actions: [
       { key: 'raise', label: '3벳', spec: {
-        '1': 'QQ+ AKs AKo AQs A5s A4s',
-        '0.5': 'JJ TT AJs KQs KJs A3s A2s AQo AJo ATo KJo A9o',
-        '0.25': '99 88 ATs KTs K9s QJs QTs JTs T9s 98s A8o A7o',
+        '1': 'AA AKs AKo AQs AJs A5s KK KQs KJs KTs QQ QJs QTs JJ JTs T9s',
+        '0.75': 'A9s A8s TT 65s',
+        '0.5': 'A7s K9s 99 98s 87s 76s 54s',
+        '0.25': 'AQo ATs A6s A4s A2s K7s K6s K5s QJo Q9s Q8s Q5s J9s J8s J7s T7s 97s 88 86s 77 66',
       } },
       { key: 'call', label: '콜', spec: {
-        '1': 'A9s A8s A7s A6s KQo QJo Q9s JTo J9s T9o T8s 97s 87s 77 76s 66 65s 55 54s 44 33 22',
-        '0.75': '99 88 ATs KTs K9s QJs QTs JTs T9s 98s A8o A7o',
-        '0.5': 'JJ TT AJs KQs KJs A3s A2s AQo AJo ATo KJo A9o KTo K8s K7s K6s QTo Q9o Q8s Q7s J9o J8s J7s T7s 98o 96s 87o 86s 75s 64s 53s 43s',
+        '1': 'AJo ATo A9o A3s KQo KJo KTo K8s K4s K3s K2s QTo Q7s Q6s Q4s Q3s Q2s JTo J6s T8s 96s 95s 85s 75s 74s 64s 63s 55 53s 52s 44 43s 33 22',
+        '0.75': 'AQo ATs A6s A4s A2s K7s K6s K5s QJo Q9s Q8s Q5s J9s J8s J7s J5s J4s T9o T7s T6s 97s 88 86s 77 66',
+        '0.5': 'A8o A7s K9s 99 98s 98o 87s 76s 54s 42s',
+        // A7o·A6o·A5o 는 솔버 원값(4% · 0% · 56%)이 키커 순서와 거꾸로라 사슬 평균(20%)으로 눌러 0.25 로 맞췄다.
+        '0.25': 'A9s A8s A7o A6o A5o TT 87o 76o 65s',
       } },
     ],
-    note: 'CO 오픈은 꽤 넓어(≈27%) BB 가 폴라 3벳(8.2%)을 늘리고 콜도 크게 벌린다. 총 수비 30.3%.',
+    note: 'CO 오픈은 꽤 넓어(≈28%) BB 가 3벳(10.2%)을 늘리고 수딧은 K2s·Q2s 까지 콜한다. 총 수비 36.9%(솔버 36.7%). 오프수트 에이스는 A9o 까지만 확실히 수비하고 A8o 아래는 섞거나 접는다.',
   },
   {
     id: 'bb_vs_btn', group: 'defend', hero: 'BB', vs: 'BTN', label: 'BB vs BTN 오픈', desc: '버튼이 2.5bb 오픈 · 가장 넓은 오픈, 가장 넓은 수비',
     actions: [
       { key: 'raise', label: '3벳', spec: {
-        '1': 'QQ+ AKs AKo AQs AJs KQs',
-        '0.5': 'JJ TT 99 88 ATs KJs KTs A5s A4s A3s A2s AQo AJo ATo A9o A8o A7o',
-        '0.25': 'K9s K8s QJs QTs JTs T9s 98s 87s 76s 65s A6o A5o',
+        '1': 'AA AKs AKo AQs AJs A7s A5s KK KQs KJs KTs QQ QJs QTs JJ JTs J9s TT T9s 98s',
+        '0.75': 'ATs A4s K9s Q9s T8s 87s 76s 54s',
+        '0.5': 'AQo A8s A3s KQo K8s Q8s 99 88 65s',
+        '0.25': 'AJo A6s KJo K7s K6s K5s J8s J7s J5s T7s T6s 97s 96s 77 75s 66 55',
       } },
       { key: 'call', label: '콜', spec: {
-        // 3벳에 들어간 핸드는 콜에서 나머지 빈도만(합계 ≤ 1 — 테스트로 보증).
-        // (2026-08-30) 예전엔 그 '나머지'가 아예 비어 있었다 — QJs·T9s 가 3벳 0.25 뒤 폴드로 끝나
-        // Q9s·T8s(콜 100%)보다 덜 수비하는 도미네이션 역전. KQo 는 표에서 통째로 빠져 있었다.
-        '1': 'KQo A9s A8s A7s A6s KJo KTo K7s K6s K5s QJo QTo Q9s Q8s Q7s Q6s JTo J9s J8s J7s T9o T8s T7s 98o 97s 96s 86s 85s 77 75s 74s 66 64s 55 54s 53s 44 43s 33 22',
-        '0.75': 'K9s K8s QJs QTs JTs T9s 98s 87s 76s 65s A6o A5o',
-        '0.5': 'JJ TT 99 88 ATs KJs KTs A5s A4s A3s A2s AQo AJo ATo A9o A8o A7o A4o A3o A2o K9o K8o K4s Q9o Q8o Q5s J9o J8o J6s T8o T6s 97o 87o 76o 65o 63s 52s 42s',
+        '1': 'ATo A9s A9o A8o A7o A2s KTo K9o K4s K3s K2s QJo QTo Q7s Q6s Q5s Q4s Q3s Q2s JTo J9o J6s J4s J3s J2s T9o T5s 95s 86s 85s 74s 64s 63s 53s 52s 44 43s 42s 33 22',
+        // A6o·A5o·A4o 는 솔버 원값(31% · 100% · 69%)이 키커 순서와 거꾸로라 사슬 평균(67%)으로 눌러 0.75 로 맞췄다.
+        '0.75': 'AJo A6s A6o A5o A4o KJo K7s K6s K5s Q9o J8s J7s J5s T7s T6s 97s 96s 77 75s 66 55 32s',
+        '0.5': 'AQo A8s A3s KQo K8s Q8s T8o 99 98o 88 87o 76o 65s',
+        '0.25': 'ATs A4s K9s K8o Q9s T8s T4s T3s 87s 84s 76s 65o 54s',
       } },
     ],
-    note: '버튼은 아무 두 장으로 벌리므로(≈45%) BB 는 거의 절반(42.8%)을 수비한다. 3벳은 밸류(QQ+)와 블러프(A2s~A5s·A9o류)의 폴라 구조(9.4%). 3벳 혼합의 잔여를 콜로 받아 QJs·T9s·87s 까지 컨티뉴 100%. 예전엔 이 잔여가 비어 있어 Q9s·T8s 보다 덜 수비했다.',
+    note: '버튼은 넓게 열므로(≈42%) BB 는 45.4%(솔버 45.1%)를 수비한다. 3벳 13.0% — 프리미엄에 수딧 브로드웨이·커넥터를 크게 섞는다(예전 9.4% 는 얇았다). 수딧은 K2s·Q2s·J2s 까지 다 콜하고, 오프수트 하단(A3o·A2o 류)은 접는다.',
   },
   {
     id: 'bb_vs_sb', group: 'defend', hero: 'BB', vs: 'SB', label: 'BB vs SB 오픈', desc: 'SB가 3bb 오픈 · 헤즈업, 포지션 우위로 가장 공격적으로 수비',
     actions: [
       { key: 'raise', label: '3벳', spec: {
-        '1': 'TT+ AQs+ AJs A5s A4s A3s A2s AQo+',
-        '0.5': '99 88 77 ATs KQs KJs QJs JTs T9s K9s Q9s KJo AJo KQo ATo A9o A8o',
-        '0.25': '66 KTs QTs J9s 98s 87s 76s 65s K8s A7o A6o',
+        '1': 'AA AKs AKo AQs AJs KK QQ JJ TT',
+        '0.75': 'KQs J8s J5s T5s 95s',
+        '0.5': 'AQo A6o A5o A3o KJo K8o Q9o J7s J6s J3s T8s T6s T4s 99 87s 84s 73s',
+        '0.25': 'AJo ATo A8o A7o A4o A2o KQo KJs KTo K9o K7s K7o K6o QJo QTo Q8o Q6s Q5s Q4s Q2s JTo J9o J4s T9s T9o T8o T7s T2s 98s 98o 97s 96s 88 85s 77 76o 74s 66 65s 54s',
       } },
       { key: 'call', label: '콜', spec: {
-        '1': 'A9s A8s A7s A6s KTo K7s K6s K5s QJo QTo Q8s Q7s JTo J8s J7s T9o T8s T7s 98o 97s 96s 86s 85s 75s 64s 55 54s 53s 44 33 22',
-        '0.75': '66 KTs QTs J9s 98s 87s 76s 65s K8s A7o A6o',
-        '0.5': '99 88 77 ATs KQs KJs QJs JTs T9s K9s Q9s KJo AJo KQo ATo A9o A8o A5o A4o A3o A2o K9o K8o K4s Q9o Q8o Q6s J9o J6s T8o T6s 97o 87o 76o 74s 65o 63s 52s 43s',
+        '1': 'ATs A9s A9o A8s A7s A6s A5s A4s A3s A2s KTs K9s K8s K6s K5s K4s K3s K2s QJs QTs Q9s Q8s Q7s Q3s JTs J9s J2s T3s 86s 76s 75s 64s 63s 55 53s 52s 44 43s 42s 33 32s 22',
+        '0.75': 'AJo ATo A8o A7o A4o KQo KJs KTo K9o K7s QJo QTo Q6s Q5s Q4s Q2s JTo J9o J8o J4s T9s T9o T8o T7s T2s 98s 98o 97s 96s 94s 88 87o 85s 77 74s 66 65s 65o 54s',
+        '0.5': 'AQo A6o A5o A3o A2o KJo K8o K7o Q9o J7s J6s J3s T8s T6s T4s 99 87s 84s 76o 73s 62s 54o',
+        '0.25': 'KQs Q8o J8s J5s T5s 97o 95s',
       } },
     ],
-    note: 'SB 는 넓게 열고(≈40%) BB 는 포지션 우위(포스트플랍 마지막 액션)로 매우 넓게(41.2%) 수비한다. 3벳 12.0% + 콜 29.2%.',
+    note: 'SB 는 넓게 열고 BB 는 포지션 우위(포스트플랍 마지막 액션)로 절반 넘게(54.8%, 솔버 55.5%) 수비한다. 3벳 16.1% + 콜 38.7%. 수딧은 사실상 전부(J2s·T2s·32s 까지) 수비하고, 오프수트도 A2o·K7o·Q8o·J8o 까지 섞는다. 예전 41.2% 는 SB 가 아무 두 장으로 열어도 이득인 폭이었다.',
   },
   {
     id: 'sb_vs_btn', group: 'defend', hero: 'SB', vs: 'BTN', label: 'SB vs BTN 오픈', desc: 'BTN 오픈에 SB의 수비 · 뒤에 BB가 남아 콜보다 3벳 중심',
@@ -267,7 +294,7 @@ const DEFEND: RangeScenario[] = [
         '0.5': 'JJ TT AQs AJs KQs A9s KTs QTs T9s 98s',
       } },
     ],
-    note: '콜 임계 41.7%(팟오즈 33.3% + OOP 실현 0.8 + BB 스퀴즈)를 vs LJ 15.8% 상대로 넘는 건 중간 페어·수딧 브로드웨이뿐. 그래서 콜이 4.7%로 극히 좁다. AQo 는 접지 않고 3벳 절반으로 처리한다: LJ 의 컨티뉴 안에서 AK·AQ 에 도미네이트당하는 게 문제라면 답은 폴드가 아니라 **콜을 건너뛰는 것**이고, A9s(같은 스팟에서 100% 콜이던 핸드)보다 vs LJ 에퀴티가 8%p 높은 핸드를 0% 로 두면 표 자체가 거꾸로다. 대신 A9s 는 절반으로 낮춰 그 자리를 비웠다. 3벳은 OOP 4x(알파 75%) 역산의 QQ+/AK 밸류 + A5s 블로커 + AQo 절반 = 4.2%.',
+    note: '콜 임계 41.7%(팟오즈 33.3% + OOP 실현 0.8 + BB 스퀴즈)를 vs LJ 16.7% 상대로 넘는 건 중간 페어·수딧 브로드웨이뿐. 그래서 콜이 4.7%로 극히 좁다. AQo 는 접지 않고 3벳 절반으로 처리한다: LJ 의 컨티뉴 안에서 AK·AQ 에 도미네이트당하는 게 문제라면 답은 폴드가 아니라 **콜을 건너뛰는 것**이고, A9s(같은 스팟에서 100% 콜이던 핸드)보다 vs LJ 에퀴티가 8%p 높은 핸드를 0% 로 두면 표 자체가 거꾸로다. 대신 A9s 는 절반으로 낮춰 그 자리를 비웠다. 3벳은 OOP 4x(알파 75%) 역산의 QQ+/AK 밸류 + A5s 블로커 + AQo 절반 = 4.2%.',
   },
   {
     id: 'sb_vs_hj', group: 'defend', hero: 'SB', vs: 'HJ', label: 'SB vs HJ 오픈', desc: '하이잭이 2.5bb 오픈. 상대가 약해진 만큼만 3벳을 넓힌다',
@@ -281,7 +308,7 @@ const DEFEND: RangeScenario[] = [
         '0.5': 'JJ TT AJs ATs KQs KJs QJs 55 A8s K9s Q9s J9s 98s',
       } },
     ],
-    note: 'HJ(20.5%)가 LJ(15.8%)보다 약한 만큼 같은 핸드의 에퀴티가 2~3%p 오른다. 딱 그 폭만큼 55·A8s·K9s·Q9s를 절반으로 추가. 3벳은 HJ 의 MDF 컨티뉴 가 LJ 대비 30% 넓어진 만큼만 확장(AQs 밸류 승격 + A3s + AQo 절반 = 5.1%). 수딧 커넥터를 3벳에 안 넣은 건 포지션이 없으면 "콜당해도 실현된다"가 성립하지 않기 때문. btn_3bet_hj 와의 대조군이다.',
+    note: 'HJ(21.3%)가 LJ(16.7%)보다 약한 만큼 같은 핸드의 에퀴티가 2~3%p 오른다. 딱 그 폭만큼 55·A8s·K9s·Q9s를 절반으로 추가. 3벳은 HJ 의 MDF 컨티뉴 가 LJ 대비 30% 넓어진 만큼만 확장(AQs 밸류 승격 + A3s + AQo 절반 = 5.1%). 수딧 커넥터를 3벳에 안 넣은 건 포지션이 없으면 "콜당해도 실현된다"가 성립하지 않기 때문. btn_3bet_hj 와의 대조군이다.',
   },
   {
     id: 'sb_vs_co', group: 'defend', hero: 'SB', vs: 'CO', label: 'SB vs CO 오픈', desc: '컷오프가 2.5bb 오픈 · 콜이 아니라 3벳으로 반응을 바꾸는 전환점',
@@ -295,7 +322,7 @@ const DEFEND: RangeScenario[] = [
         '0.5': '99 88 ATs A9s KJs QJs JTs T9s 55 A6s K9s Q9s J9s 76s',
       } },
     ],
-    note: '3벳 스펙은 threebet 그룹의 sb_3bet_co 와 의도적으로 완전히 동일하다(같은 스팟이 두 그룹에 있는데 폭이 어긋나면 앱 안에서 같은 질문에 두 답이 생긴다). 여기서는 콜 축만 신설했다. 3벳 목표는 CO 의 MDF 컨티뉴(27.8% x 25%)라 상대 오픈 폭에 비례해 커지고, 콜이 vs HJ 보다 오히려 좁은 건 넓어진 3벳이 ATs·AJs·KQs 상단을 흡수했기 때문.',
+    note: '3벳 스펙은 threebet 그룹의 sb_3bet_co 와 의도적으로 완전히 동일하다(같은 스팟이 두 그룹에 있는데 폭이 어긋나면 앱 안에서 같은 질문에 두 답이 생긴다). 여기서는 콜 축만 신설했다. 3벳 목표는 CO 의 MDF 컨티뉴(28.7% x 25%)라 상대 오픈 폭에 비례해 커지고, 콜이 vs HJ 보다 오히려 좁은 건 넓어진 3벳이 ATs·AJs·KQs 상단을 흡수했기 때문.',
   },
 ];
 
@@ -324,7 +351,7 @@ const THREEBET: RangeScenario[] = [
       '1': 'TT+ AQs+ AKo A5s A4s A3s',
       '0.5': '99 88 AJs ATs KQs KJs QJs JTs T9s 98s A2s AQo KQo KJo',
     } }],
-    note: 'CO 오픈은 넓어(≈27%) 3벳을 벌린다. 최상위 밸류 + A2s~A5s·수딧 커넥터 블러프의 폴라 구조(7.8%). KQo 가 빠져 있어 KJo(절반 3벳)가 KQo(0%)를 지배하는 역전이 있었다. 같은 하이카드에서 키커만 높은 핸드가 덜 공격받는 표는 틀린 표다.',
+    note: 'CO 오픈은 넓어(≈29%) 3벳을 벌린다. 최상위 밸류 + A2s~A5s·수딧 커넥터 블러프의 폴라 구조(7.8%). KQo 가 빠져 있어 KJo(절반 3벳)가 KQo(0%)를 지배하는 역전이 있었다. 같은 하이카드에서 키커만 높은 핸드가 덜 공격받는 표는 틀린 표다.',
   },
   {
     id: 'sb_3bet_btn', group: 'threebet', hero: 'SB', vs: 'BTN', label: 'SB 3벳 vs BTN', desc: '버튼 오픈에 SB의 3벳 · 리니어(직선형) 구조',
@@ -332,7 +359,9 @@ const THREEBET: RangeScenario[] = [
       '1': '99+ ATs+ A5s A4s KQs KJs QJs AJo+ KQo',
       '0.5': '88 77 A9s A8s A3s A2s KTs K9s QTs JTs T9s 98s ATo KJo',
     } }],
-    note: 'SB 는 포지션이 나빠 콜보다 3벳 중심(3벳 아니면 폴드). 넓은 BTN 오픈을 상대하므로 좋은 핸드를 직선형으로 늘린다.',
+    // 2026-10-01: 예전 문구 "(3벳 아니면 폴드)" 는 같은 스팟의 수비 표 sb_vs_btn(콜 9.2%)과도,
+    //   솔버(BeyondGTO SB vs BTN: 3벳 13.2% · 콜 5.2%)와도 맞지 않았다. 콜은 있다 — 적을 뿐이다.
+    note: 'SB 는 포지션이 나빠 콜보다 3벳 중심이다. 콜은 작은 페어·수딧 커넥터 일부만 소량 섞는다(블라인드 수비의 SB vs BTN 표). 넓은 BTN 오픈을 상대하므로 좋은 핸드를 직선형으로 늘린다.',
   },
   {
     id: 'sb_3bet_co', group: 'threebet', hero: 'SB', vs: 'CO', label: 'SB 3벳 vs CO', desc: '컷오프 오픈에 SB의 3벳 · 리니어',
@@ -360,7 +389,7 @@ const THREEBET: RangeScenario[] = [
       '1': 'QQ+ AKs AKo AQs A5s',
       '0.5': 'JJ TT AJs KQs KJs A4s A3s',
     } }],
-    note: '알파는 vs LJ 와 같은 65.2%(같은 IP 3x·같은 데드머니)라 달라지는 건 상대뿐. HJ 의 MDF 컨티뉴(7.1%)가 LJ(5.5%)보다 넓다. 상대 컨티뉴 가 넓으면 (a) 내 밸류가 그 안에서 50% 선을 더 쉽게 넘고 (b) 폴드를 노린 블러프 콤보를 더 담을 수 있다 → AQs 밸류 승격 + A4s·A3s 절반, 두 방향으로만 확장.',
+    note: '알파는 vs LJ 와 같은 65.2%(같은 IP 3x·같은 데드머니)라 달라지는 건 상대뿐. HJ 의 MDF 컨티뉴(7.4%)가 LJ(5.8%)보다 넓다. 상대 컨티뉴 가 넓으면 (a) 내 밸류가 그 안에서 50% 선을 더 쉽게 넘고 (b) 폴드를 노린 블러프 콤보를 더 담을 수 있다 → AQs 밸류 승격 + A4s·A3s 절반, 두 방향으로만 확장.',
   },
   {
     id: 'btn_3bet_hj', group: 'threebet', hero: 'BTN', vs: 'HJ', label: 'BTN 3벳 vs HJ', desc: '하이잭 오픈에 버튼의 3벳. 포지션이 수딧 커넥터를 블러프 자격으로 만든다',
@@ -408,7 +437,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo AQo AJs KQs QJs JTs T9s 99',
       } },
     ],
-    note: '얼리 오픈이 3벳을 맞으면 레인지가 이미 강해도 좁게 컨티뉴. 4벳은 KK+ 중심, 콜은 프리미엄. 컨티뉴 5.4%(오픈 15.8% 대비 34.0%). QQ·AK 는 4벳 절반 + 콜 절반이라 접지 않고, A5s 는 4벳 절반 + 폴드 절반이다.',
+    note: '얼리 오픈이 3벳을 맞으면 레인지가 이미 강해도 좁게 컨티뉴. 4벳은 KK+ 중심, 콜은 프리미엄. 컨티뉴 5.4%(오픈 16.7% 대비 32.1%). QQ·AK 는 4벳 절반 + 콜 절반이라 접지 않고, A5s 는 4벳 절반 + 폴드 절반이다.',
   },
   {
     id: 'co_vs_btn3bet', group: 'vs3bet', hero: 'CO', vs: 'BTN', label: 'CO vs BTN 3벳', desc: 'CO 오픈 → BTN 3벳 · 포지션 없이 컨티뉴',
@@ -422,7 +451,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo A9s 98s 87s',
       } },
     ],
-    note: 'CO 는 포지션이 없어 BTN 3벳에 타이트하게. 4벳 폴라(KK+ + A5s·A4s 블러프) + 프리미엄 콜. 폭의 기준은 BTN 의 3x(IP) 가 강요하는 MDF **하한** 34.8% 다: 27.8% x 34.8% ≈ 9.7% 가 하한이고 실제 컨티뉴 는 10.6%(38.0%). 하한을 넘는 1%p 는 QQ·AKs·AKo 의 4벳 잔여를 폴드가 아니라 콜로 받기 때문이다. 예전 8.0%(28.8%)는 같은 BTN 3x 를 맞는 hj_vs_btn3bet 보다 좁아 **더 넓게 연 쪽이 덜 수비하는** 역전이었다. BTN 은 CO 를 상대로 더 넓게(7.8%) 3벳하므로 방향이 반대여야 한다(현재 CO 38.0% > HJ 36.8%).',
+    note: 'CO 는 포지션이 없어 BTN 3벳에 타이트하게. 4벳 폴라(KK+ + A5s·A4s 블러프) + 프리미엄 콜. 폭의 기준은 BTN 의 3x(IP) 가 강요하는 MDF **하한** 34.8% 다: 28.7% x 34.8% ≈ 10.0% 가 하한이고 실제 컨티뉴 는 10.6%(36.8%). 하한을 넘는 0.6%p 는 QQ·AKs·AKo 의 4벳 잔여를 폴드가 아니라 콜로 받기 때문이다. 예전 8.0%(28.8%)는 같은 BTN 3x 를 맞는 hj_vs_btn3bet 보다 좁아 **더 넓게 연 쪽이 덜 수비하는** 역전이었다. BTN 은 CO 를 상대로 더 넓게(7.8%) 3벳하므로 방향이 반대여야 한다(현재 CO 36.8% > HJ 35.5%).',
   },
   {
     id: 'btn_vs_sb3bet', group: 'vs3bet', hero: 'BTN', vs: 'SB', label: 'BTN vs SB 3벳', desc: '버튼 오픈 → SB 3벳 · 포지션 우위로 넓게 콜',
@@ -436,7 +465,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo AJo A9s A8s KQo KJo KTs QTs J9s 87s 77 76s 66 65s',
       } },
     ],
-    note: '포지션이 있어 넓게 콜한다(컨티뉴 11.3%, 오픈 44.5% 대비 25.4%). 4벳은 KK+ 확정 + QQ/AK/A5s·A4s 혼합. 상대가 3벳을 멈추지 못하게 하는 최소 방어. QQ·AK 는 4벳하지 않는 절반을 콜로 받고(컨티뉴 100%), 블로커 블러프인 A5s·A4s 는 그 절반을 접는다.',
+    note: '포지션이 있어 넓게 콜한다(컨티뉴 11.3%, 오픈 43.2% 대비 26.2%). 4벳은 KK+ 확정 + QQ/AK/A5s·A4s 혼합. 상대가 3벳을 멈추지 못하게 하는 최소 방어. QQ·AK 는 4벳하지 않는 절반을 콜로 받고(컨티뉴 100%), 블로커 블러프인 A5s·A4s 는 그 절반을 접는다.',
   },
   {
     id: 'btn_vs_bb3bet', group: 'vs3bet', hero: 'BTN', vs: 'BB', label: 'BTN vs BB 3벳', desc: '버튼 오픈 → BB 3벳 · 상대 폴라 3벳을 넓게 콜',
@@ -450,7 +479,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo AJo A9s A8s KQo KJo KTs K9s QTs J9s T8s 76s 66 65s 55 54s',
       } },
     ],
-    note: 'BB 3벳은 블러프가 많은 폴라라, 포지션 있는 버튼은 아주 넓게 콜해 플랍에서 활용한다. 컨티뉴 12.2%(오픈 44.5% 대비 27.5%)로 vs 3벳 15노드 중 가장 넓다.',
+    note: 'BB 3벳은 블러프가 많은 폴라라, 포지션 있는 버튼은 아주 넓게 콜해 플랍에서 활용한다. 컨티뉴 12.2%(오픈 43.2% 대비 28.3%)로 vs 3벳 15노드 중 가장 넓다.',
   },
   // ── vs 3벳 확장(2026-08-30) — 15노드 매트릭스의 빈칸 메우기 ──
   // 4벳 폭은 '상대 3벳이 폴라냐 리니어냐'로 갈린다: 폴라(BB) 상대는 4벳에 대량 폴드하므로
@@ -468,7 +497,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo 88 77 66 55 A9s A8s A7s A6s KTs QTs T9s 98s 87s 76s KQo AJo ATo',
       } },
     ],
-    note: '블라인드 배틀 3연결(SB 오픈 → BB 3벳 → SB 의 4벳/콜)의 마지막 다리. BB 의 OOP 4x → 알파 75% → SB 의 MDF 하한 25% → 38.5% x 25% ≈ 9.6% 가 하한이고 실제 컨티뉴 는 10.9%(28.2%). 예전 6.1%(폴드 84%)는 **BB 가 아무 두 장으로 3벳해도 이득**인 수치였다. 같은 파일의 bb_vs_sb 가 BB 3벳을 12.0%(블러프 다수 폴라)로 정의하는데 SB 의 컨티뉴 가 그 절반(0.51배)이면 블러프가 공짜로 통과한다. 지금은 0.91배로, BB 3벳을 맞는 다른 노드(CO 0.94 · HJ 1.01 · BTN 1.31)와 같은 대역이다. 넓게 연 대가는 "그래서 많이 접는다"가 아니라 "낮은 SPR 에서 실현되는 핸드로 넓게 받는다"로 치른다. 그래서 콜 하단이 중간 페어·수딧 커넥터까지 내려간다. 4벳을 KK+ 단독으로 두지 않는 것도 같은 이유다(12콤보 0.9%면 BB 가 3벳을 공짜로 계속한다).',
+    note: '블라인드 배틀 3연결(SB 오픈 → BB 3벳 → SB 의 4벳/콜)의 마지막 다리. BB 의 OOP 4x → 알파 75% → SB 의 MDF 하한 25% → 38.5% x 25% ≈ 9.6% 가 하한이고 실제 컨티뉴 는 10.9%(28.2%). 예전 6.1%(폴드 84%)는 **BB 가 아무 두 장으로 3벳해도 이득**인 수치였다. 같은 파일의 bb_vs_sb 가 BB 3벳을 16.1% 로 정의한다(2026-10-01 솔버 빈도로 재작성 — 예전 12.0%). 예전 컨티뉴 6.1% 는 그 0.38배라 블러프가 공짜로 통과했다. 지금 10.9% 는 0.67배로, BB 3벳을 맞는 다른 노드(CO 0.76 · HJ 0.83 · BTN 0.94)보다 낮다 — BB 수비 표가 넓어진 뒤 다시 맞춰 볼 노드다(같은 전제의 솔버 자료가 아직 없어 값은 그대로 둔다). 넓게 연 대가는 "그래서 많이 접는다"가 아니라 "낮은 SPR 에서 실현되는 핸드로 넓게 받는다"로 치른다. 그래서 콜 하단이 중간 페어·수딧 커넥터까지 내려간다. 4벳을 KK+ 단독으로 두지 않는 것도 같은 이유다(12콤보 0.9%면 BB 가 3벳을 공짜로 계속한다).',
   },
   {
     id: 'co_vs_bb3bet', group: 'vs3bet', hero: 'CO', vs: 'BB', label: 'CO vs BB 3벳', desc: 'CO 오픈 → BB 3벳 · 상대 폴라 3벳이라 4벳 블러프를 넓게',
@@ -482,7 +511,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo 99 88 ATs A9s KJs KTs QTs T9s 98s AQo KQo',
       } },
     ],
-    note: 'BB 의 OOP 4x(10bb) 3벳 → 데드머니 3.0·리스크 9.0 → 알파 75%, CO 의 MDF 하한 25% → 27.8% x 25% = 6.95% 가 하한이고 실제 컨티뉴 는 7.7%(27.7%). 상대가 폴라라 4벳 블러프의 폴드에퀴티가 커 A4s 까지 넓혔다. 그 A5s·A4s 의 나머지 절반은 **폴드**다(콜에 다시 적으면 블로커 블러프가 프리미엄보다 잘 안 접히는 역전이 난다). 반대로 밸류 4벳인 QQ·AKs·AKo 의 나머지 절반은 **콜**이다. 이 둘을 같은 규약으로 묶으면 어느 쪽으로든 역전이 난다. 콜에 QTs·T9s·98s 가 들어오는 건 CO 가 IP 라 낮은 SPR 에서도 무료 카드·무저항 팟 옵션이 살아 실현율이 회복되기 때문.',
+    note: 'BB 의 OOP 4x(10bb) 3벳 → 데드머니 3.0·리스크 9.0 → 알파 75%, CO 의 MDF 하한 25% → 28.7% x 25% = 7.16% 가 하한이고 실제 컨티뉴 는 7.7%(26.8%). 상대가 폴라라 4벳 블러프의 폴드에퀴티가 커 A4s 까지 넓혔다. 그 A5s·A4s 의 나머지 절반은 **폴드**다(콜에 다시 적으면 블로커 블러프가 프리미엄보다 잘 안 접히는 역전이 난다). 반대로 밸류 4벳인 QQ·AKs·AKo 의 나머지 절반은 **콜**이다. 이 둘을 같은 규약으로 묶으면 어느 쪽으로든 역전이 난다. 콜에 QTs·T9s·98s 가 들어오는 건 CO 가 IP 라 낮은 SPR 에서도 무료 카드·무저항 팟 옵션이 살아 실현율이 회복되기 때문.',
   },
   {
     id: 'co_vs_sb3bet', group: 'vs3bet', hero: 'CO', vs: 'SB', label: 'CO vs SB 3벳', desc: 'CO 오픈 → SB 3벳 · 상대가 리니어라 오히려 좁게 컨티뉴',
@@ -496,7 +525,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo 99 88 ATs A9s KJs JTs QTs T9s 98s AQo',
       } },
     ],
-    note: 'MDF 하한만 보면 이쪽이 더 넓어야 한다(SB 는 죽은 BB 의 1bb 까지 노리느라 알파 73.1% → 하한 7.5%). 그런데 최종은 co_vs_bb3bet 보다 좁다. SB 는 포지션이 나빠 3벳을 리니어(밸류 위주)로 짜므로 마주하는 평균 강도가 높고, 하한을 문자 그대로 채우면 실현 에퀴티가 따라오지 않는다(보정 0.8 → 6.0%, 실제 컨티뉴 6.8% = 24.5%). 이 표와 co_vs_bb3bet(7.7%) 의 차이는 오직 상대 3벳 구조만으로 생긴 폭이다. 같은 CO 오픈, 같은 4벳 스펙, 다른 상대.',
+    note: 'MDF 하한만 보면 이쪽이 더 넓어야 한다(SB 는 죽은 BB 의 1bb 까지 노리느라 알파 73.1% → 하한 7.5%). 그런데 최종은 co_vs_bb3bet 보다 좁다. SB 는 포지션이 나빠 3벳을 리니어(밸류 위주)로 짜므로 마주하는 평균 강도가 높고, 하한을 문자 그대로 채우면 실현 에퀴티가 따라오지 않는다(보정 0.8 → 6.0%, 실제 컨티뉴 6.8% = 23.7%). 이 표와 co_vs_bb3bet(7.7%) 의 차이는 오직 상대 3벳 구조만으로 생긴 폭이다. 같은 CO 오픈, 같은 4벳 스펙, 다른 상대.',
   },
   {
     id: 'hj_vs_bb3bet', group: 'vs3bet', hero: 'HJ', vs: 'BB', label: 'HJ vs BB 3벳', desc: 'HJ 오픈 → BB가 4x 3벳 · vs 3벳 매트릭스에서 가장 좁은 노드',
@@ -510,7 +539,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo 99 ATs KJs JTs AQo',
       } },
     ],
-    note: 'BB 의 OOP 4x → 알파 75%, HJ 의 MDF 하한 25% → 20.5% x 25% = 5.13% 가 하한이고 실제 컨티뉴 는 6.0%(29.0%). HJ 오픈(20.5%)이 CO(27.8%)보다 강해 컨티뉴 비율은 비슷해도 절대량이 작아지고, 그래서 콜이 프리미엄 여섯 종 + 절반 여덟 종에서 끊긴다. ATs·KJs 를 절반으로만 남긴 게 경계. ATs 는 폴라 3벳에 콜당했을 때 A블로커가 겹쳐 도미네이트 리스크가 크다. 4벳 블러프인 A5s 의 나머지 절반은 폴드라 A5s 의 컨티뉴 는 50% 에서 멈춘다. 여기에 A5s 를 콜로 또 적으면 A5s 만 100% 가 되어 A9s·A8s(0%)를 뛰어넘는 역전이 난다(1차 버그). 반대로 밸류인 QQ·AKs·AKo 를 콜에서 빼면 이번엔 QQ 가 50% 인데 99·JTs 가 100% 인 거울상 역전이 난다(2차 버그).',
+    note: 'BB 의 OOP 4x → 알파 75%, HJ 의 MDF 하한 25% → 21.3% x 25% = 5.32% 가 하한이고 실제 컨티뉴 는 6.0%(28.0%). HJ 오픈(21.3%)이 CO(28.7%)보다 강해 컨티뉴 비율은 비슷해도 절대량이 작아지고, 그래서 콜이 프리미엄 여섯 종 + 절반 여덟 종에서 끊긴다. ATs·KJs 를 절반으로만 남긴 게 경계. ATs 는 폴라 3벳에 콜당했을 때 A블로커가 겹쳐 도미네이트 리스크가 크다. 4벳 블러프인 A5s 의 나머지 절반은 폴드라 A5s 의 컨티뉴 는 50% 에서 멈춘다. 여기에 A5s 를 콜로 또 적으면 A5s 만 100% 가 되어 A9s·A8s(0%)를 뛰어넘는 역전이 난다(1차 버그). 반대로 밸류인 QQ·AKs·AKo 를 콜에서 빼면 이번엔 QQ 가 50% 인데 99·JTs 가 100% 인 거울상 역전이 난다(2차 버그).',
   },
   {
     id: 'hj_vs_btn3bet', group: 'vs3bet', hero: 'HJ', vs: 'BTN', label: 'HJ vs BTN 3벳', desc: 'HJ 오픈 → BTN이 3x 3벳 · 상대가 포지션 우위인데 내가 더 넓게 수비하는 역설',
@@ -524,7 +553,7 @@ const VS3BET: RangeScenario[] = [
         '0.5': 'QQ AKs AKo 99 88 KJs KTs QTs T9s AQo KQo',
       } },
     ],
-    note: 'BTN 은 포지션이 있어 3벳이 3x(7.5bb)로 작고 데드머니가 4.0 이라 알파 65.2% → HJ 의 MDF 하한이 34.8% 로 뛴다(20.5% x 34.8% = 7.13% 하한, 실제 컨티뉴 7.5% = 36.8%). 같은 HJ 가 BB 의 4x 를 맞을 때(6.0%)보다 1.6%p 넓게 수비하는 원인은 오직 3벳 사이즈다. 이 두 표를 나란히 두는 것이 "누가 3벳했는지"를 구분하지 않는 표가 왜 부정확한지의 직접 증거다. 같은 BTN 3x 를 맞는 co_vs_btn3bet 은 38.0% 로 이쪽(36.8%)보다 넓다. BTN 이 CO 를 상대로 더 넓게(7.8% vs 5.4%) 3벳하기 때문이고, 반대로 뒤집히면 표가 틀린 것이다. 밸류 4벳 잔여를 콜로 받는 규약이 두 노드를 함께 밀어 올렸는데, 분모가 작은 HJ 쪽이 더 크게 올라 이 순서가 한 번 뒤집혔다. 그래서 77·A9s 를 콜에서 뺐다(7.9% → 7.5%).',
+    note: 'BTN 은 포지션이 있어 3벳이 3x(7.5bb)로 작고 데드머니가 4.0 이라 알파 65.2% → HJ 의 MDF 하한이 34.8% 로 뛴다(21.3% x 34.8% = 7.40% 하한, 실제 컨티뉴 7.5% = 35.5%). 같은 HJ 가 BB 의 4x 를 맞을 때(6.0%)보다 1.6%p 넓게 수비하는 원인은 오직 3벳 사이즈다. 이 두 표를 나란히 두는 것이 "누가 3벳했는지"를 구분하지 않는 표가 왜 부정확한지의 직접 증거다. 같은 BTN 3x 를 맞는 co_vs_btn3bet 은 36.8% 로 이쪽(35.5%)보다 넓다. BTN 이 CO 를 상대로 더 넓게(7.8% vs 5.4%) 3벳하기 때문이고, 반대로 뒤집히면 표가 틀린 것이다. 밸류 4벳 잔여를 콜로 받는 규약이 두 노드를 함께 밀어 올렸는데, 분모가 작은 HJ 쪽이 더 크게 올라 이 순서가 한 번 뒤집혔다. 그래서 77·A9s 를 콜에서 뺐다(7.9% → 7.5%).',
   },
 ];
 
