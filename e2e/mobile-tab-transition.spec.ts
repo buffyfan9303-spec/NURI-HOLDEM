@@ -382,7 +382,7 @@ const LATE_FRAMES = 2;
 const STALL_MS = 1500;
 
 for (const width of [390, 1023]) {
-  test(`🔴 R3 — ${width}px 메인 메뉴 전환에 목적지 본문 애니메이션이 0개이고, 떠나는 판은 새 판 첫 프레임 ${HOLD_FRAMES}번 뒤 ${LEAVE_FADE_MS}ms 페이드로 걷힌다(프레임 수로 잰다)`, async ({ page }) => {
+  test(`🔴 R3 — ${width}px 메인 메뉴 전환에 목적지 본문 애니메이션이 0개이고, 첫 방문의 떠나는 판은 새 판 첫 프레임 ${HOLD_FRAMES}번 뒤 ${LEAVE_FADE_MS}ms 페이드로 걷히며 재방문은 즉시 교체다(프레임 수로 잰다)`, async ({ page }) => {
     test.setTimeout(90_000);
     expect(Number.isFinite(FIRST_VISIT_HOLD_MAX_MS) && FIRST_VISIT_HOLD_MAX_MS > 0,
       'src/lib/tabCover.ts 에서 FIRST_VISIT_HOLD_MAX_MS 를 못 읽었다 — 첫 방문 대기 상한을 잴 기준이 없다').toBe(true);
@@ -487,6 +487,10 @@ for (const width of [390, 1023]) {
 
     const findings: string[] = [];
     let visited = 0;
+    // R-03(2026-10-01 · 오너 결정) — **재방문은 떠나는 판 없이 즉시 교체**, 첫 방문만 떠나는 판이 선다.
+    //   '첫 방문' = 누르기 전 목적지 판이 DOM 에 없었다(App visitedTabs = seenTabs ∪ 미리 마운트 — notePaneLeaving 의 first 와 같은 판정).
+    let firstMoves = 0;
+    let revisitMoves = 0;
 
     for (const pass of [1, 2]) { // 1회차 = first/cold, 2회차 = warm 재방문
       for (const m of MENUS) {
@@ -502,6 +506,8 @@ for (const width of [390, 1023]) {
         }, BODY_PRESENTATION_PROPS);
 
         const from = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((p) => p.style.display !== 'none')?.getAttribute('data-tab') ?? null);
+        const first = await page.evaluate((t) => !document.querySelector(`.tab-pane[data-tab="${t}"]`), m.tab);
+        if (first) firstMoves += 1; else revisitMoves += 1;
         await tapNav(m.label);
         await expect(pane(m.tab)).toBeVisible({ timeout: 15_000 });
         visited += 1;
@@ -584,9 +590,12 @@ for (const width of [390, 1023]) {
         //   이 경로(한 번에 한 이동 · 500ms+ 정착 대기 · 보이는 문서 · 오버레이 없음 · 동작 줄이기 끔)에는
         //   tabCover.ts notePaneLeaving 의 skip 조건(rapid·hidden·data-overlay·reduce)에 드는 이동이 없다 —
         //   격리 빌드 CPU×1/4/6 600이동 실측에서 전부 1건씩 기록됐다. 그래서 **이동마다 정확히 1건**을 요구한다.
-        if (res.leave.length !== 1) {
-          findings.push(`pass${pass} ${m.label}(${from}→${m.tab}) 떠나는 판 기록이 ${res.leave.length}건이다 — 1건이어야 한다(0건이면 수명 판정이 비어 통과한다 · ${res.skipState})`);
+        //   R-03 — 재방문은 **0건**(떠나는 판을 다시 그리지 않는다 · 퇴장 페이드도 없다), 첫 방문은 정확히 1건.
+        const wantLeave = first ? 1 : 0;
+        if (res.leave.length !== wantLeave) {
+          findings.push(`pass${pass} ${m.label}(${from}→${m.tab}) ${first ? '첫 방문' : '재방문'}인데 떠나는 판 기록이 ${res.leave.length}건이다 — ${wantLeave}건이어야 한다(${res.skipState})`);
         }
+        if (!first && origin.length) findings.push(`pass${pass} ${m.label} 재방문인데 출발 판 퇴장 페이드가 걸렸다(${origin.length}건)`);
         for (const l of res.leave) {
           const tag = `pass${pass} ${m.label}(${from}→${m.tab})`;
           if (l.tab !== from) { findings.push(`${tag} 출발 판이 아닌 판이 떠나는 판으로 섰다: ${JSON.stringify(l)}`); continue; }
@@ -598,10 +607,7 @@ for (const width of [390, 1023]) {
           const aF = a.f as number;
           const hold = aF - l.fOn;
           const holdMs = Math.round(tsAt(aF) - tsAt(l.fOn));
-          if (pass === 2 && hold !== HOLD_FRAMES) {
-            findings.push(`${tag} 재방문인데 판이 선 뒤 ${hold}프레임(${holdMs}ms) 만에 페이드를 걸었다 — 새 판 첫 프레임 뒤 정확히 ${HOLD_FRAMES}프레임이어야 한다`);
-          }
-          if (pass === 1) {
+          if (first) {
             if (hold < HOLD_FRAMES) findings.push(`${tag} 판이 선 뒤 ${hold}프레임 만에 페이드를 걸었다 — 새 판 첫 프레임(${HOLD_FRAMES}프레임)보다 이르다`);
             const late = framesPast(l.fOn + HOLD_FRAMES, aF, tsAt(l.fOn + HOLD_FRAMES) + FIRST_VISIT_HOLD_MAX_MS);
             if (late > LATE_FRAMES) findings.push(`${tag} 첫 방문 준비 대기가 상한 ${FIRST_VISIT_HOLD_MAX_MS}ms 를 넘긴 뒤 ${late}프레임을 더 붙잡았다(허용 ${LATE_FRAMES} · hold ${hold}프레임 ${holdMs}ms)`);
@@ -625,6 +631,9 @@ for (const width of [390, 1023]) {
 
     // 🔴 빈 통과 방지 — 실제로 잴 대상을 돌았는지 먼저 단언한다.
     expect(visited, '메뉴를 한 번도 이동하지 않았다 — 아래 0건은 아무 의미가 없다').toBe(MENUS.length * 2);
+    // 두 갈래를 다 지났는지 — 한쪽이 0이면 그쪽 판정은 비어 통과한다(미리 마운트가 먼저 끝나면 첫 방문이 0일 수 있다).
+    expect(firstMoves, `첫 방문 이동이 0건이다 — 떠나는 판 수명 판정이 비었다(재방문 ${revisitMoves})`).toBeGreaterThan(0);
+    expect(revisitMoves, `재방문 이동이 0건이다 — 즉시 교체 판정이 비었다(첫 방문 ${firstMoves})`).toBeGreaterThan(0);
     expect(await page.evaluate(() => (window as unknown as { __vtCalls: { count: number } }).__vtCalls.count),
       `${width}px 모바일 메인 탭에서 document View Transition 이 돌았다`).toBe(0);
     expect(findings, `메인 메뉴 전환이 목적지 본문에 애니메이션을 시작했다:\n${findings.join('\n')}`).toEqual([]);

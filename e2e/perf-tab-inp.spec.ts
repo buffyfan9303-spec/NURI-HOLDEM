@@ -15,6 +15,8 @@ import { press, center } from './_flicker';
 import type { Page } from '@playwright/test';
 
 test.use({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+// @boot — 단일 워커로 따로 돈다(npm run test:e2e:boot). CPU 6배 측정은 병렬 러너 부하를 그대로 세어 흔들린다
+//   (실측: 병렬 전체 실행에서 첫 홈→캘린더 808/952/936 FAIL · 같은 빌드 단독 3회 800/736/760 PASS).
 test.describe.configure({ mode: 'serial' });
 
 const TAB = (l: string) => ({ sel: 'nav[aria-label="하단 내비게이션"] button', text: l, exact: true });
@@ -65,7 +67,7 @@ async function oneRun(page: Page): Promise<Record<string, number>> {
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
-test('🔴 CPU 6배 — 탭 재방문 ≤ 160ms · 캘린더 첫 표시 ≤ 800ms (3회 중앙값)', async ({ context }) => {
+test('🔴 CPU 6배 — 탭 재방문 ≤ 160ms · 캘린더 첫 표시 ≤ 800ms (3회 중앙값) @boot', async ({ context }) => {
   test.setTimeout(300_000);
   const runs: Record<string, number>[] = [];
   // 새 문서 3개 — 같은 컨텍스트(_fixtures 의 쓰기 차단 가드가 걸린 것)에서 연다. 첫 방문 경로는 문서마다 새로 생긴다.
