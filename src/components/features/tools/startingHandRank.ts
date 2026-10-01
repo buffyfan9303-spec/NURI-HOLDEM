@@ -23,7 +23,7 @@ export interface StartingHandRow {
 /** 화면 문구용 기준 이름. */
 export const RANK_BASIS_LABEL: Record<RankBasis, string> = { ten: '10인 테이블 기준', hu: '헤즈업 승률 기준' };
 
-const kindOf = (h: string) => (h.length === 2 ? '페어' : h.endsWith('s') ? '수티드' : '오프수트');
+const kindOf = (h: string) => (h.length === 2 ? '페어' : h.endsWith('s') ? '수딧' : '오프수트');
 
 function build(entries: readonly (readonly [string, number | null])[]): StartingHandRow[] {
   let cum = 0;

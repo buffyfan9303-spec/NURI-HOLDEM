@@ -52,7 +52,7 @@ export default function StartingHandRankPanel() {
   const list = useMemo(() => {
     const needle = norm(q);
     if (!needle) return ROWS.slice(0, limit);
-    return ROWS.filter((r) => r.hand.toUpperCase().startsWith(needle) || r.kind.includes(q.trim()));
+    return ROWS.filter((r) => r.hand.toUpperCase().startsWith(needle) || r.kind.includes(q.trim().replace('수티드', '수딧')));
   }, [q, limit, ROWS]);
 
   const selRow = sel ? BY_HAND.get(sel) : undefined;
@@ -158,7 +158,7 @@ export default function StartingHandRankPanel() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="핸드 검색 · AK · 77 · 수티드"
+            placeholder="핸드 검색 · AK · 77 · 수딧"
             className="input w-full pl-9 text-sm"
             aria-label="핸드 검색"
             autoCapitalize="characters"

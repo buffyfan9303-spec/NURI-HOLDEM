@@ -135,7 +135,7 @@ export function EvCalc() {
 export function BankrollCalc() {
   const [buyin, setBuyin] = useState(100000);
   const [type, setType] = useState<'cash' | 'tourney'>('tourney');
-  const mult = type === 'cash' ? { min: 20, rec: 30 } : { min: 50, rec: 100 };
+  const mult = type === 'cash' ? { min: 35, rec: 50 } : { min: 75, rec: 100 };
   return (
     <CalcCard>
       <Field label="게임 유형">
@@ -154,7 +154,7 @@ export function BankrollCalc() {
         <Result label={`권장 (${mult.rec}바이인)`} value={(buyin * mult.rec).toLocaleString()} accent />
         <Result label={`최소 (${mult.min}바이인)`} value={(buyin * mult.min).toLocaleString()} />
       </div>
-      <p className="text-2xs text-ink-muted">뱅크롤이 최소 미만이면 한 단계 낮은 바이인을 권장합니다.</p>
+      <p className="text-2xs text-ink-muted">최소는 공개 가이드의 하한(캐시 35 · 대회 75 바이인 이상)입니다. 뱅크롤이 최소 미만이면 한 단계 낮은 바이인을 권장합니다.</p>
     </CalcCard>
   );
 }
