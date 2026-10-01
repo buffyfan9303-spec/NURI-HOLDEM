@@ -1117,23 +1117,37 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 활성 '요약' 알약이 같은 말을 한다. 남겨 두면 실제 내용(오늘 장부)이 58px 아래로 밀린다(390 실측).
                 ⚠ PC(≥1024)는 그대로다 — PC 는 단계 바 옆에 사이드바가 있고 섹션 헤더 높이 계약(pc-store-regression)이 있다.
                 ⚠ 다른 섹션은 설명·'+ 새 게임' 액션을 이 헤더에만 싣는다 — 대시보드만 숨긴다. */}
-            {!dItem?.locked && (
+            {/* 🔴 오너 2026-10-01("모바일 내 매장에서 요약·포스터·장부·클락 이렇게 움직이면 하단 전체 콘텐츠가 위로 올라갔다가 내려와").
+                원인(4174 실측 · 목킹 업주): 모바일에서는 설명이 제목 아래로 내려가 **단계마다 줄 수가 다르다** — 헤더 높이가
+                포스터·장부 78 · 클락 59(390) / 412 에선 78·78·46·59·46. 그래서 레일 아래 판 윗변이 172→172→140→154→140 으로
+                오르내렸다(PC 는 한 줄 48 고정이라 안 생긴다). 게임 단계 5개의 헤더를 **같은 격자 칸에 겹쳐 두고** 지금 단계만 보이게 해
+                칸 높이 = 다섯 헤더 중 최댓값으로 고정한다 — 폭·글꼴이 바뀌어도 CSS 가 직접 max 를 잡는다(수치 하드코딩 없음).
+                숨은 사본은 invisible + aria-hidden + inert(포커스·낭독·클릭 0). 회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts */}
+            {!dItem?.locked && renderSection === 'game' && (
+              <div className="grid" data-step-header="">
+                {GAME_STEPS.map((st) => {
+                  const on = st.id === renderGameStep;
+                  return (
+                    <div key={st.id} className={on ? '[grid-area:1/1]' : '[grid-area:1/1] invisible'} aria-hidden={on ? undefined : true} inert={!on}>
+                      <SectionHeader title={st.label} desc={SECTION_DESC[st.id]} icon={SECTION_ICON[st.id]}
+                        action={st.id === 'posters' && canPosters
+                          ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
+                          : undefined} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {!dItem?.locked && renderSection !== 'game' && (
               <div className={renderSection === 'dashboard' ? 'max-lg:hidden' : undefined}>
               <SectionHeader
-                title={renderSection === 'game'
-                  ? (GAME_STEPS.find((s) => s.id === renderGameStep)?.label ?? '게임 진행')
-                  : renderSection === 'settings'
+                title={renderSection === 'settings'
                   ? (SETTINGS_TABS.find((t) => t.id === renderSettingsTab)?.label ?? '매장 설정')
                   : (dItem?.label ?? '')}
-                desc={renderSection === 'game' ? SECTION_DESC[renderGameStep]
-                  : renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
+                desc={renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
                   : renderSection ? SECTION_DESC[renderSection] : ''}
-                icon={renderSection === 'game' ? SECTION_ICON[renderGameStep]
-                  : renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
+                icon={renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
                   : renderSection ? SECTION_ICON[renderSection] : undefined}
-                action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
-                  ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
-                  : undefined}
               />
               </div>
             )}
