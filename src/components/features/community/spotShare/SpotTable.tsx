@@ -74,16 +74,13 @@ function Felt({ v, big }: { v: ShareView; big: boolean }) {
     p ? { left: p.x, top: p.y, transform: 'translate(-50%, -50%)' } : { left: 0, top: 0, visibility: 'hidden' as const };
 
   const label = (text: string, pos: SpotPosition) => (
-    // 'Villain A · BTN'(오너 표기). 테이블 폭이 290px 미만이면 두 줄. 7인 이상은 둘레에 자리가 많아 늘 두 줄.
-    v.tableSize > 6 ? (
-      <span className="inline-flex flex-col items-center gap-px whitespace-nowrap rounded-badge bg-surface-base/85 px-1.5 py-0.5 text-2xs font-bold leading-none text-ink-primary ring-1 ring-border-default">
-        <span>{text}</span><span>{pos}</span>
-      </span>
-    ) : (
-      <span className="inline-flex flex-col items-center gap-px whitespace-nowrap rounded-badge bg-surface-base/85 px-1.5 py-0.5 text-2xs font-bold leading-none text-ink-primary ring-1 ring-border-default @min-[290px]:flex-row @min-[290px]:gap-0">
-        <span>{text}</span><span aria-hidden className="hidden @min-[290px]:inline">&nbsp;·&nbsp;</span><span>{pos}</span>
-      </span>
-    )
+    // 'Villain A · BTN'(오너 표기) — 인원·폭과 무관하게 **한 줄**(오너 2026-10-02 "7~9인도 한 줄, 좁으면 글자 축소").
+    //   글자: 기본 text-2xs(11.7px). 7인 이상이거나 테이블 폭 290px 미만(320 화면)이면 10px — 최소 크기다(더 줄이지 않는다).
+    //   예전엔 7인 이상·좁은 테이블에서 'Villain A' / 'UTG1' 두 줄로 나뉘며 가운데 '·' 가 빠졌다(독립 검토 10-02 §1).
+    <span className={['inline-flex items-center whitespace-nowrap rounded-badge bg-surface-base/85 px-1.5 py-0.5 font-bold leading-none text-ink-primary ring-1 ring-border-default',
+      v.tableSize > 6 ? 'text-[10px]' : 'text-2xs @max-[290px]:text-[10px]'].join(' ')} data-seat-label>
+      {text}&nbsp;·&nbsp;{pos}
+    </span>
   );
   // 좌석 아래 마지막 액션 — 상세만, 좁은 테이블(<290px)에서는 뺀다(같은 정보가 아래 스트리트 타임라인에 있다).
   //   지면색 받침: 받침 없이 테두리 선 위에 놓이면 라이트 390 에서 4.42(실측) — 빈 좌석 글자와 같은 이유.
@@ -162,20 +159,31 @@ export function SpotTableFeed({ v }: { v: ShareView }) {
 /**
  * 상세 — 머리(매치업·맥락) → 테이블 → 스트리트 타임라인 → 메모 → 투표 → 공개 블록 → 하단 동작.
  * 투표·공개 블록·하단 동작은 호출부(SpotPostCard)가 실제 배선을 넣는다.
+ *
+ * 넓은 칸(≥ 520px — PC 2-pane·태블릿)은 두 단(3:2): 왼쪽 테이블·타임라인, 오른쪽 메모·투표·공개. 모바일은 한 단(같은 순서).
+ *   🔴 독립 검토 10-02 §6: PC 2-pane 상세에서 테이블이 608px 정사각으로 커져 투표가 첫 화면 밖으로 밀렸다.
+ *   테이블 폭만 420 으로 줄여서는 모자랐다(1440×900 실측: 칸 높이 748 에 투표 아래끝 1087 — 머리 190·테이블 420·리버 타임라인 249 가 위에 쌓인다).
+ *   두 단이면 투표가 테이블 옆(칸 위끝에서 ≈ 430px)에 선다. 한 단 묶음은 display:contents 라 모바일 DOM 순서·간격이 그대로다.
  */
 export function SpotTableDetail({ v, poll, reveal, footer }: { v: ShareView; poll?: ReactNode; reveal: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-3" data-spot-share="table">
-      <div>
-        <p className="text-base font-bold text-ink-primary">{matchupLine(v)}</p>
-        <ContextChips v={v} className="mt-0.5" />
+    <div className="@container" data-spot-share="table">
+      <div className="flex flex-col gap-3 @min-[520px]:grid @min-[520px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[520px]:items-start @min-[520px]:gap-x-4">
+        <div className="@min-[520px]:col-span-2">
+          <p className="text-base font-bold text-ink-primary">{matchupLine(v)}</p>
+          <ContextChips v={v} className="mt-0.5" />
+        </div>
+        <div className="contents @min-[520px]:flex @min-[520px]:min-w-0 @min-[520px]:flex-col @min-[520px]:gap-3">
+          <div className="mx-auto w-full max-w-[420px]" data-felt-wrap><Felt v={v} big /></div>
+          {v.streets.some((s) => s.actions.length) && <StreetTimeline streets={v.streets} decision={v.streetName} />}
+        </div>
+        <div className="contents @min-[520px]:flex @min-[520px]:min-w-0 @min-[520px]:flex-col @min-[520px]:gap-3">
+          {v.note && <p className="border-l-2 border-accent-300/50 pl-2.5 text-sm text-ink-secondary wrap-break-word">{v.note}</p>}
+          {poll}
+          {reveal}
+        </div>
+        {footer && <div className="@min-[520px]:col-span-2">{footer}</div>}
       </div>
-      <Felt v={v} big />
-      {v.streets.some((s) => s.actions.length) && <StreetTimeline streets={v.streets} decision={v.streetName} />}
-      {v.note && <p className="border-l-2 border-accent-300/50 pl-2.5 text-sm text-ink-secondary wrap-break-word">{v.note}</p>}
-      {poll}
-      {reveal}
-      {footer}
     </div>
   );
 }

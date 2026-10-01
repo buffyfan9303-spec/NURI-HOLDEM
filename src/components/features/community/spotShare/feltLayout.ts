@@ -46,6 +46,8 @@ const GAP = 3;
 const BOARD_GAP = 4.5;    // 좌석–보드 최소 간격 — 피드에서 0.6px 까지 붙었다(독립 검토 10-02). 서브픽셀 여유 0.5
 const CENTER_TOL = 24;    // 보드가 가운데에서 이만큼까지 비켜도 '가운데'(검토 기준 30px 안)
 const OVAL_SIDE = 0.08;   // 타원 면의 좌우 여백(폭 비율) — SpotTable 의 inset-x-[8%] 와 짝
+const SEAT_OUT = 16;      // 좌석 가운데가 타원 둘레에서 이만큼 넘게 벗어나면 되돌린다(검토 기준 20px 안)
+const SEAT_FAR = 18;      // 되돌린 뒤에도 이보다 멀면 그 높이는 탈락(rank +4) — 검토 기준 20px 에 2px 여유
 
 type R = { x: number; y: number; w: number; h: number };
 const hit = (a: R, b: R, gap = GAP) =>
@@ -102,16 +104,52 @@ function tryAt(inp: FeltIn, H: number, pinBoard: boolean): FeltOut {
     }
   }
 
+  // 타원 면은 rounded-full 상자(스타디움) — 반지름 = 짧은 변의 절반. 둘레까지의 거리(밖 +, 안 −)
+  const oHalfW = W * (0.5 - OVAL_SIDE), oHalfH = (ovalBottom - ovalTop) / 2;
+  const rr = Math.min(oHalfW, oHalfH), ocy = ovalTop + oHalfH;
+  const edgeDist = (x: number, y: number) =>
+    Math.hypot(Math.max(Math.abs(x - cx) - (oHalfW - rr), 0), Math.max(Math.abs(y - ocy) - (oHalfH - rr), 0)) - rr;
+  const inOval = (x: number, y: number) => edgeDist(x, y) <= -1;
+
+  // ②-b 밀려서 둘레에서 멀어진 좌석을 둘레 쪽 빈자리로 되돌린다.
+  //   🔴 2026-10-02 독립 검토(경미): 360 상세 8·9인 리버에서 빈 자리 SB·CO 가 위·옆 좌석과 보드에 밀려 타원 아래 37~41px,
+  //   '나 BTN' 배지 옆까지 내려가 내 줄처럼 읽혔다. 둘레 ±SEAT_OUT 안에서 아무것과도 안 닿는 가장 가까운 자리로 옮긴다.
+  //   못 찾으면 그대로 둔다(겹침 없는 쪽이 우선). 줄마다 둘레 띠(|거리| ≤ SEAT_OUT)에 드는 x 구간만 훑는다 —
+  //   스타디움 거리는 |x − cx| 에 대해 단조라 구간이 닫힌 식으로 나온다(전체 격자를 훑으면 상세 9인 리버에서 6배 느렸다).
+  const flatW = oHalfW - rr, flatH = oHalfH - rr;
+  const span = (dy: number, d: number) => (d < 0 || dy >= d ? null : flatW + Math.sqrt(d * d - dy * dy));
+  for (const s of seats) {
+    // 좌석끼리 겹친 배치(rank ≥ 10)는 어차피 탈락이라 되돌리기를 건너뛴다
+    if (!clean || edgeDist(s.x, s.y) <= SEAT_OUT) continue;
+    const others: R[] = [...seats.filter((o) => o !== s), heroR, ...(pinBoard ? [boardR] : [])];
+    let best = null as { x: number; y: number; d: number } | null;   // 클로저가 채운다(좁히기 방지)
+    const look = (x: number, y: number) => {
+      if (x < s.w / 2 + 1 || x > W - s.w / 2 - 1 || y < s.h / 2 || y > H - s.h / 2) return;
+      if (Math.abs(edgeDist(x, y)) > SEAT_OUT) return;
+      const r = { x, y, w: s.w, h: s.h };
+      if (others.some((o) => hit(r, o, o === boardR ? BOARD_GAP + 0.5 : GAP))) return;
+      const d = Math.hypot(x - s.x, y - s.y);
+      if (!best || d < best.d) best = { x, y, d };
+    };
+    // 거칠게(6px) 훑고, 찾은 자리 둘레를 2px 로 다듬는다
+    for (let y = s.h / 2; y <= H - s.h / 2 + 0.01; y += 6) {
+      const dy = Math.max(Math.abs(y - ocy) - flatH, 0);
+      const uMax = span(dy, rr + SEAT_OUT);
+      if (uMax === null) continue;
+      const uMin = span(dy, rr - SEAT_OUT) ?? 0;
+      for (let u = uMin; u <= uMax + 0.01; u += 6) { look(cx - u, y); look(cx + u, y); }
+    }
+    const coarse = best;
+    if (coarse) for (let dy = -6; dy <= 6; dy += 2) for (let dx = -6; dx <= 6; dx += 2) look(coarse.x + dx, coarse.y + dy);
+    if (best) { s.x = best.x; s.y = best.y; }
+  }
+  const far = seats.some((s) => edgeDist(s.x, s.y) > SEAT_FAR);
+
   // ③ 보드 — 가운데에서 가까운 순으로, 좌석·내 자리와 닿지 않는 자리를 등급으로 고른다:
   //   0 = 그려진 타원 안 + 내 카드 위 + 가운데(±CENTER_TOL) · 1 = 타원 안 + 내 카드 위(옆으로 치우침)
   //   · 2 = 안 닿기만 함(타원 밖·내 카드 줄 — 마지막 안전망).
   const maxDx = Math.max(0, W * (0.5 - OVAL_SIDE) - board.w / 2);
   const obstacles: R[] = [...seats, heroR];
-  // 타원 면은 rounded-full 상자(스타디움) — 반지름 = 짧은 변의 절반
-  const oHalfW = W * (0.5 - OVAL_SIDE), oHalfH = (ovalBottom - ovalTop) / 2;
-  const rr = Math.min(oHalfW, oHalfH), ocy = ovalTop + oHalfH;
-  const inOval = (x: number, y: number) =>
-    Math.hypot(Math.max(Math.abs(x - cx) - (oHalfW - rr), 0), Math.max(Math.abs(y - ocy) - (oHalfH - rr), 0)) <= rr - 1;
   let best: { pt: Pt; cost: number; tier: number } | null = null;
   for (let dx = 0; dx <= maxDx + 0.01; dx += 4) {
     for (const sx of dx ? [1, -1] : [1]) {
@@ -131,8 +169,9 @@ function tryAt(inp: FeltIn, H: number, pinBoard: boolean): FeltOut {
     seats: Object.fromEntries(seats.map((s) => [s.key, { x: s.x, y: s.y }])),
     board: best?.pt ?? { x: cx, y: prefY },
     ovalTop, ovalBottom,
-    ok: clean && best?.tier === 0,
-    rank: (clean ? 0 : 10) + (best?.tier ?? 3),
+    ok: clean && best?.tier === 0 && !far,
+    // 둘레에서 벗어난 좌석이 남으면 +4 — 높이를 더 키운 배치를 계속 본다(못 찾으면 가장 나은 것)
+    rank: (clean ? 0 : 10) + (best?.tier ?? 3) + (far ? 4 : 0),
   };
 }
 

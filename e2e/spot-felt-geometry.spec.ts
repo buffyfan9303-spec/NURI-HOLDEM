@@ -27,6 +27,9 @@ const CFGS: Cfg[] = [
   { key: '9hu', tableSize: 9, hero: 'BTN', vils: ['BB'] },
   { key: '9-3way', tableSize: 9, hero: 'CO', vils: ['BTN', 'SB'] },            // 왼쪽 끝에 셋이 끼던 판(360 피드 401~419px)
   { key: '9max', tableSize: 9, hero: 'BB', vils: ['UTG1', 'HJ', 'BTN'] },      // 9인 4-way — 10-02 FAIL 판(390 턴·리버)
+  // 10-02 3차 검토(경미): 360 상세 리버에서 빈 자리 SB·CO 가 타원 아래 41px · 9인 상대 5명은 Villain A 가 타원 밖 22~31px
+  { key: '8-6way', tableSize: 8, hero: 'BTN', vils: ['UTG1', 'MP', 'LJ', 'HJ', 'BB'] },
+  { key: '9-6way', tableSize: 9, hero: 'BTN', vils: ['SB', 'BB', 'UTG', 'LJ', 'CO'] },
 ];
 const BOARDS = [0, 3, 4, 5] as const;
 const STREET = { 0: 'preflop', 3: 'flop', 4: 'turn', 5: 'river' } as const;
@@ -89,13 +92,13 @@ async function install(page: Page) {
 }
 
 type Box = { id: string; l: number; t: number; r: number; b: number };
-type FeltReport = { seats: number; boardCards: number; seatParts: number; boardParts: number; overlaps: string[]; placement: string[] };
+type FeltReport = { seats: number; boardCards: number; seatParts: number; boardParts: number; overlaps: string[]; placement: string[]; labels: number; ring: string[] };
 
 /** 한 테이블 안의 좌석 하위 상자 × 보드 하위 상자 교차 — 페이지 안에서 잰다 */
 async function measureFelt(page: Page, feltSel: string): Promise<FeltReport> {
   return page.evaluate((sel) => {
     const f = document.querySelector(sel);
-    if (!f) return { seats: 0, boardCards: 0, seatParts: 0, boardParts: 0, overlaps: ['테이블 없음'], placement: [] };
+    if (!f) return { seats: 0, boardCards: 0, seatParts: 0, boardParts: 0, overlaps: ['테이블 없음'], placement: [], labels: 0, ring: [] };
     const boxOf = (el: Element, id: string): Box | null => {
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') return null;
@@ -158,15 +161,53 @@ async function measureFelt(page: Page, feltSel: string): Promise<FeltReport> {
         if (g < 4) placement.push(`${s.id}–보드 간격 ${g.toFixed(1)}px < 4`);
       }
     }
+    // 🔴 10-02 3차 검토 + 오너 결정(10-02) — ⓓ 상대 이름표는 인원·폭과 무관하게 한 줄 'Villain A · UTG1'
+    //   (글자가 한 줄에 그려지고, 잘리지 않고, 10px 이상) ⓔ 좌석·빈 자리 가운데가 타원 둘레에서 20px 안.
+    const ring: string[] = [];
+    let labels = 0;
+    f.querySelectorAll('[data-seat]').forEach((s) => {
+      const who = s.getAttribute('data-seat');
+      if (who === 'hero') return;
+      const lab = (s.querySelector('[data-seat-label]') ?? s.querySelector('.rounded-badge')) as HTMLElement | null;
+      if (!lab) { ring.push(`${who} 이름표 없음`); return; }
+      labels++;
+      const text = (lab.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // 줄 수 = 보이는 글자 조각들의 세로 가운데를 3px 넘게 벌어진 무리로 센 것(요소 상자는 빼고 글자만 잰다 —
+      //   inline-flex 자식 상자 위끝은 같은 줄이어도 소수점이 달라 거짓으로 여러 줄이 된다)
+      const mids: number[] = [];
+      const tw = document.createTreeWalker(lab, NodeFilter.SHOW_TEXT);
+      for (let t = tw.nextNode(); t; t = tw.nextNode()) {
+        if (!(t.textContent ?? '').trim()) continue;
+        const rg = document.createRange(); rg.selectNodeContents(t);
+        for (const q of rg.getClientRects()) if (q.width > 0.5) mids.push(q.top + q.height / 2);
+      }
+      mids.sort((a, b) => a - b);
+      const lines = mids.length ? 1 + mids.slice(1).filter((m, k) => m - mids[k] > 3).length : 0;
+      const fs = parseFloat(getComputedStyle(lab).fontSize);
+      if (!/^Villain [A-E] · [A-Z0-9]+$/.test(text)) ring.push(`${who} 이름표 글자 '${text}'`);
+      if (lines !== 1) ring.push(`${who} 이름표 ${lines}줄`);
+      if (lab.scrollWidth > lab.clientWidth + 0.5) ring.push(`${who} 이름표 잘림 ${lab.scrollWidth - lab.clientWidth}px`);
+      if (!(fs >= 10)) ring.push(`${who} 이름표 글자 ${fs}px < 10`);
+    });
+    if (ovalEl) {
+      const o = ovalEl.getBoundingClientRect();
+      const rr = Math.min(o.width, o.height) / 2, ocx = o.left + o.width / 2, ocy = o.top + o.height / 2;
+      for (const s of blocks) {
+        if (s.id === 'hero') continue;
+        const x = (s.l + s.r) / 2, y = (s.t + s.b) / 2;
+        const d = Math.hypot(Math.max(Math.abs(x - ocx) - (o.width / 2 - rr), 0), Math.max(Math.abs(y - ocy) - (o.height / 2 - rr), 0)) - rr;
+        if (d > 20) ring.push(`${s.id} 가 타원 밖 ${d.toFixed(1)}px > 20`);
+      }
+    }
     return {
       seats: f.querySelectorAll('[data-seat]').length,
       boardCards: board ? board.querySelectorAll('[data-card]').length : 0,
-      seatParts: seatParts.length, boardParts: boardParts.length, overlaps, placement,
+      seatParts: seatParts.length, boardParts: boardParts.length, overlaps, placement, labels, ring,
     };
   }, feltSel);
 }
 
-function check(where: string, i: number, rep: FeltReport, bad: string[], place: string[]) {
+function check(where: string, i: number, rep: FeltReport, bad: string[], place: string[], ring: string[]) {
   const { c, b } = CASES[i];
   // 거짓 통과 방지 — 측정 대상이 픽스처와 같아야 한다(0건이면 여기서 걸린다)
   expect(rep.seats, `${where} ${titleOf(i)}: 좌석 수`).toBe(c.vils.length + 1);
@@ -175,11 +216,13 @@ function check(where: string, i: number, rep: FeltReport, bad: string[], place: 
   expect(rep.boardParts, `${where} ${titleOf(i)}: 보드 상자 0건`).toBeGreaterThan(0);
   for (const o of rep.overlaps) bad.push(`${where} ${titleOf(i)}: ${o}`);
   for (const o of rep.placement) place.push(`${where} ${titleOf(i)}: ${o}`);
+  expect(rep.labels, `${where} ${titleOf(i)}: 잰 상대 이름표 수`).toBe(c.vils.length);
+  for (const o of rep.ring) ring.push(`${where} ${titleOf(i)}: ${o}`);
 }
 
 for (const w of [320, 360, 390]) {
-  test(`좌석 × 보드 겹침 0 · 보드는 타원 안·내 카드 위 — 폭 ${w} · 보드 0/3/4/5장 · 상대 1/2/3명 · 6·9인 · 피드와 상세`, async ({ page }) => {
-    test.setTimeout(240_000);
+  test(`좌석 × 보드 겹침 0 · 보드는 타원 안·내 카드 위 · 이름표 한 줄 · 좌석은 둘레 20px 안 — 폭 ${w} · 보드 0/3/4/5장 · 상대 1/2/3/5명 · 6·8·9인 · 피드와 상세`, async ({ page }) => {
+    test.setTimeout(420_000);
     await page.setViewportSize({ width: w, height: 844 });
     await page.addInitScript(() => { try { localStorage.setItem('nuri:board-view', 'feed'); } catch { /* 사생활 모드 */ } });
     await stubLogin(page);
@@ -200,13 +243,14 @@ for (const w of [320, 360, 390]) {
 
     const bad: string[] = [];
     const place: string[] = [];
+    const ring: string[] = [];
     // ── 피드 — 카드마다 화면에 올려(content-visibility 건너뛰기 방지) 잰다
     let feedMeasured = 0;
     for (let i = 0; i < CASES.length; i++) {
       const li = page.locator('li').filter({ hasText: titleOf(i) }).filter({ visible: true }).first();
       await li.evaluate((n) => { n.setAttribute('data-geo-card', ''); n.scrollIntoView({ block: 'center' }); });
       await page.waitForTimeout(60);
-      check('피드', i, await measureFelt(page, '[data-geo-card] [data-felt]'), bad, place);
+      check('피드', i, await measureFelt(page, '[data-geo-card] [data-felt]'), bad, place, ring);
       await li.evaluate((n) => n.removeAttribute('data-geo-card'));
       feedMeasured++;
     }
@@ -220,7 +264,7 @@ for (const w of [320, 360, 390]) {
       const felt = page.getByRole('dialog').first().locator('[data-spot-post] [data-felt]');
       await expect(felt, `${titleOf(i)} 상세에 테이블이 없다`).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(150);
-      check('상세', i, await measureFelt(page, '[role=dialog] [data-spot-post] [data-felt]'), bad, place);
+      check('상세', i, await measureFelt(page, '[role=dialog] [data-spot-post] [data-felt]'), bad, place, ring);
       detailMeasured++;
       await page.evaluate(() => history.back());
       await expect(page.getByRole('dialog'), '뒤로가기로 상세가 닫히지 않는다').toHaveCount(0, { timeout: 5_000 });
@@ -230,5 +274,6 @@ for (const w of [320, 360, 390]) {
 
     expect(bad, '좌석(이름표·카드)이 보드 카드를 덮거나, 좌석끼리 겹치거나, 테이블 밖으로 밀렸다').toEqual([]);
     expect(place, '보드가 타원 밖이거나, 내 카드 줄로 내려왔거나, 좌석과 4px 미만으로 붙었다').toEqual([]);
+    expect(ring, '상대 이름표가 한 줄 \'Villain A · 자리\' 가 아니거나(두 줄·잘림·10px 미만), 좌석이 타원 둘레에서 20px 넘게 벗어났다').toEqual([]);
   });
 }

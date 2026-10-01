@@ -94,7 +94,10 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
       <Row label="자리">
         나 <b className="font-bold">{spot.heroPos}</b>
         {' · '}
-        {villains.map((v) => `${villainName(v.label)} (${v.pos})`).join(', ')}
+        {/* 항목마다 한 덩어리 — 'Villain B' 와 '(BTN)' 이 다른 줄로 갈라지지 않게(독립 검토 10-02 §3 경미 2). 줄바꿈은 쉼표 뒤에서만. */}
+        {villains.map((v, i) => (
+          <span key={v.label}>{i > 0 && ', '}<span className="whitespace-nowrap" data-testid="spot-seat-item">{villainName(v.label)} ({v.pos})</span></span>
+        ))}
       </Row>
       <Row label="유효 스택">
         <span className="tabular-nums">{spot.effectiveBb}BB</span>

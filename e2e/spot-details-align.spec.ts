@@ -46,9 +46,25 @@ const SPOT_THREE = {
   ],
   heroAction: 'bet', heroActionSizeBb: 4.5,
 };
+/** 상대 5명 · 9인 · 턴 — 독립 검토 10-02(review-share-a3-1002.md §3 경미 2)의 판: '자리' 줄에서
+ *  'Villain B' 와 '(BTN)' 이 서로 다른 줄로 갈라졌다(360 다크). 그 검토의 픽스처 그대로다. */
+const SPOT_FIVE = {
+  v: 3, game: 'nlhe', format: 'mtt', tableSize: 9, sbBb: 0.5, anteBb: 1, effectiveBb: 35, heroStackBb: 42, villainStackBb: 35,
+  heroPos: 'CO', villainPos: 'BB', hero: ['Ah', 'Kd'], villain: [['Qc', 'Qs'], [], ['9h', '9d'], ['7c', '7d'], []], extraPos: ['BTN', 'SB', 'UTG', 'HJ'],
+  board: ['Kh', '7c', '2d', '5s'], street: 'turn', note: '긴 메모가 두 줄 이상으로 넘어가는지 확인하려고 적은 문장입니다. 줄 정렬을 봅니다.',
+  actions: [
+    { street: 'preflop', actor: 'hero', type: 'raise', sizeBb: 2.2 },
+    { street: 'preflop', actor: 'villain', pos: 'BTN', type: 'call', sizeBb: 2.2 },
+    { street: 'preflop', actor: 'villain', type: 'call', sizeBb: 1.2 },
+    { street: 'flop', actor: 'villain', type: 'check' },
+    { street: 'turn', actor: 'villain', type: 'bet', sizeBb: 5 },
+  ],
+  heroAction: 'call', heroActionSizeBb: 5,
+};
 const CASES = [
   { name: '상대 1명', spot: SPOT_ONE, villains: 1 },
   { name: '상대 3명·보드', spot: SPOT_THREE, villains: 3 },
+  { name: '상대 5명·9인', spot: SPOT_FIVE, villains: 5 },
 ] as const;
 const VIEWS = [
   { name: '390 다크', width: 390, height: 844, theme: 'dark' },
@@ -69,6 +85,8 @@ interface Measure {
   heroGaps: number[];
   villainGaps: number[];
   text: string;
+  /** '자리' 줄의 'Villain X (자리)' 항목마다 몇 줄에 걸쳐 그려졌는가 — 1 이어야 한다 */
+  seatItems: { item: string; lines: number }[];
 }
 
 /** 한 SpotDetails 를 잰다 — 숫자만 돌려주고 판정은 아래 assertAligned 가 한다. */
@@ -95,7 +113,28 @@ async function measure(root: Locator): Promise<Measure> {
     };
     const heroRow = [...el.querySelectorAll('[data-spot-row]')].find((row) => row.querySelector('[data-spot-label]')?.textContent === '내 카드');
     const villainBox = el.querySelector('[data-spot-villain] [data-spot-cards]');
-    return { rows, villainMid, heroGaps: gaps(heroRow?.querySelector('[data-spot-cards]')), villainGaps: gaps(villainBox), text: el.textContent ?? '' };
+    // '자리' 줄 — 글자 위치로 잰다(마크업과 무관하게: 고치기 전 빌드에서도 같은 방법으로 FAIL 이 나야 한다).
+    const seatItems: { item: string; lines: number }[] = [];
+    const seatVal = [...el.querySelectorAll('[data-spot-row]')]
+      .find((row) => row.querySelector('[data-spot-label]')?.textContent === '자리')?.querySelector('[data-spot-value]');
+    if (seatVal) {
+      const nodes: { n: Text; at: number }[] = [];
+      let txt = '';
+      const walker = document.createTreeWalker(seatVal, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) { nodes.push({ n: n as Text, at: txt.length }); txt += n.textContent ?? ''; }
+      const at = (i: number, end: boolean) => {
+        const k = nodes.findIndex((x) => (end ? i > x.at : i >= x.at) && i <= x.at + (x.n.textContent ?? '').length);
+        return { node: nodes[k].n, off: i - nodes[k].at };
+      };
+      for (const m of txt.matchAll(/Villain [A-E] \([A-Z0-9]+\)/g)) {
+        const range = document.createRange();
+        const a = at(m.index!, false), b = at(m.index! + m[0].length, true);
+        range.setStart(a.node, a.off); range.setEnd(b.node, b.off);
+        const tops = new Set([...range.getClientRects()].filter((q) => q.width > 0.5).map((q) => Math.round(q.top)));
+        seatItems.push({ item: m[0], lines: tops.size });
+      }
+    }
+    return { rows, villainMid, heroGaps: gaps(heroRow?.querySelector('[data-spot-cards]')), villainGaps: gaps(villainBox), text: el.textContent ?? '', seatItems };
   });
 }
 
@@ -136,6 +175,10 @@ function assertAligned(m: Measure, villains: number, where: string) {
   expect(m.text, `${where}: 'Villain A (BB)' 자리 표기가 없다`).toContain('Villain A (BB)');
   expect(m.text, `${where}: 옛 표기 '상대 A' 가 남았다`).not.toMatch(/상대 A/);
   if (villains === 3) expect(m.text, `${where}: Villain C 가 없다`).toContain('Villain C (SB)');
+  // ⑥ '자리' 줄 — 'Villain B (BTN)' 한 항목이 두 줄로 갈라지지 않는다(독립 검토 10-02 경미 2). 0건 수집 금지.
+  expect(m.seatItems.length, `${where}: '자리' 줄의 Villain 항목 수`).toBe(villains);
+  const split = m.seatItems.filter((x) => x.lines !== 1);
+  expect(split, `${where}: 항목이 줄바꿈으로 갈라졌다`).toEqual([]);
 }
 
 for (const view of VIEWS) {

@@ -2,7 +2,7 @@
 // 계산하지 않는다(팟·승률·핸드 강도 없음). 적힌 값만 옮기고, 빈 값은 항목째 뺀다.
 // 원본: 시안 브랜치 NURI/spot-share-design-1001(b8982254) 의 shareView.ts — 투표 보기(voteChoices·fitPollOptions)를 더했다.
 import type { SpotReview, SpotActionType, Street, SpotPosition } from '../../../../lib/spot';
-import { actionLabel, actorPos, streetLabel, EXTRA_LETTERS } from '../../../../lib/spot';
+import { actionLabel, actorPos, streetLabel, EXTRA_LETTERS, committedBb, hasStackPair, liveVillains } from '../../../../lib/spot';
 
 const RANK_ORDER = 'AKQJT98765432';
 
@@ -107,29 +107,48 @@ export function decisionLine(v: ShareView): string {
 // 2026-10-01 README P9: 상대가 체크한 뒤 내 차례인데도 보기가 '폴드·콜·레이즈' 로 고정이었다.
 //   결정 스트리트에 벳·레이즈가 있으면 마주한 벳이 있다 → 폴드·콜·레이즈.
 //   없으면 프리플랍은 블라인드가 벳이라 그대로이되 BB(림프만 받음)는 체크·레이즈, 포스트플랍은 체크·벳.
-// ⚠ 서버 초안 20261001o_spot_vote_choices.sql 의 _spot_vote_choices 가 **같은 규칙**이다. 한쪽을 바꾸면 둘 다 바꿔라.
+// 2026-10-02 독립 검토 FAIL(review-share-a3-1002.md §2): 상대가 올인했거나 내 스택을 덮는 벳에도 '레이즈' 가 나왔다.
+//   레이즈를 받을 수 없으면 폴드·콜만: ⓐ 콜할 금액 ≥ 내 남은 스택 ⓑ 팟에 남은 상대가 전원 올인(칩 0).
+//   남은 스택 = 스택(두 스택이 있으면 내 스택, 없으면 유효 스택) − committedBb(내가 넣은 누적 · spot.ts).
+//   상대 스택: Villain A 는 villainStackBb(없으면 유효 스택), B~E 는 따로 적지 않으므로 유효 스택으로 본다.
+// ⚠ 서버 20261002c_spot_vote_allin.sql 의 _spot_vote_choices 가 **같은 규칙**이다. 한쪽을 바꾸면 둘 다 바꿔라.
+//   두 쪽이 같은 답을 내는지는 그 파일 §3 의 사례표를 shareView.test.ts 가 이 함수로 다시 돌려 잠근다.
 const LEGACY = ['폴드', '콜', '레이즈'];
+const EPS = 1e-9;
 
-export function voteChoices(s: Pick<SpotReview, 'street' | 'heroPos' | 'actions'>): string[] {
+export function voteChoices(s: SpotReview): string[] {
   const facing = s.actions.some((a) => a.street === s.street && (a.type === 'bet' || a.type === 'raise'));
-  if (facing) return LEGACY;
-  if (s.street === 'preflop') return s.heroPos === 'BB' ? ['체크', '레이즈'] : LEGACY;
-  return ['체크', '벳'];
+  const base = facing ? LEGACY
+    : s.street === 'preflop' ? (s.heroPos === 'BB' ? ['체크', '레이즈'] : LEGACY)
+      : ['체크', '벳'];
+  return base === LEGACY && !canRaise(s) ? ['폴드', '콜'] : base;
+}
+
+function canRaise(s: SpotReview): boolean {
+  const pair = hasStackPair(s);
+  const stackOf = (pos: SpotPosition) =>
+    pair && pos === s.heroPos ? (s.heroStackBb as number) : pair && pos === s.villainPos ? (s.villainStackBb as number) : s.effectiveBb;
+  const live = liveVillains(s);
+  const toCall = Math.max(s.street === 'preflop' ? 1 : 0, ...live.map((v) => committedBb(s, v.pos, s.street))) - committedBb(s, s.heroPos, s.street);
+  if (toCall >= stackOf(s.heroPos) - committedBb(s, s.heroPos) - EPS) return false;
+  return live.some((v) => stackOf(v.pos) - committedBb(s, v.pos) > EPS);
 }
 
 /**
  * 서버가 보기를 고정값(폴드·콜·레이즈)으로 넣은 글 — 20261001o 적용 전 글 — 을 상황에 맞게 **보여 준다**.
  * 표는 보기 id 로 들어가므로 뜻이 같은 쪽으로만 이름을 바꾼다: 콜→체크(넘기기), 레이즈→벳/레이즈(올리기).
  * 고를 수 없는 폴드는 빼되, 이미 표가 있으면 남긴다(있던 표를 화면에서 지우지 않는다).
+ * 올리기가 없는 자리(상대 올인·내 스택을 덮는 벳 → 폴드·콜)면 레이즈도 같은 규칙으로 뺀다 — 표가 있으면 '레이즈' 그대로 남긴다.
  * 보기가 고정값이 아니면(서버 적용 뒤 글·직접 만든 투표) 손대지 않는다.
  */
 export function fitPollOptions<T extends { idx: number; label: string; votes: number }>(opts: T[], choices: string[]): T[] {
   const sorted = [...opts].sort((a, b) => a.idx - b.idx);
   if (sorted.map((o) => o.label).join() !== LEGACY.join() || choices.join() === LEGACY.join()) return opts;
   const passive = choices.includes('체크') ? '체크' : '콜';
-  const aggressive = choices[choices.length - 1];
+  const aggressive = choices.find((c) => c === '벳' || c === '레이즈');
   return sorted.flatMap((o) => {
     if (o.label === '폴드') return choices.includes('폴드') || o.votes > 0 ? [o] : [];
-    return [{ ...o, label: o.label === '콜' ? passive : aggressive }];
+    if (o.label === '레이즈' && !aggressive) return o.votes > 0 ? [o] : [];
+    return [{ ...o, label: o.label === '콜' ? passive : (aggressive as string) }];
   });
 }
