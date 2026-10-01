@@ -2173,7 +2173,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           .filter((n) => !mainChip || mainChip.split || n !== mainChip.label);
         const sides = [...new Set(dayGames.filter((g) => g.kind === 'side').map((g) => g.name))];
         const ledgers = [...new Set(dayGames.filter((g) => g.kind === 'ledger').map((g) => g.name))];
-        const known = new Set<string>(['', ...mains, ...sides, ...ledgers]);
+        // K-1 — mains 에서 뺀 메인 칩 이름도 known 이어야 저장분(=제목)이 기타 게임에 한 번 더 나오지 않는다.
+        const known = new Set<string>(['', ...mains, ...sides, ...ledgers, ...(mainChip && !mainChip.split ? [mainChip.label] : [])]);
         // 포스터·장부엔 없지만 이미 저장됐거나(과거 직접추가) 지금 입력 중인 커스텀 게임
         const extras = [...new Set([
           ...[...saved].filter((s) => s && !known.has(s)),
@@ -2499,7 +2500,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         catch { imgFailed = true; }
       }
       toast.show(imgFailed
-        ? '매장이 생성되었습니다. 대표 사진은 올리지 못했어요 — 매장 설정 › 매장 페이지에서 다시 올려 주세요'
+        ? '매장이 생성되었습니다. 대표 사진은 올리지 못했습니다 — 매장 설정 › 매장 페이지에서 다시 올려 주십시오'
         : '매장이 생성되었습니다. 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', imgFailed ? 'error' : 'success');
       await onCreated();
     } catch (e) { toast.show(e instanceof Error ? e.message : '매장 생성 실패', 'error'); }

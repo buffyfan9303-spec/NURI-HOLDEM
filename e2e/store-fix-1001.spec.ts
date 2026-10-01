@@ -105,6 +105,20 @@ test('S-10 — 순위 메인 게임은 칩 하나(제목) · 기존 저장분(\'
   expect(chips).toEqual([`${TITLE} ✓`]);
 });
 
+// K-1 — 저장 이름이 제목과 같으면(새 규칙의 일반 경로) 같은 대회가 '기타 게임' 에 한 번 더 나왔다.
+test('K-1 — 저장 이름 = 제목이어도 같은 대회 칩은 한 번만(기타 게임에 중복 없음)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, 1440, async (p) => {
+    const saved = { id: 'r1', venue_id: MOCK_VENUE, ranking_date: MOCK_DAY, event_name: TITLE, position: 1, rank: 1, nickname: '홍길동', real_name: '', prize: null };
+    await p.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([saved])));
+    await p.route(/\/rest\/v1\/venue_rankings\?/, get([saved]));
+  }, 900);
+  await go(page, '게임 진행', '순위');
+  const chips = await page.evaluate((t) => [...document.querySelectorAll('button')]
+    .filter((b) => (b as HTMLElement).offsetParent && (b.textContent || '').trim().startsWith(t)).map((b) => (b.textContent || '').trim()), TITLE);
+  expect(chips).toEqual([`${TITLE} ✓`]);
+});
+
 // S-06 — 숨김(status ≠ active) 매장: 업주에게 아무 표시가 없었고 '즉시 게시됩니다' 가 그대로 떴다.
 test('S-06 — 숨김 매장이면 숨김 안내가 뜨고 즉시 게시 안내는 사라진다', async ({ page }) => {
   test.setTimeout(90_000);
