@@ -24,9 +24,12 @@ const flagGated = (body: string, gate: string) => new RegExp(`coalesce\\(public\
 const killGated = (body: string) =>
   /v\.id = p_venue_id\s+and \(v\.owner_id = auth\.uid\(\) or coalesce\(my_role\(\) = 'admin'::user_role, false\)\)\)\s+and exists\(select 1 from public\.venue_kill_switch/.test(body);
 const noRole = (body: string) => !/\brole\b/.test(body.slice(0, body.indexOf('language sql')));
-const anonRevoked = (src: string, sig: string) =>
-  new RegExp(`revoke all on function public\\.${sig.replace(/[()]/g, '\\$&')} from public, anon;`).test(src)
-  && !new RegExp(`grant execute on function public\\.${sig.replace(/[()]/g, '\\$&')} to [^;]*\\banon\\b`).test(src);
+// 정규식 조립 없이 문자열 비교로(CodeQL: 불완전한 이스케이프 회피)
+const anonRevoked = (src: string, sig: string) => {
+  const grantPrefix = `grant execute on function public.${sig} to `;
+  const grantsAnon = src.split('\n').some((l) => l.startsWith(grantPrefix) && /\banon\b/.test(l.slice(grantPrefix.length)));
+  return src.includes(`revoke all on function public.${sig} from public, anon;`) && !grantsAnon;
+};
 
 // 2026-10-01 라이브에서 읽은 옛 정의의 핵심 줄(음성 대조용)
 const OLD_INVITES = `create or replace function public.get_my_venue_invites(p_venue_id uuid default null)
@@ -61,6 +64,9 @@ describe('20261001i — 개인정보·설정 여부 최소 노출', () => {
     expect(flagGated(fn(APPLIED, 'pos_has_password'), 'can_access_ledger')).toBe(true);
     expect(anonRevoked(APPLIED, 'kill_switch_is_set(uuid)')).toBe(true);
     expect(anonRevoked(APPLIED, 'pos_has_password(uuid)')).toBe(true);
+    // 음성 대조: 회수가 없거나 anon 에 다시 주면 걸린다
+    expect(anonRevoked('grant execute on function public.kill_switch_is_set(uuid) to authenticated;', 'kill_switch_is_set(uuid)')).toBe(false);
+    expect(anonRevoked('revoke all on function public.kill_switch_is_set(uuid) from public, anon;\ngrant execute on function public.kill_switch_is_set(uuid) to anon, authenticated;', 'kill_switch_is_set(uuid)')).toBe(false);
   });
 
   it('SEC-05: 공개 순위는 role 을 반환하지 않는다 — 반환 타입이 바뀌니 DROP 후 ACL 을 다시 쓴다', () => {
