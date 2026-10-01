@@ -1,4 +1,7 @@
--- ⏳ 초안(미적용) — store-team 2026-10-01. **적용 금지**(리드가 판단·적용: MCP execute_sql, 이 파일 §0~§2 본문 그대로 한 번에).
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 본문 그대로 한 번에). 게이트 md5 4개 적용 직전 라이브 일치 확인.
+--    적용 후 실측 md5(prosrc): approve cd6f2bfc · rule 80bd1d70 · client_guard 1baa2b4f · reduce 04e69c1c(기대값과 일치) · 자가검사 통과 · 보안 어드바이저 ERROR 0(WARN 3·INFO 1).
+--    적용 전 독립 검토: critical-reviewer 재확인 PASS(review-money-1001.md 재확인 절 — F1 반례 6종 42501·양성 통과·되돌림 확인).
+-- (원래 머리줄) 초안 — store-team 2026-10-01.
 -- 20261001j — 'T' = 차감된 이용권 장수 + N 미설정 게임 = 참가비 ÷ 1만 장.
 --   요구 원천: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\audit-store-1001.md#S-01·S-02 ·
 --             C:\Users\buffy\Documents\누리홀덤_영상분석_0930\fable-money-1001.md#판정①·판정③·불변식 1·2·5 ·

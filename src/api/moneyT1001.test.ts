@@ -183,11 +183,14 @@ describe('불변식', () => {
     expect(guard).toContain(MSG);
     // 1만 원 미만 이용권 거절(유지) — 접수대용 합니다체 문구
     expect(fn('approve_buyin_request')).toContain("'참가비(할인 후 %원)가 1만 원 미만인 게임은 이용권으로 낼 수 없습니다. 요청을 거절하고 현금·카드·계좌로 받으십시오.'");
-    // 라이브 정의 게이트 4개 · 적용 전 초안 표기
+    // 라이브 정의 게이트 4개 · 적용 완료 표기(2026-10-01 리드 적용 — 적용 후 실측 md5 4개)
     for (const m of ['de5cd99da0c1aadb34e5535bcb7705da', '35e7504abaae6d7c62ce93f3eaebdfde', 'eee44d4d0c9c53e9fda390227d5f30c2', 'a74bbdeaaeea76735902521a400a720e']) {
       expect(sql.split('do $gate$')[1]?.split('end $gate$')[0], m).toContain(m);
     }
-    expect(sql.split('\n')[0]).toMatch(/^-- ⏳ 초안\(미적용\)/);
+    expect(sql.split('\n')[0]).toMatch(/^-- ✅ 2026-10-01 라이브 적용 완료/);
+    for (const m of ['cd6f2bfc', '80bd1d70', '1baa2b4f', '04e69c1c']) {
+      expect(sql.split('\n').slice(0, 3).join('\n'), m).toContain(m);
+    }
   });
 
   it('5 분납·수동 행은 예전과 같은 수(음성 대조군)', () => {
