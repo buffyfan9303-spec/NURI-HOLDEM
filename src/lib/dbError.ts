@@ -61,7 +61,7 @@ const DEFAULT_FALLBACK = '요청을 처리하지 못했습니다';
  * SQLSTATE 는 5글자이고 앞 두 글자가 분류다. 여기 열거한 것은 전부 "서버 내부 사정"이라
  * 사용자가 문장을 읽어도 할 수 있는 일이 없다. 반대로 **제외**한 것들이 중요하다:
  *  · `P0001` — plpgsql `raise exception`, 우리가 사용자를 향해 직접 쓴 문장이다(위에서 이미 반환).
- *  · 코드가 아예 없는 오류 — 네트워크·SDK·직접 `throw new Error('…')` 는 우리가 쓴 문장이다.
+ *  · 코드가 아예 없는 오류 — 네트워크·SDK·직접 `throw new Error('…')`. **한글 문장일 때만** 통과(isUserSentence).
  *  · `PGRST*` — PostgREST 계층. 위 switch 에서 다루고, 나머지는 식별자를 담지 않는다.
  */
 function isInternalSqlState(code: string): boolean {
@@ -70,9 +70,48 @@ function isInternalSqlState(code: string): boolean {
   return /^(0[89AB]|2[0-9BDEF]|3[0-9BDF]|4[02]|5[3-8]|F0|HV|P0[234]|XX)/.test(code);
 }
 
-/** 원문은 화면에서 빼되 **버리지는 않는다** — 재현 안 되는 버그의 유일한 단서다. */
+/**
+ * 우리가 사용자에게 보여 주려고 쓴 문장인가 — 화면에 그대로 내도 되는 원문의 판별 규칙(2026-10-01).
+ *
+ * 왜 코드(SQLSTATE)만으로 못 가르나: PostgREST·Supabase SDK 의 원문은 **코드가 없거나 PGRST* 라서**
+ * 5글자 SQLSTATE 검사(isInternalSqlState)에 안 걸렸다. 그래서 'JSON object requested, multiple (or no) rows returned'
+ * (PGRST116)·'Invalid API key'·"Could not find the 'x' column of 'y' in the schema cache"(PGRST204) 가 그대로 화면에 나갔다
+ * (내 매장 오류 카드 19곳 · 토스트 다수, 보안 표준 6).
+ *
+ * 규칙: ① 한글이 한 글자라도 있어야 한다 — 서버 raise exception·우리 throw new Error('…') 는 전부 한국어 문장이고,
+ *   PostgREST·Supabase·Postgres 시스템 원문은 전부 영문이다(AUTH_REQUIRED 같은 영문 토큰도 사용자 문장이 아니다).
+ *   ② 한글이 섞여 있어도 시스템 원문의 서명(제약 위반·스키마 캐시·RLS 등)이 보이면 아니다
+ *   — new Error(`저장 실패: ${error.message}`) 처럼 원문을 뒤에 붙여 감싼 경우를 막는다.
+ * ledger.ts ledgerErrorText 의 /[가-힣]/ 검사와 같은 발상이고, 여기가 단일 소스다.
+ */
+const HANGUL = /[가-힣ㄱ-ㅎㅏ-ㅣ]/;
+const SYSTEM_SIGNATURE = new RegExp([
+  'PGRST\\d{3}', 'SQLSTATE', 'schema cache', 'JSON object requested', 'row-level security',
+  'violates (?:\\w+ )*constraint', 'duplicate key value', 'invalid input syntax', 'null value in column',
+  '(?:relation|column|function|table|schema|type|role|policy|operator) "?[\\w.]+"? (?:does not exist|already exists)',
+  'could not find the', 'permission denied for', 'invalid api key', 'jwt', 'syntax error at',
+].join('|'), 'i');
+function isUserSentence(text: string): boolean {
+  return HANGUL.test(text) && !SYSTEM_SIGNATURE.test(text);
+}
+
+/** Sentry 중복 전송 방지 — LoadErrorCard 는 렌더마다 msgOf 를 부른다. */
+const reported = new Set<string>();
+const SENTRY_DSN = import.meta.env?.VITE_SENTRY_DSN as string | undefined;
+
+/** 원문은 화면에서 빼되 **버리지는 않는다** — 재현 안 되는 버그의 유일한 단서다. 콘솔 + (DSN 이 있으면) Sentry.
+ *  ⚠ console.error 가 아니라 warn: e2e 스펙 여럿이 "앱 오류(console.error·pageerror)는 0" 을 단언하는데,
+ *  이 경로는 정상 동작(오류를 사용자 문장으로 바꾸는 중)이라 오류로 세면 안 된다. */
 function logInternal(code: string, raw: string): void {
   try { console.warn('[db]', code || '(no code)', raw); } catch { /* 콘솔이 막힌 환경 */ }
+  if (!SENTRY_DSN) return;
+  const key = `${code}|${raw}`;
+  if (reported.has(key) || reported.size >= 50) return;
+  reported.add(key);
+  // monitoring.ts 가 이미 같은 방식으로 동적 import 한다(DSN 이 있을 때만 로드되는 별도 청크).
+  import('@sentry/react').then((Sentry) => {
+    Sentry.captureMessage('[db] 내부 오류 원문을 화면에서 가림', { level: 'warning', extra: { code, raw: raw.slice(0, 500) } });
+  }).catch(() => { /* 감시망 자체 오류는 무시 */ });
 }
 
 /**
@@ -99,7 +138,9 @@ export function msgOf(e: unknown, fallback = DEFAULT_FALLBACK): string {
   switch (code) {
     // 서버가 사용자를 향해 직접 쓴 문장(plpgsql raise exception) — 번역하지 않는다
     case 'P0001':
-      return raw || fallback;
+      if (isUserSentence(raw)) return raw;
+      if (raw) logInternal(code, raw);   // 영문 토큰('AUTH_REQUIRED' 등)은 사용자 문장이 아니다
+      return fallback;
     case '23505':
       return '이미 등록된 값입니다';
     case '23503':
@@ -126,13 +167,13 @@ export function msgOf(e: unknown, fallback = DEFAULT_FALLBACK): string {
   //
   //   그렇다고 전부 삼키면 이 파일이 막으려던 '전부 저장 실패로 뭉개짐'이 되돌아온다. 그래서 나눈다:
   //   화면에는 행동 가능한 문장만, 원문은 **콘솔로만** 남겨 재현 안 되는 버그의 단서를 유지한다.
-  if (raw && !isInternalSqlState(code)) return raw;
+  if (raw && !isInternalSqlState(code) && isUserSentence(raw)) return raw;
   if (raw) logInternal(code, raw);
   // 모르는 오류를 '실패'로 뭉개면 원인 추적이 끊긴다 — 단서를 최소한 남긴다.
   const detail = str(r.details) || str(r.hint);
   if (!detail) return fallback;
   // `details` 는 원문보다 더 노골적이다 — `Key (venue_id)=(…) is not present in table "venues"` 처럼
   // 컬럼·값·테이블을 한 줄에 담는다. 같은 기준으로 거른다.
-  if (isInternalSqlState(code)) { logInternal(code, detail); return fallback; }
+  if (isInternalSqlState(code) || !isUserSentence(detail)) { logInternal(code, detail); return fallback; }
   return `${fallback} (${detail})`;
 }
