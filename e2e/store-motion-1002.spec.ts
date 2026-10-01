@@ -263,6 +263,8 @@ test('M-5 짧은 판(출근 관리)으로 600 에서 가면 정렬 한 번으로
   });
   // 600 → 정렬값 하나. 그 뒤 클램프로 더 내려가면 2단 점프다.
   expect(ys.length, `scrollY 이동: ${ys.join(' → ')}`).toBeLessThanOrEqual(2);
+  // 클릭이 아무 효과가 없어 600 에 머무는 것도 실패다(ys=[600] 거짓 통과 차단 — verify-store-motion-1002 §3).
+  expect(ys[ys.length - 1], `정렬이 일어나지 않았다: ${ys.join(' → ')}`).toBeLessThan(600);
 });
 
 for (const vp of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }]) {
