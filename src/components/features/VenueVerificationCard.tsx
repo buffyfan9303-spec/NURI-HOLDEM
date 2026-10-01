@@ -1,17 +1,43 @@
 import { useEffect, useState } from 'react';
-import { getMyVenue, type Venue } from '../../api/community';
+import { getAllVenues, getMyVenue, type Venue } from '../../api/community';
+import { venueHiddenFromGuests } from '../../lib/venueHidden';
 
-/** 업주 마이페이지 상단 — 매장 인증 등급 표시(인증 부여는 관리자 전용) */
-export default function VenueVerificationCard() {
+/**
+ * 업주 마이페이지 상단 — 매장 인증 등급 표시(인증 부여는 관리자 전용) + 숨김 상태 안내(S-06).
+ *
+ * venueId 를 주면 **지금 고른 매장**을 읽는다. 예전엔 owner_id 로 첫 매장 하나만 읽어(getMyVenue)
+ * 매장이 여럿인 업주는 다른 매장의 등급을 봤다. showVerification=false 면 숨김 안내만(공동 운영자·직원).
+ */
+export default function VenueVerificationCard({ venueId, showVerification = true }: { venueId?: string | null; showVerification?: boolean } = {}) {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getMyVenue().then(setVenue).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    let alive = true;   // 매장 전환 중 앞 매장 응답이 늦게 와서 덮지 않게
+    setLoading(true);
+    const load = venueId ? getAllVenues().then((vs) => vs.find((v) => v.id === venueId) ?? null) : getMyVenue();
+    load.then((v) => { if (alive) setVenue(v); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [venueId]);
 
   if (loading || !venue) return null;
   const status = venue.verificationStatus ?? 'unverified';
+  // S-06(2026-10-01) — 숨김(status ≠ active)이면 서버 RLS 가 손님 화면의 일정·매장·로그인 안 한 TV 클락을 가린다
+  //   (venue_is_hidden · schedules_select · clock_states_public_read · venues_select). 업주 화면엔 그 사실이 0곳에 표시돼
+  //   '즉시 게시됩니다' 를 본 채 포스터를 계속 올렸다. 순위 기록은 유지된다(오너 결정 '매장 자체는 숨기고 순위 유지').
+  //   해제는 관리자만(admin_set_venue_archived) — 업주에게 버튼을 주지 않고 문의로 안내한다.
+  const hidden = venueHiddenFromGuests(venue.status);
+  const hiddenBand = hidden ? (
+    <div role="status" data-testid="venue-hidden-band" className="rounded-card border border-danger/40 bg-danger/10 px-3 py-2.5">
+      <p className="text-sm font-bold text-danger-light">이 매장은 숨김 상태입니다</p>
+      <p className="mt-0.5 t-desc break-keep text-ink-secondary">
+        손님 화면(매장·포스터·일정)과 로그인하지 않은 TV 클락에 보이지 않습니다. 새로 등록한 포스터도 손님에게 보이지 않습니다.
+        장부·클락·순위 기록은 그대로 쓰고 남습니다. TV 는 매장 계정(업주·장부 권한)으로 로그인하면 송출됩니다. 해제는 운영자에게 문의하세요.
+      </p>
+    </div>
+  ) : null;
+  if (!showVerification) return hiddenBand;
+  if (hidden) return hiddenBand;   // 숨김이면 '즉시 게시됩니다' 류 안내는 거짓이 된다 — 숨김 안내만.
 
   if (status === 'verified') {
     return (
