@@ -1,4 +1,7 @@
--- ⏳ 미적용 — 초안(community-team 2026-10-01). 적용은 리드만 한다. 라이브에는 begin…raise 롤백 리허설만 했다(아래 §R).
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 그대로 한 번에, 게이트 통과).
+--    적용 후 실측: share_spot_post md5(prosrc) 5de6754a · _spot_vote_choices cc4f9b92(검토자 계산값과 일치) · search_path=public,pg_temp · anon 실행 false(둘 다) · authenticated: share=true, helper=false · 보안 어드바이저 ERROR 0.
+--    적용 전 독립 검토: critical-reviewer PASS(spot-share-design/review-mig-o-1001.md).
+-- (원래 머리줄) ⏳ 미적용 — 초안(community-team 2026-10-01). 적용은 리드만 한다. 라이브에는 begin…raise 롤백 리허설만 했다(아래 §R).
 -- 20261001o — SPOT 공유 글의 투표 보기를 상황에 맞춘다(체크를 받은 뒤 내 차례면 '체크·벳').
 --   요구 원천: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\spot-share-design\README.md#P9 · 오너 2026-10-01(리드 전달:
 --             정본 proto\a-detail-mw-hidden-dark.png — "SB 가 체크한 뒤 내 차례인데 보기가 폴드/콜/레이즈로 나온다 … 체크/벳으로").
