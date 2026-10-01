@@ -1,4 +1,7 @@
--- ⏳ 미적용 초안(2026-10-01, 서버 수정 초안 담당 Opus 5.5). 리드 독립 검토 뒤 지시가 있을 때만 적용한다.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 본문 그대로 한 번에, k→l→m 순). 게이트 통과.
+--    적용 후 실측: venues_update 정책 md5 27ec510d · _guard_venue_coowner_columns md5 bc358e62(anon·authenticated 실행 false) · trg_guard_venue_coowner_columns 존재 · 보안 어드바이저 ERROR 0(WARN 290·INFO 16).
+--    적용 전 독립 검토: critical-reviewer PASS(store-db-report.md 독립 검토 절).
+-- (원래 머리줄) ⏳ 미적용 초안(2026-10-01, 서버 수정 초안 담당 Opus 5.5). 리드 독립 검토 뒤 지시가 있을 때만 적용한다.
 --    적용은 이 파일 전체(REHEARSAL 주석 블록 제외)를 **한 번의 execute_sql** 로.
 --    ⚠ 화면 짝: src/components/features/VenueManageTab.tsx 의 canEditKakao 를 넓힌 커밋은 **이 파일 적용 뒤에** 배포해야 한다
 --      (먼저 나가면 공동 운영자에게 카카오 칸이 보이고 저장이 0행 오류 → 2026-09-28 F4 부분 저장 재발).

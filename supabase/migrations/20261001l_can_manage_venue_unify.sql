@@ -1,4 +1,7 @@
--- ⏳ 미적용 초안(2026-10-01, 서버 수정 초안 담당 Opus 5.5). 리드 독립 검토(critical-reviewer) 뒤 지시가 있을 때만 적용한다.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 본문 그대로 한 번에, k→l→m 순). 게이트 통과.
+--    적용 후 실측: can_manage_venue md5 6c6be34b(적용 전 b09b193c 와 다름) · 보안 어드바이저 ERROR 0(WARN 290·INFO 16).
+--    적용 전 독립 검토: critical-reviewer PASS(store-db-report.md 독립 검토 절).
+-- (원래 머리줄) ⏳ 미적용 초안(2026-10-01, 서버 수정 초안 담당 Opus 5.5). 리드 독립 검토(critical-reviewer) 뒤 지시가 있을 때만 적용한다.
 --    적용은 이 파일 전체(REHEARSAL 주석 블록 제외)를 **한 번의 execute_sql** 로.
 -- 20261001l — S-09(audit-store-1001): 공동 운영자 판정 두 벌(can_manage_venue ≠ can_manage_pos)을 하나로
 --
