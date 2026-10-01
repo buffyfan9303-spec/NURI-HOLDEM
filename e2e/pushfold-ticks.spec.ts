@@ -7,7 +7,8 @@
 //   '추정' 은 이제 **CO 이상(뒤 3명+)** 의 2~10bb 만 말한다(nash.data.ts NASH_EXACT_KS · isNashApprox).
 // 그래서 이 스펙은 이제 다섯 가지를 **같이** 잰다 — 하나라도 빠지면 등급 경계가 밀려도 초록이 뜬다:
 //   ① BTN 2~10bb 눈금이 '있음' 이고 실제로 행렬이 그려지며 배지가 '추정' 을 **말하지 않는다**(추정→정확 전환. 되돌리면 여기서 빨개진다)
-//   ② CO(뒤 3명)의 같은 구간은 출처 배지가 '추정' 이라고 말한다 — 12bb 이상은 말하지 않는다(등급이 다르다)
+//   ② CO(뒤 3명)의 6~10bb 는 출처 배지가 '추정' 이라고 말한다 — 12bb 이상은 말하지 않는다(등급이 다르다).
+//      2~5bb 는 2026-10-01(N7) 부터 '준비 중' — 행렬을 그리지 않는다
 //   ③ 경계 — **11bb 는 눈금에 없으므로 10bb ↔ 12bb 가 바로 이웃**이다. CO 에서 눈금 하나 차이로 등급이 갈리는 것을 직접 누른다
 //   ④ SB(뒤 1명)는 2bb 부터 전 깊이 정식 등급 — 자리 기준으로 계산한다
 //   ⑤ 자리 기준이다 — 같은 5bb 에서 BTN 정식 ↔ CO 추정이 자리 버튼 하나로 갈린다
@@ -15,7 +16,9 @@
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
 
-const SHALLOW = [2, 3, 4, 5, 6, 7, 8, 9, 10];   // 빅앤티 k≥3 추정 구간 — nash.data.ts 의 NASH_ANTE_APPROX 와 같아야 한다(BTN·SB 는 이 깊이도 정식)
+const SHALLOW = [2, 3, 4, 5, 6, 7, 8, 9, 10];   // BTN·SB 는 이 깊이도 정식
+const APPROX = [6, 7, 8, 9, 10];   // 빅앤티 k≥3 추정 구간 — nash.data.ts 의 NASH_ANTE_APPROX 와 같아야 한다
+const HIDDEN = [2, 3, 4, 5];       // 2026-10-01 N7 — 빅앤티 k≥3 '준비 중'(추정값이 공개 Nash 표보다 크게 좁아 내렸다)
 const EXACT = [12, 15, 20];
 
 test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', () => {
@@ -60,14 +63,19 @@ test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', 
 
     // ② CO(뒤 3명) — 같은 5bb 가 자리 버튼 하나로 추정 등급이 된다(⑤ 자리 기준). 행렬은 그려지고 배지가 '추정' 이라고 말한다
     await dlg.getByRole('button', { name: 'CO', exact: true }).click();
-    for (const s of [...SHALLOW, ...EXACT]) {
+    for (const s of [...APPROX, ...EXACT]) {
       await expect(tick(s), `CO ${s}bb 눈금이 '없음' 으로 표시됐다 — 추정값(NASH_ANTE_APPROX)이 안 실렸다`).toHaveAttribute('data-has-data', 'true');
     }
+    // ②-0 N7(2026-10-01): CO 2~5bb 는 '준비 중' — 행렬을 그리지 않고 안내 상자가 그 사실을 말한다(되돌리면 여기서 빨개진다)
+    for (const s of HIDDEN) await expect(tick(s), `CO ${s}bb 가 아직 값을 낸다 — 숨긴 추정값이 돌아왔다`).toHaveAttribute('data-has-data', 'false');
     await tick(5).click();
-    await expect(dlg.getByTestId('pushfold-no-data'), '5bb CO 에 안내 상자가 떴다 — 추정값이 안 읽힌다').toHaveCount(0);
-    await expect(cells, '5bb CO 행렬이 없다').toHaveCount(169);
-    expect(await colored(), '5bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)').toBeGreaterThan(20);
-    await expect(source, '5bb CO 배지가 추정 등급을 말하지 않는다').toHaveAttribute('data-approx', 'true');
+    await expect(dlg.getByTestId('pushfold-no-data'), '5bb CO 에 준비 중 안내가 없다').toContainText('준비 중');
+    await expect(cells, '5bb CO 가 행렬을 그린다 — 숨긴 값이 보인다').toHaveCount(0);
+    await tick(6).click();
+    await expect(dlg.getByTestId('pushfold-no-data'), '6bb CO 에 안내 상자가 떴다 — 추정값이 안 읽힌다').toHaveCount(0);
+    await expect(cells, '6bb CO 행렬이 없다').toHaveCount(169);
+    expect(await colored(), '6bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)').toBeGreaterThan(20);
+    await expect(source, '6bb CO 배지가 추정 등급을 말하지 않는다').toHaveAttribute('data-approx', 'true');
     await expect(source).toContainText('추정');
 
     // ③ 경계 — 눈금 하나 차이(10bb ↔ 12bb). 11bb 는 NASH_STACKS 에 없어 이 둘이 바로 이웃이다.

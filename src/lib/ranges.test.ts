@@ -233,10 +233,23 @@ describe('nash.data 정합', () => {
     expect(isNashQuarantined(3, true)).toBe(true);
   });
 
-  it('🔴 추정 구간(빅앤티 2~10BB k≥3) — 차트만 allowApprox 로 읽고, 기본 경로(드릴·스팟)는 여전히 격리다 (2026-09-21 · k=2 제외 2026-09-25)', () => {
+  it('🔴 N7(2026-10-01) — 빅앤티 2~5BB · 뒤 3명+ 는 차트에서도 값을 내지 않는다(준비 중). 추정값이 공개 Nash 표보다 3~58%p 좁았다', () => {
+    // 오너 결정 2026-10-01 "일단 숨기고 재생성". allowApprox(차트 경로)로 읽어도 표가 없어야 한다 — 되돌리면 여기서 빨개진다.
+    for (const s of [2, 3, 4, 5]) for (const k of [3, 4, 5, 6, 7, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+      expect(isNashApprox(s, true, k), `${s}bb k=${k} 가 아직 '추정' 으로 열려 있다`).toBe(false);
+      expect(hasNashRange(kind, k, s, true, true), `${kind} ${s}bb k=${k} 차트 경로가 숨긴 추정값을 내보낸다`).toBe(false);
+      expect(Array.from(nashRange(kind, k, s, true, true)).every((f) => f === 0), `${kind} ${s}bb k=${k} 표가 비어 있지 않다`).toBe(true);
+      expect(isNashQuarantined(s, true, k, kind), `${kind} ${s}bb k=${k} 가 드릴·스팟 격리에서 풀렸다`).toBe(true);
+    }
+    // 양성 대조 — 같은 깊이라도 SB·BTN(정확 게임)은 그대로, 같은 자리라도 6bb 는 추정으로 그대로 보인다
+    for (const s of [2, 3, 4, 5]) for (const k of [1, 2]) expect(hasNashRange('shove', k, s, true, true), `${s}bb k=${k} 정확 열까지 숨겼다`).toBe(true);
+    for (const k of [3, 8]) expect(hasNashRange('shove', k, 6, true, true), `6bb k=${k} 추정까지 숨겼다`).toBe(true);
+  });
+
+  it('🔴 추정 구간(빅앤티 6~10BB k≥3) — 차트만 allowApprox 로 읽고, 기본 경로(드릴·스팟)는 여전히 격리다 (2026-09-21 · k=2 제외 2026-09-25 · 2~5bb 제외 2026-10-01)', () => {
     // 오너 결정 2026-09-21 "근사 계산 — 오늘 안에": 격리 구간을 다인 콜 근사 값으로 채우되 등급은 '추정' 이다.
     // 이 계약이 없으면 ① 추정값이 드릴 채점에 새거나 ② 추정 표가 전부 0(=전부 폴드)인 채로 차트에 나갈 수 있다.
-    for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+    for (const s of [6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
       expect(isNashApprox(s, true, k)).toBe(true);
       expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 기본 경로가 추정값을 내보낸다 — 드릴·스팟에 샌다`).toBe(false);
       expect(hasNashRange(kind, k, s, true, true), `${kind} ${s}bb k=${k} 추정값이 없다`).toBe(true);
@@ -252,8 +265,8 @@ describe('nash.data 정합', () => {
     const pct = (kind: NashKind, k: number, s: number) => rangeComboPct(freqFromArray(nashRange(kind, k, s, true, true), HAND_ORDER));
     const broken: string[] = [];
     for (const kind of ['shove', 'callBB', 'callSB'] as const) {
-      for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const [a, b] of [[2, 5], [5, 8]]) if (pct(kind, a, s) < pct(kind, b, s) - 1.0) broken.push(`${kind} ${s}bb k${a}(${pct(kind, a, s).toFixed(1)}) < k${b}(${pct(kind, b, s).toFixed(1)})`);
-      for (const k of [2, 5, 8]) for (const [sh, dp] of [[2, 3], [3, 5], [5, 7], [7, 10]]) if (pct(kind, k, sh) < pct(kind, k, dp) - 1.0) broken.push(`${kind} k${k} ${sh}bb(${pct(kind, k, sh).toFixed(1)}) < ${dp}bb(${pct(kind, k, dp).toFixed(1)})`);
+      for (const s of [6, 7, 8, 9, 10]) for (const [a, b] of [[2, 5], [5, 8]]) if (pct(kind, a, s) < pct(kind, b, s) - 1.0) broken.push(`${kind} ${s}bb k${a}(${pct(kind, a, s).toFixed(1)}) < k${b}(${pct(kind, b, s).toFixed(1)})`);
+      for (const [k, pairs] of [[2, [[2, 3], [3, 5], [5, 7], [7, 10]]], [5, [[6, 7], [7, 10]]], [8, [[6, 7], [7, 10]]]] as [number, number[][]][]) for (const [sh, dp] of pairs) if (pct(kind, k, sh) < pct(kind, k, dp) - 1.0) broken.push(`${kind} k${k} ${sh}bb(${pct(kind, k, sh).toFixed(1)}) < ${dp}bb(${pct(kind, k, dp).toFixed(1)})`);
     }
     expect(broken, `추정 표 단조성 위반: ${broken.join(' · ')}`).toEqual([]);
   });

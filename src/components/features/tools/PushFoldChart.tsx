@@ -150,7 +150,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       </p>
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
-      {/* 추정 구간(빅앤티 2~10bb · 뒤 3명+ — BTN·SB 는 정확)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
+      {/* 추정 구간(빅앤티 6~10bb · 뒤 3명+ — BTN·SB 는 정확, 2~5bb 는 2026-10-01 부터 '준비 중')은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
       <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
       </div>
@@ -170,11 +170,14 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           <div role="status" data-testid="pushfold-no-data" className="rounded-input border border-aura-300/40 bg-aura-300/10 px-3 py-3 text-left text-xs text-ink-primary">
             {isNashQuarantined(stack, NASH_BIG_ANTE, k, effView) ? (
               <>
-                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 값이 틀린 것이 확인돼 <b className="text-aura-300">일시적으로 내렸습니다</b>.</p>
+                {/* 2026-10-01 오너 "일단 숨기고 재생성"(감사 N7) — 지금 이 갈래에 오는 것은 빅앤티 2~5bb · 뒤 3명+ 뿐이다.
+                    추정값이 공개 Nash 표보다 크게 좁아(폴드 과다) 내렸고, 다인 콜을 제대로 푸는 생성기로 다시 만드는 중이다. */}
+                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 <b className="text-aura-300">준비 중</b>입니다.</p>
                 <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
-                  가까운 깊이로 대체하지 않습니다. 눈금에서 점선으로 표시된 깊이(
+                  예전 추정값이 공개된 Nash 표와 크게 달라 내렸고, 다시 계산하고 있습니다. 가까운 깊이로 대체하지 않습니다.
+                  눈금에서 점선으로 표시된 깊이(
                   {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE, true)).join('·')}bb)가 그 구간이고,
-                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있습니다. 표를 다시 만들면 돌아옵니다.
+                  <b> SB·BTN</b>과 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있습니다.
                 </p>
               </>
             ) : (

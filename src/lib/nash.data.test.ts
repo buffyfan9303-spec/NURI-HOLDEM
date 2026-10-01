@@ -152,7 +152,8 @@ describe('nash.data — 빅앤티 k=2 열은 정확 3인 균형(2026-09-25)', ()
     for (const s of [2, 5, 10]) {
       expect(isNashApprox(s, NASH_BIG_ANTE, 2), `${s}bb BTN 배지가 '추정'`).toBe(false);
       expect(isNashQuarantined(s, NASH_BIG_ANTE, 2), `${s}bb BTN 이 드릴·스팟에서 격리`).toBe(false);
-      expect(isNashApprox(s, NASH_BIG_ANTE, 3), `${s}bb CO(k=3) 는 아직 추정이어야 한다`).toBe(true);
+      // CO(k=3): 2~5bb 는 2026-10-01 N7 로 '준비 중'(추정도 아님), 6~10bb 는 아직 추정이다
+      expect(isNashApprox(s, NASH_BIG_ANTE, 3), `${s}bb CO(k=3) 추정 등급이 어긋났다`).toBe(s >= 6);
     }
   });
 });

@@ -37,6 +37,30 @@ describe('call 모드 — 격리된 빅앤티 k≥3 표는 문제로 내지 않�
   });
 });
 
+// N7(2026-10-01 오너 "일단 숨기고 재생성"): 빅앤티 2~5bb · 뒤 3명+ 추정값을 차트에서도 내렸다.
+// 드릴은 원래 추정값을 쓰지 않았다(isNashQuarantined) — 이 계약은 그 칸이 새 문제·복원 문제로 새지 않고,
+// 그렇다고 출제할 문제가 0개가 되지도 않는다는 것을 함께 잠근다.
+describe('N7 — 드릴은 2~5bb · 뒤 3명+ 칸을 내지 않고, 문제 풀이 0개가 되지 않는다', () => {
+  it('새 올인·콜 문제 300건씩 — 5bb 이하에서 k≥3 이 없고, 5bb 문제는 실제로 나온다', () => {
+    let shallow = 0;
+    for (let i = 0; i < 300; i += 1) {
+      const p = makeQuiz('push');
+      expect(p, 'push 문제가 안 만들어졌다').toBeTruthy();
+      const [k, stack] = p.key.split('|')[1].split('-').map(Number);
+      if (stack <= 5) { shallow += 1; expect(k, p.key).toBeLessThanOrEqual(2); }
+      expect(p.acts.length).toBeGreaterThan(0);
+      const c = makeQuiz('call');
+      const [, ck, cs] = c.key.split('|')[1].split('-');
+      if (Number(cs) <= 5) expect(Number(ck), c.key).toBeLessThanOrEqual(2);
+    }
+    expect(shallow, '5bb 문제가 한 번도 안 나왔다 — 출제 풀에서 깊이가 통째로 빠졌다').toBeGreaterThan(0);
+  });
+  it('저장된 오답 키 push|3-5 · call|bb-8-4 는 복원되지 않고 새 문제로 대체된다(BTN·SB 5bb 는 복원 — 양성 대조)', () => {
+    for (const key of ['push|3-5|A5s', 'push|8-5|AA', 'call|bb-8-4|AA']) expect(makeQuiz(key.startsWith('push') ? 'push' : 'call', key).key, key).not.toBe(key);
+    for (const key of ['push|2-5|A5s', 'push|1-5|A5s']) expect(makeQuiz('push', key).key, key).toBe(key);
+  });
+});
+
 const q = (acts: QuizAct[] | number, actionLabel = '오픈'): Quiz => ({
   mode: 'rfi', key: 'rfi|x|AKs', posLabel: 'CO', situ: '', hand: 'AKs', cards: [] as unknown as Quiz['cards'], stackBb: 100,
   acts: typeof acts === 'number' ? [{ label: actionLabel, freq: acts }] : acts,

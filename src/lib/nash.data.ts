@@ -84,8 +84,12 @@ export const NASH_ANTE_QUARANTINE: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 
  *  단일 콜러 근사가 '실제보다 넓게' 틀리던 방향을 줄이지만 **정확값이 아니다** — 12bb 이상과 등급이 다르다.
  *  · `isNashQuarantined` 는 그대로 true 다: 드릴(preflopQuiz)·스팟 분석(spotEvaluate)은 추정값으로 채점하지 않는다.
  *  · 차트만 `allowApprox=true`(hasNashRange/nashRange 5번째 인자)로 읽고 '추정' 배지를 단다.
- *  · 이 목록에서 깊이를 빼면 그 깊이는 다시 빈칸(격리)이다. 진짜 3인 에퀴티로 재산출하면 격리·추정 목록에서 **함께** 빼라. */
-export const NASH_ANTE_APPROX: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+ *  · 이 목록에서 깊이를 빼면 그 깊이는 다시 빈칸(격리)이다. 진짜 3인 에퀴티로 재산출하면 격리·추정 목록에서 **함께** 빼라.
+ *  🔴 2026-10-01 — **2~5bb 를 뺐다**(오너 결정 "일단 숨기고 재생성", 감사 gto-calc-audit-1001 N7).
+ *    공개 9인 BB앤티 Nash 셔브 표(PokerCoaching, 비교용으로만 씀)보다 우리 추정값이 **모두 좁았다** — 5bb −3.1~−8.7 ·
+ *    4bb −5.7~−8.7 · 3bb −14.8~−26.8 · 2bb −31.7~−57.9%p(UTG 2bb 27.6 vs 85.5%). 숏스택 핵심 구간에서 '폴드' 를 보여 줬다.
+ *    6~10bb 는 −0.9~−4.4%p 라 '추정' 배지로 남긴다. 차트는 2~5bb 의 뒤 3명+ 자리를 '준비 중' 으로 보여 준다. */
+export const NASH_ANTE_APPROX: readonly number[] = [6, 7, 8, 9, 10];
 
 /** ✅ **정확 게임으로 푼 자리(뒤 인원)** — 격리·추정 목록은 이 자리에 걸리지 않는다.
  *  · k=1: SB vs BB 헤즈업. 169×169 전수 에퀴티 + CFR+(hu-exact.mjs, 착취가능도 ≤1e-7bb).
