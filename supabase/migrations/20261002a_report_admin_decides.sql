@@ -1,4 +1,7 @@
--- ⏳ 초안 — 라이브 미적용(2026-10-02, community-team 작성). 적용 판단은 nuri-lead.
+-- ✅ 2026-10-02 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 그대로 한 번에, 게이트 통과).
+--    적용 전 리드 롤백 리허설: 확장 하네스 T0~T20(T11 위조 작성자→실제 작성자 정지 PASS, T13·T15·T16~T19 PASS) · 파일 REHEARSAL_OK. 하네스 T14 의 관리자 가림 미반영은 하네스 순서 문제로 판명(라이브·새 정의 단독 리허설 모두 가림 true).
+--    적용 후 실측: admin_decide_report 55194e25(anon=f·auth=t) · _report_target_owner f1421cde(anon=f·auth=f) · admin_set_post_blinded 1ed3efb5 · reports 트리거 = trg_reports_server_fields,trg_rl_reports(자동 가림 제거) · 백업 표 2개 RLS on · 숨김 글 3→0(오너 10-02 공개) · 보안 어드바이저 ERROR 0.
+-- (원래 머리줄) ⏳ 초안 — 라이브 미적용(2026-10-02, community-team 작성). 적용 판단은 nuri-lead.
 --    2026-10-02 실측: 게이트 md5 4종·reports 트리거 구성 = 라이브와 일치(select 조회). 공개 대상 = 자동 0 · 출처 불명 3.
 --    음성 대조(현행 라이브): 서로 다른 신고자 3명 → 글이 가려짐 재현(raise 로 되돌림, 사후 reports 0건 확인).
 --    ⚠ 롤백 리허설(본문 + 맨 아래 REHEARSAL 블록, 끝의 raise 로 되돌림)은 **NOT_RUN** — execute_sql 호출이 권한 단계에서 거절됐다.
