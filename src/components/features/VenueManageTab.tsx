@@ -386,7 +386,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   높이가 계속 바뀌는 동안은 아직 파도가 진행 중이라는 뜻이다.
     const release = () => setLockPx(null);
     let debounce: ReturnType<typeof setTimeout> | null = null;
+    const outer = secPanelRef.current;
     const ro = new ResizeObserver(() => {
+      // M-5c(2026-10-02 store-link-1002) — 예약은 로딩 중 '올라가기만' 한다. 새 판의 첫 프레임이 예약보다 커졌다가(장부: 505→671)
+      //   스켈레톤으로 줄면(541) 그 낙차가 로딩 중에 보였다(푸터 932→802). 종전엔 화면 높이 바닥(735)이 이 낙차를 가렸는데,
+      //   바닥을 '정렬에 필요한 최소'로 줄이면서 드러났다. 안쪽이 예약을 넘으면 그 높이로 예약을 올린다(바깥만 바꾸므로 RO 루프 없음).
+      const h = inner.getBoundingClientRect().height;
+      if (outer && h > (parseFloat(outer.style.minHeight) || 0)) outer.style.minHeight = `${Math.ceil(h)}px`;
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
         // F-2 — '따라잡음'만으로 풀지 않는다. 스켈레톤이 예약을 넘긴 채 잠잠해도(장부 첫 진입: 스켈레톤 1620 ≥ 예약) 실제 내용이
@@ -604,6 +610,39 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const top = el.getBoundingClientRect().top;
     if (top < head - 1) window.scrollBy({ top: top - head, behavior: 'instant' as ScrollBehavior });
   }, [pane, tabActive]);
+  // 🔴 M-5 오너 결정(2026-10-02 · review-store-motion-1002) — 판 바닥 = 화면 높이 − 정렬 머리(사이드 메뉴 sticky top) − 판 아래 꼬리(푸터까지).
+  //   0326d1f3 는 바닥을 화면 높이(.pane-reserve)로 잡아 2단 점프는 없앴지만, 빈 출근 관리에서 빈칸이 314→573px 로 늘고 푸터가 첫 화면 밖으로 밀렸다.
+  //   2단 점프를 막는 데 필요한 것은 '판 윗변이 머리에 정렬된 자리에서 문서 끝 ≥ 화면 끝' 뿐이다 — 그 최소값을 실측으로 준다.
+  //   그러면 정렬은 한 번에 끝나고(클램프 없음), 정렬된 화면 맨 아래에 법정 푸터가 보인다. 꼬리(푸터 높이·간격)는 폭마다 줄바꿈이 달라 잰다.
+  //   꼬리 = 푸터 아랫변 − 판 아랫변(뷰포트 좌표라 스크롤과 무관 · 판 높이와도 무관 → 되먹임 없음).
+  useLayoutEffect(() => {
+    const el = secPanelRef.current;
+    if (!el || !tabActive) return;
+    const foot = () => [...document.querySelectorAll<HTMLElement>('[data-testid="business-footer"]')].find((f) => !f.closest('[role="dialog"]') && f.offsetParent !== null);
+    const calc = () => {
+      const f = foot();
+      if (!f || el.offsetParent === null) return;
+      const nav = document.querySelector('[data-mystore-secbar]');
+      const head = nav ? parseFloat(getComputedStyle(nav).top) || 0 : 0;
+      // ⚠ 레이아웃 좌표(offsetTop 사슬)로 잰다 — 푸터를 감싼 .reveal 은 화면에 들기 전 18px 아래로 옮겨져(transform) 있어
+      //   getBoundingClientRect 로 재면 꼬리가 18px 크게 나오고, 들어오며 제자리로 가면 문서가 18px 줄어 한 번 더 깎였다(600→76→58→76 실측).
+      const docTop = (n: HTMLElement) => { let y = 0; for (let e: HTMLElement | null = n; e; e = e.offsetParent as HTMLElement | null) y += e.offsetTop; return y; };
+      const tail = Math.max(0, docTop(f) + f.offsetHeight - (docTop(el) + el.offsetHeight));
+      const v = `${Math.max(0, Math.ceil(window.innerHeight - head - tail))}px`; // 올림 — 내림이면 문서 끝이 화면 끝보다 1px 모자라 75 로 한 번 더 깎였다(실측)
+      if (el.style.getPropertyValue('--pane-floor') !== v) el.style.setProperty('--pane-floor', v);
+    };
+    calc();
+    // 판 교체·푸터 줄바꿈·창 크기에 따라 꼬리·머리가 바뀐다 → 문서(body)·푸터 크기가 바뀔 때마다 다시 잰다.
+    //   잰 값을 RO 콜백 안에서 바로 쓰면 관찰 대상 크기가 그 프레임에 또 바뀌어 'ResizeObserver loop' 오류가 난다 → 다음 프레임에 쓴다(값이 같으면 쓰지 않아 멈춘다).
+    let raf = 0;
+    const later = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(calc); };
+    const ro = new ResizeObserver(later);
+    ro.observe(document.body);
+    const f = foot();
+    if (f) ro.observe(f);
+    window.addEventListener('resize', later);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', later); };
+  }, [tabActive, pane]);
 
   // 시즌 '역대 챔피언' 카드 공유에 찍히는 매장명 — prop 이 비어 있어 카드에서 매장명 줄이 통째로
   // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
@@ -1053,9 +1092,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             </>)}
 
           {/* S6-1: 예약(min-height)은 바깥에, 실측(ResizeObserver)은 안쪽 래퍼에 — 위 lockPane 주석 참고. */}
-          {/* M-5(2026-10-02) — pane-reserve: 판 바닥을 화면 높이로. 600 에서 짧은 판(출근 관리·직원)으로 가면 판 윗변 정렬(76) 뒤
-              예약이 풀리며 문서가 짧아져 scrollY 가 두 번 더 깎였다(600→76→63→45). 바닥이 화면 높이면 정렬값이 그대로 산다. */}
-          <div data-mystore-secpanel ref={secPanelRef} className="pane-reserve mt-3 min-w-0 flex-1 lg:mt-0"
+          {/* M-5(2026-10-02) — 판 바닥. 600 에서 짧은 판(출근 관리·직원)으로 가면 판 윗변 정렬(76) 뒤 예약이 풀리며 문서가 짧아져
+              scrollY 가 두 번 더 깎였다(600→76→63→45). 바닥 = 정렬된 자리에서 문서 끝이 화면 끝에 닿는 최소 높이(--pane-floor, 위 실측).
+              재기 전 첫 프레임만 종전 .pane-reserve 값으로 둔다. */}
+          <div data-mystore-secpanel ref={secPanelRef} className="min-h-[var(--pane-floor,calc(100svh-3.5rem-var(--tabbar-safe)))] mt-3 min-w-0 flex-1 lg:mt-0"
             style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
           <div ref={secInnerRef} className="space-y-3">
             {dItem?.locked && (
@@ -1269,7 +1309,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
-                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}
+                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'presets'} />)}
                 {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
                     전부 'NURI POS_…' 로 나갔다 — 매장이 여럿인 운영자가 파일만 보고 구분할 수 없었다.
                     비면 컴포넌트 기본값('NURI POS')이 그대로라 회귀 없음. */}

@@ -49,6 +49,7 @@ import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useVenueScope } from '../../lib/useVenueScope';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -233,6 +234,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
   const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
   const [copyMain, setCopyMain]   = useState<LedgerSession | null>(null); // 사이드 생성 시 '메인 설정 복사'용
+  // 🔴 L-06(audit-link-1002) — 이 판은 (관리자의) 매장 A→B 전환에 다시 마운트되지 않는다. A 매장 '직전 게임 설정' 응답이
+  //   늦게 오면 B 의 새 게임 폼에 '직전 게임 설정을 불러왔습니다'(A 의 참가비·할인·게임명)로 붙었다. 매장 몫 조회는 run 으로 —
+  //   요청 매장이 지금 매장과 다르면 응답을 버린다(공용 지점 lib/useVenueScope).
+  const run = useVenueScope(venueId);
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
@@ -389,11 +394,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setDelTarget({ date: d, gameSeq: g, label: `${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
     setDelLoss(null); setDelLossErr(false); setDelPw('');
     // 목록 화면은 보드를 안 거쳐 hasPw 가 옛 값일 수 있다 — 비밀번호 칸을 낼지 지금 다시 묻는다(실패하면 직전 값 유지).
-    posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ });
+    run(posHasPassword, setHasPw); // 실패하면 직전 값 유지
     Promise.all([getLedgerSession(venueId, d, g), getLedgerBuyins(venueId, d, g), getLedgerPlayers(venueId, d, g)])
       .then(([s, bs, ps]) => { if (my === delSeq.current) setDelLoss(ledgerLossSummary(bs, ps, s)); })
       .catch(() => { if (my === delSeq.current) setDelLossErr(true); });
-  }, [venueId]);
+  }, [venueId, run]);
   const doDeleteSession = useCallback(async () => {
     if (!delTarget || delBusy) return; // 홀드 재진입/연타로 두 번 실행되지 않게
     setDelBusy(true);
@@ -427,7 +432,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 🔴 D3(2026-09-25) — hasPw 는 보드를 열 때 **한 번** 읽은 값이었다(그것도 조회 실패를 '없음'으로 삼킨 값).
   //   그 사이 다른 기기에서 비밀번호를 설정하면 업주 화면은 '비밀번호 없이 취소' 버튼만 내밀고 서버는 매번 거절 →
   //   입력칸이 끝내 안 나왔다. ① 다시 보일 때 재조회 ② 서버가 비밀번호 문구로 거절하면 그 사실로 바로 고친다.
-  const refreshPw = useCallback(() => { posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ }); }, [venueId]);
+  const refreshPw = useCallback(() => { run(posHasPassword, setHasPw); }, [run]); // 실패하면 직전 값 유지 · 늦은 A 매장 응답은 버린다(L-06)
   const notePwFromError = (e: unknown) => {
     const st = cancelPwStateFromError(ledgerErrorText(e, ''));   // msgOf 는 42501 문구를 뭉개 '비밀번호가 올바르지 않습니다' 를 못 본다(20260925g)
     if (st !== null) setHasPw(st);
@@ -927,7 +932,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       seedFillRef.current = null;
       return;
     }
-    getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
+    run((v) => getLastLedgerSettings(v, date), setPrefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, showSetup, venueId, date, gameSeq]);
 
@@ -960,11 +965,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 사이드 시작 설정일 때 — 그날 메인 게임 설정을 '복사' 버튼으로 제공(반복 입력 제거)
   useEffect(() => {
     if (showSetup && gameSeq !== MAIN_GAME_SEQ) {
-      getLedgerSession(venueId, date, MAIN_GAME_SEQ)
-        .then((s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null))
-        .catch(() => setCopyMain(null));
+      run((v) => getLedgerSession(v, date, MAIN_GAME_SEQ),
+        (s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null),
+        () => setCopyMain(null));
     } else setCopyMain(null);
-  }, [showSetup, gameSeq, venueId, date]);
+  }, [showSetup, gameSeq, venueId, date, run]);
 
   // 정산바(하단 고정)가 --tabbar-safe(탭바 예약)보다 커지면(실측 ~166px, SettleFilter 펼침·
   // 좁은 폭 2×2 그리드 포함) 전 화면 상시 노출 푸터(BusinessFooter)의 법정 고지(19세 미만·1336·
@@ -1304,10 +1309,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   useEffect(() => {
     if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
     const t = window.setTimeout(() => {
-      searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([]));
+      run((v) => searchRegisteredPlayers(v, newName), setSuggest, () => setSuggest([]));
     }, 250);
     return () => window.clearTimeout(t);
-  }, [newName, addOpen, venueId]);
+  }, [newName, addOpen, venueId, run]);
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
   const pickRegistered = async (rp: RegisteredPlayer) => {
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());

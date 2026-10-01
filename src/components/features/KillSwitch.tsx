@@ -8,6 +8,7 @@ import { useToast } from '../atoms/Toast';
 import { killSwitchIsSet, setKillPassword, killVenue, exportVenueCsv, VENUE_EXPORT_GROUPS, type VenueExportGroup } from '../../api/killswitch';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 const CONFIRM_PHRASE = '영구 삭제';
 
@@ -51,11 +52,13 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   };
   const missing = (Object.keys(VENUE_EXPORT_GROUPS) as VenueExportGroup[]).filter((g) => !exported.has(g));
 
+  // L-06 부류(audit-link-1002) — 매장 전환에 다시 마운트되지 않는다. A 의 '비밀번호 설정됨'이 B 화면에 남지 않게 비우고, 늦은 A 응답은 버린다.
+  const run = useVenueScope(venueId);
   const refreshStatus = () => {
     setStatusErr(null);
-    killSwitchIsSet(venueId).then(setPwIsSet).catch((e) => { setStatusErr(e); setPwIsSet(null); });
+    run(killSwitchIsSet, setPwIsSet, (e) => { setStatusErr(e); setPwIsSet(null); });
   };
-  useEffect(() => { refreshStatus(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPwIsSet(null); refreshStatus(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     setSetupPw(''); setSetupPw2(''); setStep(1);

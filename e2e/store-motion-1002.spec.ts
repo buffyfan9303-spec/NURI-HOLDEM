@@ -294,3 +294,91 @@ for (const vp of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }]) {
     expect(await page.evaluate(() => Math.round(scrollY)), '닫은 뒤 목록 위치가 돌아오지 않았다').toBe(600);
   });
 }
+
+// ── M-6 회귀 · M-5 바닥(오너 결정 10-02) — store-link-1002 ───────────────────────────────────────
+// M-6b 편집을 연 채 다른 메뉴에 다녀와서 ✕ 를 누르면 떠날 때의 목록 위치(600)로 524px 점프했다(0326d1f3 이 만든 회귀, review-store-motion-1002).
+test('M-6b 프리셋 편집을 연 채 다른 메뉴에 다녀와 닫아도 떠날 때 위치(600)로 점프하지 않는다 1440', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, { width: 1440, height: 900 }, 150);
+  await press(page, SIDE, /^매장 설정/);
+  await page.waitForTimeout(1200);
+  await press(page, '[data-tab-id]', /게임 프리셋/);
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => scrollTo(0, 600));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll<HTMLElement>('[data-mystore-secpanel] button')].filter((e) => e.offsetParent !== null && (e.textContent ?? '').trim() === '수정');
+    b.find((e) => { const q = e.getBoundingClientRect(); return q.top > 0 && q.bottom < innerHeight; })!.click();
+  });
+  await page.waitForTimeout(400);
+  await press(page, SIDE, /^대시보드/);
+  await page.waitForTimeout(1200);
+  await press(page, SIDE, /^매장 설정/);
+  await page.waitForTimeout(1200);
+  await expect(page.locator('[data-pane="presets"] h3').filter({ hasText: '프리셋 수정' }), '돌아왔는데 편집 폼이 없다 — 이 검사가 아무것도 재지 않았다').toBeVisible();
+  const before = await page.evaluate(() => Math.round(scrollY));
+  expect(before, '돌아온 위치가 우연히 600 이면 이 검사가 점프를 못 본다').not.toBe(600);
+  await press(page, '[data-mystore-secpanel] button', /^✕$/);
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => Math.round(scrollY));
+  expect(Math.abs(after - before), `닫을 때 ${before} → ${after} 로 점프했다(떠날 때의 목록 위치를 복원)`).toBeLessThanOrEqual(1);
+});
+
+// M-5c 오너 결정(10-02): '빈칸 줄이고 푸터 보이기' — 판 바닥 = 화면 높이 − 머리 − 푸터 꼬리.
+//   정렬은 여전히 한 번(2단 점프 없음)이고, 정렬된 첫 화면 맨 아래에 법정 푸터가 보인다(문서 끝 = 화면 끝).
+const settleShort = async (page: Page) => {
+  await press(page, STEP, /순위/);
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => scrollTo(0, 600));
+  await page.waitForTimeout(300);
+  const ys = await page.evaluate(async () => {
+    const b = [...document.querySelectorAll<HTMLElement>('[data-mystore-secbar] button')].find((x) => x.offsetParent !== null && /^출근 관리/.test((x.textContent ?? '').trim()))!;
+    const out: number[] = [];
+    const t0 = performance.now();
+    b.click();
+    await new Promise<void>((done) => { const loop = () => { const y = Math.round(scrollY); if (out[out.length - 1] !== y) out.push(y); if (performance.now() - t0 < 3000) requestAnimationFrame(loop); else done(); }; requestAnimationFrame(loop); });
+    return out;
+  });
+  const m = await page.evaluate(() => {
+    const f = [...document.querySelectorAll<HTMLElement>('[data-testid="business-footer"]')].find((x) => !x.closest('[role="dialog"]') && x.offsetParent !== null)!;
+    const pane = document.querySelector<HTMLElement>('[data-mystore-secpanel]')!;
+    const inner = pane.firstElementChild as HTMLElement;
+    const fr = f.getBoundingClientRect();
+    return { vh: innerHeight, sy: Math.round(scrollY), docEnd: Math.round(scrollY + innerHeight), sh: document.documentElement.scrollHeight,
+      footTop: Math.round(fr.top), footBottom: Math.round(fr.bottom), blank: Math.round(fr.top - inner.getBoundingClientRect().bottom),
+      paneMinH: getComputedStyle(pane).minHeight,
+      // 사이드 메뉴 열이 판보다 길면 그 열이 문서 끝을 정한다(판 바닥과 무관) — 그만큼은 푸터가 화면 아래로 내려가도 된다.
+      //   판은 행에 늘어나(flex stretch) 판 높이로는 못 잰다 — 행 높이 − max(판 바닥, 판 내용).
+      sideExtra: Math.max(0, Math.round(pane.parentElement!.getBoundingClientRect().height - Math.max(parseFloat(getComputedStyle(pane).minHeight) || 0, inner.getBoundingClientRect().height))) };
+  });
+  return { ys, m };
+};
+for (const vp of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+  test(`M-5c 짧은 판 정렬 뒤 법정 푸터가 첫 화면 맨 아래에 보이고 2단 점프가 없다 ${vp.width}`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await boot(page, vp, 300);
+    const { ys, m } = await settleShort(page);
+    console.log(`M-5c ${vp.width}x${vp.height}`, JSON.stringify({ ys, ...m }));
+    expect(ys.length, `scrollY 이동: ${ys.join(' → ')}`).toBeLessThanOrEqual(2);
+    expect(ys[ys.length - 1], `정렬이 일어나지 않았다: ${ys.join(' → ')}`).toBeLessThan(600);
+    expect(m.footTop, '정렬된 화면에 법정 푸터가 안 보인다(첫 화면 밖으로 밀렸다)').toBeLessThan(m.vh);
+    expect(m.sh - m.docEnd, '정렬된 화면 아래에 판 바닥이 만든 빈 문서가 남았다(바닥이 필요 이상)').toBeLessThanOrEqual(Math.max(2, m.sideExtra + 2));
+    if (vp.width === 1440) expect(m.blank, '빈 출근 관리의 빈칸이 기준(314px) 수준보다 크다').toBeLessThanOrEqual(360);
+  });
+}
+test('M-5c 모바일 390 영향 측정 — 바닥이 종전(.pane-reserve)보다 커지지 않는다', async ({ page }) => {
+  test.setTimeout(60_000);
+  await boot(page, { width: 390, height: 844 }, 300);
+  const m = await page.evaluate(() => {
+    const pane = document.querySelector<HTMLElement>('[data-mystore-secpanel]')!;
+    const probe = document.createElement('div');
+    probe.className = 'pane-reserve';
+    document.body.appendChild(probe);
+    const old = parseFloat(getComputedStyle(probe).minHeight);
+    probe.remove();
+    return { now: parseFloat(getComputedStyle(pane).minHeight), old };
+  });
+  console.log('M-5c 390x844', JSON.stringify(m));
+  expect(m.now, '판 바닥을 못 읽었다').toBeGreaterThan(0);
+  expect(m.now, '모바일 판 바닥이 종전보다 커졌다').toBeLessThanOrEqual(m.old + 1);
+});

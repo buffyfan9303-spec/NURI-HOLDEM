@@ -42,6 +42,7 @@ import { ambIsolation } from './ambience/ambiencePresets';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
+import { useVenueScope } from '../../../lib/useVenueScope';
 import { createBackoff } from '../../../lib/retryBackoff';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
@@ -126,7 +127,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     reloadAfterSaveRef.current = true;
     saver.push(next, prev);
   }, [saver, bumpClockReq]);
-  const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
+  // L-06(audit-link-1002) — 매장 전환에 다시 마운트되지 않으므로 늦게 온 A 매장 응답은 run 이 버린다(공용 지점 lib/useVenueScope).
+  const run = useVenueScope(venueId);
+  const reloadPresets = useCallback(() => run(getClockPresets, setPresets), [run]);
 
   useEffect(() => {
     // 🔴 D3(2026-09-28) — 매장 전환은 이 컴포넌트를 다시 마운트하지 않는다(VenueManageTab 이 같은 자리에서 venueId 만 바꾼다).
@@ -148,10 +151,11 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
 
   // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
   useEffect(() => {
-    if (!seedSessionDate) { setSeedSession(null); return; }
-    getLedgerSession(venueId, seedSessionDate, seedGameSeq).then(setSeedSession).catch(() => {});
+    setSeedSession(null); // 다른 매장·회차의 시드가 새 조회 전까지 설정 폼에 남지 않게(L-06)
+    if (!seedSessionDate) return;
+    run((v) => getLedgerSession(v, seedSessionDate, seedGameSeq), setSeedSession);
     setView('settings');
-  }, [venueId, seedSessionDate, seedGameSeq]);
+  }, [venueId, seedSessionDate, seedGameSeq, run]);
 
   // 구독은 **이 판이 보일 때만** 연다. 탭 keep-alive 라 홈으로 가도 컴포넌트가 살아 있어서
   //   예전엔 안 보이는 판이 계속 realtime 을 붙들었다(무료 한도: 동시연결 200·월 200만 메시지).

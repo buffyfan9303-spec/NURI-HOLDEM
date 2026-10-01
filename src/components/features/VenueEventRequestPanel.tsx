@@ -18,6 +18,7 @@ import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { kstToday } from '../../lib/kst';
+import { useVenueScope } from '../../lib/useVenueScope';
 import {
   requestVenueEvent, myVenueEventRequests,
   type VenueEventKind, type VenueEventRequest,
@@ -48,11 +49,12 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
   const [mine, setMine] = useState<VenueEventRequest[] | 'not-deployed' | null>(null);
   const [loadErr, setLoadErr] = useState<unknown>(null);
 
+  const run = useVenueScope(venueId); // L-06 부류 — 매장 전환 뒤 늦게 온 A 신청 목록이 B 화면에 그려지지 않게
   const load = useCallback(() => {
     setLoadErr(null);
-    myVenueEventRequests(venueId).then(setMine).catch(setLoadErr);
-  }, [venueId]);
-  useEffect(() => { load(); }, [load]);
+    run(myVenueEventRequests, setMine, setLoadErr);
+  }, [run]);
+  useEffect(() => { load(); }, [venueId, load]);
 
   const rows = Array.isArray(mine) ? mine : [];
   const notDeployed = mine === 'not-deployed';
