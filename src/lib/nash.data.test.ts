@@ -44,6 +44,15 @@ describe('PushFoldChart 화면 계약(소스)', () => {
     expect(src).toContain('데이터가 없습니다');
   });
 
+  it('출처 배지 힌트가 실제 생성 방식을 말한다 — 옛 "단일 콜러 근사 · 몬테카를로" 한 줄로 돌아가지 않는다(online-audit2 N10, 2026-10-01)', () => {
+    const badge = readFileSync(join(__dirname, '../components/features/tools/SourceBadge.tsx'), 'utf-8');
+    const hint = badge.match(/nash: \{[\s\S]*?hint: '([^']*)'/)?.[1] ?? '';
+    expect(hint, 'nash 힌트를 못 찾았다').not.toBe('');
+    expect(hint).not.toContain('단일 콜러 근사 · 2~20bb');
+    expect(hint).toContain('준비 중');          // 숨긴 칸(NASH_ANTE_QUARANTINE − NASH_ANTE_APPROX)을 말한다
+    expect(hint).toContain('정확 균형');        // SB·BTN(NASH_EXACT_KS)
+  });
+
   it('① 스택은 한 줄 슬라이더(44px 트랙) + 실제 깊이 눈금 — 칩 두 줄이 아니다', () => {
     expect(src).toMatch(/<input type="range" min=\{0\} max=\{NASH_STACKS\.length - 1\} step=\{1\} value=\{stackIdx\}/);
     expect(src).toContain('h-[44px] accent-accent-300');

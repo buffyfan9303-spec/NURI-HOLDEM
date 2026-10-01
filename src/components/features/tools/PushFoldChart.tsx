@@ -191,7 +191,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           ⚠ 2026-09-19 까지는 '생성기 재현 필요' 였다. 생성기가 유실돼 사실이었지만 이제 `scripts/gen-nash/` 로
             **이 화면이 읽는 빅 앤티 표는 전부 다시 만들 수 있다** — 그대로 두면 거짓 고지가 된다. */}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 자체 계산 Nash(첫 진입 올인 · {approx ? '콜러 2명까지 근사' : k === 2 ? '3인 균형' : '단일 콜러'}) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
+        ※ 자체 계산 Nash(첫 진입 올인 · {!hasData ? '이 칸 준비 중' : approx ? '콜러 2명까지 근사' : k === 2 ? '3인 균형' : k === 1 ? '헤즈업 정확 균형' : '단일 콜러'}) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
       </p>
     </CalcCard>
   );
