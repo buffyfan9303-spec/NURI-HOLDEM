@@ -191,9 +191,8 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const feed = page.locator('[data-spot-feed]').filter({ visible: true }).first();
     await expect(feed, '피드 카드에 SPOT 미리보기가 없다(목록 select 에 post_spots 가 빠졌나?)').toBeVisible({ timeout: 20_000 });
     await expect(feed.locator('[data-seat="hero"]')).toContainText('나 CO');
-    // 2026-10-01 검토 보완: 피드 이름표는 'A · BTN' 한 줄(카드 높이를 줄였다). 상세는 'Villain A · BB' 그대로(위 시험).
-    await expect(feed.locator('[data-seat="A"]')).toHaveText('A · BTN');
-    await expect(feed.locator('[data-seat="B"]')).toHaveText('B · SB');
+    await expect(feed.locator('[data-seat="A"]')).toContainText('Villain A · BTN');
+    await expect(feed.locator('[data-seat="B"]')).toContainText('Villain B · SB');
     // 가린 글 — 피드에서도 상대 카드 앞면이 없다
     await expect(feed.locator('[data-seat="A"] [data-card]')).toHaveCount(0);
     await expect(feed.locator('[data-spot-choices]')).toHaveText('체크 · 벳 — 당신이라면?');
