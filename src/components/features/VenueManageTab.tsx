@@ -886,7 +886,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         </div>
       )}
 
-      {isOwner && <VenueVerificationCard />}
+      {/* S-06 — 인증 등급은 대표 업주만, 숨김 안내는 이 매장을 다루는 모두에게(지금 고른 매장 기준). */}
+      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner} />}
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
