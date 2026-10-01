@@ -12,7 +12,8 @@ function strengthText(hero: string[]): string {
   const h = renderToStaticMarkup(<HandGtoModal hero={hero} onClose={() => {}} />);
   const m = h.match(/<p[^>]*data-testid="hand-strength"[^>]*>([\s\S]*?)<\/p>/);
   expect(m, '강도 문장(data-testid=hand-strength)이 렌더되지 않았다').toBeTruthy();
-  return m![1].replace(/<!-- -->/g, '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  // 태그 사이 글자만 모은다(정규식 치환 대신 '<' 로 자르고 '>' 뒤만 남김 — CodeQL 불완전 정화 경고 회피, #84 와 같은 방식).
+  return m![1].split('<').map((s, i) => (i === 0 ? s : s.slice(s.indexOf('>') + 1))).join('').replace(/\s+/g, ' ').trim();
 }
 
 const ten = (hand: string) => STARTING_HAND_BY_HAND.ten.get(hand)!;
