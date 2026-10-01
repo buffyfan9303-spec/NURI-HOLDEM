@@ -29,7 +29,6 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
-import PostAttachments from './PostAttachments';
 import SpotPostCard from './community/SpotPostCard';
 import { fetchAttachment, castPollVote, subscribePollResults } from '../../api/postAttachments';
 // 카테고리 라벨·pill 색은 src/lib/postCategory.ts 가 단일 출처 — 색표를 이 파일로 복사하지 않는다
@@ -815,16 +814,15 @@ export default function PostDetailModal({
         })()}
 
         {/* ── 게시판에 올라온 NURI SPOT — 투표(어태치먼트)보다 **위**.
-            상황을 먼저 보여주고 그 다음에 고르게 한다. 스팟 글이 아니면 스스로 null 을 낸다. */}
+            상황을 먼저 보여주고 그 다음에 고르게 한다. 스팟 글이 아니면 카드 없이 투표(어태치먼트)만 예전 자리에 낸다. */}
         {/* expectSpot: 스팟 글일 때만 자리를 예약한다 — 아니면 144.75px 빈 상자가 떴다 사라지며
             아래가 통째로 −145px 튄다(2026-09-19 실측 LayoutShift 0.0806). SpotPostCard 머리말 참고. */}
-        {!hidden && <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} expectSpot={post.category === 'hand'} />}
-
-        {/* ── 어태치먼트(핸드 결과·투표) — 본문 아래. 로딩 중엔 미표시(스켈레톤 금지). */}
-        {!hidden && attachment && (
-          <div className="mt-3">
-            <PostAttachments key={post.id} attachment={attachment} onVote={handleVote} />
-          </div>
+        {/* ── 어태치먼트(핸드 결과·투표) — 2026-10-01 시안 A: 스팟 글이면 투표가 SPOT 카드 **안**(테이블·진행 바로 아래)에 서고,
+            아니면 예전처럼 본문 아래에 선다. 그 갈림을 SpotPostCard 하나가 정한다(두 곳에서 그리면 투표가 두 번 선다).
+            로딩 중엔 미표시(스켈레톤 금지). initial = 목록에 끼워 받은 스팟 — 있으면 첫 프레임부터 그린다. */}
+        {!hidden && (
+          <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} expectSpot={post.category === 'hand'}
+            initial={post.spotEmbed} attachment={attachment} onVote={handleVote} />
         )}
 
         {/* ── 반응 한 줄 — 좋아요 · 추천 · 비추천 · 공유 ───────────────────────

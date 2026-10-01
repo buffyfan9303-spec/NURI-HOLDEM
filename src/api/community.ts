@@ -115,6 +115,22 @@ export interface CommunityPost {
   bumpCount?: number;
   /** 관리자 상단 고정 시각(ISO). null = 미고정. 정렬은 src/lib/pinnedFirst.ts */
   pinnedAt?: string | null;
+  /**
+   * 목록 쿼리에 끼워 받은 post_spots 원본 행(`POST_LIST_SELECT`) — 피드 SPOT 미리보기·상세 첫 프레임용.
+   * undefined = 모른다(끼워 받지 않은 경로·옛 캐시) · null = 스팟 글이 아니다. 해석은 spotShare/embeddedSpot.ts.
+   */
+  spotEmbed?: unknown | null;
+}
+
+/**
+ * 게시판 목록·단건 select — 스팟 미리보기를 **같은 요청 하나에** 끼워 받는다(글마다 따로 부르는 N+1 금지).
+ * post_spots 는 칸 단위 GRANT(공개 열만)라 `*` 금지 — 쓰는 세 열만. 가린 값은 서버가 spot 본문에서 이미 뺐다(20260911d).
+ * 끼워 받기가 실패하면(관계·권한 변경) 목록이 죽지 않게 `*` 로 한 번 더 받는다 — 미리보기만 빠진다.
+ */
+const POST_LIST_SELECT = '*, post_spots(spot, reveal_villain, reveal_result)';
+async function withSpotFallback<R extends { error: unknown }>(run: (select: string) => PromiseLike<R>): Promise<R> {
+  const res = await run(POST_LIST_SELECT);
+  return res.error ? run('*') : res;
 }
 
 /** 이 글이 지금 끌올 중인가 — 만료 판정을 화면마다 다시 쓰지 않게 한 곳에 둔다 */
@@ -169,6 +185,9 @@ export const rowToPost = (r: any): CommunityPost => ({
   bumpedUntil: r.bumped_until ?? null,
   bumpCount:   r.bump_count ?? 0,
   pinnedAt:    r.pinned_at ?? null,
+  // post_spots.post_id 는 PK 라 PostgREST 가 보통 객체로 주지만, 배열로 와도 받는다. 키가 없으면 '모름'.
+  spotEmbed: !('post_spots' in r) ? undefined
+    : Array.isArray(r.post_spots) ? (r.post_spots[0] ?? null) : (r.post_spots ?? null),
 });
 
 /** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회.
@@ -192,7 +211,7 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
   // FULL-ERROR-SWEEP-B(2026-09-25): ?post=·알림 링크의 id 는 URL 에서 온 남의 입력이다. uuid 꼴이 아니면
   //   PostgREST 가 400(22P02) 을 돌려주던 것을 요청 없이 '없는 글'(null) 로 끝낸다.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId)) return null;
-  const res = await supabase.from('community_posts').select('*').eq('id', postId).maybeSingle();
+  const res = await withSpotFallback((sel) => supabase.from('community_posts').select(sel).eq('id', postId).maybeSingle());
   if (res.error || !res.data) return null;
   const liked = await supabase.from('post_likes').select('post_id').eq('post_id', postId).limit(1);
   return { ...rowToPost(res.data), liked: (liked.data ?? []).length > 0 };
@@ -401,19 +420,19 @@ export async function getPosts(): Promise<CommunityPost[]> {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS;
   }
-  const postsRes = await supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(50);
+  const postsRes = await withSpotFallback((sel) => supabase.from('community_posts').select(sel).order('created_at', { ascending: false }).limit(50));
   if (postsRes.error) throw postsRes.error;
   // 끌올(100점)한 글은 최신 50건 밖으로 밀려나 있어도 **반드시** 목록에 있어야 한다.
   // 이 한 번의 추가 조회가 없으면 오래된 글을 끌올한 사람은 돈을 내고 아무것도 못 얻는다
   // (동시 끌올 상한이 3자리라 최대 3행 — 부하는 무시할 수 있다).
   // 컬럼이 아직 없는 환경(마이그레이션 지연)에서는 조용히 건너뛴다 — 목록 자체가 죽으면 안 된다.
-  const bumpedRes = await supabase.from('community_posts').select('*')
+  const bumpedRes = await withSpotFallback((sel) => supabase.from('community_posts').select(sel)
     .gt('bumped_until', new Date().toISOString())
-    .order('bumped_until', { ascending: false }).limit(10);
+    .order('bumped_until', { ascending: false }).limit(10));
   // 관리자 고정 글도 같은 이유로 50건 밖에서 건져 온다(20260903a pinned_at — 컬럼 없으면 조용히 건너뜀).
-  const pinnedRes = await supabase.from('community_posts').select('*')
+  const pinnedRes = await withSpotFallback((sel) => supabase.from('community_posts').select(sel)
     .not('pinned_at', 'is', null)
-    .order('pinned_at', { ascending: false }).limit(10);
+    .order('pinned_at', { ascending: false }).limit(10));
   const rows = [...(postsRes.data ?? [])];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const seen = new Set(rows.map((r: any) => r.id as string));
@@ -663,7 +682,19 @@ export async function searchPosts(params: SearchPostsParams): Promise<SearchPost
       : [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return { posts: list.slice(0, limit), nextCursor: null };
   }
-  let q = supabase.from('community_posts').select('*');
+  const { data, error } = await withSpotFallback((sel) => searchQuery(sel, params, kw, popular).limit(limit));
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const posts = rows.map(rowToPost);
+  const last = rows[rows.length - 1];
+  const nextCursor: PostCursor | null = rows.length === limit && last
+    ? { createdAt: last.created_at as string, id: last.id as string, likeCount: Number(last.like_count ?? 0) }
+    : null;
+  return { posts, nextCursor };
+}
+
+function searchQuery(sel: string, params: SearchPostsParams, kw: string, popular: boolean) {
+  let q = supabase.from('community_posts').select(sel);
   if (params.category && params.category !== 'all') q = q.eq('category', params.category);
   if (kw) {
     const v = orIlikeValue(kw);
@@ -681,15 +712,7 @@ export async function searchPosts(params: SearchPostsParams): Promise<SearchPost
       q = q.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`);
     }
   }
-  const { data, error } = await q.limit(limit);
-  if (error) throw error;
-  const rows = (data ?? []) as Record<string, unknown>[];
-  const posts = rows.map(rowToPost);
-  const last = rows[rows.length - 1];
-  const nextCursor: PostCursor | null = rows.length === limit && last
-    ? { createdAt: last.created_at as string, id: last.id as string, likeCount: Number(last.like_count ?? 0) }
-    : null;
-  return { posts, nextCursor };
+  return q;
 }
 
 // ── 관리자: 매장 상태 관리 (게시물 관리) ───────────────────────────────────────

@@ -12,7 +12,9 @@
 //   ④ 'Villain X' 이름표와 옆 카드 칩의 **세로 가운데선이 같다**
 //   ⑤ 칩 사이 간격이 내 카드 줄과 상대 카드 줄에서 같다
 //   + 측정 대상이 0건이면 실패한다(빈 검사로 초록이 되지 않게).
-// 소비 화면: 게시글 상세의 스팟 카드(공유) · 내 스팟 상세(펼침) · 그 스팟을 '수정하기' 로 다시 연 작성 화면(확인 단계).
+// 소비 화면: 내 스팟 상세(펼침) · 그 스팟을 '수정하기' 로 다시 연 작성 화면(확인 단계).
+//   ⚠ 2026-10-01 시안 A(오너 선택)로 **게시글 상세의 공유 카드는 SpotDetails 를 쓰지 않는다**(테이블 그림 —
+//     community/spotShare/SpotTable.tsx). 그래서 '게시글 상세' 케이스를 뺐다. 그 화면의 계약은 e2e/nuri-spot-board.spec.ts 가 본다.
 //   ⚠ 드릴(트레이너)·게시판 목록 행은 SpotDetails 를 쓰지 않는다(소스 import 0 — 2026-10-01 grep).
 // ⚠ 운영 DB 무접촉: stubLogin + page.route fixture. _fixtures 가 비-GET 을 끊는다.
 import { test, expect } from './_fixtures';
@@ -20,8 +22,6 @@ import { type Locator, type Page, type Route } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
-const POST_ID = '00000000-0000-4000-8000-00000000ab21';
-const ME = '00000000-0000-4000-8000-0000000000f1';   // stubLogin 의 uid
 
 /** 상대 1명 — 오너 스크린샷의 그 판(토너먼트 6인 · BTN AsKs vs BB QhQd · 프리플랍) */
 const SPOT_ONE = {
@@ -61,35 +61,6 @@ async function boot(page: Page, view: (typeof VIEWS)[number]) {
   await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* */ } }, view.theme);
   await stubLogin(page);
   await stabilizeBackstack(page);
-}
-
-async function installPost(page: Page, spot: unknown) {
-  await page.route(/\/rest\/v1\/community_posts\?/, (r: Route) => r.fulfill(json([{
-    id: POST_ID, user_id: ME, user_name: '스팟올린사람', user_role: 'user', user_color: '#888', user_avatar: null,
-    content: '정렬 확인용', created_at: '2026-10-01T00:00:00Z', like_count: 0, comment_count: 0, view_count: 0,
-    category: 'hand', title: '정렬 확인 스팟', images: [], badbeat_count: 0, goodrun_count: 0, blinded: false,
-    cheer_count: 0, bumped_until: null, bump_count: 0, pinned_at: null,
-  }])));
-  await page.route(/\/rest\/v1\/post_spots\?/, (r: Route) => r.fulfill(json({
-    post_id: POST_ID, spot, coverage_kind: 'math_only', source_label: null,
-    dataset_version: 'nuri-charts-2026-09-11', reveal_villain: true, reveal_result: true, analysis: null,
-  })));
-  for (const re of [/\/rest\/v1\/post_hands\?/, /\/rest\/v1\/post_polls\?/]) await page.route(re, (r: Route) => r.fulfill(json(null)));
-  await page.route(/\/rest\/v1\/comments\?/, (r: Route) => r.fulfill(json([])));
-}
-
-async function openPost(page: Page): Promise<Locator> {
-  await page.goto('/?tab=community');
-  await dismissOverlays(page);
-  const boardTab = page.getByRole('button', { name: '게시판', exact: true }).first();
-  await expect(boardTab).toBeVisible({ timeout: 20_000 });
-  await boardTab.click();
-  const title = page.getByText('정렬 확인 스팟').filter({ visible: true }).first();
-  await expect(title).toBeVisible({ timeout: 20_000 });
-  await title.click();
-  const card = page.getByRole('dialog').first().locator('[data-spot-post]');
-  await expect(card, '게시글에 스팟 카드가 없다').toBeVisible({ timeout: 15_000 });
-  return card;
 }
 
 interface Measure {
@@ -170,14 +141,6 @@ function assertAligned(m: Measure, villains: number, where: string) {
 for (const view of VIEWS) {
   test.describe(`SpotDetails 정렬 — ${view.name}`, () => {
     for (const c of CASES) {
-      test(`🔴 게시글 상세 · ${c.name}`, async ({ page }) => {
-        await boot(page, view);
-        await installPost(page, c.spot);
-        const details = (await openPost(page)).getByTestId('spot-details');
-        await expect(details, '게시글 스팟 카드에 작성 내용이 없다').toBeVisible();
-        assertAligned(await measure(details), c.villains, `게시글 상세/${view.name}/${c.name}`);
-      });
-
       test(`🔴 내 스팟 상세 → 재열기 작성 화면 · ${c.name}`, async ({ page }) => {
         test.setTimeout(60_000);
         await boot(page, view);

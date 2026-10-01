@@ -47,18 +47,56 @@ const spotRow = (reveal: boolean) => ({
   reveal_villain: reveal, reveal_result: reveal, analysis: null,
 });
 
-async function installBoard(page: Page, opts: { reveal?: boolean; spot?: boolean } = {}) {
+/** 3인 플랍 — SB(Villain B) 가 체크한 뒤 내 차례. 시안 A 정본(a-detail-mw-hidden-dark.png)과 같은 판. */
+const MW_SPOT = {
+  v: 3, game: 'nlhe', format: 'cash', tableSize: 6, sbBb: 0.5, anteBb: 0, effectiveBb: 80,
+  heroPos: 'CO', villainPos: 'BTN', extraPos: ['SB'], hero: ['Ah', 'Jh'], villain: [[], []],
+  board: ['Jc', '8h', '2d'], street: 'flop',
+  actions: [
+    { street: 'preflop', actor: 'hero', type: 'raise', sizeBb: 2.5 },
+    { street: 'preflop', actor: 'villain', type: 'call', sizeBb: 2.5 },
+    { street: 'preflop', actor: 'villain', pos: 'SB', type: 'call', sizeBb: 2 },
+    { street: 'flop', actor: 'villain', pos: 'SB', type: 'check' },
+  ],
+  note: 'SB 체크 받고 얼마나 벳할지 고민했습니다.',
+};
+/** 서버(20261001o 적용 전)가 넣는 고정 보기 */
+const LEGACY_OPTIONS = [
+  { option_id: 'o-f', idx: 0, label: '폴드', votes: 0 },
+  { option_id: 'o-c', idx: 1, label: '콜', votes: 5 },
+  { option_id: 'o-r', idx: 2, label: '레이즈', votes: 2 },
+];
+
+async function installBoard(page: Page, opts: { reveal?: boolean; spot?: boolean; spotJson?: unknown; poll?: boolean } = {}) {
   const reveal = opts.reveal ?? false;
-  await page.route(/\/rest\/v1\/community_posts\?/, (r: Route) => r.fulfill(json([postRow()])));
-  await page.route(/\/rest\/v1\/post_spots\?/, (r: Route) =>
-    r.fulfill(json(opts.spot === false ? null : spotRow(reveal))));
+  const row = () => (opts.spot === false ? null : { ...spotRow(reveal), ...(opts.spotJson ? { spot: opts.spotJson } : {}) });
+  // 목록은 PostgREST 처럼 굴린다 — select 에 post_spots(...) 를 **끼워 달라고 했을 때만** 스팟(공개 열 3개)을 실어 준다.
+  //   목록 쿼리에서 끼워 받기를 빼면 피드 미리보기가 사라진다(음성 대조의 근거).
+  await page.route(/\/rest\/v1\/community_posts\?/, (r: Route) => {
+    const embed = decodeURIComponent(r.request().url()).includes('post_spots(');
+    const s = row();
+    const pub = s ? { spot: s.spot, reveal_villain: s.reveal_villain, reveal_result: s.reveal_result } : null;
+    return r.fulfill(json([embed ? { ...postRow(), post_spots: pub } : postRow()]));
+  });
+  await page.route(/\/rest\/v1\/post_spots\?/, (r: Route) => r.fulfill(json(row())));
   // 상세가 함께 부르는 것들 — 비어 있어도 화면은 서야 한다.
   // ⚠ 모양을 맞춰야 한다: maybeSingle 계열은 null, **목록 계열은 빈 배열**.
   //   comments 에 null 을 물렸더니 커뮤니티 목록 자체가 안 그려졌다(실측).
-  for (const re of [/\/rest\/v1\/post_hands\?/, /\/rest\/v1\/post_polls\?/]) {
-    await page.route(re, (r: Route) => r.fulfill(json(null)));
-  }
+  await page.route(/\/rest\/v1\/post_hands\?/, (r: Route) => r.fulfill(json(null)));
+  await page.route(/\/rest\/v1\/post_polls\?/, (r: Route) => r.fulfill(json(opts.poll
+    ? { id: 'poll-1', post_id: POST_ID, question: '당신이라면 어떻게 하시겠어요?', closes_at: null } : null)));
+  await page.route(/\/rest\/v1\/rpc\/poll_results/, (r: Route) => r.fulfill(json(LEGACY_OPTIONS)));
+  await page.route(/\/rest\/v1\/post_poll_votes\?/, (r: Route) => r.fulfill(json(null)));
   await page.route(/\/rest\/v1\/comments\?/, (r: Route) => r.fulfill(json([])));
+}
+
+/** 게시판 섹션까지만 들어간다(글은 열지 않는다) */
+async function openBoard(page: Page) {
+  await page.goto('/?tab=community');
+  await dismissOverlays(page);
+  const boardTab = page.getByRole('button', { name: '게시판', exact: true }).first();
+  await expect(boardTab, '게시판 서브탭이 없다').toBeVisible({ timeout: 20_000 });
+  await boardTab.click();
 }
 
 /** 게시판 섹션까지 들어가 글 하나를 연다 */
@@ -107,12 +145,13 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const dlg = await openPost(page);
     const card = dlg.locator('[data-spot-post]');
     await expect(card, '게시글에 스팟 카드가 없다').toBeVisible({ timeout: 15_000 });
-    await expect(card.getByText('NURI SPOT')).toBeVisible();
-    // 🔴 2026-09-22 요구 A — 등급 배지(data-spot-coverage)는 화면에서 뺐다. 대신 **작성 내용**이 선다.
-    //   배지가 되살아나지 않았는지와, 그 자리에 실제 내용이 들어갔는지를 함께 본다(빈 검사 방지).
+    // 🔴 2026-09-22 요구 A — 등급 배지(data-spot-coverage)는 화면에서 뺐다.
     await expect(card.locator('[data-spot-coverage]'), '출처 등급 배지가 되살아났다').toHaveCount(0);
-    await expect(card.getByTestId('spot-details'), '작성 내용이 안 보인다').toBeVisible();
-    await expect(card.getByTestId('spot-details')).toContainText('유효 스택');
+    // 🔴 2026-10-01 시안 A — 라벨 표(SpotDetails) 대신 테이블 그림이 선다. 내용이 실제로 들어갔는지 본다(빈 검사 방지).
+    await expect(card.locator('[data-spot-share="table"]'), '테이블 화면이 안 선다').toBeVisible();
+    await expect(card.locator('[data-felt] [data-seat="hero"]')).toContainText('나 BTN');
+    await expect(card.locator('[data-felt] [data-seat="A"]')).toContainText('Villain A · BB');
+    await expect(card.locator('[data-spot-share="table"]')).toContainText('100BB');
     await expect(card.getByRole('button', { name: '내 스팟으로 가져오기' })).toBeVisible();
   });
 
@@ -121,7 +160,7 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const dlg = await openPost(page);
     const card = dlg.locator('[data-spot-post]');
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByText(/아직 가려져 있습니다/)).toBeVisible();
+    await expect(card.getByTestId('spot-hidden-note')).toBeVisible();
     // 앵커링 금지 — 글쓴이가 뭘 했는지 먼저 보이면 "당신이라면?" 투표가 그 값에 끌려간다
     // ⚠ 텍스트로 찾으면 **가림 안내 문구**('… 글쓴이의 선택 … 가려져 있습니다')에 걸린다.
     //   실제 표시 요소만 본다.
@@ -136,9 +175,41 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const dlg = await openPost(page);
     const card = dlg.locator('[data-spot-post]');
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByText(/아직 가려져/)).toHaveCount(0);
+    await expect(card.getByTestId('spot-hidden-note')).toHaveCount(0);
     await expect(card.getByTestId('spot-villain-cards'), '공개했는데 상대 카드가 없다').toBeVisible();
     await expect(card.locator('[data-spot-heroaction]'), '공개 뒤에는 글쓴이의 선택이 보여야 한다').toBeVisible();
+  });
+
+  test('🔴 피드 카드에 테이블 미리보기가 선다 — 목록 요청 하나에 끼워 받고 글마다 따로 부르지 않는다', async ({ page }) => {
+    await installBoard(page, { reveal: false, spotJson: MW_SPOT });
+    const spotCalls: string[] = [];
+    page.on('request', (req) => { if (/\/rest\/v1\/post_spots\?/.test(req.url())) spotCalls.push(req.url()); });
+    await openBoard(page);
+    // 기본 보기는 한 줄 목록 — 스팟 글은 아이콘 하나로만 알린다(행 높이 = 목록 밀도).
+    await expect(page.getByLabel('NURI SPOT').filter({ visible: true }).first(), '한 줄 목록에 스팟 표시가 없다').toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: '카드 보기' }).click();
+    const feed = page.locator('[data-spot-feed]').filter({ visible: true }).first();
+    await expect(feed, '피드 카드에 SPOT 미리보기가 없다(목록 select 에 post_spots 가 빠졌나?)').toBeVisible({ timeout: 20_000 });
+    await expect(feed.locator('[data-seat="hero"]')).toContainText('나 CO');
+    await expect(feed.locator('[data-seat="A"]')).toContainText('Villain A · BTN');
+    await expect(feed.locator('[data-seat="B"]')).toContainText('Villain B · SB');
+    // 가린 글 — 피드에서도 상대 카드 앞면이 없다
+    await expect(feed.locator('[data-seat="A"] [data-card]')).toHaveCount(0);
+    await expect(feed.locator('[data-spot-choices]')).toHaveText('체크 · 벳 — 당신이라면?');
+    expect(spotCalls, '목록을 그리면서 글마다 post_spots 를 따로 불렀다(N+1)').toEqual([]);
+  });
+
+  test('🔴 체크를 받은 뒤 내 차례면 투표 보기가 체크·벳이다 — 서버 고정 보기(폴드·콜·레이즈)도 맞춰 보인다', async ({ page }) => {
+    await installBoard(page, { reveal: false, spotJson: MW_SPOT, poll: true });
+    const dlg = await openPost(page);
+    const card = dlg.locator('[data-spot-post]');
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    // 투표는 SPOT 카드 **안**에 선다(시안 A) — 카드 밖에 한 번 더 서면 안 된다.
+    const group = card.getByRole('group', { name: '투표 선택지' });
+    await expect(group).toBeVisible({ timeout: 15_000 });
+    await expect(dlg.getByRole('group', { name: '투표 선택지' })).toHaveCount(1);
+    await expect(group.getByRole('button')).toHaveText(['체크', '벳']);
+    await expect(card.getByTestId('spot-timeline')).toContainText('플랍 · 내 차례');
   });
 
   test('🔴 스팟이 아닌 글에는 카드가 서지 않는다 — 일반 글을 망치지 않는다', async ({ page }) => {
