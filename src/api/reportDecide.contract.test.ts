@@ -47,11 +47,12 @@ describe('decideReport — 관리자 결정은 RPC 한 번', () => {
   });
 
   it('정지: 기간·사유·글 삭제를 싣고, 정지된 작성자에게 기존 제재 메일(notify-sanction)을 보낸다', async () => {
-    rpcResult = { data: { closed: 1, deleted: true, suspended_user: 'u9' }, error: null };
+    // 서버가 정한 만료일(더 긴 기존 정지가 남은 경우 포함)을 메일에 그대로 싣는다
+    rpcResult = { data: { closed: 1, deleted: true, suspended_user: 'u9', suspended_until: '2026-10-30T00:00:00Z' }, error: null };
     const { decideReport } = await import('./reports');
     const res = await decideReport('r3', 'suspend', { suspendDays: 7, reason: '욕설', deleteContent: true });
     expect(calls[0]).toMatchObject({ name: 'admin_decide_report', args: { p_action: 'suspend', p_suspend_days: 7, p_reason: '욕설', p_delete_content: true } });
-    expect(calls[1]).toMatchObject({ kind: 'fn', name: 'notify-sanction', args: { body: { userId: 'u9', status: 'suspended', reason: '욕설' } } });
+    expect(calls[1]).toMatchObject({ kind: 'fn', name: 'notify-sanction', args: { body: { userId: 'u9', status: 'suspended', reason: '욕설', suspendedUntil: '2026-10-30T00:00:00Z' } } });
     expect(res.mailSent).toBe(true);
   });
 
@@ -107,6 +108,40 @@ describe('20261002a 마이그레이션 계약', () => {
     expect(sql).toMatch(/create\s+table\s+if\s+not\s+exists\s+public\._bk_20261002a_unblinded/i);
     expect(sql).toMatch(/revoke\s+all\s+on\s+public\._bk_20261002a_unblinded\s+from\s+public,\s*anon,\s*authenticated/i);
     expect(sql).toMatch(/c_expected_auto[\s\S]*c_expected_unknown[\s\S]*raise\s+exception/i);
+  });
+
+  // 검토 T11(2026-10-02): 신고자가 reports.target_owner_id 에 아무 회원이나 적으면 그 회원이 정지됐다.
+  const rpcBody = () => {
+    const from = sql.search(/create\s+or\s+replace\s+function\s+public\.admin_decide_report/i);
+    const to = sql.indexOf('$function$;', from);
+    expect(from, 'admin_decide_report 정의가 없다').toBeGreaterThan(-1);
+    return sql.slice(from, to);
+  };
+
+  it('reports 에 BEFORE INSERT 트리거가 있고, 작성자 칸을 서버 판정기로 덮는다', () => {
+    expect(sql).toMatch(/create\s+trigger\s+trg_reports_server_fields\s+before\s+insert\s+on\s+public\.reports\s+for\s+each\s+row\s+execute\s+function\s+public\._reports_server_fields\(\)/i);
+    const fn = sql.slice(sql.search(/create\s+or\s+replace\s+function\s+public\._reports_server_fields/i));
+    expect(fn.slice(0, fn.indexOf('$function$;'))).toMatch(/new\.target_owner_id\s*:=\s*public\._report_target_owner\(\s*new\.target_type\s*,\s*new\.target_id\s*\)/i);
+    expect(sql).toMatch(/revoke\s+all\s+on\s+function\s+public\._report_target_owner\(text,\s*uuid\)\s+from\s+public,\s*anon,\s*authenticated/i);
+  });
+
+  it('admin_decide_report 는 target_owner_id 칸을 믿지 않는다 — 정지 대상은 원문 판정기로', () => {
+    const body = rpcBody();
+    expect(body).not.toMatch(/target_owner_id/i);
+    expect(body).toMatch(/v_user\s*:=\s*public\._report_target_owner\(\s*r\.target_type\s*,\s*r\.target_id\s*\)/i);
+  });
+
+  it('정지는 더 긴 제재를 줄이지 않고(T13), 승인 대기 회원을 정지하지 않는다(T15)', () => {
+    const body = rpcBody();
+    expect(body).toMatch(/v_user_status\s*=\s*'banned'[\s\S]*raise\s+exception\s+'이미 영구/i);
+    expect(body).toMatch(/greatest\(\s*v_user_until\s*,/i);
+    expect(body).toMatch(/not\s+in\s*\(\s*'active',\s*'suspended',\s*'banned'\s*\)[\s\S]{0,40}raise\s+exception\s+'승인 대기/i);
+  });
+
+  it('기존 행 백필은 백업 표 + 건수 게이트를 거친다', () => {
+    expect(sql).toMatch(/create\s+table\s+if\s+not\s+exists\s+public\._bk_20261002a_report_owner/i);
+    expect(sql).toMatch(/revoke\s+all\s+on\s+public\._bk_20261002a_report_owner\s+from\s+public,\s*anon,\s*authenticated/i);
+    expect(sql).toMatch(/c_expected_mismatch\s+constant\s+int\s*:=\s*0[\s\S]*raise\s+exception/i);
   });
 
   it('뒤 마이그레이션이 reports 에 글을 가리는 트리거를 다시 달지 않는다', () => {

@@ -99,15 +99,18 @@ test.describe('신고 정책 10-02', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const ADMIN = '00000000-0000-4000-8000-00000000ad11';
     const cap: Cap[] = [];
+    // 검토 T11: r1 은 신고자가 작성자 칸을 남(FORGED)으로 적은 옛 행이다 — 화면은 원문(post.user_id = AUTHOR)을 따라야 한다.
+    const FORGED = '00000000-0000-4000-8000-0000000000f9';
     let open = [
-      { id: 'r1', reporter_name: '신고자1', target_type: 'post', target_id: 'rp-1', target_owner_id: AUTHOR, target_summary: TITLE, reason: '욕설/비방', status: 'open', created_at: '2026-10-01T10:00:00Z' },
+      { id: 'r1', reporter_name: '신고자1', target_type: 'post', target_id: 'rp-1', target_owner_id: FORGED, target_summary: TITLE, reason: '욕설/비방', status: 'open', created_at: '2026-10-01T10:00:00Z' },
       { id: 'r2', reporter_name: '신고자2', target_type: 'post', target_id: 'rp-1', target_owner_id: AUTHOR, target_summary: TITLE, reason: '스팸/도배', status: 'open', created_at: '2026-10-01T09:00:00Z' },
     ];
     const history = [
       { id: 'h1', reporter_name: '예전', target_type: 'comment', target_id: 'c-old', target_owner_id: AUTHOR, target_summary: '예전 댓글', reason: '욕설', status: 'resolved', created_at: '2026-09-01T00:00:00Z' },
     ];
     let decideReply: { status: number; body: unknown } = { status: 200, body: { status: 'dismissed', closed: 2, deleted: false, suspended_user: null } };
-    const USERS = [profile(ADMIN, 'admin', '운영자'), profile(AUTHOR, 'user', '문제회원', { sanction_reason: '예전 도배' })];
+    const USERS = [profile(ADMIN, 'admin', '운영자'), profile(AUTHOR, 'user', '문제회원', { sanction_reason: '예전 도배' }),
+      profile(FORGED, 'user', '엉뚱한회원')];
     await install(page, baseURL, session(ADMIN, 'admin@example.com'), USERS[0], cap, (url, route) => {
       const m = route.request().method();
       if (/\/rest\/v1\/profiles\?/.test(url) && m === 'GET' && /order=/.test(url)) return json(route, USERS);
@@ -128,6 +131,7 @@ test.describe('신고 정책 10-02', () => {
     await expect(row.getByTestId('report-target-text'), '원문이 안 보인다').toContainText(BODY);
     await expect(row.getByText('같은 대상 신고 2건')).toBeVisible();
     await expect(row.getByTestId('report-author-history')).toContainText('문제회원');
+    await expect(row.getByTestId('report-author-history'), '위조된 작성자 칸을 따랐다(T11)').not.toContainText('엉뚱한회원');
     await expect(row.getByTestId('report-author-history')).toContainText('받은 신고 3건(조치 1건)');
     await expect(row.getByTestId('report-author-history')).toContainText('예전 도배');
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import { getReportQueue, decideReport, reportedUserId } from '../../api/reports';
+import { getReportQueue, decideReport } from '../../api/reports';
 import type { ReportQueueItem, ReportDecision, DecideOptions } from '../../api/reports';
 import { adminSetPostBlinded } from '../../api/community';
 import type { User } from '../../api/auth';
@@ -76,7 +76,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
   };
 
   const sanction = (r: ReportQueueItem) => {
-    const uid = reportedUserId(r);
+    const uid = r.authorId;
     if (!uid || !users.some((u) => u.id === uid)) {
       toast.show('신고 대상 작성자를 회원 목록에서 찾지 못했습니다. 회원 관리에서 직접 검색해 주세요', 'error');
       return;
@@ -96,7 +96,9 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
   return (
     <ul className="space-y-1.5" data-testid="report-queue">
       {reports.map((r) => {
-        const author = reportedUserId(r);
+        // 작성자는 원문 행에서 정한다(getReportQueue 가 채움 — 검토 T11). 원문이 지워졌으면 서버도 정지를 거절하므로 정지 버튼을 숨긴다.
+        const author = r.authorId;
+        const canSuspend = !!author && !r.targetMissing;
         const au = author ? users.find((u) => u.id === author) : undefined;
         const deletable = (r.targetType === 'post' || r.targetType === 'comment') && !!r.targetId && !r.targetMissing;
         const what = r.targetType === 'comment' ? '댓글' : '글';
@@ -157,7 +159,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
                   onClick={() => decide(r, 'delete', `이 ${what}을(를) 삭제합니다. 되돌릴 수 없습니다. 진행할까요?`)}
                   className={`${BTN} bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25`}>{what} 삭제</button>
               )}
-              {author && (
+              {canSuspend && (
                 <button type="button" data-testid="report-suspend-open" disabled={isBusy} aria-expanded={suspendOpen === r.id}
                   onClick={() => openSuspend(r.id)}
                   className={`${BTN} bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25`}>유저 정지</button>
@@ -166,7 +168,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
                 className={`${BTN} bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25`}>처리 완료</button>
             </div>
 
-            {suspendOpen === r.id && author && (
+            {suspendOpen === r.id && canSuspend && (
               <div className="rounded-input border border-danger/30 bg-danger/5 p-2 space-y-2" data-testid="report-suspend-panel">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-2xs font-semibold text-ink-secondary">정지 기간</span>
