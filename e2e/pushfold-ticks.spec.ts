@@ -8,23 +8,23 @@
 // 그래서 이 스펙은 이제 다섯 가지를 **같이** 잰다 — 하나라도 빠지면 등급 경계가 밀려도 초록이 뜬다:
 //   ① BTN 2~10bb 눈금이 '있음' 이고 실제로 행렬이 그려지며 배지가 '추정' 을 **말하지 않는다**(추정→정확 전환. 되돌리면 여기서 빨개진다)
 //   ② CO(뒤 3명)의 6~10bb 는 출처 배지가 '추정' 이라고 말한다 — 12bb 이상은 말하지 않는다(등급이 다르다).
-//      2~5bb 는 2026-10-01(N7) 부터 '준비 중' — 행렬을 그리지 않는다
+//      2~5bb 는 2026-10-01(N7) '준비 중' → 2026-10-02 다인 균형(solve-deal.mjs)으로 다시 만들어 **정식 등급**으로 그린다
 //   ③ 경계 — **11bb 는 눈금에 없으므로 10bb ↔ 12bb 가 바로 이웃**이다. CO 에서 눈금 하나 차이로 등급이 갈리는 것을 직접 누른다
 //   ④ SB(뒤 1명)는 2bb 부터 전 깊이 정식 등급 — 자리 기준으로 계산한다
-//   ⑤ 자리 기준이다 — 같은 5bb 에서 BTN 정식 ↔ CO 추정이 자리 버튼 하나로 갈린다
+//   ⑤ 자리 기준이다 — 같은 6bb 에서 BTN 정식 ↔ CO 추정이 자리 버튼 하나로 갈린다
 // ⚠ 로그인은 stubLogin(로컬). 운영 DB 무접촉.
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
 
 const SHALLOW = [2, 3, 4, 5, 6, 7, 8, 9, 10];   // BTN·SB 는 이 깊이도 정식
 const APPROX = [6, 7, 8, 9, 10];   // 빅앤티 k≥3 추정 구간 — nash.data.ts 의 NASH_ANTE_APPROX 와 같아야 한다
-const HIDDEN = [2, 3, 4, 5];       // 2026-10-01 N7 — 빅앤티 k≥3 '준비 중'(추정값이 공개 Nash 표보다 크게 좁아 내렸다)
+const MULTI = [2, 3, 4, 5];        // 2026-10-02 N7 2단계 — 빅앤티 k≥3 다인 균형(정식 등급). 10-01 에는 '준비 중' 이었다
 const EXACT = [12, 15, 20];
 
 test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, height: 844 }); });
 
-  test('🔴 BTN 은 2bb 부터 전 깊이 정식 등급 · CO 는 2~10bb 가 추정, 12bb 부터 정식 · SB 는 2bb 부터 정식', async ({ page }) => {
+  test('🔴 BTN 은 2bb 부터 전 깊이 정식 등급 · CO 는 2~5bb 다인 균형 · 6~10bb 추정 · 12bb 부터 정식 · SB 는 2bb 부터 정식', async ({ page }) => {
     await stubLogin(page);
     await stabilizeBackstack(page);
     await page.goto('/?tab=tools#tool=pushfold');
@@ -61,16 +61,20 @@ test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', 
       expect(await colored(), `${s}bb BTN 행렬에 색칠된 셀이 없다`).toBeGreaterThan(10);
     }
 
-    // ② CO(뒤 3명) — 같은 5bb 가 자리 버튼 하나로 추정 등급이 된다(⑤ 자리 기준). 행렬은 그려지고 배지가 '추정' 이라고 말한다
+    // ② CO(뒤 3명) — 같은 6bb 가 자리 버튼 하나로 추정 등급이 된다(⑤ 자리 기준). 행렬은 그려지고 배지가 '추정' 이라고 말한다
     await dlg.getByRole('button', { name: 'CO', exact: true }).click();
     for (const s of [...APPROX, ...EXACT]) {
       await expect(tick(s), `CO ${s}bb 눈금이 '없음' 으로 표시됐다 — 추정값(NASH_ANTE_APPROX)이 안 실렸다`).toHaveAttribute('data-has-data', 'true');
     }
-    // ②-0 N7(2026-10-01): CO 2~5bb 는 '준비 중' — 행렬을 그리지 않고 안내 상자가 그 사실을 말한다(되돌리면 여기서 빨개진다)
-    for (const s of HIDDEN) await expect(tick(s), `CO ${s}bb 가 아직 값을 낸다 — 숨긴 추정값이 돌아왔다`).toHaveAttribute('data-has-data', 'false');
-    await tick(5).click();
-    await expect(dlg.getByTestId('pushfold-no-data'), '5bb CO 에 준비 중 안내가 없다').toContainText('준비 중');
-    await expect(cells, '5bb CO 가 행렬을 그린다 — 숨긴 값이 보인다').toHaveCount(0);
+    // ②-0 N7(2026-10-02): CO 2~5bb 는 다인 균형으로 다시 그려진다 — 행렬이 있고 '추정' 배지가 아니다(숨김 커밋으로 되돌리면 여기서 빨개진다)
+    for (const s of MULTI) await expect(tick(s), `CO ${s}bb 가 아직 '없음' 이다 — 다인 균형 표가 안 실렸다`).toHaveAttribute('data-has-data', 'true');
+    for (const s of [2, 5]) {
+      await tick(s).click();
+      await expect(dlg.getByTestId('pushfold-no-data'), `${s}bb CO 에 안내 상자가 떴다 — 표가 안 읽힌다`).toHaveCount(0);
+      await expect(cells, `${s}bb CO 행렬이 없다`).toHaveCount(169);
+      expect(await colored(), `${s}bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)`).toBeGreaterThan(20);
+      await expect(source, `${s}bb CO 배지가 '추정' 이다 — 다인 균형은 정식 등급이다`).toHaveAttribute('data-approx', 'false');
+    }
     await tick(6).click();
     await expect(dlg.getByTestId('pushfold-no-data'), '6bb CO 에 안내 상자가 떴다 — 추정값이 안 읽힌다').toHaveCount(0);
     await expect(cells, '6bb CO 행렬이 없다').toHaveCount(169);
