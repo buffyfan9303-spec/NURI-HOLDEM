@@ -1,4 +1,8 @@
--- ⏳ 미적용 — 초안(store-team, 2026-10-02). 리드가 독립 검토 뒤 MCP execute_sql 로 적용한다. 적용하면 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다.
+-- ✅ 2026-10-02 라이브 적용 완료(nuri-lead · Management API database/query 로 이 파일 그대로 한 번에, 게이트 통과).
+--    적용 전 리드 롤백 리허설: critical-reviewer 하네스(직원 초대 중복 행을 먼저 지우게 보정) RESULT fails=[] — 알림 7종·수신자·RLS·L-01 음성/양성·가입 거절 W1~W7·이용권 한도 +10/반려 불변/캠페인 −3.
+--    적용 후 실측 md5(prosrc): admin_decide_voucher_quota 61804c67 · admin_reject_signup 8afcc9c8 · reject_buyin_request 99b7edbe · remove_venue_staff c474d48e · respond_staff_invite 5dfd2d58 · approve_buyin_request cd6f2bfc(불변) · 보안 어드바이저 ERROR 0.
+--    독립 검토: critical-reviewer review-notify-1002.md(DB PASS, 화면 F-1 은 같은 브랜치에서 수정).
+-- (원래 머리줄) ⏳ 미적용 — 초안(store-team, 2026-10-02). 리드가 독립 검토 뒤 MCP execute_sql 로 적용한다. 적용하면 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다.
 -- 20261002b — 결정 결과 알림 7종 + 바인 요청 알림 매장 구분(audit-link-1002 L-04) + 철회된 초대자의 초대 무효(L-01)
 --
 -- 오너 결정(2026-10-02)
