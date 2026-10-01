@@ -619,7 +619,7 @@ function FeedSection({
     //   새 검색어의 서버 조회가 영영 안 나가고 '찾는 중…' 이 끝나지 않았다. 계약: e2e/board-search-race.spec.ts
     setServerExtra([]); setServerCursor(null); setServerDone(false); setServerErr(null); setServerLoading(false);
   }, [q, cat, order, enableCategory]);
-  // 보기 모드: feed(카드 스택, **기본**) / compact(에펨코리아식 한 줄).
+  // 보기 모드: compact(모아보기·에펨코리아식 한 줄, **기본**) / feed(펼쳐보기·카드 스택).
   // 오너 리포트(2026-08-28) "샘플까지 줬는데 적용이 안 됐다"의 원인이 정확히 이 한 줄이었다 —
   // 보기 모드 이력: 2026-08 에는 PostCard 를 아무도 못 봐서 미선택 기본을 카드(feed)로 뒤집었다.
   // N08(2026-09-13 최신 요구): 미선택·손상 값·저장소 접근 예외의 기본은 **모아보기(compact)** 다.
@@ -902,7 +902,7 @@ function FeedSection({
             ) : (
               <div className="min-w-0 flex-1" />
             )}
-            {/* 보기 모드 토글 — 카드 스택 / 한 줄 목록(기본, N08). 두 보기 모두 유지(기능 보존).
+            {/* 보기 모드 토글 — **왼쪽 모아보기(compact, 기본 · N08) / 오른쪽 펼쳐보기(feed, 카드 스택)**(오너 2026-10-02). 두 보기 모두 유지(기능 보존).
                 UI-05(2026-09-13): 예전 트랙 h-8+p-0.5 안의 h-7 w-7 버튼은 클릭 영역 28×28 · 아이콘 15px 였고
                 트랙 안쪽(27.75px)보다 자식(29.75px)이 커 위아래가 어긋났다. 이제 **동일한 두 슬롯 h-11 w-11**(46.75px ≥ 44)이
                 버튼 자체이고, 선택 배경은 슬롯 안 inset 3px 의 별도 면(span)이라 빈틈이 없다. 아이콘 18px 중앙.
@@ -912,16 +912,16 @@ function FeedSection({
             <div data-board-view-toggle role="group" aria-label="보기 방식"
               className="flex h-11 shrink-0 items-center rounded-input border border-border-default bg-surface-high">
               {([
-                { v: 'feed' as const, label: '카드 보기', icon: (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
-                  </svg>) },
-                { v: 'compact' as const, label: '한 줄 목록', icon: (
+                { v: 'compact' as const, label: '모아보기', icon: (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
                     <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
                   </svg>) },
+                { v: 'feed' as const, label: '펼쳐보기', icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
+                  </svg>) },
               ]).map(({ v, label, icon }) => (
-                <button key={v} type="button" aria-label={label} title={label} aria-pressed={view === v}
+                <button key={v} type="button" data-testid={`board-view-${v}`} aria-label={label} title={label} aria-pressed={view === v}
                   onClick={() => switchView(v)}
                   className={['relative flex h-11 w-11 items-center justify-center rounded-input transition-colors',
                     view === v ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
