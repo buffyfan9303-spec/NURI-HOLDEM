@@ -30,7 +30,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import SpotPostCard from './community/SpotPostCard';
-import { fetchAttachment, castPollVote, subscribePollResults } from '../../api/postAttachments';
+import { fetchAttachment, castPollVote, subscribePollResults, pollFromEmbed } from '../../api/postAttachments';
 // 카테고리 라벨·pill 색은 src/lib/postCategory.ts 가 단일 출처 — 색표를 이 파일로 복사하지 않는다
 // (복사하면 목록 뱃지와 상세 뱃지가 언젠가 다른 색이 된다).
 import { categoryPillClass, postCategoryLabel } from '../../lib/postCategory';
@@ -365,6 +365,8 @@ export default function PostDetailModal({
   // ── 어태치먼트(핸드 결과·투표) — DB 기반 신규 시스템(src/api/postAttachments).
   // 로딩 중엔 아무것도 그리지 않는다(스켈레톤 금지 — 유무를 모르는 상태의 공간 예약은 없는 글에서 CLS).
   const [attachment, setAttachment] = useState<Attachment | null>(null);
+  // 어느 글의 응답을 받았는가 — 받기 전에는 목록에 끼워 받은 투표(pollEmbed)로 자리를 잡는다(아래 shownAttachment).
+  const [attachmentFor, setAttachmentFor] = useState<string | null>(null);
   // 낙관 갱신 직후 리얼타임 에코 가드 — castPollVote 서버 응답이 최종이므로,
   // 마지막 vote 후 800ms 안에 도착한 구독 콜백은 무시한다(§7-6).
   const lastVoteAtRef = useRef(0);
@@ -372,7 +374,9 @@ export default function PostDetailModal({
     setAttachment(null);
     if (!open || !post) return;
     let active = true;
-    fetchAttachment(post.id).then((a) => { if (active) setAttachment(a); }).catch(() => {});
+    fetchAttachment(post.id)
+      .then((a) => { if (active) { setAttachment(a); setAttachmentFor(post.id); } })
+      .catch(() => { if (active) setAttachmentFor(post.id); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
@@ -386,6 +390,10 @@ export default function PostDetailModal({
     });
     return unsubscribe; // 닫힘/글 전환/언마운트 시 해제
   }, [open, pollId]);
+
+  // 응답 전 첫 프레임부터 투표 자리를 잡는다(같은 마크업·같은 높이 — 10-02 검토: 늦게 들어와 아래를 밀던 결함).
+  const embeddedPoll = useMemo(() => pollFromEmbed(post?.pollEmbed), [post?.pollEmbed]);
+  const shownAttachment = post && attachmentFor === post.id ? attachment : embeddedPoll;
 
   if (!post) return null;
 
@@ -822,7 +830,7 @@ export default function PostDetailModal({
             로딩 중엔 미표시(스켈레톤 금지). initial = 목록에 끼워 받은 스팟 — 있으면 첫 프레임부터 그린다. */}
         {!hidden && (
           <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} expectSpot={post.category === 'hand'}
-            initial={post.spotEmbed} attachment={attachment} onVote={handleVote} />
+            initial={post.spotEmbed} attachment={shownAttachment} onVote={handleVote} />
         )}
 
         {/* ── 반응 한 줄 — 좋아요 · 추천 · 비추천 · 공유 ───────────────────────

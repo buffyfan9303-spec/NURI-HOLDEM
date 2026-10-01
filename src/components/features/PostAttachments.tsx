@@ -219,7 +219,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
   const total = sorted.reduce((sum, o) => sum + o.votes, 0);
 
   const vote = async (optionId: string) => {
-    if (closed) return;
+    if (closed || poll.pending) return;
     if (!user) { promptLogin(); return; } // 비로그인 → 로그인 게이트(앱 공통 문법)
     if (optionId === myOptionId) return;  // 같은 선택지 연타 무시
     if (inFlightRef.current || !onVote) return;
@@ -256,7 +256,8 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
         )}
       </div>
 
-      <div className="space-y-1.5" role="group" aria-label="투표 선택지">
+      {/* pending = 목록에 끼워 받은 보기로 자리만 잡은 첫 프레임(pollFromEmbed) — 같은 마크업·같은 높이, 집계가 오면 눌린다 */}
+      <div className="space-y-1.5" role="group" aria-label="투표 선택지" aria-busy={poll.pending || undefined}>
         {sorted.map((o) => {
           const mine = o.id === myOptionId;
           const pct = showResults && total > 0 ? Math.round((o.votes / total) * 100) : 0;
@@ -264,7 +265,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
             <button
               key={o.id}
               type="button"
-              disabled={closed}
+              disabled={closed || poll.pending}
               aria-pressed={mine}
               onClick={() => vote(o.id)}
               className={[

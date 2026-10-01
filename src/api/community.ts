@@ -120,6 +120,11 @@ export interface CommunityPost {
    * undefined = 모른다(끼워 받지 않은 경로·옛 캐시) · null = 스팟 글이 아니다. 해석은 spotShare/embeddedSpot.ts.
    */
   spotEmbed?: unknown | null;
+  /**
+   * 목록 쿼리에 끼워 받은 post_polls 행(질문·보기 이름) — 상세가 투표 자리를 첫 프레임부터 잡는 데 쓴다.
+   * undefined = 모른다 · null = 투표 없음. 해석은 postAttachments.pollFromEmbed.
+   */
+  pollEmbed?: unknown | null;
 }
 
 /**
@@ -127,7 +132,8 @@ export interface CommunityPost {
  * post_spots 는 칸 단위 GRANT(공개 열만)라 `*` 금지 — 쓰는 세 열만. 가린 값은 서버가 spot 본문에서 이미 뺐다(20260911d).
  * 끼워 받기가 실패하면(관계·권한 변경) 목록이 죽지 않게 `*` 로 한 번 더 받는다 — 미리보기만 빠진다.
  */
-const POST_LIST_SELECT = '*, post_spots(spot, reveal_villain, reveal_result)';
+//   투표(post_polls·보기)는 공개 읽기 정책(20260827h)이라 같은 요청에 끼운다 — 상세 투표 블록이 첫 프레임부터 선다.
+const POST_LIST_SELECT = '*, post_spots(spot, reveal_villain, reveal_result), post_polls(id, question, closes_at, post_poll_options(id, idx, label))';
 async function withSpotFallback<R extends { error: unknown }>(run: (select: string) => PromiseLike<R>): Promise<R> {
   const res = await run(POST_LIST_SELECT);
   return res.error ? run('*') : res;
@@ -188,6 +194,8 @@ export const rowToPost = (r: any): CommunityPost => ({
   // post_spots.post_id 는 PK 라 PostgREST 가 보통 객체로 주지만, 배열로 와도 받는다. 키가 없으면 '모름'.
   spotEmbed: !('post_spots' in r) ? undefined
     : Array.isArray(r.post_spots) ? (r.post_spots[0] ?? null) : (r.post_spots ?? null),
+  pollEmbed: !('post_polls' in r) ? undefined
+    : Array.isArray(r.post_polls) ? (r.post_polls[0] ?? null) : (r.post_polls ?? null),
 });
 
 /** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회.

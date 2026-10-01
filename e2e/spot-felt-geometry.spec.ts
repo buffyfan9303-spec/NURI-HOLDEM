@@ -19,12 +19,14 @@ import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 
 type Cfg = { key: string; tableSize: number; hero: string; vils: string[] };
-/** 상대 1·2·3명. 3명은 위쪽 줄을 꽉 채우는 6인 판과 9인 판(검토자 시나리오 ⑤) 둘. */
+/** 상대 1·2·3명 × 6인·9인. 4-way 는 위쪽 줄을 꽉 채우는 6인 판과 9인 판(검토자 시나리오 ⑤). */
 const CFGS: Cfg[] = [
   { key: 'hu', tableSize: 6, hero: 'BTN', vils: ['BB'] },                      // 가장 흔한 판 — 검토에서 겹친 판
   { key: '3way', tableSize: 6, hero: 'CO', vils: ['BTN', 'SB'] },              // 시안 정본과 같은 판
-  { key: '4way', tableSize: 6, hero: 'BTN', vils: ['BB', 'LJ', 'HJ'] },        // 위쪽 좌석 셋이 전부 상대
-  { key: '9max', tableSize: 9, hero: 'BB', vils: ['UTG1', 'HJ', 'BTN'] },
+  { key: '4way', tableSize: 6, hero: 'BTN', vils: ['BB', 'LJ', 'HJ'] },        // 위쪽 좌석 셋이 전부 상대 — 10-02 FAIL 판(360 플랍)
+  { key: '9hu', tableSize: 9, hero: 'BTN', vils: ['BB'] },
+  { key: '9-3way', tableSize: 9, hero: 'CO', vils: ['BTN', 'SB'] },            // 왼쪽 끝에 셋이 끼던 판(360 피드 401~419px)
+  { key: '9max', tableSize: 9, hero: 'BB', vils: ['UTG1', 'HJ', 'BTN'] },      // 9인 4-way — 10-02 FAIL 판(390 턴·리버)
 ];
 const BOARDS = [0, 3, 4, 5] as const;
 const STREET = { 0: 'preflop', 3: 'flop', 4: 'turn', 5: 'river' } as const;
@@ -87,13 +89,13 @@ async function install(page: Page) {
 }
 
 type Box = { id: string; l: number; t: number; r: number; b: number };
-type FeltReport = { seats: number; boardCards: number; seatParts: number; boardParts: number; overlaps: string[] };
+type FeltReport = { seats: number; boardCards: number; seatParts: number; boardParts: number; overlaps: string[]; placement: string[] };
 
 /** 한 테이블 안의 좌석 하위 상자 × 보드 하위 상자 교차 — 페이지 안에서 잰다 */
 async function measureFelt(page: Page, feltSel: string): Promise<FeltReport> {
   return page.evaluate((sel) => {
     const f = document.querySelector(sel);
-    if (!f) return { seats: 0, boardCards: 0, seatParts: 0, boardParts: 0, overlaps: ['테이블 없음'] };
+    if (!f) return { seats: 0, boardCards: 0, seatParts: 0, boardParts: 0, overlaps: ['테이블 없음'], placement: [] };
     const boxOf = (el: Element, id: string): Box | null => {
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') return null;
@@ -130,15 +132,41 @@ async function measureFelt(page: Page, feltSel: string): Promise<FeltReport> {
         if (ix > 0.5 && iy > 0.5) overlaps.push(`좌석 ${a.id} × ${b.id} = ${ix.toFixed(1)}×${iy.toFixed(1)}px`);
       }
     }
+    // 🔴 2026-10-02 독립 검토 FAIL — 보드 자리: '안 닿음'만으로는 보드가 타원 밖·내 카드 옆에 가도 통과했다.
+    //   ⓐ 보드 상자 네 모서리가 그려진 타원(rounded-full = 스타디움) 안 ⓑ 보드 아래 끝이 내 카드 위끝보다 위
+    //   ⓒ 상대·빈 좌석과 보드 사이 4px 이상(피드에서 0.6px 까지 붙었다).
+    const placement: string[] = [];
+    const ovalEl = f.querySelector('[data-felt-oval]');
+    const heroCards = f.querySelector('[data-seat="hero"]')?.firstElementChild;
+    const br = board?.getBoundingClientRect();
+    if (!ovalEl || !heroCards || !br) placement.push(`측정 대상 없음 oval=${!!ovalEl} hero=${!!heroCards} board=${!!br}`);
+    else {
+      const o = ovalEl.getBoundingClientRect();
+      const rr = Math.min(o.width, o.height) / 2, ocx = o.left + o.width / 2, ocy = o.top + o.height / 2;
+      const outBy = (x: number, y: number) =>
+        Math.hypot(Math.max(Math.abs(x - ocx) - (o.width / 2 - rr), 0), Math.max(Math.abs(y - ocy) - (o.height / 2 - rr), 0)) - rr;
+      for (const [x, y, name] of [[br.left, br.top, '왼위'], [br.right, br.top, '오른위'], [br.left, br.bottom, '왼아래'], [br.right, br.bottom, '오른아래']] as const) {
+        const d = outBy(x, y);
+        if (d > 0.5) placement.push(`보드 ${name} 모서리가 타원 밖 ${d.toFixed(1)}px`);
+      }
+      const ht = heroCards.getBoundingClientRect().top;
+      if (br.bottom > ht + 0.5) placement.push(`보드 아래 끝(${br.bottom.toFixed(1)})이 내 카드 위끝(${ht.toFixed(1)})보다 아래`);
+      for (const s of blocks) {
+        if (s.id === 'hero') continue;
+        const gx = Math.max(br.left - s.r, s.l - br.right, 0), gy = Math.max(br.top - s.b, s.t - br.bottom, 0);
+        const g = Math.hypot(gx, gy);
+        if (g < 4) placement.push(`${s.id}–보드 간격 ${g.toFixed(1)}px < 4`);
+      }
+    }
     return {
       seats: f.querySelectorAll('[data-seat]').length,
       boardCards: board ? board.querySelectorAll('[data-card]').length : 0,
-      seatParts: seatParts.length, boardParts: boardParts.length, overlaps,
+      seatParts: seatParts.length, boardParts: boardParts.length, overlaps, placement,
     };
   }, feltSel);
 }
 
-function check(where: string, i: number, rep: FeltReport, bad: string[]) {
+function check(where: string, i: number, rep: FeltReport, bad: string[], place: string[]) {
   const { c, b } = CASES[i];
   // 거짓 통과 방지 — 측정 대상이 픽스처와 같아야 한다(0건이면 여기서 걸린다)
   expect(rep.seats, `${where} ${titleOf(i)}: 좌석 수`).toBe(c.vils.length + 1);
@@ -146,10 +174,11 @@ function check(where: string, i: number, rep: FeltReport, bad: string[]) {
   expect(rep.seatParts, `${where} ${titleOf(i)}: 좌석 상자 0건`).toBeGreaterThan(c.vils.length + 1);
   expect(rep.boardParts, `${where} ${titleOf(i)}: 보드 상자 0건`).toBeGreaterThan(0);
   for (const o of rep.overlaps) bad.push(`${where} ${titleOf(i)}: ${o}`);
+  for (const o of rep.placement) place.push(`${where} ${titleOf(i)}: ${o}`);
 }
 
 for (const w of [320, 360, 390]) {
-  test(`좌석 × 보드 겹침 0 — 폭 ${w} · 보드 0/3/4/5장 · 상대 1/2/3명 · 피드와 상세`, async ({ page }) => {
+  test(`좌석 × 보드 겹침 0 · 보드는 타원 안·내 카드 위 — 폭 ${w} · 보드 0/3/4/5장 · 상대 1/2/3명 · 6·9인 · 피드와 상세`, async ({ page }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: w, height: 844 });
     await page.addInitScript(() => { try { localStorage.setItem('nuri:board-view', 'feed'); } catch { /* 사생활 모드 */ } });
@@ -170,13 +199,14 @@ for (const w of [320, 360, 390]) {
     await expect(firstFeed, '피드에 SPOT 테이블이 없다').toBeVisible({ timeout: 20_000 });
 
     const bad: string[] = [];
+    const place: string[] = [];
     // ── 피드 — 카드마다 화면에 올려(content-visibility 건너뛰기 방지) 잰다
     let feedMeasured = 0;
     for (let i = 0; i < CASES.length; i++) {
       const li = page.locator('li').filter({ hasText: titleOf(i) }).filter({ visible: true }).first();
       await li.evaluate((n) => { n.setAttribute('data-geo-card', ''); n.scrollIntoView({ block: 'center' }); });
       await page.waitForTimeout(60);
-      check('피드', i, await measureFelt(page, '[data-geo-card] [data-felt]'), bad);
+      check('피드', i, await measureFelt(page, '[data-geo-card] [data-felt]'), bad, place);
       await li.evaluate((n) => n.removeAttribute('data-geo-card'));
       feedMeasured++;
     }
@@ -190,7 +220,7 @@ for (const w of [320, 360, 390]) {
       const felt = page.getByRole('dialog').first().locator('[data-spot-post] [data-felt]');
       await expect(felt, `${titleOf(i)} 상세에 테이블이 없다`).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(150);
-      check('상세', i, await measureFelt(page, '[role=dialog] [data-spot-post] [data-felt]'), bad);
+      check('상세', i, await measureFelt(page, '[role=dialog] [data-spot-post] [data-felt]'), bad, place);
       detailMeasured++;
       await page.evaluate(() => history.back());
       await expect(page.getByRole('dialog'), '뒤로가기로 상세가 닫히지 않는다').toHaveCount(0, { timeout: 5_000 });
@@ -199,5 +229,6 @@ for (const w of [320, 360, 390]) {
     expect(detailMeasured, '상세에서 잰 테이블 수').toBe(CASES.length);
 
     expect(bad, '좌석(이름표·카드)이 보드 카드를 덮거나, 좌석끼리 겹치거나, 테이블 밖으로 밀렸다').toEqual([]);
+    expect(place, '보드가 타원 밖이거나, 내 카드 줄로 내려왔거나, 좌석과 4px 미만으로 붙었다').toEqual([]);
   });
 }

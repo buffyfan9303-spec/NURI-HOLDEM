@@ -117,6 +117,10 @@ const INTENTIONAL: Record<string, string> = {
   //   그 조회가 실패하면 undefined 그대로 → 카드는 예전 본문 발췌로 그린다(값을 0/빈 값으로 접어 거짓 표시하지 않는다).
   //   정식은 광고 RPC 에 공개 열 3개(spot·reveal_villain·reveal_result)를 싣는 마이그레이션이다(리드 판단).
   post_spots: '광고 RPC 미포함 — ads.ts attachSpots 가 한 번 조회로 채운다(임시)',
+  // 2026-10-02: 게시판 목록은 투표 질문·보기 이름(post_polls)도 끼워 받아 상세 투표 자리를 첫 프레임부터 잡는다.
+  //   광고 RPC 는 안 싣는다 → 키가 없으면 pollEmbed = undefined('모름') → 광고에서 연 상세는 예전처럼 응답 뒤에 투표가 선다
+  //   (값을 지어내지 않는다 — 기능 손실 없음, 자리 잡기만 빠진다).
+  post_polls: '광고 RPC 미포함 — 상세 투표 자리 잡기만 빠진다(응답 뒤 그대로 선다)',
 };
 
 describe('20260911a — 광고 행은 일반 피드와 같은 모양이다', () => {

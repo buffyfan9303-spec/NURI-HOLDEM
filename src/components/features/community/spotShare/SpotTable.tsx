@@ -25,7 +25,8 @@ const sizeOf = (el: Element | null | undefined): Box =>
 
 /**
  * 테이블 — 좌석은 시안 A 처럼 **타원 둘레**에(오너 2026-10-01 "시안처럼 타원 둘레로"), 보드는 좌석이 비운 자리에.
- * 자리 계산은 feltLayout.ts: 실제 상자 크기(px)를 재서 좌석끼리·좌석과 보드가 닿지 않게 놓는다.
+ * 자리 계산은 feltLayout.ts: 실제 상자 크기(px)를 재서 좌석끼리·좌석과 보드가 닿지 않게, 보드는 타원 안·내 카드 위에 놓는다.
+ *   (타원 면의 inset-x-[8%] 는 feltLayout 의 OVAL_SIDE 와 짝이다 — 하나만 바꾸면 '타원 안' 판정이 어긋난다.)
  *   (구현 1차는 각도 % 로만 놓아 보드 4~5장에서 이름표가 보드를 덮었다 — e2e/spot-felt-geometry.spec.ts 가 잰다.)
  * 첫 그림은 레이아웃 효과에서 재고 바로 다시 그리므로(그리기 전) 자리 없는 프레임은 보이지 않는다.
  */
@@ -95,7 +96,7 @@ function Felt({ v, big }: { v: ShareView; big: boolean }) {
     <div ref={ref} className="@container relative w-full" style={{ height: lay?.H ?? (big ? undefined : 165), aspectRatio: lay || !big ? undefined : '1' }} data-felt>
       {/* 테이블 면 — 테마 토큰으로 칠한다(라이트·다크 모두 지면과 구분되게). 위쪽 좌석 가운데·내 카드 가운데를 지나게 놓는다. */}
       {lay && (
-        <div aria-hidden className="absolute inset-x-[8%] rounded-[999px] border border-accent-300/25 bg-[radial-gradient(ellipse_at_center,rgb(var(--accent-300)/0.20),rgb(var(--surface-high))_70%)]"
+        <div aria-hidden data-felt-oval className="absolute inset-x-[8%] rounded-[999px] border border-accent-300/25 bg-[radial-gradient(ellipse_at_center,rgb(var(--accent-300)/0.20),rgb(var(--surface-high))_70%)]"
           style={{ top: lay.ovalTop, height: lay.ovalBottom - lay.ovalTop }} />
       )}
       {/* 보드 — 가운데에서 가까운, 좌석이 비운 자리. 없으면 스트리트 이름만 */}
