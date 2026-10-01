@@ -1363,10 +1363,10 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
           ::before 오버행은 아래 절반이 잘린다(위 단계 칩 주석의 실측) → 버튼 박스를 min-h-[44px] 로 직접 키우고
           바의 세로 여백을 py-1→py-0.5 로 줄여 바 높이 증가를 줄인다. 루트 17px 이라 h-11 이 아니라 44px 로 못박는다.
           P-03(2026-10-01) — PC(lg+)는 테두리·배경 없는 한 줄(바 34px). 스크롤 칸을 풀어(overflow-visible) 보이는 버튼 32px
-          + tap-y-44(위아래 6px)로 누름 44 를 지킨다. 모바일은 overflow-x-auto 가 ::before 를 잘라 종전(44 박스) 그대로. */}
+          + 위아래 6px 확장(lg 한정)으로 누름 44 를 지킨다. 확장을 모바일에도 걸면 스크롤 칸 scrollHeight 가 48→52 로 늘어 세로 스크롤이 생겼다(독립 검증) — 모바일은 종전 그대로. */}
       {main && eff && (
         <button type="button" onClick={() => onGoto('clock')}
-          className="flex min-h-[44px] lg:min-h-[32px] tap-y-44 shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
+          className="flex min-h-[44px] lg:min-h-[32px] lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-6px] shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
           <span className={['h-1.5 w-1.5 shrink-0 rounded-full', main.running ? 'bg-emerald-400' : 'bg-amber-400'].join(' ')} aria-hidden />
           <span className="font-bold text-ink-primary">{lv?.kind === 'break' ? 'BREAK' : `레벨 ${levelNo}`}</span>
           {lv && lv.kind !== 'break' && <span className="tabular-nums text-ink-secondary">{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}</span>}
@@ -1382,7 +1382,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
           ⚠ 주석을 `{pending > 0 && (` **안**에 두면 JSX 가 형제 둘로 읽혀 빌드가 깨진다 — 밖에 둔다. */}
       {pending > 0 && (
         <button type="button" onClick={() => onGoto({ section: 'ledger', date: biz })}
-          className="flex min-h-[44px] lg:min-h-[32px] tap-y-44 shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          className="flex min-h-[44px] lg:min-h-[32px] lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-6px] shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
       )}
