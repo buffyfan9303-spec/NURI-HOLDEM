@@ -3601,15 +3601,7 @@ export default function App() {
       ? { ...s, approved: false, rejectedAt: new Date().toISOString(), rejectReason: reason.trim() }
       : s)));
     rejectSchedule(id, reason)
-      .then((mode) => {
-        if (mode === 'deleted') {
-          // 마이그레이션(20260911o) 전 서버 — 종전대로 삭제됐고 사유는 전달되지 않았다. 숨기지 않고 말한다.
-          toast.show('포스터가 반려(삭제)되었습니다 — 서버 업데이트 전이라 사유는 전달되지 않았습니다', 'info');
-          reloadSchedules();
-        } else {
-          toast.show('포스터가 반려되었습니다. 업주에게 사유가 전달됩니다', 'info');
-        }
-      })
+      .then(() => { toast.show('포스터가 반려되었습니다. 업주에게 사유가 전달됩니다', 'info'); })
       .catch(() => { toast.show('반려에 실패했습니다', 'error'); reloadSchedules(); });
   }, [toast, reloadSchedules]);
 

@@ -1074,7 +1074,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
         <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기" aria-label="알림음 미리듣기"
           className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
         <div className="flex flex-col items-center gap-0.5">
-          <span className="text-[9px] text-ink-muted">10초틱</span>
+          <span className="text-[9px] md:text-xs md:leading-[1.2] text-ink-muted">10초틱</span>
           <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')}
             title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
             className="h-7 rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-[#8B94E8]">
@@ -1326,12 +1326,13 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
   label: string; value?: number; onPlus: () => void; onMinus: () => void;
   size?: 'sm' | 'lg'; plusDisabled?: boolean; minusDisabled?: boolean;
 }) {
+  // P-06(2026-10-01) — 조작판 라벨(Level·Min·Sec·Entries·…·Volume·10초틱)은 md+ 에서 9px → text-xs(12.75px). 모바일 K1 격자는 9px 그대로.
   // 🔴 K1(오너 2026-09-24) — 모바일(<768)은 Level(lg)·Min·Sec·지표(sm) 크기가 제각각(40 vs 29.75px)이던 것을
   //   **한 값**으로 맞춘다: 격자 칸 폭을 두 버튼이 반씩 나누고 높이 44px(유효 터치). md 이상은 종전 크기 그대로.
   const box = [size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm', 'max-md:h-[44px] max-md:w-auto max-md:min-w-0 max-md:flex-1'].join(' ');
   return (
     <div className="flex flex-col items-center gap-0.5 max-md:w-full">
-      <span className="text-[9px] text-ink-muted">
+      <span className="text-[9px] md:text-xs md:leading-[1.2] text-ink-muted">
         {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-ink-primary">{value}</b>}
       </span>
       <div className={[size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5', 'max-md:w-full max-md:gap-1'].join(' ')}>
@@ -1344,7 +1345,7 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
 function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v: number) => void; onToggleMute: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-ink-muted">Volume ({value})</span>
+      <span className="text-[9px] md:text-xs md:leading-[1.2] text-ink-muted">Volume ({value})</span>
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
           className="grid h-7 w-7 place-items-center hover:opacity-80"><Icon name={value > 0 ? 'volume' : 'volume-off'} size={14} /></button>

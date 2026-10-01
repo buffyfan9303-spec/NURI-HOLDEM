@@ -127,6 +127,24 @@ export async function signedVerifyUrl(path: string): Promise<string> {
 }
 
 /**
+ * (운영자) 승인·반려 전 확인 창 — 결과가 {go:false} 이면 **아무 일도 하지 않는다**.
+ * 🔴 점검 A-05(2026-10-01): 사유 창 '취소'(null)가 '사유 없이 반려'로 바뀌어 신분증이 지워졌다.
+ * 반려는 사유 창(취소 = 중단), 승인은 확인 창(신분증 즉시 삭제 고지). win 은 테스트에서 가짜를 넣는다.
+ */
+export function askRankDecision(
+  approve: boolean,
+  win: Pick<Window, 'confirm' | 'prompt'>,
+): { go: false } | { go: true; note?: string } {
+  if (approve) {
+    return win.confirm('대회 입상으로 승인합니다. 신청자의 신분증 이미지가 즉시 삭제되며 되돌릴 수 없습니다. 승인할까요?')
+      ? { go: true } : { go: false };
+  }
+  const reason = win.prompt('반려 사유 (신청자에게 그대로 보입니다)');
+  if (reason === null) return { go: false };
+  return { go: true, note: reason.trim() || undefined };
+}
+
+/**
  * (운영자) 승인/거절 — 어느 쪽이든 신분증은 즉시 삭제(개인정보 최소 보관).
  *
  * 오너 #11 이후 승인의 의미가 하나로 줄었다: **승인 = 대회로 확정**.
@@ -155,7 +173,7 @@ export async function adminDecideRankVerification(
     event_kind: approve ? VERIFIABLE_EVENT_KIND : v.eventKind,
     decided_at: new Date().toISOString(),
     id_card_path: null,
-  }).eq('id', v.id));
+  }).eq('id', v.id).eq('status', 'pending'));   // 다른 관리자가 이미 처리한 건을 덮어쓰지 않는다(0행 → mustAffect 가 던진다)
 }
 
 // (2026-09-11) 증빙 이미지 AI 진위 검사 제거 — 증빙 사진을 외부 모델로 보내던 경로였다.

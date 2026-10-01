@@ -221,8 +221,10 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               <CenterPanel g={g} />
               <div className="flex min-h-0 w-full flex-1 basis-0 flex-col justify-start">
                 {/* 진행률 바 → CURRENT 라벨 간격 7cqmin(종전 실측 6.3cqmin) — 오너 #3 "살짝 아래로". 높이는 내용대로(타이머 y 와 무관). */}
+                {/* P-01(2026-10-01) — 높이 400px 이하 스테이지(운영자 미리보기 570×320 등)에서 7cqmin 이 26/16/9px 글자 하한 누적을 못 버텨
+                    ANTE 줄이 하단 지표와 겹쳤다(4쌍). 그 크기에서만 2cqmin. TV·전체화면·1024 미리보기(>400px)는 불변. */}
                 {/* data-amb-avoid: 모션 테마가 글자 뒤를 흐린 유리·그늘로 누르는 영역(CURRENT/NEXT·ANTE 라벨까지 한 덩어리) */}
-                <div data-amb-avoid className="mt-[7cqmin] w-full shrink-0">
+                <div data-amb-avoid className="mt-[7cqmin] [@container(max-height:400px)]:mt-[2cqmin] w-full shrink-0">
                   <BlindsRow g={g} />
                 </div>
               </div>
@@ -547,7 +549,7 @@ function RunningTime({ g }: { g: ClockState }) {
   const run = elapsedMs(g, eff.index, eff.remainingMs);
   return (
     <p className="clk-wide-only shrink-0 text-right">
-      <span className={`${LABEL} block ${LABEL_SIZE}`} style={DIM}>Total Time</span>
+      <span className={`${LABEL} block [@container(max-height:400px)]:inline [@container(max-height:400px)]:mr-[1cqmin] ${LABEL_SIZE}`} style={DIM}>Total Time</span>
       <span className="text-[max(9px,2.1cqmin)] font-extrabold tabular-nums text-white">{formatElapsed(run)}</span>
     </p>
   );

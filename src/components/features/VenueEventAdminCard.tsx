@@ -20,7 +20,7 @@ import {
   type AdminVenueEventRequest,
 } from '../../api/venueEvents';
 
-export default function VenueEventAdminCard() {
+export default function VenueEventAdminCard({ onChanged }: { onChanged?: () => void } = {}) {
   const toast = useToast();
   /** null = 아직 못 받음 / 'not-deployed' = 서버 준비 전 / 배열 = 받음 */
   const [reqs, setReqs] = useState<AdminVenueEventRequest[] | 'not-deployed' | null>(null);
@@ -46,7 +46,7 @@ export default function VenueEventAdminCard() {
         approve ? 'success' : 'info',
       );
       setNote((n) => { const m = { ...n }; delete m[r.id]; return m; });
-      load();
+      load(); onChanged?.();
     } catch (e) {
       // 한도 부족은 '실패' 가 아니라 **다음에 할 일이 있는 상태**다. 서버 문구를 그대로 보여 준다.
       toast.show(e instanceof Error ? e.message : '처리 실패', 'error');

@@ -92,7 +92,7 @@ describe('신청↔승인 배선 — 막다른 길 금지', () => {
     const admin = readFileSync(join(SRC, 'components', 'features', 'AdminTab.tsx'), 'utf8');
     for (const c of ['VoucherQuotaAdminCard', 'VenueEventAdminCard']) {
       expect(admin, `${c} 가 AdminTab 에서 렌더되지 않는다 — 만들어 놓고 안 붙인 것이다`)
-        .toMatch(new RegExp(`<${c}\\s*/?>`));
+        .toMatch(new RegExp(`<${c}(\\s[^>]*)?/?>`)); // 속성(onChanged 등)이 붙어도 마운트다(점검 A-09)
     }
   });
 

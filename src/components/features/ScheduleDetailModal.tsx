@@ -208,8 +208,10 @@ export default function ScheduleDetailModal({
                   decoding="async"
                   // 로드 전 높이 예약 — 이미지가 뜨는 순간 아래 제목/배지가 통째로 밀리는 점프(CLS) 방지.
                   // 포스터는 세로형(1200x1600)이라 로드 후 실제 높이가 이 최소값을 항상 넘어 시각 영향 없음.
+                  // 최대 높이 42svh(M-08, 2026-10-01): 65vh 였을 때 390×844 에서 참가비 라벨이 첫 화면 90% 지점까지 밀렸다.
+                  //   포스터는 잘리지 않고 작아질 뿐이다(탭하면 라이트박스 확대). svh = 주소창이 펼쳐진 작은 뷰포트 기준.
                   style={{ minHeight: 'min(40vh, 320px)' }}
-                  className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
+                  className="block h-auto w-full max-h-[42svh] object-contain lg:max-h-screen"
                 />
               </button>
             ) : (
@@ -228,8 +230,9 @@ export default function ScheduleDetailModal({
               style={{ background: 'linear-gradient(to bottom, rgba(10,12,15,0.7), transparent)' }}
             />
 
-            {/* 상단 배지 */}
-            <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
+            {/* 상단 배지 — 포스터(어두운 면) 위라 라이트 테마에서도 밝은 글자를 쓴다.
+                data-on-dark: index.css 의 라이트 파스텔 보정(딥 톤)을 이 줄에서만 되돌린다(M-01, 2026-10-01). */}
+            <div data-on-dark="" className="absolute top-3 left-3 flex items-center gap-1 z-10">
               {status !== 'upcoming' && (
                 <span className={[
                   'rounded-badge px-2 py-0.5 text-xs font-bold leading-none',

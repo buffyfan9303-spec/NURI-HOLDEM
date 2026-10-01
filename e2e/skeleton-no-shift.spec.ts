@@ -43,7 +43,7 @@ async function armSampler(page: Page, panel: string, skel: string) {
     const tick = () => {
       const p = document.querySelector<HTMLElement>(panelSel);
       const shown = !!p && p.offsetParent !== null;
-      const f = document.querySelector<HTMLElement>('footer');
+      const f = document.querySelector<HTMLElement>('footer:not([data-footer-clone])');
       const s = p ? p.querySelector<HTMLElement>(skelSel) : null;
       frames.push({
         t: Math.round(performance.now()),

@@ -135,7 +135,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
               className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
-                on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
+                // P-10(2026-10-01) — 위험 구역은 일상 탭과 2px 거리였다(오클릭). 줄 오른쪽 끝으로 뗀다(승인된 After 이미지 그대로 — 구분선은 그림에 없다). DOM·키보드 순서 불변,
+                // 탭이 넘쳐 가로 스크롤이 생기면 ml-auto 는 0 이 된다.
+                t.id === 'danger' ? 'ml-auto' : ''].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
           );
@@ -1354,14 +1357,16 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
       data-aura=""
       data-aura-level="hero"
       data-aura-variant={mainRunning ? 'emerald' : 'amber'}
-      className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-0.5 text-2xs"
+      className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-0.5 text-2xs lg:overflow-visible lg:border-transparent lg:bg-transparent lg:px-0 lg:py-0"
     >
       {/* 2026-09-25 MYSTORE-FULL-AUDIT #10 — 두 버튼이 24.4px 였다(390·1024·1440 공통). 이 바는 overflow-x-auto 라
           ::before 오버행은 아래 절반이 잘린다(위 단계 칩 주석의 실측) → 버튼 박스를 min-h-[44px] 로 직접 키우고
-          바의 세로 여백을 py-1→py-0.5 로 줄여 바 높이 증가를 줄인다. 루트 17px 이라 h-11 이 아니라 44px 로 못박는다. */}
+          바의 세로 여백을 py-1→py-0.5 로 줄여 바 높이 증가를 줄인다. 루트 17px 이라 h-11 이 아니라 44px 로 못박는다.
+          P-03(2026-10-01) — PC(lg+)는 테두리·배경 없는 한 줄(바 34px). 스크롤 칸을 풀어(overflow-visible) 보이는 버튼 32px
+          + 위아래 6px 확장(lg 한정)으로 누름 44 를 지킨다. 확장을 모바일에도 걸면 스크롤 칸 scrollHeight 가 48→52 로 늘어 세로 스크롤이 생겼다(독립 검증) — 모바일은 종전 그대로. */}
       {main && eff && (
         <button type="button" onClick={() => onGoto('clock')}
-          className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
+          className="flex min-h-[44px] lg:min-h-[32px] lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-6px] shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
           <span className={['h-1.5 w-1.5 shrink-0 rounded-full', main.running ? 'bg-emerald-400' : 'bg-amber-400'].join(' ')} aria-hidden />
           <span className="font-bold text-ink-primary">{lv?.kind === 'break' ? 'BREAK' : `레벨 ${levelNo}`}</span>
           {lv && lv.kind !== 'break' && <span className="tabular-nums text-ink-secondary">{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}</span>}
@@ -1377,7 +1382,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
           ⚠ 주석을 `{pending > 0 && (` **안**에 두면 JSX 가 형제 둘로 읽혀 빌드가 깨진다 — 밖에 둔다. */}
       {pending > 0 && (
         <button type="button" onClick={() => onGoto({ section: 'ledger', date: biz })}
-          className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          className="flex min-h-[44px] lg:min-h-[32px] lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-6px] shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
       )}
@@ -1454,9 +1459,10 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             ⚠ 루트 폰트가 17px 라 max-w-56 = 238px 다(Tailwind rem 유틸이 6.25% 크다).
             그래서 우선순위를 뒤집는다: 매장명은 flex-1(basis 0)로 **남는 폭만** 먹고 먼저 줄어들며,
             게임명은 shrink-0 으로 제 폭을 지키되 max-w-[50%] 로 긴 이름일 때만 잘린다.
-            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
+            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변).
+            P-05(2026-10-01) — PC(lg+)는 flex-initial(내용 폭): flex-1 이 매장명 뒤에 179px 빈 칸을 만들었다. 상한은 max-w-56 그대로. */}
         {venueName && (<>
-          <span className="min-w-0 max-w-56 flex-1 truncate font-bold text-ink-primary">{venueName}</span>
+          <span className="min-w-0 max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>

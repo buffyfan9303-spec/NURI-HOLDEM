@@ -1145,7 +1145,18 @@ export async function getGroupActivityRanking(groupId: string): Promise<GroupRan
 // ── 운영자: 그룹 개설 승인 ────────────────────────────────────────────────────
 export async function getPendingGroups(): Promise<Venue[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.from('venues').select('*').neq('kind', 'venue').eq('approved', false).order('created_at', { ascending: true });
+  // 반려된 신청은 status='hidden' 으로 남는다(삭제 아님 — 점검 A-14). 대기열에서는 뺀다.
+  const { data, error } = await supabase.from('venues').select('*').neq('kind', 'venue').eq('approved', false).neq('status', 'hidden').order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToVenue);
+}
+/** 운영자: **홀덤펍(kind='venue') 입점 승인 대기** — 점검 A-03(2026-10-01).
+ *  승인된 업주가 만든 새 매장은 create_my_venue 가 approved=false 로 만들고 관리자에게 "승인해 주세요" 알림을 보낸다.
+ *  그런데 위 getPendingGroups 는 `.neq('kind','venue')` 라 이 매장이 어느 화면에도 없었다(운영 1건이 20일째 대기).
+ *  서버는 이미 관리자 승인을 허용한다(RLS venues_update admin + guard_venue_verification 는 admin 통과). */
+export async function getPendingVenues(): Promise<Venue[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venues').select('*').eq('kind', 'venue').eq('approved', false).neq('status', 'hidden').order('created_at', { ascending: true });
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
@@ -1167,6 +1178,14 @@ export async function setGroupMemberRole(memberId: string, role: 'manager' | 'me
 export async function approveGroup(groupId: string): Promise<void> {
   if (IS_MOCK) return;
   await mustAffect(supabase.from('venues').update({ approved: true }).eq('id', groupId));
+}
+/** 개설 신청 반려 — **삭제가 아니라 '숨김' 상태로 내린다**(점검 A-14). 행·그 밑의 데이터는 남고 대기열에서만 빠진다.
+ *  이미 승인된 곳은 건드리지 않는다(`approved=false` 조건 — 다른 운영자가 먼저 승인했다면 0행으로 드러난다). */
+export async function rejectGroup(groupId: string): Promise<void> {
+  if (IS_MOCK) return;
+  await mustAffect(supabase.from('venues')
+    .update({ status: 'hidden', updated_at: new Date().toISOString() })
+    .eq('id', groupId).eq('approved', false));
 }
 
 // ── 내 커뮤니티 관리 ──────────────────────────────────────────────────────────
@@ -1417,6 +1436,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null)),
     cnt('profiles', (q) => q.gt('joined_at', since)),
   ]);
+  // 🔴 점검 A-10: RLS 가 막은 count 는 오류가 아니라 **0** 으로 온다(권한 없는 세션에서 '전체 회원 0 · 업주 0' 이 그려졌다).
+  //   로그인한 관리자의 profiles 는 최소 본인 1행이라 0 일 수 없다 — 0 이면 '없음'이 아니라 '못 읽음'이다.
+  if (users === 0) throw new Error('운영 지표를 읽을 수 없습니다 — 열람 권한이 없거나 회원 목록이 비어 내려왔습니다');
   return { users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d };
 }
 

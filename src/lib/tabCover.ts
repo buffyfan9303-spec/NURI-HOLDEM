@@ -287,6 +287,7 @@ const visibleFooter = (): { el: HTMLElement; box: Box } | null => {
 const cloneFooter = (foot: { el: HTMLElement; box: Box }, parent: Node, before: Node | null): HTMLElement => {
   const c = foot.el.cloneNode(true) as HTMLElement;
   stripIdentity(c);
+  c.setAttribute('data-footer-clone', ''); // e2e 가 복제본과 진짜 푸터를 구별한다(skeleton-no-shift)
   c.setAttribute('aria-hidden', 'true');
   c.inert = true;
   c.style.viewTransitionName = 'none';
