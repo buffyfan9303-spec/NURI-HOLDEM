@@ -2004,7 +2004,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
           전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
           예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      {/* S-04(2026-10-01) — `lg:pr-16`: PC 폭에서 바가 화면 오른쪽 끝 가까이 닿으면(1024·1280) '맨 위로' FAB(App.tsx `.scroll-top-fab`,
+          lg:bottom-5 right-4 z-40, 42.5px)가 맨 아래 스크롤 때 '정산 마감' 버튼을 덮었다(버튼 면 21점 중 1024 11점 · 1280 4점이 FAB — '정' 한 글자만 보임).
+          FAB 자리(right 17 + 폭 42.5 ≈ 59.5px)+여백만큼 오른쪽을 비운다. 아래 실행 버튼 바(`pr-12`)와 같은 처방 — FAB 는 App.tsx(공용)라 손대지 않는다. */}
+      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
