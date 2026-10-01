@@ -90,9 +90,19 @@ const SYSTEM_SIGNATURE = new RegExp([
   'violates (?:\\w+ )*constraint', 'duplicate key value', 'invalid input syntax', 'null value in column',
   '(?:relation|column|function|table|schema|type|role|policy|operator) "?[\\w.]+"? (?:does not exist|already exists)',
   'could not find the', 'permission denied for', 'invalid api key', 'jwt', 'syntax error at',
+  // 2026-10-01 반례 14개 — 한글 접두로 감싼 Postgres·PostgREST·Storage 원문. 위 목록이 형태를 다 못 덮었다
+  // (`function public.x(uuid) does not exist` 는 괄호가 붙어 위 패턴을 피한다).
+  'does not exist', 'already exists', 'is ambiguous', 'has no field', 'invalid input value', 'is not present in table',
+  'could not choose', 'failed to parse', 'no unique or exclusion constraint', 'value too long', 'more than one row',
+  'exceeded the maximum', 'public\\.\\w+',
 ].join('|'), 'i');
+// 목록은 열거라 새 원문 형태를 못 따라간다 — 형태로 막는 보조 규칙: 영문 단어 3개 이상 연속(= 문장 단위 영문 원문),
+// snake_case 식별자(컬럼·함수·타입 이름), uuid. 우리가 쓴 한국어 문장에는 이런 것이 들어가지 않는다.
+const ENGLISH_RUN = /[A-Za-z]{2,}(?:\s+[A-Za-z]{2,}){2,}/;
+const SNAKE_IDENT = /\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b/;
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 function isUserSentence(text: string): boolean {
-  return HANGUL.test(text) && !SYSTEM_SIGNATURE.test(text);
+  return HANGUL.test(text) && !SYSTEM_SIGNATURE.test(text) && !ENGLISH_RUN.test(text) && !SNAKE_IDENT.test(text) && !UUID.test(text);
 }
 
 /** Sentry 중복 전송 방지 — LoadErrorCard 는 렌더마다 msgOf 를 부른다. */
@@ -101,16 +111,19 @@ const SENTRY_DSN = import.meta.env?.VITE_SENTRY_DSN as string | undefined;
 
 /** 원문은 화면에서 빼되 **버리지는 않는다** — 재현 안 되는 버그의 유일한 단서다. 콘솔 + (DSN 이 있으면) Sentry.
  *  ⚠ console.error 가 아니라 warn: e2e 스펙 여럿이 "앱 오류(console.error·pageerror)는 0" 을 단언하는데,
- *  이 경로는 정상 동작(오류를 사용자 문장으로 바꾸는 중)이라 오류로 세면 안 된다. */
+ *  이 경로는 정상 동작(오류를 사용자 문장으로 바꾸는 중)이라 오류로 세면 안 된다.
+ *  🔴 Sentry 로는 **원문·details·hint 를 보내지 않는다**(2026-10-01 독립 검토): 23502 의 details 는 `Failing row contains (…)` 로
+ *  profiles 행 전체(전화·이메일·ci_hash)를 싣는다. 외부로는 SQLSTATE 코드만 — 원문은 이 브라우저 콘솔에만 남는다.
+ *  (콘솔 breadcrumb 으로 새는 길은 monitoring.ts 의 beforeSend 스크러빙이 닫는다.) */
 function logInternal(code: string, raw: string): void {
   try { console.warn('[db]', code || '(no code)', raw); } catch { /* 콘솔이 막힌 환경 */ }
   if (!SENTRY_DSN) return;
-  const key = `${code}|${raw}`;
-  if (reported.has(key) || reported.size >= 50) return;
-  reported.add(key);
+  const kind = code || 'no-code';
+  if (reported.has(kind) || reported.size >= 50) return;
+  reported.add(kind);
   // monitoring.ts 가 이미 같은 방식으로 동적 import 한다(DSN 이 있을 때만 로드되는 별도 청크).
   import('@sentry/react').then((Sentry) => {
-    Sentry.captureMessage('[db] 내부 오류 원문을 화면에서 가림', { level: 'warning', extra: { code, raw: raw.slice(0, 500) } });
+    Sentry.captureMessage(`[db] 내부 오류 ${kind}`, { level: 'warning', extra: { code: kind } });
   }).catch(() => { /* 감시망 자체 오류는 무시 */ });
 }
 
