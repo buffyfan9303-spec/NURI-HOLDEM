@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import type { User, UserStatus, UserUpdateResult } from '../../api/auth';
-import { adminSetNickname, adminSetShadowban } from '../../api/auth';
+import { adminSetNickname, adminSetShadowban, adminRejectSignup } from '../../api/auth';
 import {
   getUserActivity, getActivityLog,
   adminPointSummary, adminListPurchases, adminRefundPurchase, adminListGrants, adminGrantPoints,
@@ -150,7 +150,7 @@ export default function UserManagementTab({
             <p className="py-8 text-center text-xs text-ink-muted">조건에 맞는 회원이 없습니다</p>
           ) : (
             <ul className="space-y-1.5">
-              {filtered.map((u) => <UserRow key={u.id} user={u} onUpdate={onUpdateUser} />)}
+              {filtered.map((u) => <UserRow key={u.id} user={u} onUpdate={onUpdateUser} onReload={onRetryUsers} />)}
             </ul>
           )}
         </>
@@ -175,10 +175,12 @@ const ACT_TYPE_LABEL: Record<string, string> = { post: '글', comment: '댓글',
 const ACT_TYPE_LABEL2: Record<string, string> = { post: '글', comment: '댓글', listing: '매물', schedule: '포스터', venue: '매장', live: '실시간' };
 const ACT_ACTION_LABEL: Record<string, string> = { delete: '삭제', hide: '숨김', suspend: '정지', inactive: '비활성', deactivate: '비활성', restore: '활성화', ad_on: 'AD ON', ad_off: 'AD OFF' };
 
-function UserRow({ user, onUpdate }: {
+function UserRow({ user, onUpdate, onReload }: {
   user: User;
   /** 서버 완료를 기다린다. 실패하면 던진다 — 성공 표시는 resolve 뒤에만(결함 A). */
   onUpdate: (id: string, patch: Partial<User>) => Promise<UserUpdateResult>;
+  /** 서버 RPC 가 role·status 를 한꺼번에 바꾼 뒤 목록을 다시 읽는다(가입 거절). */
+  onReload?: () => void;
 }) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -230,10 +232,19 @@ function UserRow({ user, onUpdate }: {
     () => toast.show(`${user.name} 가입 승인`, 'success'));
   const restore = () => run({ status: 'active', suspendedUntil: undefined, sanctionReason: undefined },
     () => toast.show(`${user.name} 제재 해제`, 'success'));
-  // 사유를 안 실으면 sanction_reason 이 null 로 저장돼 목록 행의 '사유:' 줄이 사라지고,
-  // 회원이 받는 메일의 상세 사유는 폴백 '운영원칙 위반'(notify-sanction)으로 나간다.
-  const reject = () => run({ status: 'banned', approved: false, sanctionReason: '가입 심사 거절' },
-    () => toast.show(`${user.name} 가입 거절`, 'error'));
+  // 가입 거절 = 일반 회원으로 되돌리기(오너 결정 2026-10-01, 20261001f admin_reject_signup).
+  // ⚠ status='banned' 로 저장하지 않는다 — 트리거가 그 CI 를 withdrawn_identities 에 올려 본인인증 재가입까지 영구 차단한다.
+  //   제재가 아니므로 안내 메일(notify-sanction)도 보내지 않는다. 서버가 바꾼 role·status 는 목록을 다시 읽어 반영한다.
+  const reject = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true);
+    try {
+      await adminRejectSignup(user.id, '가입 심사 거절');
+      toast.show(`${user.name} 가입 거절 — 일반 회원으로 되돌렸습니다`, 'info');
+      close(); onReload?.();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '가입 거절에 실패했습니다', 'error'); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
   // 운영자: 회원 닉네임 변경 — 30일 규칙 면제(admin_set_nickname RPC · 이력은 서버 트리거가 source=admin 으로 남긴다)
   const changeNick = async () => {
     const v = window.prompt('새 닉네임 입력', user.nickname ?? '');

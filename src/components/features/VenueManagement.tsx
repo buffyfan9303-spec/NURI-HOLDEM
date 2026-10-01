@@ -13,8 +13,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  getAllVenues, updateVenueStatus, setVenueAd, deleteVenue, logActivity, setVenueVerification, reorderVenues,
+  getAllVenues, updateVenueStatus, setVenueAd, logActivity, setVenueVerification, reorderVenues,
 } from '../../api/community';
+import { removeOrArchiveVenue } from '../../lib/venueRemove';
 import type { Venue, VenueStatus, VenueVerificationStatus } from '../../api/community';
 import Icon from '../atoms/Icon';
 
@@ -92,16 +93,22 @@ export default function VenueManagement() {
   };
 
   const remove = async (v: Venue) => {
-    if (!confirm(`'${v.name}' 매장을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
     try {
-      await deleteVenue(v.id);
+      // 서버는 장부·이용권·출석 등 기록이 있는 매장의 삭제를 거부한다(20261001d) — 그때는 숨김(보관)으로 안내한다.
+      const r = await removeOrArchiveVenue(v);
+      if (r === 'cancelled') return;
+      if (r === 'archived') {
+        setVenues((prev) => prev.map((x) => (x.id === v.id ? { ...x, status: 'hidden' } : x)));
+        toast.show(`${v.name} 숨김(보관) 처리됨 — 기록은 보존됩니다`, 'info');
+        return;
+      }
       await logActivity({
         action: 'delete', targetType: 'venue', targetId: v.id, targetOwnerId: v.ownerId,
         targetSummary: v.name, actorName: user?.name,
       });
       setVenues((prev) => prev.filter((x) => x.id !== v.id));
       toast.show(`${v.name} 삭제됨`, 'error');
-    } catch { toast.show('삭제에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
   };
 
   // 드래그 종료 → 순서 재배치 + 저장(낙관적, 실패 시 롤백)
