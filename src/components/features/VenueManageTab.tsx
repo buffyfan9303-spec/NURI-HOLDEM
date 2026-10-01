@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
-import { waitSettled } from '../../lib/tabCover';
+import { isSettled, waitSettled } from '../../lib/tabCover';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
 import { Fold, onSummaryClick, pinPressed } from '../atoms/Fold';
@@ -58,6 +58,9 @@ import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
 import { loadRankingsEffect } from '../../lib/rankingsLoad';
+
+/** 판 높이 예약의 탈출구(F-2) — 해제 시각이 아니다. 로딩 표시가 영영 안 사라지는 버그에서 rAF 대기를 끊을 뿐이다. */
+const PANE_LOCK_ESCAPE_MS = 10_000;
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
@@ -386,7 +389,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const ro = new ResizeObserver(() => {
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
-        if (inner.getBoundingClientRect().height >= lockPx) release();
+        // F-2 — '따라잡음'만으로 풀지 않는다. 스켈레톤이 예약을 넘긴 채 잠잠해도(장부 첫 진입: 스켈레톤 1620 ≥ 예약) 실제 내용이
+        //   오면 더 짧아질 수 있다(1620→1489, 로딩 중 붕괴). 판 안 로딩 표시가 사라졌을 때만 이 경로로도 푼다.
+        if (inner.getBoundingClientRect().height >= lockPx && isSettled(inner, true)) release();
       }, 160);
     });
     ro.observe(inner);
@@ -396,7 +401,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   (첫 방문 늦은 덜컥). 첫 방문 오르내림(매장 설정 533→2954)은 판이 로딩 표시 없이 불러오던 탓이라
     //   그 판(VenueCustomizePanel)이 aria-busy 로 알리게 고쳤다 — 판정은 하나, 알리는 쪽이 제 몫을 한다.
     //   화면 밖 로딩까지 본다(whole) — 덮개는 보이는 곳만 지키지만 예약은 판 전체 높이를 지킨다.
-    const stop = waitSettled(() => secInnerRef.current, release, undefined, true);
+    // 🔴 F-2(2026-10-02 audit-motion-1002) — 상한은 덮개 상한(TAB_COVER_WAIT_MAX_MS 700)을 **쓰지 않는다.**
+    //   정산 첫 진입은 연쇄 조회라 응답이 400ms 면 실제 도착이 ~920ms 인데, 700ms 에 예약이 먼저 풀려
+    //   로딩 중(판 안 aria-busy 그대로)에 문서가 3326→969px 로 무너지고 푸터가 화면 안으로 올라왔다 내려갔다.
+    //   예약은 '로딩 완료'(판 안 스켈레톤·aria-busy 0 + 높이 두 프레임 정지)로만 푼다. PANE_LOCK_ESCAPE_MS 는 타이밍이 아니라
+    //   영영 안 끝나는 로딩 표시(버그)에 rAF 가 무한히 도는 것만 끊는 탈출구다 — 정상 경로는 그 전에 반드시 정착한다.
+    const stop = waitSettled(() => secInnerRef.current, release, undefined, true, PANE_LOCK_ESCAPE_MS);
     return () => { ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
@@ -1043,7 +1053,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             </>)}
 
           {/* S6-1: 예약(min-height)은 바깥에, 실측(ResizeObserver)은 안쪽 래퍼에 — 위 lockPane 주석 참고. */}
-          <div data-mystore-secpanel ref={secPanelRef} className="mt-3 min-w-0 flex-1 lg:mt-0"
+          {/* M-5(2026-10-02) — pane-reserve: 판 바닥을 화면 높이로. 600 에서 짧은 판(출근 관리·직원)으로 가면 판 윗변 정렬(76) 뒤
+              예약이 풀리며 문서가 짧아져 scrollY 가 두 번 더 깎였다(600→76→63→45). 바닥이 화면 높이면 정렬값이 그대로 산다. */}
+          <div data-mystore-secpanel ref={secPanelRef} className="pane-reserve mt-3 min-w-0 flex-1 lg:mt-0"
             style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
           <div ref={secInnerRef} className="space-y-3">
             {dItem?.locked && (

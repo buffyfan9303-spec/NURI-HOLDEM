@@ -137,6 +137,27 @@ function revealPastSticky(sc: HTMLElement, el: HTMLElement) {
   });
 }
 
+/**
+ * F-1(2026-10-02 audit-motion-1002) — PC(lg+) 장부 표 상자는 **헤더 밑 ~ 정산 바 위** 칸 안에서만 굴린다.
+ * 예전엔 70vh 상자의 절반(1440: 630 중 413px)이 화면 밖·정산 바 밑인데 휠을 그 상자가 먼저 먹어서,
+ * 사용자는 보이지 않는 아래쪽으로 행이 흘러가는 표를 굴렸다(표 2567px 를 다 내린 뒤에야 페이지가 움직였다).
+ * → 상자 높이는 그 칸에 맞추고(CSS), 상자가 칸에 다 들어오기 전에는 **페이지가 먼저** 그 차이만큼 움직인다.
+ * 상자 위/아래 경계가 칸 안이면 아무것도 안 한다(브라우저 기본: 표가 먼저, 끝나면 페이지로 이어짐).
+ * 반환값 = 페이지를 움직여야 하는 양(px, 0 이면 그대로). dy 의 부호가 방향이다.
+ */
+function pageFirstDelta(box: HTMLElement, bar: HTMLElement | null, dy: number): number {
+  const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-top')) || 97;
+  const r = box.getBoundingClientRect();
+  const barTop = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().top : window.innerHeight;
+  let need = 0;
+  if (dy > 0 && r.bottom > barTop + 1) need = Math.min(dy, r.bottom - barTop);
+  else if (dy < 0 && r.top < head - 1) need = Math.max(dy, r.top - head);
+  if (need > 0 && window.scrollY >= document.documentElement.scrollHeight - window.innerHeight - 1) return 0; // 문서 끝 — 표에 넘긴다
+  if (need < 0 && window.scrollY <= 0) return 0;
+  return need;
+}
+const isLgUp = () => window.matchMedia('(min-width: 1024px)').matches;
+
 // venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
 export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
@@ -977,6 +998,38 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     window.addEventListener('resize', measureFooterReserve);
     return () => window.removeEventListener('resize', measureFooterReserve);
   }, [measureFooterReserve]);
+  // F-1 — 표 상자 휠은 '페이지 먼저'(pageFirstDelta). React onWheel 은 passive 라 preventDefault 가 안 먹어 직접 붙인다.
+  //   상자는 행이 0 이면 사라지므로(빈 목록 분기) 콜백 ref 로 붙였다 뗀다.
+  const boardWheelOff = useRef<(() => void) | null>(null);
+  const boardRef = useCallback((el: HTMLDivElement | null) => {
+    boardWheelOff.current?.();
+    boardWheelOff.current = null;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // 전체화면(LedgerWorkspace)은 페이지가 아니라 그 안의 칸이 스크롤 상자다 — 뒤에 깔린 페이지를 굴리면 안 된다.
+      if (e.ctrlKey || e.deltaY === 0 || !isLgUp() || el.closest('[data-ledger-fullscreen]')) return;
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+      const need = pageFirstDelta(el, settleBarElRef.current, dy);
+      if (!need) return;
+      e.preventDefault();
+      window.scrollBy({ top: need, behavior: 'instant' as ScrollBehavior });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    boardWheelOff.current = () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  // F-1 키보드 — Tab 으로 정산 바 밑(또는 헤더 밑) 행에 들어가면 상자를 칸 안으로 올린다/내린다(브라우저는 고정 바를 모른다).
+  const revealBoardRow = useCallback((box: HTMLElement, el: HTMLElement) => {
+    if (!isLgUp() || !el.matches(':focus-visible') || box.closest('[data-ledger-fullscreen]')) return;
+    requestAnimationFrame(() => {
+      const bar = settleBarElRef.current;
+      const r = el.getBoundingClientRect();
+      const barTop = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().top : window.innerHeight;
+      const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-top')) || 97;
+      // 칸이 가렸으면 상자 전체를 칸 안으로(상자 높이가 칸에 맞으므로 그 안의 칸도 보인다)
+      const need = r.bottom > barTop ? pageFirstDelta(box, bar, Infinity) : r.top < head ? pageFirstDelta(box, bar, -Infinity) : 0;
+      if (need) window.scrollBy({ top: need, behavior: 'instant' as ScrollBehavior });
+    });
+  }, []);
 
   // 셀/행 조회는 표에서 행×열×바인(예: 50명×10칸×200바인 ≈ 10만회/렌더)으로 폭증하던 곳 —
   // buyins 1회 순회로 맵을 만들어 O(1) 조회로 전환(필터/find/reduce per-cell 제거).
@@ -1866,8 +1919,12 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           //   실측(격리 유무 대조, elementFromPoint): 없음 → TH 가 위 / isolate → 정산바가 위.
           // D7(2026-09-29 design-reviewer) — 고정 열(No 38px + 플레이어 ≤153px, 모바일 ≤119px) 폭만큼 scroll-padding 을 줘
           //   키보드 포커스(Shift+Tab)로 끌려온 바인 칸이 고정 열 밑에 가려지지 않게 한다. sm 이상은 오른쪽 총바인·미수도 고정이다.
-          onFocusCapture={(e) => revealPastSticky(e.currentTarget, e.target as HTMLElement)}
-          className="isolate overflow-auto max-h-[70vh] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // F-1(2026-10-02) — PC(lg+)는 상자 높이를 '헤더(--stack-top) 밑 ~ 정산 바(--footer-reserve, 바 높이+12) 위' 칸에 맞춘다.
+          //   70vh 는 상자가 화면 아래쪽(1440: top 576)에서 시작해도 630px 라 절반이 화면 밖·바 밑이었다. 모바일은 종전 70vh.
+          //   휠·키보드는 상자가 그 칸에 다 들어온 뒤에만 표를 굴린다(boardRef·revealBoardRow → pageFirstDelta).
+          ref={boardRef}
+          onFocusCapture={(e) => { revealPastSticky(e.currentTarget, e.target as HTMLElement); revealBoardRow(e.currentTarget, e.target as HTMLElement); }}
+          className="isolate overflow-auto max-h-[70vh] lg:max-h-[calc(100svh-var(--stack-top,6.0625rem)-var(--footer-reserve,0px))] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">

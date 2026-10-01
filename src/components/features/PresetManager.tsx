@@ -1,7 +1,7 @@
 // src/components/features/PresetManager.tsx
 // 게임 프리셋 관리 — 포스터/장부를 만들지 않고도 게임 내용(+듀레이션)을 템플릿으로 생성/수정/삭제.
 // PL3: 기본 생성 경로가 '지난 게임에서 만들기' — 빈 폼은 2차 진입점(§13-B 생성 경로 역전).
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { listGamePresets, saveGamePreset, deleteGamePreset, presetBuyInWon, presetFilledCount, type GamePreset, type GamePresetData } from '../../api/presets';
 import { getSchedules, type Schedule } from '../../api/schedules';
@@ -21,6 +21,21 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   const [presets, setPresets] = useState<GamePreset[] | null>(null);
   const [editing, setEditing] = useState<{ id?: string; name: string; data: GamePresetData } | null>(null);
   const [busy, setBusy] = useState(false);
+  // M-6(2026-10-02 audit-motion-1002) — 편집은 목록 자리에서 제자리 교체다. 목록을 600 쯤 내린 채 '수정'을 누르면
+  //   폼 머리('프리셋 수정'·이름 칸)가 화면 위로 잘린 채 시작했다(판 윗변 −408). 열 때 폼 머리를 헤더 밑(scroll-mt)으로 맞추고,
+  //   닫으면(취소·저장) 목록을 보던 자리로 돌려준다. 폼 머리가 이미 보이면 아무것도 안 움직인다.
+  const listY = useRef<number | null>(null);
+  const editTopRef = useCallback((el: HTMLElement | null) => {
+    if (el) {
+      const m = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      const top = el.getBoundingClientRect().top;
+      if (top < m - 1) { listY.current = window.scrollY; window.scrollBy({ top: top - m, behavior: 'instant' as ScrollBehavior }); }
+    } else if (listY.current != null) {
+      const y = listY.current;
+      listY.current = null;
+      requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior }));
+    }
+  }, []);
 
   const load = () => listGamePresets(venueId).then(setPresets).catch(() => setPresets([]));
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,7 +104,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   if (editing) {
     const d = editing.data;
     return (
-      <section className="space-y-2.5 rounded-aura border card-aura p-3">
+      <section ref={editTopRef} className="space-y-2.5 rounded-aura border card-aura p-3 scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-ink-primary">{editing.id ? '프리셋 수정' : '새 프리셋'}</h3>
           <button type="button" onClick={() => setEditing(null)} className="text-lg leading-none text-ink-muted">✕</button>
