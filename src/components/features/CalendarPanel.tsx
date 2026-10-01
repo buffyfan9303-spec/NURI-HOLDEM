@@ -380,7 +380,11 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
             <span key={d} className={['text-center text-[11px] font-semibold leading-4', i === 0 ? 'text-danger-deep dark:text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-px">
+        {/* R-03(2026-10-01 · 오너 결정 ②) — **날짜 숫자 영역만** 시스템 글꼴. 42칸 × 두 줄을 Pretendard Variable 로 조판하는 것이
+            캘린더 첫 표시 멈춤의 큰 몫이었다(CPU6 · Layout 한 번 650~927ms — audit-regress-1001 R-03 A/B). 요일 머리·요약·나머지는 Pretendard 그대로.
+            ⚠ 이 범위를 넓히거나 좁히면 디자인 결정이 바뀐다 — 오너 확인 대상. e2e/perf-tab-inp 가 첫 표시 ≤ 800ms 를 잠근다. */}
+        <div className="grid grid-cols-7 gap-px" data-cal-grid
+          style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif' }}>
           {cells.map((d) => {
             const key = ymd(d);
             const items = byDate.get(key);

@@ -249,6 +249,8 @@ type Box = { top: number; left: number; width: number };
 /** foot = 떠나기 직전 화면에 걸쳐 있던 사업자 푸터(판 밖 형제라 새 판 아래로 내려간다 — 그 자리를 복제본이 지킨다). */
 type Leaving = { tab: string; el: HTMLElement; box: Box; foot: { el: HTMLElement; box: Box } | null; skip: boolean; first: boolean };
 let leaving: Leaving | null = null;
+/** 커밋 전인 이동이 재방문인가 — notePaneLeaving 이 적고 handOffPane 이 한 번 쓴다(R-03). */
+let revisit = false;
 /** 도는(또는 하위 탭 커밋을 기다리는) 판 교체를 끝낸다 — 메인 탭·하위 탭 공용. 있으면 다음 이동은 연타다. */
 let fading: (() => void) | null = null;
 let swapTimer = 0;
@@ -347,7 +349,18 @@ export function notePaneLeaving(from: string, to: string, first = false): void {
   const rapid = fading !== null || leaving !== null;
   fading?.(); // 연타 — 도는 퇴장은 즉시 끝낸다(연출보다 응답)
   leaving = null;
+  revisit = false;
   if (from === to) { releaseSwap(); return; }
+  // R-03(2026-10-01 · 오너 결정 ①) — **재방문은 떠나는 판을 다시 그리지 않는다**(①스왑 프레임 정적화만, 한 프레임 교체).
+  //   떠나는 판(②)은 방금 숨긴 옛 판을 display:block·fixed 로 되살려 같은 프레임에 두 판의 스타일·레이아웃·페인트를 겹쳤다 —
+  //   CPU6 재 홈→커뮤니티 멈춤 208~248 → 판을 끈 A/B 72~120ms(audit-regress-1001 R-03 A/B · ab-matrix.jsonl).
+  //   빠진 타일을 끈 것은 ①이다(e391fb2f). 첫 방문(lazy·스켈레톤)은 종전대로 판을 붙잡는다.
+  if (!first) {
+    holdSwap();
+    window.scrollTo({ top: window.scrollY, behavior: 'instant' as ScrollBehavior });
+    revisit = true;
+    return;
+  }
   // 재기(떠나는 판·푸터 자리)를 **먼저** — html[data-tab-swap] 을 켠 뒤에 재면 그 무효화로 문서 전체 스타일 재계산이 이벤트 안에서 강제된다.
   const el = document.querySelector<HTMLElement>(`.tab-pane[data-tab="${from}"]`);
   const shown = !!el && el.getClientRects().length > 0;
@@ -373,6 +386,10 @@ export function handOffPane(to: string): void {
   if (typeof document === 'undefined') return;
   const l = leaving;
   leaving = null;
+  const rv = revisit;
+  revisit = false;
+  // 재방문 한 프레임 교체에도 진짜 푸터는 그 프레임만 가린다 — 뒤로가기(popstate) 이동이 CLS 로 계상되지 않게(R-05).
+  if (rv) hideShellFooterForSwap();
   if (!l || l.tab === to || !l.el.isConnected || l.skip) { afterFirstFrame(releaseSwap); return; }
   const el = l.el;
   place(el, l.box);
