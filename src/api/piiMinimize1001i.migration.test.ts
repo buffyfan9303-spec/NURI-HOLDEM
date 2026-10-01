@@ -21,6 +21,8 @@ function fn(src: string, name: string): string {
 
 const inviteEmailHidden = (body: string) => /case when my_role\(\) = 'admin'::user_role then p\.email end/.test(body);
 const flagGated = (body: string, gate: string) => new RegExp(`coalesce\\(public\\.${gate}\\(p_venue_id\\), false\\)\\s+and exists`).test(body);
+const killGated = (body: string) =>
+  /v\.id = p_venue_id\s+and \(v\.owner_id = auth\.uid\(\) or coalesce\(my_role\(\) = 'admin'::user_role, false\)\)\)\s+and exists\(select 1 from public\.venue_kill_switch/.test(body);
 const noRole = (body: string) => !/\brole\b/.test(body.slice(0, body.indexOf('language sql')));
 const anonRevoked = (src: string, sig: string) =>
   new RegExp(`revoke all on function public\\.${sig.replace(/[()]/g, '\\$&')} from public, anon;`).test(src)
@@ -52,9 +54,11 @@ describe('20261001i — 개인정보·설정 여부 최소 노출', () => {
   });
 
   it('SEC-04: 킬스위치·취소 비밀번호 설정 여부는 권한자에게만 true — 옛 정의는 걸린다', () => {
-    expect(flagGated(fn(APPLIED, 'kill_switch_is_set'), 'can_manage_pos')).toBe(true);
+    // 킬스위치는 set_kill_password 와 같은 서버 조건(대표 업주 또는 관리자) — 정지 제외를 더하면 '최초 설정 → 서버 거부' 막다른 길(검토 권고 A)
+    expect(killGated(fn(APPLIED, 'kill_switch_is_set'))).toBe(true);
+    expect(fn(APPLIED, 'kill_switch_is_set')).not.toContain('can_manage_pos');
+    expect(killGated(fn(OLD_KILL, 'kill_switch_is_set'))).toBe(false);
     expect(flagGated(fn(APPLIED, 'pos_has_password'), 'can_access_ledger')).toBe(true);
-    expect(flagGated(fn(OLD_KILL, 'kill_switch_is_set'), 'can_manage_pos')).toBe(false);
     expect(anonRevoked(APPLIED, 'kill_switch_is_set(uuid)')).toBe(true);
     expect(anonRevoked(APPLIED, 'pos_has_password(uuid)')).toBe(true);
   });

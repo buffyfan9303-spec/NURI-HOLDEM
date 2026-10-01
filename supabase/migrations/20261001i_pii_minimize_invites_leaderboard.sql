@@ -1,5 +1,9 @@
--- ⏳ 미적용 초안 (2026-10-01, 보안 수정 초안 담당 Opus 5.5 high). 적용은 리드 승인 후 MCP execute_sql 로.
---    라이브 롤백 리허설(이 파일 본문 + 맨 아래 REHEARSAL 블록, 마지막 raise 로 되돌림) → REHEARSAL_OK 확인.
+-- ✅ 2026-10-01 라이브 적용 완료(nuri-lead 승인 · 독립 검토 PASS review-sec-1001b.md · 권고 A 반영). 파일 본문을 한 번의 MCP execute_sql 로 적용
+--    (게이트 md5 4개 일치 → 본문 → 자가검사 통과). 적용 직전 같은 본문 + REHEARSAL 블록으로 라이브 롤백 리허설 REHEARSAL_OK, 되돌림 확인.
+--    사후 md5(pg_get_functiondef): get_my_venue_invites 2581f8efd66c5ccbc8d8a376015004bc · kill_switch_is_set 7c4c0cb4119033eff39cb9eb7b0bde01
+--                                  pos_has_password 72893d129f5dc9478a1e7d8fddf7b806 · get_activity_leaderboard 02be15aeed40ec2f6fbf24c5053333f8
+--    사후 ACL: 앞 셋 {postgres,authenticated,service_role} · 순위 {postgres,anon,authenticated,service_role}(PUBLIC 없음).
+--    어드바이저 security: ERROR 0 · anon 실행 DEFINER 51→48(이 파일의 3개 회수).
 --    보고: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\sec-1001b-report.md
 -- 20261001i — 공개 전 보안 점검(audit-security-1001.md) SEC-01 · SEC-04 · SEC-05.
 --
@@ -10,7 +14,8 @@
 --    (본문 게이트 can_manage_pos 로 이미 0행이었다 — 심층 방어).
 -- ② SEC-04 [Low] kill_switch_is_set · pos_has_password 를 비로그인·무관계 회원이 매장 id 로 물을 수 있었다.
 --    → anon 실행 회수 + 본문에 권한 조건(권한 없으면 false).
---      kill_switch_is_set: can_manage_pos(업주·공동 운영자·관리자). 설정·실행 화면은 대표 업주 전용이다.
+--      kill_switch_is_set: 대표 업주(venues.owner_id = auth.uid()) 또는 관리자 — set_kill_password 와 같은 서버 조건
+--        (독립 검토 권고 A: can_manage_pos 는 정지 제외가 더 붙어 '최초 설정 화면 → 서버 거부' 막다른 길을 만든다).
 --      pos_has_password : can_access_ledger(장부 권한 직원 포함 — 장부 화면 NuriPosLedger·LedgerStatsPanel 이 부른다).
 --    반환 타입 그대로 → CREATE OR REPLACE.
 --    venue_hidden_for_viewer·venue_today_games 는 건드리지 않는다(앞은 2차 재검토에서 수용, 뒤는 비로그인 출석 QR 경로).
@@ -59,7 +64,9 @@ create or replace function public.kill_switch_is_set(p_venue_id uuid)
  stable security definer
  set search_path = public, pg_temp
 as $function$
-  select coalesce(public.can_manage_pos(p_venue_id), false)
+  select exists(select 1 from public.venues v
+                 where v.id = p_venue_id
+                   and (v.owner_id = auth.uid() or coalesce(my_role() = 'admin'::user_role, false)))
      and exists(select 1 from public.venue_kill_switch where venue_id = p_venue_id);
 $function$;
 revoke all on function public.kill_switch_is_set(uuid) from public, anon;
@@ -126,6 +133,9 @@ begin
   if position('my_role() = ''admin''::user_role then p.email' in pg_get_functiondef('public.get_my_venue_invites(uuid)'::regprocedure)) = 0 then
     raise exception '20261001i 자가검사: get_my_venue_invites 의 이메일 가림이 없다';
   end if;
+  if position('v.owner_id = auth.uid() or coalesce(my_role() = ''admin''::user_role, false)' in pg_get_functiondef('public.kill_switch_is_set(uuid)'::regprocedure)) = 0 then
+    raise exception '20261001i 자가검사: kill_switch_is_set 의 대표·관리자 조건이 없다';
+  end if;
   if (select count(*) from pg_proc where oid in ('public.get_my_venue_invites(uuid)'::regprocedure, 'public.kill_switch_is_set(uuid)'::regprocedure,
         'public.pos_has_password(uuid)'::regprocedure, 'public.get_activity_leaderboard(integer)'::regprocedure)
         and prosecdef and proconfig @> array['search_path=public, pg_temp']) <> 4 then
@@ -134,52 +144,91 @@ begin
 end $$;
 
 /* ── REHEARSAL(라이브 롤백 리허설 — 적용 때는 이 블록을 빼고 돌린다) ─────────────────────────────
-   begin;  <위 본문>  then:
+   begin;  <적용 전 스냅샷 블록>  <위 본문>  <시험 블록>  — 마지막 raise 로 전체가 되돌아간다.
+   계정(사전 조회): 업주 7e435684(f35b42d1 대표·승인) · 관리자 f5d305f2(소유 0) · 회원 708de904(초대 대상) · 회원 fd14c2dc(트랜잭션 안에서 장부 권한 직원으로).
+   호출은 전부 실제 `set local role authenticated/anon` 으로 한다.
+
+create temp table _lb_before on commit drop as select * from public.get_activity_leaderboard(100);   -- 적용 전 스냅샷(role 칼럼 포함)
+
 do $$
 declare
-  v_owner uuid := '7e435684-2c8c-458d-985c-31b784a44893';   -- venue_owner, f35b42d1 의 대표(사전 조회)
-  v_admin uuid := 'f5d305f2-0f30-4d61-91ce-51f3332e5193';   -- admin, 매장 소유 없음
-  v_user  uuid := '708de904-913e-4082-8803-8a2766b342f9';   -- user, 매장 소유·소속 없음 → 초대 대상
+  v_owner uuid := '7e435684-2c8c-458d-985c-31b784a44893';
+  v_admin uuid := 'f5d305f2-0f30-4d61-91ce-51f3332e5193';
+  v_user  uuid := '708de904-913e-4082-8803-8a2766b342f9';
+  v_staff uuid := 'fd14c2dc-d994-46e4-8f12-b6cf38104983';
   v_venue uuid := 'f35b42d1-2d54-4905-95c1-1fda24e0f178';
-  n int; e text; b boolean; denied boolean;
+  n int; e text; denied int := 0; d int;
 begin
   insert into venue_staff_invites(venue_id, user_id, status) values (v_venue, v_user, 'pending');
   insert into venue_kill_switch(venue_id, pw_hash) values (v_venue, 'x');
   insert into venue_pos_settings(venue_id, cancel_password_hash) values (v_venue, 'x')
     on conflict (venue_id) do update set cancel_password_hash = 'x';
-  -- 업주(양성: 목록은 나온다 / 음성: 이메일 null / 양성: 두 판정 true)
+  update profiles set role = 'venue_staff', venue_id = v_venue, approved = true where id = v_staff;
+  insert into ledger_access(venue_id, user_id) values (v_venue, v_staff);
+
+  -- 업주(양성: 초대 1행·이메일 null·두 판정 true, p_venue_id=null 경로도)
   perform set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
-  select count(*), max(email), bool_and(nickname is not null or name is not null) into n, e, b from get_my_venue_invites(v_venue) where user_id = v_user;
-  if n <> 1 then raise exception 'FAIL owner invites rows=%', n; end if;
-  if e is not null then raise exception 'FAIL owner got email'; end if;
-  if not kill_switch_is_set(v_venue) then raise exception 'FAIL owner kill_switch_is_set false'; end if;
-  if not pos_has_password(v_venue) then raise exception 'FAIL owner pos_has_password false'; end if;
-  -- 관리자(양성: 이메일 보인다)
+  execute 'set local role authenticated';
+  select count(*), max(email) into n, e from get_my_venue_invites(v_venue) where user_id = v_user;
+  if n <> 1 or e is not null then raise exception 'FAIL owner invites n=% email=%', n, e; end if;
+  select count(*), max(email) into n, e from get_my_venue_invites(null) where user_id = v_user;
+  if n <> 1 or e is not null then raise exception 'FAIL owner invites(null) n=% email=%', n, e; end if;
+  if not kill_switch_is_set(v_venue) or not pos_has_password(v_venue) then raise exception 'FAIL owner flags'; end if;
+  execute 'reset role';
+
+  -- 정지된 대표(권고 A 반례): 킬스위치 판정은 여전히 true(set_kill_password 와 같은 조건 → 막다른 길 없음)
+  update profiles set status = 'suspended', suspended_until = now() + interval '1 day' where id = v_owner;
+  execute 'set local role authenticated';
+  if not kill_switch_is_set(v_venue) then raise exception 'FAIL suspended owner kill_switch_is_set false'; end if;
+  execute 'reset role';
+  update profiles set status = 'active', suspended_until = null where id = v_owner;
+
+  -- 관리자(양성: 이메일 보임 · 킬스위치 판정 true)
   perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
   select max(email) into e from get_my_venue_invites(v_venue) where user_id = v_user;
   if e is null then raise exception 'FAIL admin email null'; end if;
-  -- 무관계 회원(음성)
+  if not kill_switch_is_set(v_venue) then raise exception 'FAIL admin kill_switch_is_set false'; end if;
+  execute 'reset role';
+
+  -- 장부 권한 직원(양성: pos true / 음성: kill false · 초대 0행)
+  perform set_config('request.jwt.claims', json_build_object('sub', v_staff, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  if not pos_has_password(v_venue) then raise exception 'FAIL staff pos_has_password false'; end if;
+  if kill_switch_is_set(v_venue) then raise exception 'FAIL staff sees kill switch'; end if;
+  select count(*) into n from get_my_venue_invites(v_venue);
+  if n <> 0 then raise exception 'FAIL staff invites rows=%', n; end if;
+  execute 'reset role';
+
+  -- 무관한 회원(음성)
   perform set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
   if kill_switch_is_set(v_venue) or pos_has_password(v_venue) then raise exception 'FAIL stranger sees flags'; end if;
   select count(*) into n from get_my_venue_invites(v_venue);
   if n <> 0 then raise exception 'FAIL stranger invites rows=%', n; end if;
-  -- 비로그인(음성: 본문 false + ACL 거부)
+  execute 'reset role';
+
+  -- 비로그인(음성: 본문 false · anon 롤 3함수 모두 권한 거부 / 양성: 공개 순위)
   perform set_config('request.jwt.claims', '', true);
-  if kill_switch_is_set(v_venue) or pos_has_password(v_venue) then raise exception 'FAIL anon body sees flags'; end if;
-  if has_function_privilege('anon', 'public.kill_switch_is_set(uuid)', 'execute')
-     or has_function_privilege('anon', 'public.pos_has_password(uuid)', 'execute')
-     or has_function_privilege('anon', 'public.get_my_venue_invites(uuid)', 'execute') then raise exception 'FAIL anon acl'; end if;
-  -- 실제 anon 롤로: 판정 함수는 권한 거부(음성), 공개 순위는 행이 나온다(양성)
+  if kill_switch_is_set(v_venue) or pos_has_password(v_venue) then raise exception 'FAIL null-session body sees flags'; end if;
   execute 'set local role anon';
-  begin
-    perform kill_switch_is_set(v_venue); denied := false;
-  exception when insufficient_privilege then denied := true;
-  end;
-  if not denied then raise exception 'FAIL anon role executed kill_switch_is_set'; end if;
+  begin perform kill_switch_is_set(v_venue); exception when insufficient_privilege then denied := denied + 1; end;
+  begin perform pos_has_password(v_venue);   exception when insufficient_privilege then denied := denied + 1; end;
+  begin perform count(*) from get_my_venue_invites(v_venue); exception when insufficient_privilege then denied := denied + 1; end;
   select count(*) into n from get_activity_leaderboard(5);
   execute 'reset role';
+  if denied <> 3 then raise exception 'FAIL anon denied=%/3', denied; end if;
   if n = 0 then raise exception 'FAIL leaderboard empty'; end if;
-  raise exception 'REHEARSAL_OK leaderboard_rows=%', n;
+
+  -- 옛/새 순위 동일성(role 칼럼만 빠졌는가)
+  select count(*) into d from (
+    (select id, nickname, activity_points, avatar_color, equipped_mark from _lb_before
+     except select id, nickname, activity_points, avatar_color, equipped_mark from public.get_activity_leaderboard(100))
+    union all
+    (select id, nickname, activity_points, avatar_color, equipped_mark from public.get_activity_leaderboard(100)
+     except select id, nickname, activity_points, avatar_color, equipped_mark from _lb_before)) x;
+  if d <> 0 then raise exception 'FAIL leaderboard diff=%', d; end if;
+
+  raise exception 'REHEARSAL_OK owner/suspended-owner/admin/staff/stranger/anon ok · anon_denied=3 · lb_rows=% · lb_diff=0', n;
 end $$;
-   (raise 로 트랜잭션 전체가 되돌아간다 — 이후 md5 재조회로 원상 확인)
 */
