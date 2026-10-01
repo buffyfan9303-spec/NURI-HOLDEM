@@ -15,7 +15,7 @@ import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
@@ -2486,13 +2486,21 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
     if (!ready) { toast.show('매장 이름·주소·전화번호는 필수입니다', 'error'); return; }
     setBusy(true);
     try {
-      let imageUrl: string | undefined;
-      if (imgFile && user) imageUrl = await uploadPoster(user.id, imgFile);
-      await createMyVenue({
+      // S-11(2026-10-01) — **매장 생성 → 사진 업로드** 순서. 예전엔 매장이 없는 상태에서 포스터 버킷에 먼저 올려,
+      //   버킷 정책을 '매장 있는 업주'로 좁히면(review-sec R2) 첫 매장 생성이 42501 로 통째로 깨졌다(09-30 실제 기록).
+      //   매장을 먼저 만들면 업로드 시점엔 내 매장 행이 있다. 사진 실패는 매장 생성을 되돌리지 않는다(나중에 매장 페이지에서 바꾼다).
+      const newId = await createMyVenue({
         name: name.trim(), region: region.trim(), address: address.trim(), phone: phone.trim(),
-        imageUrl, kakaoUrl: kakao.trim() || undefined, description: desc.trim() || undefined, businessHours: hours.trim() || undefined,
+        kakaoUrl: kakao.trim() || undefined, description: desc.trim() || undefined, businessHours: hours.trim() || undefined,
       });
-      toast.show('매장이 생성되었습니다. 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', 'success');
+      let imgFailed = false;
+      if (imgFile && user && newId) {
+        try { await updateVenueImage(newId, await uploadPoster(user.id, imgFile)); }
+        catch { imgFailed = true; }
+      }
+      toast.show(imgFailed
+        ? '매장이 생성되었습니다. 대표 사진은 올리지 못했어요 — 매장 설정 › 매장 페이지에서 다시 올려 주세요'
+        : '매장이 생성되었습니다. 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', imgFailed ? 'error' : 'success');
       await onCreated();
     } catch (e) { toast.show(e instanceof Error ? e.message : '매장 생성 실패', 'error'); }
     setBusy(false);
