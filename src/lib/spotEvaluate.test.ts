@@ -9,7 +9,7 @@
 //  ⑥ 혼합 전략에 든 선택을 오답으로 처리하지 않는다
 //  ⑦ 승패 결과가 판정을 바꾸지 않는다
 import { describe, it, expect } from 'vitest';
-import { emptySpot, positionsFor, type SpotReview } from './spot';
+import { emptySpot, positionsFor, toJSON, fromJSON, type SpotReview } from './spot';
 import { RANGE_SCENARIOS } from './ranges.data';
 import { makeQuiz } from './preflopQuiz';
 import {
@@ -48,6 +48,21 @@ describe('솔버 데이터가 없다는 사실을 코드가 지킨다', () => {
   it('모든 결과에 데이터 버전이 붙는다 — 게시 시점 기준을 보존한다', () => {
     expect(evaluateSpot(base()).datasetVersion).toBe(DATASET_VERSION);
     expect(evaluateSpot(base({ street: 'flop', board: ['7d', '2c', '9h'] })).datasetVersion).toBe(DATASET_VERSION);
+  });
+
+  it('옛 데이터 버전(nuri-charts-2026-09-11)으로 저장된 스팟을 다시 열어도 예외 없이 지금 표로 다시 계산된다', () => {
+    // 저장 행의 spot JSON 에는 버전이 없다(버전은 별도 컬럼) — 재열기는 fromJSON(r.spot) → evaluateSpot 이다.
+    // 표가 바뀐 핸드(LJ A7s: 옛 표 0% → 새 표 100%)와 BB 수비 혼합 핸드로 그 경로를 그대로 밟는다.
+    const oldRow = { dataset_version: 'nuri-charts-2026-09-11', spot: toJSON(base({ tableSize: 6, heroPos: 'LJ', hero: ['As', '7s'] })) };
+    const reopened = fromJSON(JSON.parse(JSON.stringify(oldRow.spot)));
+    expect(reopened, '옛 행의 spot 을 복원하지 못했다').not.toBeNull();
+    let e!: SpotEvaluation;
+    expect(() => { e = evaluateSpot(reopened!, { heroEquity: null }); }).not.toThrow();
+    expect(e.datasetVersion).toBe(DATASET_VERSION);
+    expect(e.datasetVersion).not.toBe(oldRow.dataset_version);
+    const bb = fromJSON(toJSON(base({ tableSize: 6, heroPos: 'BB', villainPos: 'BTN', effectiveBb: 100, hero: ['Ts', '8s'],
+      actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }] })))!;
+    expect(() => evaluateSpot(bb, { heroEquity: null })).not.toThrow();
   });
 
   it('표시 라벨이 오너가 정한 문구와 같다', () => {

@@ -116,7 +116,10 @@ export type SpotEvaluation =
   | (Base & { kind: 'unsupported'; reason: string; });
 
 /** 데이터가 바뀌면 이 값을 올린다 — 게시글에 저장돼 '그때의 기준'을 증명한다. */
-export const DATASET_VERSION = 'nuri-charts-2026-09-11';
+//   2026-10-01: 6인 오픈 LJ~BTN 경계 + BB 수비 5표를 BeyondGTO 솔버 빈도로 재작성(ranges.data.ts 머리 주석).
+//   옛 값 'nuri-charts-2026-09-11' 로 저장된 행은 그대로 둔다 — 저장은 insert 전용이고 재열기는 입력(spot)만 읽어
+//   지금 표로 다시 계산한다. 버전이 달라도 안내·분기하는 경로는 없다(필요해지면 저장 행의 dataset_version 과 비교).
+export const DATASET_VERSION = 'nuri-charts-2026-10-01';
 
 // ── 차트 조회 ─────────────────────────────────────────────────────────────────
 
