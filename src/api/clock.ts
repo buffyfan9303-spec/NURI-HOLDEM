@@ -554,9 +554,25 @@ export async function getClockState(venueId: string, gameSeq = 1): Promise<Clock
   return data ? rowToState(data) : null;
 }
 
-/** 진행 중(running) 클락 전체 — 라이브 게임 현황 보드용. (공개 읽기 정책 필요, 없으면 접근 가능한 것만) */
-export async function getRunningClocks(): Promise<ClockState[]> {
-  if (IS_MOCK) return [];
+/** 진행 중(running) 클락 전체 — 라이브 게임 현황 보드용. (공개 읽기 정책 필요, 없으면 접근 가능한 것만)
+ *
+ *  R-05 ① A/B(2026-10-01) — 라이브 탭을 누르면 App 배지(changeTab → refreshClocks)와 본문(LiveGamesTab load)이 **같은 순간에 각자**
+ *  clock_states 를 받아 응답 두 개가 ~100ms 간격으로 커밋됐다(+384·+472ms — 늦은 커밋 프레임마다 래스터 지연이 한 번씩).
+ *  ① 진행 중인 요청이 있으면 그 요청을 같이 쓴다(배지·본문이 **같은 응답** — F5 계약이 더 단단해진다).
+ *  ② 내용이 지난번과 같으면 **지난번 배열 그대로** 돌려준다 — React 가 같은 참조로 보고 다시 그리지 않는다(30초 폴링·실시간 재조회 포함). */
+let runningInflight: Promise<ClockState[]> | null = null;
+let runningLast: ClockState[] | null = null;
+export function getRunningClocks(): Promise<ClockState[]> {
+  if (IS_MOCK) return Promise.resolve([]);
+  runningInflight ??= fetchRunningClocks().then((next) => {
+    // 같은 질의·같은 rowToState 라 키 순서가 같다 — 문자열 비교로 충분하다.
+    if (runningLast && JSON.stringify(runningLast) === JSON.stringify(next)) return runningLast;
+    runningLast = next;
+    return next;
+  }).finally(() => { runningInflight = null; });
+  return runningInflight;
+}
+async function fetchRunningClocks(): Promise<ClockState[]> {
   const { data, error } = await supabase.from('clock_states').select('*').eq('running', true).order('updated_at', { ascending: false });
   if (error) throw error; // 실패를 빈 배열로 바꾸면 '진행 중인 대회 없음'으로 위장된다
   // C3(2026-09-25): running=true 여도 마지막 레벨까지 소진한 클락은 **끝난 대회**다 — 라이브 목록·홈 레일·배지에서 뺀다.
