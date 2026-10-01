@@ -1472,7 +1472,7 @@ export interface LeaderboardEntry {
   nickname: string;
   activityPoints: number;
   avatarColor?: string;
-  role: UserRole;
+  // role 은 20261001i 에서 뺐다 — 공개 RPC 는 role 을 싣지 않는다(보안 표준 6 · SEC-05). 화면 소비처 0곳.
   /** 랭킹 상점 장착 마크 키(코스메틱 — 금전 가치 없음) */
   equippedMark?: string | null;
 }
@@ -1488,7 +1488,6 @@ export async function getActivityLeaderboard(limit = 20): Promise<LeaderboardEnt
     nickname:       r.nickname ?? '익명',
     activityPoints: r.activity_points ?? 0,
     avatarColor:    r.avatar_color ?? undefined,
-    role:           r.role,
     equippedMark:   r.equipped_mark ?? null,
   }));
 }

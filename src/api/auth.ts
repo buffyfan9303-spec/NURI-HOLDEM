@@ -330,7 +330,8 @@ export async function getMyVenueInvites(venueId?: string): Promise<VenueInvite[]
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
-    id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined,
+    // 20261001i: email 은 관리자 외에는 null 로 온다(SEC-01) — 빈 값이면 화면이 닉네임을 대신 보인다
+    id: r.id, userId: r.user_id, email: r.email ?? '', nickname: r.nickname ?? undefined,
     name: r.name, createdAt: r.created_at,
     grantLedger: !!r.grant_ledger, grantVoucher: !!r.grant_voucher, grantSchedule: !!r.grant_schedule,
     staffTitle: r.staff_title ?? undefined,
