@@ -86,7 +86,8 @@
     :root{--card:#f5f6f8;--card2:#eceef2;--ink:#111;--ink2:#333;--ink3:#666;--line:#ccc;--body:#1a1a1a;}
     tr:nth-child(even) td{background:transparent;} }
 </style>
-  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" media="print" onload="this.media='all'" />
+  <!-- 강제 CSP(SEC-03)는 인라인 onload 를 막는다 — media="print" 바꿔치기 대신 바로 적용한다(글꼴 목록 CSS 한 장). -->
+  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" />
 </head>
 <body>
 <div class="bar">
@@ -436,20 +437,7 @@
 </footer>
 </div>
 <a class="top" href="#" aria-label="맨 위로">↑</a>
-<script>
-  // 읽기 진행률 — 긴 문서에서 '얼마나 남았나' 를 보여 준다. 라이브러리 없이 스크롤 비율 한 줄.
-  (function () {
-    var pg = document.querySelector('.bar .pg');
-    if (!pg) return;
-    var tick = function () {
-      var h = document.documentElement;
-      var max = h.scrollHeight - h.clientHeight;
-      pg.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
-    };
-    addEventListener('scroll', tick, { passive: true });
-    addEventListener('resize', tick);
-    tick();
-  })();
-</script>
+<!-- 읽기 진행률 — 강제 CSP(SEC-03)는 인라인 스크립트를 막으므로 같은 출처 파일로 둔다. -->
+<script src="/guide/manual.js"></script>
 </body>
 </html>
