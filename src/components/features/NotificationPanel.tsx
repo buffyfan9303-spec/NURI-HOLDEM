@@ -342,7 +342,10 @@ export default function NotificationPanel({
           (closing/render)에 기대지 않고 `open` 그 자체로 pointer-events 를 끈다. 시각적 퇴장(느림)과
           입력 차단 해제(즉시)는 다른 시점이어야 한다는 것이 이 부류의 핵심이다. */}
       <div
-        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
+        // R-08(2026-10-01) — 열기 딤은 `animate-dim-in`(0 에서 · 패널 slide-up 과 같은 0.32s · Modal 의 가운데 모달과 같은 짝).
+        //   `animate-fade-in` 은 불투명도 0.45 에서 시작해 첫 프레임부터 어두운데 밝은 패널은 0 에서 늦게 차올라,
+        //   라이트에서 화면이 먼저 어두워졌다 밝아졌다(휘도 200 → 166 → 187 · e2e/notif-open-dip).
+        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-dim-in'].join(' ')}
         onClick={handleClose}
         aria-hidden
       />
