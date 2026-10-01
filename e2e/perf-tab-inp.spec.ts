@@ -4,7 +4,7 @@
 //   ① 재방문 — 떠나는 판(PANE-HANDOFF ②)이 방금 숨긴 옛 판을 display:block·fixed 로 되살려 같은 프레임에 두 판을 그렸다.
 //      → 오너 결정: 재방문은 떠나는 판 연출 없이 즉시 교체(첫 방문 연출 유지). src/lib/tabCover.ts notePaneLeaving.
 //   ② 캘린더 첫 표시 — Pretendard Variable 조판 한 번의 Layout 이 650~927ms. → 오너 결정: 날짜 숫자 영역만 시스템 글꼴.
-// 잠그는 것(Pixel 7 · CPU 6배 · CDP 터치 110ms · 다크 · 목 로그인 · 미리 마운트 뒤, 새 페이지 3회의 중앙값):
+// 잠그는 것(Pixel 7 · CPU 6배 · CDP 터치 110ms · 다크 · 목 로그인 · 미리 마운트 뒤, 새 페이지 5회의 중앙값):
 //   재 홈→커뮤니티 · 재 커뮤니티→홈 ≤ 160ms, 첫 홈→캘린더 ≤ 800ms.
 //   지표 = Event Timing duration(입력 → 다음 프레임 표시) 중 그 이동 창의 최댓값.
 // 음성 대조: 수정 전 빌드(b7ad649c)에서 FAIL(재방문 240~300 · 캘린더 1100~1900).
@@ -67,11 +67,14 @@ async function oneRun(page: Page): Promise<Record<string, number>> {
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
-test('🔴 CPU 6배 — 탭 재방문 ≤ 160ms · 캘린더 첫 표시 ≤ 800ms (3회 중앙값) @boot', async ({ context }) => {
-  test.setTimeout(300_000);
+test('🔴 CPU 6배 — 탭 재방문 ≤ 160ms · 캘린더 첫 표시 ≤ 800ms (5회 중앙값) @boot', async ({ context }) => {
+  test.setTimeout(480_000);
   const runs: Record<string, number>[] = [];
-  // 새 문서 3개 — 같은 컨텍스트(_fixtures 의 쓰기 차단 가드가 걸린 것)에서 연다. 첫 방문 경로는 문서마다 새로 생긴다.
-  for (let i = 0; i < 3; i++) {
+  // 5회(2026-10-01 리드) — 3회 중앙값은 상한 근처(재 커뮤니티→홈 144~168)에서 흔들렸다(강제 CSP 서버 실행에서 168 FAIL).
+  //   상한은 올리지 않고 표본을 늘린다.
+  const RUNS = 5;
+  // 새 문서 RUNS 개 — 같은 컨텍스트(_fixtures 의 쓰기 차단 가드가 걸린 것)에서 연다. 첫 방문 경로는 문서마다 새로 생긴다.
+  for (let i = 0; i < RUNS; i++) {
     const page = await context.newPage();
     try { runs.push(await oneRun(page)); } finally { await page.close(); }
   }
