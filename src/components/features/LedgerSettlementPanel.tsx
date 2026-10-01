@@ -19,15 +19,14 @@ import {
   getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
-// T 환산은 반드시 TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞어 쓰면
-// 둘 중 하나가 바뀌는 순간 T 표시가 조용히 틀어진다(1T = 1만원 정책은 units.ts 가 단일 소스).
-import { TICKET_WON } from '../../lib/units';
 import { businessDateOf } from '../../lib/businessDate';
 import { settlementReport, settlementReceipt, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 
 const man = (won: number) => `${wonToMan(won)}만`;
 /** 엔트리 표시 — 금액 기준이라 소수가 나온다(5만 할인 = 0.5). 정수면 정수로 보인다. */
 const ent = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+/** 이용권 **장수** 표시(2026-10-01 Fable 판정 ①: T = 차감된 장수). 원에서 거꾸로 만들지 않는다 — 12만·N=10 게임 10장은 '12만 · 10장'. */
+const jang = (n: number) => `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })}장`;
 
 export default function LedgerSettlementPanel({ venueId, date, active = true }: {
   venueId: string;
@@ -122,7 +121,8 @@ function Report({ r }: { r: SettlementReport }) {
   const hasTarget = t.targetEntries > 0;
   // 달성률의 분자는 **금액 엔트리**다(횟수가 아니다) — 기준 엔트리가 GTD 목표라 반값 손님은 0.5 명분만 채운다.
   const entryRate = hasTarget ? Math.round((t.entries / t.targetEntries) * 100) : 0;
-  const gapWon = t.revenue - t.targetRevenue;
+  // 차액은 달성률과 **같은 모집단**(금액 엔트리) — (엔트리 − 기준 엔트리) × 단가(Fable 판정 ②, ledgerSettlement.gapWon).
+  const gapWon = t.gapWon;
   // #9(2026-09-29) — '받은 방법' 대차표는 바인 + 애드온 한 벌(settlementReceipt 주석: 이용권 타일만 더하면 대차가 깨지고 이중 계상된다).
   const rc = settlementReceipt(t);
 
@@ -159,8 +159,9 @@ function Report({ r }: { r: SettlementReport }) {
               tone={entryRate >= 100 ? 'emerald' : entryRate >= 80 ? 'amber' : 'danger'} />
             <Line label="기준 엔트리" value={`${t.targetEntries.toLocaleString()}`} sub="세션에 설정한 GTD 목표" />
             <Line label="기준 매출" value={man(t.targetRevenue)} sub="기준 엔트리 × 현금 단가" />
+            {/* 엔트리(이용권·미수·지원 포함)와 같은 모집단 — 현금이 얼마나 들어왔나는 아래 '받은 방법'의 현금성 수납이다. */}
             <Line label="기준 대비 차액" value={`${gapWon >= 0 ? '+' : '−'}${man(Math.abs(gapWon))}`}
-              sub={gapWon >= 0 ? '기준을 넘었습니다' : '기준에 못 미쳤습니다'}
+              sub={`(엔트리 − 기준) × 단가 · ${gapWon >= 0 ? '기준을 넘었습니다' : '기준에 못 미쳤습니다'}`}
               tone={gapWon >= 0 ? 'emerald' : 'danger'} />
           </div>
         ) : (
@@ -178,10 +179,11 @@ function Report({ r }: { r: SettlementReport }) {
           <Tile label="현금" value={man(rc.tender.cash)} />
           <Tile label="카드" value={man(rc.tender.card)} />
           <Tile label="이체" value={man(rc.tender.transfer)} />
-          {/* #9(2026-09-29) — 값에 애드온 이용권 포함(오너 결정). T 는 이용권 사용 T 정본(ticketUsedT, 바인+애드온). */}
-          <Tile label="매장이용권" value={man(rc.tender.ticket)} sub={t.addon.ticketWon > 0
-            ? `${Math.round(ticketUsedT({ ticketPaid: t.tender.ticket / TICKET_WON }, t.addon))}T · 바인 ${Math.round(t.tender.ticket / TICKET_WON)}T + 애드온 ${Math.round(t.addon.ticketWon / TICKET_WON)}T`
-            : `${Math.round(t.tender.ticket / TICKET_WON)}T · 1T = 1만원`} />
+          {/* #9(2026-09-29) — 값에 애드온 이용권 포함(오너 결정). 장수는 이용권 사용 T 정본(ticketUsedT, 바인+애드온).
+              2026-10-01 — 원(값)과 장(꼬리표)을 따로 적는다. 장수 ≠ 원 ÷ 1만 인 게임(N 설정·min 규칙)이 있어 환산 문구는 뗐다. */}
+          <Tile label="매장이용권" value={man(rc.tender.ticket)} sub={t.addon.ticketT > 0
+            ? `${jang(ticketUsedT({ ticketPaid: t.ticketT }, t.addon))} · 바인 ${jang(t.ticketT)} + 애드온 ${jang(t.addon.ticketT)}`
+            : jang(t.ticketT)} />
         </div>
         <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">수납이 아닌 것</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -205,7 +207,7 @@ function Report({ r }: { r: SettlementReport }) {
             <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">그중 애드온 {t.addon.count}건 · 위 합계에 포함</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Tile label="애드온 매출" value={man(t.addon.revenue)} sub="현금 + 카드 + 이체" />
-              <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={`${Math.round(t.addon.ticketWon / TICKET_WON)}T`} />
+              <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={jang(t.addon.ticketT)} />
               <Tile label="애드온 미수" value={man(t.addon.unpaid)} tone={t.addon.unpaid > 0 ? 'danger' : undefined} />
             </div>
           </div>

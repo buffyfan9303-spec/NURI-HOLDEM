@@ -183,7 +183,8 @@ export interface BuyinFinance {
    *  그 횟수는 이제 ledgerCounts 가 따로 센다.)
    */
   entry: number;
-  /** 회수 티켓(T 단위, 1T = 1만원 = TICKET_WON). value 를 TICKET_WON 으로 나눈 값. */
+  /** 회수 이용권 **장수**(T, 1장 = 1T). 접수대 승인 행은 서버가 묶은 장수, 그 밖은 value ÷ TICKET_WON(2026-10-01 판정 ①).
+   *  돈(원)은 tender.ticket 이다 — 12만·N=10 게임 10장이면 T 10 · 12만으로 갈린다. */
   ticketPaid: number; ticketUnpaid: number;
   /** 가게지원 **건수**(0 또는 1) — 금액이 아니다. 지원 금액은 tender.support 에 있다. */
   support: number;
@@ -298,7 +299,11 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   // 매장이용권 — 현금은 안 받았지만 자리는 찼다. 가치는 현금·카드·이체와 **똑같다**(1T = 1만원).
   //   현금성 수납과는 별도 항목으로 표시한다(정산 대차표의 ticket 칸).
   if (b.paymentMethod === 'ticket') {
-    const t = net / TICKET_WON; // 10만 게임 = 10T · 5만 할인이면 5T
+    // T = **차감된 이용권 장수**(2026-10-01 Fable 판정 ① · 오너 W-01 '1장 = 1T'). 접수대 승인 행은 서버(20261001j)가
+    //   묶은 장수 k 를 ticket_count 에 남긴다 — 12만·N=10 게임 10장(min 규칙)이면 T 10 이지 12 가 아니다.
+    //   장수가 없는 행(수동 기록·20261001j 이전 승인)만 예전 식 (참가비 − 할인) ÷ 1만 — 오너 10-01 ① 'N 미설정 = 참가비 ÷ 1만 장' 과 같은 수.
+    //   돈(tender·value·entry)은 장수와 무관하게 참가비 − 할인 그대로다(정산 합계 회귀 0).
+    const t = b.requestId && b.ticketCount > 0 ? b.ticketCount : net / TICKET_WON;
     // ⚠ 가불(미수) 티켓은 **아직 회수하지 않았다**(2026-09-17).
     //   예전엔 미수여도 `tender.ticket = net` 을 실었다 — tender.ticket 은 정산 대차표의 '수납 완료' 칸이라
     //   (ledgerGolden.test.ts '수납 완료 가치 = 현금+카드+이체+이용권') 안 받은 돈이 매출로 올라가고
@@ -329,23 +334,28 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
 }
 
 /** 애드온 1건의 돈(원). 바인 가치(value)·엔트리와 **섞지 않는다** — 대차 항등식 gross − disc === value 는 바인만의 것이다. */
-export interface AddonFinance { count: number; revenue: number; unpaid: number; ticketWon: number; tender: Tender }
-export const ZERO_ADDON: AddonFinance = { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: ZERO_TENDER };
+/** ticketWon = 이용권으로 받은 **돈(원)**, ticketT = 그 애드온에 차감된 이용권 **장수**(T). 두 수는 다를 수 있다(2026-10-01 판정 ①). */
+export interface AddonFinance { count: number; revenue: number; unpaid: number; ticketWon: number; ticketT: number; tender: Tender }
+export const ZERO_ADDON: AddonFinance = { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, ticketT: 0, tender: ZERO_TENDER };
 export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'> & { addonTicketCount?: number }): AddonFinance {
   const m = b.addonMethod;
   if (m !== 'cash' && m !== 'card' && m !== 'transfer' && m !== 'ticket') return ZERO_ADDON;
   const amt = Math.max(0, Math.round(b.addonAmount ?? 0));
+  const k = Math.max(0, Math.round(b.addonTicketCount ?? 0));
   const tender: Tender = { ...ZERO_TENDER };
   // 20260930i — 이용권 분납 애드온: 이용권 k장(k × 1만)은 이미 받았고, 남은 금액만 addon_method(또는 미수)다.
   //   수단과 무관하게 이용권 몫을 먼저 뗀다(Fable·critical 2026-09-30) — 전액 이용권(ticket 완납)만 금액 전부가 이용권이다.
-  //   서버는 몫 > 0 인 애드온을 'ticket' 으로 못 바꾸게 막고(20260930i §C) 몫 × 1만 < 금액을 보장한다.
-  const tk = Math.min(amt, Math.max(0, Math.round(b.addonTicketCount ?? 0)) * TICKET_WON);
+  //   서버는 몫 > 0 인 분납 애드온을 'ticket' 으로 못 바꾸게 막고(20260930i §C) 몫 × 1만 < 금액을 보장한다.
+  const tk = Math.min(amt, k * TICKET_WON);
   const rest = amt - tk;
   tender.ticket = tk;
-  if (b.addonUnpaid) { tender.unpaid = rest; return { count: 1, revenue: 0, unpaid: rest, ticketWon: tk, tender }; }
-  if (m === 'ticket') { tender.ticket = amt; return { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, tender }; }
+  if (b.addonUnpaid) { tender.unpaid = rest; return { count: 1, revenue: 0, unpaid: rest, ticketWon: tk, ticketT: tk / TICKET_WON, tender }; }
+  // 전액 이용권 — 돈은 금액 전부. 20261001j 부터 서버가 묶은 장수 k 를 addon_ticket_count 에 남긴다 → T = k
+  //   (N 미설정 시절 1장으로 받은 5만 애드온 = 1T). 장수 없는 행(레거시)은 금액 ÷ 1만.
+  if (m === 'ticket') { tender.ticket = amt; return { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, ticketT: k > 0 ? k : amt / TICKET_WON, tender }; }
+  const ticketT = tk / TICKET_WON;
   tender[m] = rest;
-  return { count: 1, revenue: rest, unpaid: 0, ticketWon: tk, tender };
+  return { count: 1, revenue: rest, unpaid: 0, ticketWon: tk, ticketT, tender };
 }
 /** W-06 — 이 행의 애드온이 정산 엔트리에 더하는 값 = 애드온 횟수 × 게임별 애드온 엔트리(기본 0 = 예전 동작).
  *  바인 엔트리(buyinFinance.entry)와는 따로 더한다 — 그쪽 항등식 entry × 단가 = value 는 바인만의 것이다. */
@@ -358,7 +368,7 @@ export function addonTotals(buyins: readonly (Pick<LedgerBuyin, 'addonMethod' | 
   const t: AddonFinance = { ...ZERO_ADDON, tender: { ...ZERO_TENDER } };
   for (const b of buyins) {
     const a = addonFinance(b);
-    t.count += a.count; t.revenue += a.revenue; t.unpaid += a.unpaid; t.ticketWon += a.ticketWon;
+    t.count += a.count; t.revenue += a.revenue; t.unpaid += a.unpaid; t.ticketWon += a.ticketWon; t.ticketT += a.ticketT;
     for (const k of Object.keys(t.tender) as (keyof Tender)[]) t.tender[k] += a.tender[k];
   }
   return t;
@@ -368,9 +378,11 @@ export function addonTotals(buyins: readonly (Pick<LedgerBuyin, 'addonMethod' | 
  * 오너 결정(docs/HANDOFF-2026-09-29-account-switch.md §5 "'오늘 사용' 숫자 한 벌 = 바인+애드온").
  * 예전엔 6곳이 제각각 더해 대시보드·장부 요약은 바인만, 통계·CRM 은 애드온까지 세 같은 날 T 가 갈렸다(store-deep D3: 1,127.1T vs 1,142.1T).
  * ⚠ 표시용 수량이다 — 정산 대차표(tender.ticket, 원)·addon.ticketWon 같은 돈 계산은 바꾸지 않는다.
+ * 2026-10-01(Fable 판정 ①): T = **차감된 이용권 장수**. 그래서 애드온도 원(ticketWon)이 아니라 장수(ticketT)를 더한다 —
+ *   N 미설정 게임의 애드온 5만을 1장으로 받은 행은 5T 가 아니라 1T 다(지갑·이용권 탭과 같은 재고).
  */
-export function ticketUsedT(f: Pick<BuyinFinance, 'ticketPaid'>, a: Pick<AddonFinance, 'ticketWon'>): number {
-  return f.ticketPaid + a.ticketWon / TICKET_WON;
+export function ticketUsedT(f: Pick<BuyinFinance, 'ticketPaid'>, a: Pick<AddonFinance, 'ticketT'>): number {
+  return f.ticketPaid + a.ticketT;
 }
 
 /** 한 게임(같은 세션의 바인들)의 화면용 돈 합계 — 대시보드 '오늘 장부' KPI·미수 배너가 쓴다.
