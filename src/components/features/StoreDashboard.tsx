@@ -19,6 +19,7 @@ import { useClockSecond } from '../../lib/clockTick';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
+import { voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
 import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
@@ -604,6 +605,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
       await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq), voucherUse);
       setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
+      // S-15 — 남은 이용권 요청 장수를 알린다(목록 자체는 실시간 구독이 맞춘다 — 여기서 덮으면 매장 전환 경합이 생긴다).
+      if (r.voucherId) {
+        getPendingBuyinRequests(venueId, r.sessionDate).then((rs) => {
+          const n = voucherLeftover(r, rs);
+          if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info');
+        }).catch(() => {});
+      }
     }
     catch (e) {
       // 20260930i — 이용권이 모자라면 서버가 숫자를 실어 준다. 남은 금액 결제 선택은 장부 접수대 카드에 있다.

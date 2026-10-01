@@ -45,7 +45,7 @@ import { clockPhase, formatCountdown } from '../../lib/clockLevel';
 import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
-import { planBuyinApprovals } from '../../lib/buyinApproval';
+import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
@@ -564,7 +564,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     // C06: target 이 지금 화면 게임과 다르면 그 게임 자신의 할인·레벨로 다시 계산한다.
     return discIdxFor(target)
       .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx, voucherUse))
-      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); warnVoucherLeftover(r); })
       .catch((e) => {
         const s = voucherShortOf(e);
         if (s) { setShortFor({ id: r.id, target, use: voucherUse, s }); toast.show(ledgerErrorText(e, '승인 실패'), 'info'); loadPending(); return; }
@@ -579,8 +579,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     return discIdxFor(sf.target)
       .then((discIdx) => approveBuyinRequest(r.id, sf.target, true, method, undefined, discIdx, sf.use))
-      .then(() => { toast.show(`${r.playerName} 승인 · 이용권 ${sf.s.have}장 + 남은 ${sf.s.remainder.toLocaleString()}원 ${method === 'unpaid' ? '미수' : method === 'card' ? '카드' : method === 'transfer' ? '계좌' : '현금'}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 · 이용권 ${sf.s.have}장 + 남은 ${sf.s.remainder.toLocaleString()}원 ${method === 'unpaid' ? '미수' : method === 'card' ? '카드' : method === 'transfer' ? '계좌' : '현금'}`, 'success'); loadPending(); warnVoucherLeftover(r); })
       .catch((e) => { toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending(); });
+  };
+  // S-15 — 이용권 승인 뒤 같은 손님 이용권 요청이 남았으면 알린다(다음 승인에 바인 1회로 묶이는 것을 막을 기회).
+  const warnVoucherLeftover = (r: BuyinRequest) => {
+    if (!r.voucherId) return;
+    getPendingBuyinRequests(venueId, date)
+      .then((rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); })
+      .catch(() => {});
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
