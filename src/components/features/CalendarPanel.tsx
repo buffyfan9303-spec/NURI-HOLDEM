@@ -30,7 +30,8 @@ import { onSummaryClick } from '../atoms/Fold';
 import { isStaleResponse } from '../../lib/staleResponse';
 import CalendarToolsPanel from './CalendarToolsPanel';
 import { useToast } from '../atoms/Toast';
-import LoadErrorCard from '../atoms/LoadErrorCard';
+import { msgOf, isDenied } from '../../lib/dbError';
+import { josa } from '../../lib/josa';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMyReservations, type MyReservationRow } from '../../api/reservations';
 import {
@@ -326,25 +327,17 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </button>
       </div>
 
-      {/* 2026-09-10: '내 기록을(를) 불러오지 못했습니다' 가 무엇이 실패했는지도 말하지 못하고
-          '을(를)' 까지 노출해서, `what` 을 구체화하고 제목을 이 화면만 따로 덮었다.
-          2026-09-12: 조사를 `lib/josa.ts` 가 처리하게 되어 **덮어쓴 제목과 기본 템플릿의 글자가 같아졌다**
-          ('데이터'·'정보' 둘 다 받침이 없어 '를'). 우회할 이유가 사라졌으므로 공용 템플릿으로 되돌린다 —
-          남겨 두면 앞으로 템플릿을 고칠 때 이 화면만 조용히 뒤처진다. `what` 구체화는 그대로 유지한다. */}
-      {err != null && (
-        <LoadErrorCard
-          error={err}
-          what={bankrollErr != null ? '뱅크롤 데이터' : '캘린더 정보'}
-          hint="로그인이 만료되었거나 데이터를 불러오는 중 문제가 발생했습니다."
-          onRetry={() => { setLoaded(false); void reload(); }}
-          compact
-        />
-      )}
-
       {/* 이번 달 요약 — 오너 목적 ①(ROI·뱅크롤)이 첫 화면 맨 위다. 셋 다 '내가 적은 기록' 에서만 나온다(장부 자동 복제 없음).
           값은 칸 폭(320: 88px)에 맞춰 만/억으로 줄여 적는다 — 종전 전체 금액은 '+1,384,567' 이 칸을 넘어 잘렸다(before 실측).
           전체 값은 title·aria-label 과 아래 '전체 누계' 가 말한다. 기록 전(로딩·없음)은 '—'. */}
-      <div data-main-enter className="grid grid-cols-3 gap-1.5" data-testid="cal-summary">
+      {/* R-06(2026-10-01) — 조회 실패 표시는 **요약 자리에** 겹친다. 예전엔 요약 위에 LoadErrorCard(182px)를 끼워 넣어
+          진입 +0.7~1s 에 요약·그리드가 190px 밀렸다(390 · CLS 0.1913 — 입력 창 밖이라 전부 계상).
+          실패면 요약 숫자는 믿을 수 없는 0 이라(실패를 '기록 없음'으로 위장하지 않는다 — 머리 주석 ③) 가리고,
+          그 칸 크기 그대로 오류 줄과 '다시 시도'를 둔다. 자리가 같으니 아래가 움직이지 않는다.
+          제목 문구는 공용 LoadErrorCard 와 같은 템플릿(josa)이다. 서버가 준 이유는 title 로 남긴다. */}
+      <div className="relative">
+      <div data-main-enter className="grid grid-cols-3 gap-1.5" data-testid="cal-summary"
+        style={err != null ? { visibility: 'hidden' } : undefined} aria-hidden={err != null || undefined}>
         <SumCell testId="sum-net" label="이번 달 +/−" full={summary.bankrollSum}
           value={loaded ? compactWon(summary.bankrollSum) || '0' : '—'} tone={summary.bankrollSum > 0 ? 'emerald' : summary.bankrollSum < 0 ? 'danger' : 'muted'} />
         <SumCell testId="month-roi" label="이번 달 ROI"
@@ -353,6 +346,24 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           tone={summary.roi == null ? 'muted' : summary.roi >= 0 ? 'emerald' : 'danger'} />
         <SumCell testId="bankroll-total" label="뱅크롤 누계" full={summary.total}
           value={loaded ? compactWon(summary.total) || '0' : '—'} tone={summary.total > 0 ? 'emerald' : summary.total < 0 ? 'danger' : 'muted'} />
+      </div>
+      {err != null && (() => {
+        const what = bankrollErr != null ? '뱅크롤 데이터' : '캘린더 정보';
+        const denied = isDenied(err);
+        return (
+          <div role="alert" data-testid="cal-load-error" title={msgOf(err, '') || undefined}
+            className="absolute inset-0 flex items-center gap-2 rounded-input border border-danger/30 bg-danger/6 px-2.5">
+            <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
+            <p className="min-w-0 flex-1 text-xs font-semibold leading-4 text-danger-light">
+              {denied ? `${what} 열람 권한이 없습니다` : `${what}${josa(what, '을')} 불러오지 못했습니다`}
+            </p>
+            <button type="button" onClick={() => { setLoaded(false); void reload(); }}
+              className="h-[44px] shrink-0 rounded-input border border-danger/40 bg-danger/10 px-3 text-xs font-bold text-danger-light active:scale-95 transition">
+              다시 시도
+            </button>
+          </div>
+        );
+      })()}
       </div>
 
       {/* 월 그리드 — 날짜 칸이 그날의 **+/−(결과)** · 계획 · SPOT 을 말한다(오너 목적 ②③④).
