@@ -31,13 +31,14 @@ const session = (seq: number, title: string) => ({
   opened_by: null, opened_at: new Date().toISOString(), reg_closed: false, closed: false, schedule_id: null, voucher_issued: 0,
 });
 
-async function open(page: Page, w: number, delayMs = 0) {
+async function open(page: Page, w: number, delayMs = 0, games = 2) {
   await bootOwner(page, {
     viewport: { width: w, height: 844 }, appSettings: { identity_voucher_enabled: 'on' },
     extra: async (p) => {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
       // 메인+사이드 = 칩 줄이 뜨는 날(실매장 흔한 상태). delayMs = 요약 줄 '조회 전' 자리표시를 재기 위한 지연.
-      const body = get([session(1, '수요 딥스택'), session(2, '사이드 터보')]);
+      //   games=1 = 칩 줄이 없는 날(메인 하나).
+      const body = get([session(1, '수요 딥스택'), session(2, '사이드 터보')].slice(0, games));
       await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => { if (delayMs) await new Promise((res) => setTimeout(res, delayMs)); return body(r); });
     },
   });
@@ -185,4 +186,95 @@ test('390px — 요약 줄 조회 전 자리표시는 같은 높이(시작선·�
   expect(before.gameH, '자리표시 칸 높이가 0 — 보이지 않는 자리표시').toBeGreaterThan(0);
   // ⚠ 판 시작선(off)은 여기서 단언하지 않는다 — 조회 전엔 games=[] 라 칩 줄(멀티게임 날만 생기는 invisible 예약)이 아직 없다.
   //   이것은 게임 단계에도 같은 기존 동작(VenueManageTab F5 주석 · chipCache 선데우기로 완화)이고 요약 줄 자리표시와 무관하다. 수치는 로그로만 남긴다.
+});
+
+// 🔴 오너 2026-10-01 "아래 빈공간이 너무 큰거 아니야?" — 요약 줄 아래 빈 칸은 '가장 키 큰 게임 단계 헤더'에 맞춘 예약이었다
+//   (설명이 제목 아래로 2~3줄 내려간 헤더 78px). 고침: 모바일 레일 헤더를 한 줄(제목 + 설명 말줄임 + ⓘ)로 접었다.
+//   재는 것: ① 보이는 레일 헤더가 전부 한 줄(≤ 40px) ② 요약 줄 밑 → 구분선 빈 칸이 칩 줄 예약 + 한 줄 헤더 몫 이하
+//   (2게임 ≤ 112 · 1게임 ≤ 64 — 360·390·412 실측: 수정 후 107.3 · 60.5, 수정 전 986a0e3e 137.2~137.6 · 90.4~90.9 로 빨갛다) ③ 시작선은 7칸 동일(위 테스트들이 계속 잰다).
+//   빈 칸이 0 이 아닌 이유: 시작선을 같게 두는 한 요약 줄 밑에는 게임 단계의 [칩 줄 + 헤더] 높이만큼이 남는다(store-tabjump-report §8).
+const chrome = (page: Page) => page.evaluate((sel) => {
+  const rb = document.querySelector<HTMLElement>(sel)!.getBoundingClientRect().bottom;
+  const vis = (e: Element) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible';
+  const line = [...document.querySelectorAll<HTMLElement>('[data-summary-line]')].find(vis);
+  const grid = document.querySelector<HTMLElement>('[data-step-header]');
+  const hs = [...document.querySelectorAll<HTMLElement>('[data-step-header] header')].filter(vis);
+  const heads = hs.map((h) => h.getBoundingClientRect().height);
+  // 말줄임이 화면 안에서 일어나는가 — 헤더(설명·ⓘ 포함)가 뷰포트 오른쪽을 넘으면 안 된다(격자 auto 트랙이 564px 로 늘어난 실측 회귀)
+  const over = Math.max(0, ...hs.map((h) => h.getBoundingClientRect().right - document.documentElement.clientWidth));
+  return { blank: line && grid ? grid.getBoundingClientRect().bottom - line.getBoundingClientRect().bottom : null,
+    lineTop: line ? line.getBoundingClientRect().top - rb : null, heads, over };
+}, RAIL);
+
+for (const [G, MAX] of [[2, 112], [1, 64]] as const) for (const W of [360, 390, 412] as const) {
+  test(`${W}px · 게임 ${G}개 — 레일 헤더는 한 줄, 요약 줄 아래 빈 칸 ≤ ${MAX}px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, W, 0, G);
+    let heads = 0;
+    for (const n of TABS) {
+      expect(await step(page, n), `레일에 «${n}» 칸이 없다`).not.toBeNull();
+      await page.waitForTimeout(300);
+      const m = await chrome(page);
+      heads += m.heads.length;
+      for (const h of m.heads) expect(h, `«${n}» 헤더가 한 줄이 아니다(${h}px)`).toBeLessThanOrEqual(40);
+      expect(m.over, `«${n}» 헤더가 화면 오른쪽 밖으로 ${m.over}px 넘쳤다`).toBeLessThanOrEqual(1);
+      if (n === '요약' || n === '이용권') {
+        console.log(`${W}/g${G} ${n} 요약 줄 밑 빈 칸 ${m.blank?.toFixed(1)} · 줄 위치 ${m.lineTop?.toFixed(1)}`);
+        expect(m.blank, `«${n}»에 요약 줄 또는 머리 칸이 없다 — 빈 검사`).not.toBeNull();
+        expect(m.blank!, `«${n}» 요약 줄 아래 빈 칸이 크다`).toBeLessThanOrEqual(MAX);
+      }
+    }
+    expect(heads, '보이는 레일 헤더를 하나도 못 쟀다 — 빈 검사').toBeGreaterThanOrEqual(6);
+  });
+}
+
+// 접힌 설명 — 지우지 않았다. ⓘ 는 키보드로 닿고 Enter 로 펼치고 접으며 aria-expanded 를 알린다.
+//   낭독기는 말줄임과 무관하게 전문을 읽는다(textContent 전문). 숨은 사본(inert)의 ⓘ 는 보이지도 포커스되지도 않는다. 단계를 옮기면 접힌다.
+test('390px — 접힌 헤더 설명: ⓘ 키보드로 펼침·접힘, 단계 이동 시 접힘', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 390);
+  expect(await step(page, '클락'), '레일에 «클락» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(400);
+  const toggle = () => page.locator('[data-step-header] [data-desc-toggle]:visible');
+  await expect(toggle(), '보이는 ⓘ 는 지금 단계 하나여야 한다').toHaveCount(1);
+  const t = toggle().first();
+  await expect(t).toHaveAttribute('aria-expanded', 'false');
+  await expect(t).toHaveAccessibleName('설명 펼치기');
+  const desc = () => page.evaluate(() => {
+    const h = [...document.querySelectorAll<HTMLElement>('[data-step-header] header')].find((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible')!;
+    const p = h.querySelector<HTMLElement>('.t-desc')!;
+    return { text: p.textContent ?? '', clipped: p.scrollWidth > p.clientWidth + 1, ellipsis: getComputedStyle(p).textOverflow === 'ellipsis', h: h.getBoundingClientRect().height };
+  });
+  const c = await desc();
+  expect(c.text, '설명 전문이 DOM 에 없다(낭독기가 못 읽는다)').toBe('대회 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다');
+  expect(c.clipped && c.ellipsis, '접힌 설명이 말줄임 한 줄이 아니다').toBe(true);
+  // 키보드 순서: 문서 처음부터 Tab 을 눌러 ⓘ 에 닿는다(숨은 사본 ⓘ 는 inert 라 순서에 끼지 않는다)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  let reached = false;
+  for (let i = 0; i < 80 && !reached; i++) {
+    await page.keyboard.press('Tab');
+    reached = await page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      return !!a?.matches('[data-desc-toggle]') && getComputedStyle(a).visibility === 'visible';
+    });
+  }
+  expect(reached, 'Tab 으로 ⓘ 에 닿지 못했다').toBe(true);
+  await expect(t).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(t).toHaveAttribute('aria-expanded', 'true');
+  await expect(t).toHaveAccessibleName('설명 접기');
+  const o = await desc();
+  expect(o.clipped, '펼쳤는데 설명이 아직 잘려 있다').toBe(false);
+  expect(o.h, '펼쳤는데 헤더가 그대로 한 줄 높이다').toBeGreaterThan(c.h + 10);
+  await page.keyboard.press('Enter');
+  await expect(t).toHaveAttribute('aria-expanded', 'false');
+  // 펼친 채 단계를 옮겼다 돌아오면 접힌 채 도착한다(시작선 유지)
+  await page.keyboard.press('Enter');
+  await expect(t).toHaveAttribute('aria-expanded', 'true');
+  const fr = await step(page, '순위');
+  const fin = fr!.filter((f) => f.pane === 'ranking' && f.off != null).at(-1)!.off!;
+  await expect(toggle().first(), '옮긴 단계가 펼친 채 도착했다').toHaveAttribute('aria-expanded', 'false');
+  const back = await step(page, '클락');
+  expect(Math.abs(back!.filter((f) => f.pane === 'clock' && f.off != null).at(-1)!.off! - fin), '펼침이 남아 시작선이 달라졌다').toBeLessThanOrEqual(1);
+  await expect(toggle().first(), '돌아온 단계가 펼친 채로 남았다').toHaveAttribute('aria-expanded', 'false');
 });

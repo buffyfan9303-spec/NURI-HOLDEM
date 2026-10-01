@@ -839,6 +839,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     : renderGameStep === 'ranking' ? (rankingDraft ? (rankingDraft.event?.trim() || '메인') : undefined)
       : undefined;
 
+  // 🔴 오너 2026-10-01 "아래 빈공간이 너무 큰거 아니야?" — 모바일 레일 섹션 헤더의 설명은 한 줄(말줄임)로 접고, ⓘ 로 펼친다.
+  //   펼침은 지금 보이는 단계에만 걸리고 단계를 옮기면 접힌다 — 도착할 때의 시작선은 늘 같다(옮긴 뒤까지 펼쳐 두면 그 탭만 칸이 커진다).
+  const descKey = `${renderSection}|${renderGameStep}`;
+  const [descOpenKey, setDescOpenKey] = useState<string | null>(null);
+  if (descOpenKey !== null && descOpenKey !== descKey) setDescOpenKey(null);
+  const descOpen = descOpenKey === descKey;
+
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
   if (!isAdmin && !venueId) {
@@ -1117,6 +1124,21 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (() => {
               const isGame = renderSection === 'game';
               const ghost = isGame ? '[grid-area:1/1] invisible' : '[grid-area:1/1] invisible lg:hidden';
+              // 🔴 오너 2026-10-01 "아래 빈공간이 너무 큰거 아니야?" — 머리 칸 높이는 다섯 단계 헤더 중 **가장 키 큰 것**이 정한다.
+              //   모바일에선 설명이 제목 아래로 2~3줄 내려가 그 칸이 78px(390)였고, 요약 줄 아래가 그만큼 비었다.
+              //   모바일 헤더를 **한 줄**(제목 + 설명 말줄임 + ⓘ)로 접어 칸 자체를 줄인다. 설명은 지우지 않는다 —
+              //   말줄임은 화면만 자르고 낭독기는 전문을 읽으며, ⓘ(aria-expanded)가 그 단계의 설명을 원래 줄바꿈 배치로 펼친다.
+              //   ⚠ 공용 atom(SectionHeader)은 건드리지 않는다 — 접힘은 이 래퍼의 자손 선택자로만 건다(PC lg+ 는 무관).
+              //   회귀 게이트: e2e/mystore-mobile-tabjump.spec.ts(헤더 한 줄 · 요약 줄 아래 빈 칸 · ⓘ 키보드)
+              const oneLine = 'max-lg:[&_.flex-wrap]:flex-nowrap max-lg:[&_h2]:shrink-0 max-lg:[&_.t-desc]:min-w-0 max-lg:[&_.t-desc]:truncate';
+              const fold = (open: boolean) => (open ? '' : oneLine);
+              const descBtn = (id: string, open: boolean) => (SECTION_DESC[id as keyof typeof SECTION_DESC] ? (
+                <button type="button" className="lg:hidden text-ink-muted" data-desc-toggle=""
+                  aria-expanded={open} aria-controls={`step-head-${id}`} aria-label={open ? '설명 접기' : '설명 펼치기'}
+                  onClick={() => setDescOpenKey(open ? null : descKey)}>
+                  <Icon name="info" size={16} />
+                </button>
+              ) : null);
               return (
                 <div data-step-chrome="" className="space-y-3 max-lg:[&_header]:border-0 max-lg:[&_header]:pb-0">
                   {/* 요약·이용권: 모바일은 문맥 줄 자리에 '오늘 요약 줄'(오너 10-01 결정)을 보이고 칩 줄은 높이만 예약, PC 는 종전대로 없음 */}
@@ -1125,23 +1147,29 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
                       venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame} />
                   </div>
-                  <div className="grid max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
+                  {/* grid-cols-1 = minmax(0,1fr): auto 트랙은 가장 긴 설명 폭(390 에서 564px)까지 늘어나 말줄임이 화면 밖에서 일어났다 */}
+                  <div className="grid grid-cols-1 max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
                     {GAME_STEPS.map((st) => {
                       const on = isGame && st.id === renderGameStep;
+                      const open = on && descOpen;
                       return (
-                        <div key={st.id} className={on ? '[grid-area:1/1]' : ghost} aria-hidden={on ? undefined : true} inert={!on}>
+                        <div key={st.id} id={`step-head-${st.id}`} className={[on ? '[grid-area:1/1]' : ghost, fold(open)].join(' ')}
+                          aria-hidden={on ? undefined : true} inert={!on}>
                           <SectionHeader title={st.label} desc={SECTION_DESC[st.id]} icon={SECTION_ICON[st.id]}
-                            action={st.id === 'posters' && canPosters
-                              ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
-                              : undefined} />
+                            action={<>
+                              {descBtn(st.id, open)}
+                              {st.id === 'posters' && canPosters && <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>}
+                            </>} />
                         </div>
                       );
                     })}
                     {/* 요약 헤더는 모바일에서 계속 숨긴다(2026-09-24 결정 — 단계 바 '요약'과 같은 말 두 번 금지, e2e store-nav).
                         invisible 이라 칸은 그대로 예약되고 낭독·포커스에서도 빠진다. PC 는 그대로 보인다. */}
                     {!isGame && (
-                      <div className={renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:invisible' : '[grid-area:1/1]'}>
-                        <SectionHeader title={dItem?.label ?? ''} desc={SECTION_DESC[renderSection]} icon={SECTION_ICON[renderSection]} />
+                      <div id={`step-head-${renderSection}`}
+                        className={[renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:invisible' : '[grid-area:1/1]', fold(descOpen)].join(' ')}>
+                        <SectionHeader title={dItem?.label ?? ''} desc={SECTION_DESC[renderSection]} icon={SECTION_ICON[renderSection]}
+                          action={descBtn(renderSection, descOpen)} />
                       </div>
                     )}
                   </div>
