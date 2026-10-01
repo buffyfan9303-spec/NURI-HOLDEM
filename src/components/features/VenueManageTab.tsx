@@ -517,6 +517,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
     setLedgerFollow({ seq, n });
   }, []);
+  // 오너 2026-10-02 — 요약·이용권(모바일)의 칩: 같은 게임 선택 상태(onPickGame)를 그대로 쓰고 장부로 간다.
+  //   장부 이동은 레일 '장부'와 같은 길(onGotoStore + ledgerSeed{영업일, 그 게임})이다 — goStep('ledger') 만 하면
+  //   첫 진입 장부가 목록 모드로 열려 고른 게임 보드가 안 보였다(2026-10-02 실측: 스위처 선택 0개).
+  const onPickGameToLedger = useCallback((seq: number, title?: string) => {
+    onPickGame(seq, title);
+    onGotoStore({ section: 'ledger', date: businessDateOf(venueId), gameSeq: seq });
+  }, [onPickGame, onGotoStore, venueId]);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
@@ -1141,10 +1148,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               ) : null);
               return (
                 <div data-step-chrome="" className="space-y-3 max-lg:[&_header]:border-0 max-lg:[&_header]:pb-0">
-                  {/* 요약·이용권: 모바일은 문맥 줄 자리에 '오늘 요약 줄'(오너 10-01 결정)을 보이고 칩 줄은 높이만 예약, PC 는 종전대로 없음 */}
+                  {/* 요약·이용권: 모바일은 문맥 줄 자리에 '오늘 요약 줄'(오너 10-01 결정), 그 아래 칩 줄은 게임 단계와 같이 보인다(10-02 결정).
+                      칩은 그 게임을 고른 채 장부로 간다(onPickGameToLedger). PC 는 종전대로 없음 */}
                   <div className={isGame ? undefined : 'lg:hidden'}>
                     <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                      canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
+                      canPosters={canPosters} onPick={isGame ? onPickGame : onPickGameToLedger} onNewGame={createPosterHere}
                       venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame} />
                   </div>
                   {/* grid-cols-1 = minmax(0,1fr): auto 트랙은 가장 긴 설명 폭(390 에서 564px)까지 늘어나 말줄임이 화면 밖에서 일어났다 */}
@@ -1468,7 +1476,7 @@ function warmGameChips(venueId: string) {
 const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
   /** 🔴 오너 2026-10-01 — 요약·이용권(모바일)의 머리 칸 빈 띠를 '매장 › 날짜(요일) › 오늘 게임' 요약 줄로 채운다.
-   *  문맥 줄 자리·높이를 그대로 쓰고(시작선·구분선 불변), 칩 줄은 invisible 로 높이만 예약한다.
+   *  문맥 줄 자리·높이를 그대로 쓰고(시작선·구분선 불변), 칩 줄은 게임 단계와 같이 보인다(오너 10-02 결정).
    *  날짜는 항상 영업일(오늘), 게임 칸은 오늘 게임 수(2개 이상) 또는 그 게임 이름(1개). 조회 전·실패는 같은 높이 자리표시. */
   summary?: boolean;
   onPick: (seq: number, title?: string) => void;
@@ -1547,10 +1555,10 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
               className={['inline-block h-[1em] w-16 shrink-0 rounded-badge bg-surface-high', sumState === 'loading' ? 'animate-pulse' : ''].join(' ')} />}
       </p>
       {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지).
-          요약 줄 모드에서는 높이만 예약(invisible·aria-hidden·inert) — 게임 단계와 같은 머리 칸 높이를 지킨다. */}
+          🔴 오너 2026-10-02 결정 「요약에도 오늘 게임 칩 표시」 — 요약 줄 모드(요약·이용권)에서도 같은 자리·같은 모양으로 보인다
+          (종전엔 invisible 로 높이만 예약해 빈 띠였다). 누르면 부모가 준 onPick 이 그 게임을 고른 채 장부로 데려간다. */}
       {games.length > 1 && (
-        <div role="group" aria-label="오늘 게임 선택" className={['flex items-center gap-2 overflow-x-auto', summary ? 'invisible' : ''].join(' ')}
-          aria-hidden={summary ? true : undefined} inert={summary}>
+        <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
           <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
           {games.map((g) => {
             const on = g.gameSeq === current;

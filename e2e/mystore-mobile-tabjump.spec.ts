@@ -38,8 +38,13 @@ async function open(page: Page, w: number, delayMs = 0, games = 2) {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
       // 메인+사이드 = 칩 줄이 뜨는 날(실매장 흔한 상태). delayMs = 요약 줄 '조회 전' 자리표시를 재기 위한 지연.
       //   games=1 = 칩 줄이 없는 날(메인 하나).
-      const body = get([session(1, '수요 딥스택'), session(2, '사이드 터보')].slice(0, games));
-      await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => { if (delayMs) await new Promise((res) => setTimeout(res, delayMs)); return body(r); });
+      //   game_seq=eq.N 조회(장부 보드 단건)는 그 게임 행만 돌려준다 — 칩 → 장부 보드 착지를 재려면 단건이 맞는 게임이어야 한다.
+      const all = [session(1, '수요 딥스택'), session(2, '사이드 터보')].slice(0, games);
+      await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => {
+        if (delayMs) await new Promise((res) => setTimeout(res, delayMs));
+        const m = /game_seq=eq\.(\d+)/.exec(r.request().url());
+        return get(m ? all.filter((s) => String(s.game_seq) === m[1]) : all)(r);
+      });
     },
   });
   await openMyStore(page);
@@ -202,12 +207,20 @@ const chrome = (page: Page) => page.evaluate((sel) => {
   const heads = hs.map((h) => h.getBoundingClientRect().height);
   // 말줄임이 화면 안에서 일어나는가 — 헤더(설명·ⓘ 포함)가 뷰포트 오른쪽을 넘으면 안 된다(격자 auto 트랙이 564px 로 늘어난 실측 회귀)
   const over = Math.max(0, ...hs.map((h) => h.getBoundingClientRect().right - document.documentElement.clientWidth));
-  return { blank: line && grid ? grid.getBoundingClientRect().bottom - line.getBoundingClientRect().bottom : null,
+  // 🔴 오너 10-02 「요약에도 오늘 게임 칩 표시」 — 빈 칸은 '요약 줄 밑'이 아니라 **머리 칸의 마지막 보이는 것(요약 줄·칩 줄) 밑**에서
+  //   다음 보이는 것(보이는 헤더 윗변, 없으면 구분선)까지다. 칩 줄이 invisible 이면 그 몫이 빈 칸으로 잡힌다.
+  const chips = [...document.querySelectorAll<HTMLElement>('[data-step-chrome] [role=group][aria-label="오늘 게임 선택"]')].find(vis);
+  const last = Math.max(line?.getBoundingClientRect().bottom ?? -Infinity, chips?.getBoundingClientRect().bottom ?? -Infinity);
+  const next = hs.length ? Math.min(...hs.map((h) => h.getBoundingClientRect().top)) : grid?.getBoundingClientRect().bottom;
+  return { blank: line && next != null ? next - last : null, chips: !!chips,
     lineTop: line ? line.getBoundingClientRect().top - rb : null, heads, over };
 }, RAIL);
 
-for (const [G, MAX] of [[2, 112], [1, 64]] as const) for (const W of [360, 390, 412] as const) {
-  test(`${W}px · 게임 ${G}개 — 레일 헤더는 한 줄, 요약 줄 아래 빈 칸 ≤ ${MAX}px`, async ({ page }) => {
+// 상한(수정 후 실측 + 여유): 요약 = 숨긴 제목 줄 34 + 표준 간격 12.75×2 ≈ 59.5 → ≤ 62 · 이용권 = 보이는 헤더까지 간격 12.75 → ≤ 16.
+//   수정 전 63f77152(칩 invisible): 2게임 요약 107.3 · 이용권 ≈ 68 로 빨갛다. 1게임 날은 칩 줄이 없어(게임 단계와 같은 규칙) 전후 같다.
+const BLANK_MAX = { 요약: 62, 이용권: 16 } as const;
+for (const G of [2, 1] as const) for (const W of [360, 390, 412] as const) {
+  test(`${W}px · 게임 ${G}개 — 레일 헤더는 한 줄, 요약·이용권 머리 칸 빈 칸 상한(요약 ≤ ${BLANK_MAX.요약} · 이용권 ≤ ${BLANK_MAX.이용권})`, async ({ page }) => {
     test.setTimeout(120_000);
     await open(page, W, 0, G);
     let heads = 0;
@@ -219,9 +232,10 @@ for (const [G, MAX] of [[2, 112], [1, 64]] as const) for (const W of [360, 390, 
       for (const h of m.heads) expect(h, `«${n}» 헤더가 한 줄이 아니다(${h}px)`).toBeLessThanOrEqual(40);
       expect(m.over, `«${n}» 헤더가 화면 오른쪽 밖으로 ${m.over}px 넘쳤다`).toBeLessThanOrEqual(1);
       if (n === '요약' || n === '이용권') {
-        console.log(`${W}/g${G} ${n} 요약 줄 밑 빈 칸 ${m.blank?.toFixed(1)} · 줄 위치 ${m.lineTop?.toFixed(1)}`);
+        console.log(`${W}/g${G} ${n} 머리 칸 빈 칸 ${m.blank?.toFixed(1)} · 칩 ${m.chips} · 줄 위치 ${m.lineTop?.toFixed(1)}`);
         expect(m.blank, `«${n}»에 요약 줄 또는 머리 칸이 없다 — 빈 검사`).not.toBeNull();
-        expect(m.blank!, `«${n}» 요약 줄 아래 빈 칸이 크다`).toBeLessThanOrEqual(MAX);
+        expect(m.chips, `«${n}» 칩 줄 표시가 게임 수(${G})와 맞지 않는다`).toBe(G > 1);
+        expect(m.blank!, `«${n}» 머리 칸 빈 칸이 크다`).toBeLessThanOrEqual(BLANK_MAX[n]);
       }
     }
     expect(heads, '보이는 레일 헤더를 하나도 못 쟀다 — 빈 검사').toBeGreaterThanOrEqual(6);
@@ -278,3 +292,43 @@ test('390px — 접힌 헤더 설명: ⓘ 키보드로 펼침·접힘, 단계 �
   expect(Math.abs(back!.filter((f) => f.pane === 'clock' && f.off != null).at(-1)!.off! - fin), '펼침이 남아 시작선이 달라졌다').toBeLessThanOrEqual(1);
   await expect(toggle().first(), '돌아온 단계가 펼친 채로 남았다').toHaveAttribute('aria-expanded', 'false');
 });
+
+// 🔴 오너 10-02 「요약에도 오늘 게임 칩 표시」 — 요약·이용권의 칩은 게임 단계와 같은 자리·같은 모양으로 보이고,
+//   누르면 **같은 게임 선택 상태**(onPickGame: 클락 시드 게임·장부 추종 신호)로 그 게임을 고른 채 장부 단계로 간다.
+//   재는 것: 보이는 칩 줄(접근성 트리에 있음) · 위치가 포스터 칩 줄과 같다(±1px) · 클릭 → 장부 판 · 레일 '장부' 활성 ·
+//   장부 칩 줄에서 그 칩이 aria-pressed · 장부가 그 게임(game_seq=eq.2)을 조회했다.
+for (const from of ['요약', '이용권'] as const) {
+  test(`390px · 게임 2개 — «${from}» 칩 '사이드1' → 장부 · 같은 게임 선택`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const seqs: string[] = [];
+    page.on('request', (r) => { const m = /ledger_sessions\?.*game_seq=eq\.(\d+)/.exec(r.url()); if (m) seqs.push(m[1]); });
+    await open(page, 390);
+    const chipTop = () => page.evaluate((sel) => {
+      const g = [...document.querySelectorAll<HTMLElement>('[data-step-chrome] [role=group][aria-label="오늘 게임 선택"]')]
+        .find((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible');
+      return g ? g.getBoundingClientRect().top - document.querySelector<HTMLElement>(sel)!.getBoundingClientRect().bottom : null;
+    }, RAIL);
+    expect(await step(page, '포스터'), '레일에 «포스터» 칸이 없다').not.toBeNull();
+    await page.waitForTimeout(400);
+    const posterTop = await chipTop();
+    expect(posterTop, '포스터 칩 줄을 못 쟀다 — 빈 검사').not.toBeNull();
+    expect(await step(page, from), `레일에 «${from}» 칸이 없다`).not.toBeNull();
+    await page.waitForTimeout(400);
+    const group = page.getByRole('group', { name: '오늘 게임 선택' });
+    await expect(group, `«${from}»에 오늘 게임 칩 줄이 보이지 않는다`).toBeVisible();
+    await expect(group.getByRole('button'), '칩 수(메인·사이드1 + 새 게임)').toHaveCount(3);
+    const myTop = await chipTop();
+    expect(Math.abs(myTop! - posterTop!), `«${from}» 칩 줄 위치 ${myTop} ≠ 포스터 ${posterTop}`).toBeLessThanOrEqual(1);
+    const before = seqs.length;
+    await group.getByRole('button', { name: /사이드1/ }).evaluate((b) => (b as HTMLElement).click());
+    await expect(page.locator('[data-mystore-secpanel] [data-pane="ledger"]'), '칩을 눌렀는데 장부 판으로 가지 않았다').toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`${RAIL} [role=tab][aria-selected="true"]`), '레일 활성 칸이 장부가 아니다').toHaveText(/^\s*장부\s*$/);
+    await expect(page.getByRole('group', { name: '오늘 게임 선택' }).getByRole('button', { name: /사이드1/ }),
+      '장부의 칩 줄에서 고른 게임이 선택 상태가 아니다').toHaveAttribute('aria-pressed', 'true');
+    // 장부 판 자체가 그 게임 보드로 열렸다 — 목록 모드(스위처 없음)로 열리면 실패한다(goStep 만 쓴 첫 구현이 실제로 그랬다).
+    //   ⚠ eq.1 조회는 대시보드·클락 등 다른 소비자도 내므로 '마지막 요청' 으로 판정하지 않는다.
+    await expect.poll(() => seqs.slice(before).includes('2'), { message: '장부가 고른 게임(game_seq=2)을 조회하지 않았다', timeout: 10_000 }).toBe(true);
+    await expect(page.locator('[data-pane="ledger"] button.bg-accent-300'), '장부 보드의 게임 스위처에서 사이드1 이 선택되지 않았다(목록 모드로 열림)')
+      .toHaveText([/사이드1/], { timeout: 10_000 });
+  });
+}
