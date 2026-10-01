@@ -15,7 +15,23 @@ import { resolve } from 'node:path';
 const PUB = resolve(__dirname, '../public');
 const read = (p: string) => readFileSync(resolve(PUB, p), 'utf-8');
 /** 주석 속 설명문('<img width/height> 로 예약' 등)은 태그가 아니다 */
-const stripComments = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+/** open…close 구간을 앞에서부터 잘라 낸다 — 정규식 한 번 치환은 잘린 자리에서 새 경계가 생기면 남긴다(CodeQL
+ *  'incomplete multi-character sanitization'). indexOf 로 한 번 훑으면 남는 조각이 없다. 닫힘이 없으면 끝까지 버린다. */
+function cutBlocks(s: string, open: string, close: string): string {
+  let out = '';
+  for (let i = 0; i < s.length;) {
+    const a = s.indexOf(open, i);
+    if (a < 0) { out += s.slice(i); break; }
+    out += s.slice(i, a);
+    const b = s.indexOf(close, a + open.length);
+    if (b < 0) break;
+    i = b + close.length;
+  }
+  return out;
+}
+const stripComments = (s: string) => cutBlocks(cutBlocks(s, '<!--', '-->'), '/*', '*/');
+/** 태그를 뺀 글자 — '<' 부터 다음 '>' 까지를 버린다(같은 이유로 indexOf). */
+const textOf = (html: string) => cutBlocks(html, '<', '>');
 
 /** 서브셋 CSS 가 정의하는 family — 이름이 다르면 face 가 하나도 안 붙는다. */
 const FAMILY = /font-family:\s*'([^']+)'/.exec(read('fonts/pretendard/pretendardvariable-dynamic-subset.css'))![1];
@@ -63,7 +79,7 @@ const FOOTER_SRC = readFileSync(resolve(__dirname, 'components/features/Business
 const BIZ_VALUES = [...FOOTER_SRC.matchAll(/\['(?:상호|사업자등록번호|대표자|사업장 주소|전화번호|고객센터)', '([^']+)'\]/g)].map((m) => m[1]);
 
 describe.each(['about.html', 'guide/owner.html', 'guide/manual.html'])('%s — 법정 고지', (page) => {
-  const text = read(page).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+  const text = textOf(read(page)).replace(/\s+/g, ' ');
   it('③ 사업자 정보(앱 푸터와 같은 값) · 만 19세 · 1336 이 페이지 안에 있다', () => {
     expect(BIZ_VALUES, 'BusinessFooter 에서 사업자 값 6개를 읽지 못했다').toHaveLength(6);
     for (const s of [...BIZ_VALUES, '만 19세 미만은 이용할 수 없습니다', '도박문제 상담', '1336(24시간·무료)']) {
