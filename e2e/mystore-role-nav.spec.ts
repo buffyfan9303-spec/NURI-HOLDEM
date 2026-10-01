@@ -116,21 +116,30 @@ for (const w of [1280, 390, 360]) {
   });
 }
 
-test('공동운영자(대표 아님): 카카오 링크 칸은 읽기 전용 — venues_update(대표·관리자)와 같은 선', async ({ page }) => {
-  await bootOwner(page, {
-    viewport: { width: 1280, height: 900 }, perms: ALL,
-    extra: async (p) => {
-      await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{ user_id: 'aaaaaaaa-0000-4000-8000-000000000001', nickname: '대표', name: '대표', is_primary: true, status: 'approved' },
-          { user_id: MOCK_UID, nickname: '업주', name: '업주', is_primary: false, status: 'approved' }]) }));
-    },
-  });
+// S-08(오너 2026-10-01, DB 20261001m 적용·6270d326): 승인 공동 운영자는 매장 페이지 칸(카카오 포함)을 고칠 수 있다.
+// 이름·사업자번호 등 나머지 칸은 DB 트리거(trg_guard_venue_coowner_columns)가 막는다 — 화면에는 그 칸 입력이 없다.
+const coownerNotPrimary = async (p: import('@playwright/test').Page) => {
+  await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ user_id: 'aaaaaaaa-0000-4000-8000-000000000001', nickname: '대표', name: '대표', is_primary: true, status: 'approved' },
+      { user_id: MOCK_UID, nickname: '업주', name: '업주', is_primary: false, status: 'approved' }]) }));
+};
+const kakaoInput = (page: import('@playwright/test').Page) => page.locator('[data-pane="page"] input[placeholder^="https://open.kakao.com"]');
+
+test('공동운영자(대표 아님·매장 권한 있음): 카카오 링크 칸을 편집할 수 있다 — S-08 양성', async ({ page }) => {
+  await bootOwner(page, { viewport: { width: 1280, height: 900 }, perms: ALL, extra: coownerNotPrimary });
   await openMyStore(page);
   await page.locator('[data-mystore-secbar]').getByRole('button', { name: '매장 설정', exact: true }).click();
-  const kakao = page.locator('[data-pane="page"] input[placeholder^="https://open.kakao.com"]');
+  const kakao = kakaoInput(page);
   await expect(kakao).toBeVisible({ timeout: 15_000 });
-  await expect(kakao, '대표가 아닌 공동운영자가 카카오 링크를 고칠 수 있다(저장 시 부분 저장)').toHaveAttribute('readonly', '');
-  await expect(page.locator('[data-pane="page"]').getByText('카카오톡 링크는 대표 업주만 바꿀 수 있어요.')).toBeVisible();
+  await expect(kakao, '승인 공동 운영자는 카카오 링크를 고칠 수 있다').not.toHaveAttribute('readonly', '');
+  await expect(page.locator('[data-pane="page"]').getByText('카카오톡 링크는 대표 업주만 바꿀 수 있어요.')).toHaveCount(0);
+});
+
+test('공동운영자(대표 아님·매장 권한 없음): 매장 설정 문 자체가 없다 — 칸 입력이 화면에 뜨지 않는다 — S-08 음성', async ({ page }) => {
+  await bootOwner(page, { viewport: { width: 1280, height: 900 }, perms: NONE, extra: coownerNotPrimary });
+  await openMyStore(page);
+  expect((await navLabels(page, true)).includes('매장 설정'), '권한 없는 공동 운영자에게 매장 설정이 보이면 안 된다').toBe(false);
+  await expect(kakaoInput(page)).toHaveCount(0);
 });
 
 test('대표 업주: 카카오 링크 칸은 그대로 편집 가능(양성 대조)', async ({ page }) => {
