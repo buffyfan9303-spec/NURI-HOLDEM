@@ -350,12 +350,16 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       {err != null && (() => {
         const what = bankrollErr != null ? '뱅크롤 데이터' : '캘린더 정보';
         const denied = isDenied(err);
+        // 제목·안내는 LoadErrorCard 와 같은 문구다(e2e aura-led AURA-07 이 둘 다 잠근다). 요약 칸(55px)에 들어가게 한 문단 3줄까지 —
+        //   좁은 폭(320)에서 안내 끝이 잘리면 전체 문구는 title(서버 이유 포함)로 남는다.
+        const head = denied ? `${what} 열람 권한이 없습니다` : `${what}${josa(what, '을')} 불러오지 못했습니다`;
+        const hint = denied ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '로그인이 만료되었거나 데이터를 불러오는 중 문제가 발생했습니다.';
+        const detail = msgOf(err, '');
         return (
-          <div role="alert" data-testid="cal-load-error" title={msgOf(err, '') || undefined}
-            className="absolute inset-0 flex items-center gap-2 rounded-input border border-danger/30 bg-danger/6 px-2.5">
-            <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
-            <p className="min-w-0 flex-1 text-xs font-semibold leading-4 text-danger-light">
-              {denied ? `${what} 열람 권한이 없습니다` : `${what}${josa(what, '을')} 불러오지 못했습니다`}
+          <div role="alert" data-testid="cal-load-error" title={[head, hint, detail].filter(Boolean).join('\n')}
+            className="absolute inset-0 flex items-center gap-2 rounded-input border border-danger/30 bg-danger/6 px-2.5 py-1">
+            <p className="line-clamp-3 min-w-0 flex-1 text-2xs leading-[14px] text-ink-muted">
+              <strong className="font-semibold text-danger-light">{head}</strong> {hint}
             </p>
             <button type="button" onClick={() => { setLoaded(false); void reload(); }}
               className="h-[44px] shrink-0 rounded-input border border-danger/40 bg-danger/10 px-3 text-xs font-bold text-danger-light active:scale-95 transition">
