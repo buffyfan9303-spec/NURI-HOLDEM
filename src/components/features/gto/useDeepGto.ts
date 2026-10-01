@@ -118,7 +118,7 @@ export interface UseDeepGto {
   selectVillainRange: (id: string) => void;
   result: GtoResult | null;
   normalizedAction: Required<ActionFrequency> | null;
-  /** 실시간 에퀴티 (입력 완성 시, 보드 반영). 보드 5장이면 전수계산, 그 밖은 몬테카를로 */
+  /** 실시간 에퀴티 (입력 완성 시, 보드 반영). 카드 모드는 전수계산, 레인지 모드는 보드 5장이면 전수·그 밖은 시드 고정 몬테카를로 */
   equity: Equity | null;
   /** 그 값이 **어떻게** 나왔는지. 'no_legal_combinations' 면 equity 는 승률이 아니다 */
   equityKind: EquityKind | undefined;
@@ -299,7 +299,7 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     return canonicalizeHand([villain[0].rank, villain[1].rank], suited)?.id ?? null;
   }, [villain]);
 
-  // 실시간 에퀴티: 입력 완성 시 워커로 몬테카를로 계산. 결과는 **입력 서명에 묶여** 모드별로 저장되고,
+  // 실시간 에퀴티: 입력 완성 시 워커로 계산. 결과는 **입력 서명에 묶여** 모드별로 저장되고,
   // equity·equityKind·calculating 은 모두 그 저장본에서 **파생**한다 — 예전처럼 effect 안에서 setCalculating(true) 로
   // 뒤따라 맞추면 모드를 바꾼 첫 프레임(effect 전)에 이전 모드의 에퀴티가 새 라벨로 그려졌다.
   // 엔진이 값을 **어떻게** 냈는지(kind)도 같이 저장한다. 'no_legal_combinations' 는 "못 냈다" 는 뜻이라
@@ -315,11 +315,11 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     const h = hero as Card[];
     const v = villain as Card[];
     const b = board.filter((c): c is Card => c !== null);
-    // [DS] MO-9C: 몬테카를로 2500회를 워커로 위임(메인스레드 롱태스크 제거). 결과 동일.
+    // [DS] MO-9C: 워커로 위임(메인스레드 롱태스크 제거). 카드 모드는 전수, 레인지 모드는 시드 고정 표본 2500회.
     let alive = true;
     (villainMode === 'range'
       ? equityVsRangeAsync([h[0], h[1]], villainRange.combos, b, 2500)
-      : equityAsync([h[0], h[1]], [v[0], v[1]], b, 2500)
+      : equityAsync([h[0], h[1]], [v[0], v[1]], b)
     ).then((r) => {
       if (!alive) return;
       // kind 를 같이 들고 온다 — 이걸 버리면 '계산 못 함(0.5)' 과 '정말 5:5' 가 구별되지 않아

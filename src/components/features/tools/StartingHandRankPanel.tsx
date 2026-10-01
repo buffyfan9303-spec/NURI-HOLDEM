@@ -12,26 +12,12 @@ import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { useRangeTheme } from './cellText';
-import { comboCount, gridName } from '../../../lib/ranges';
-import { STARTING_HAND_EQUITY } from './startingHandRank.data';
+import { gridName } from '../../../lib/ranges';
+import SegmentedTabs from '../../atoms/SegmentedTabs';
+import { RANK_BASIS_LABEL, STARTING_HAND_BY_HAND, STARTING_HAND_ROWS, type RankBasis } from './startingHandRank';
 
-interface Row {
-  hand: string; rank: number; eq: number; kind: string; combos: number;
-  /** 이 핸드까지 누적한 콤보가 전체 1326콤보에서 차지하는 비율(%) — "상위 몇 %" */
-  topPct: number;
-}
-
-const kindOf = (h: string) => (h.length === 2 ? '페어' : h.endsWith('s') ? '수딧' : '오프수트');
-
-const ROWS: Row[] = (() => {
-  let cum = 0;
-  return STARTING_HAND_EQUITY.map(([hand, eq], i) => {
-    const combos = comboCount(hand);
-    cum += combos;
-    return { hand, rank: i + 1, eq, kind: kindOf(hand), combos, topPct: (cum / 1326) * 100 };
-  });
-})();
-const BY_HAND = new Map(ROWS.map((r) => [r.hand, r]));
+// 순위·상위 % 계산은 모달(HandGtoModal)과 공유한다 — startingHandRank.ts (기본 = 10인 기준 일반 순위, 전환으로 헤즈업 승률 순위)
+const BASIS_TABS: { key: RankBasis; label: string }[] = [{ key: 'ten', label: '10인 기준' }, { key: 'hu', label: '헤즈업' }];
 
 // 순위 색 단계 — 진할수록 강하다. 글자색은 바탕 진하기에 맞춰 흰색/본문색으로 갈린다.
 // 🔴 2026-09-28 테마별(레인지 칸 0f14bb9d 와 같은 방식 — useRangeTheme): 라이트에서 11~25 칸(75% 채움, 흰 카드 위)은
@@ -55,6 +41,9 @@ const LIMITS = [20, 50, 169] as const;
 const norm = (s: string) => s.toUpperCase().replace(/10/g, 'T').replace(/\s+/g, '');
 
 export default function StartingHandRankPanel() {
+  const [basis, setBasis] = useState<RankBasis>('ten');
+  const ROWS = STARTING_HAND_ROWS[basis];
+  const BY_HAND = STARTING_HAND_BY_HAND[basis];
   const [sel, setSel] = useState<string | null>(null);
   const [limit, setLimit] = useState<(typeof LIMITS)[number]>(20);
   const [q, setQ] = useState('');
@@ -64,17 +53,25 @@ export default function StartingHandRankPanel() {
     const needle = norm(q);
     if (!needle) return ROWS.slice(0, limit);
     return ROWS.filter((r) => r.hand.toUpperCase().startsWith(needle) || r.kind.includes(q.trim().replace('수티드', '수딧')));
-  }, [q, limit]);
+  }, [q, limit, ROWS]);
 
   const selRow = sel ? BY_HAND.get(sel) : undefined;
   const searching = q.trim().length > 0;
 
   return (
     <div className="space-y-3">
-      <p className="text-2xs leading-relaxed text-ink-muted">
-        <b className="font-semibold text-ink-secondary">무작위 한 손 상대 올인 승률 기준 — 실전 포지션·스택에 따라 달라짐.</b>{' '}
-        두 장만 들고 상대 한 명(아무 두 장)과 보드 5장을 끝까지 봤을 때 이길 확률이며, 비기면 절반으로 셉니다.
-      </p>
+      <SegmentedTabs items={BASIS_TABS} value={basis} onChange={setBasis} size="sm" grow className="w-full [&_button]:whitespace-nowrap" />
+      {basis === 'ten' ? (
+        <p className="text-2xs leading-relaxed text-ink-muted" data-testid="startrank-basis">
+          <b className="font-semibold text-ink-secondary">{RANK_BASIS_LABEL.ten}(널리 쓰이는 일반 순위) — 실전 포지션·스택에 따라 달라짐.</b>{' '}
+          테이블 열 명이 앉았다고 보고 두 장의 강한 순서를 매긴 표입니다. 승률 숫자 없이 순위와 상위 %만 보입니다.
+        </p>
+      ) : (
+        <p className="text-2xs leading-relaxed text-ink-muted" data-testid="startrank-basis">
+          <b className="font-semibold text-ink-secondary">무작위 한 손 상대 올인 승률 기준(헤즈업) — 실전 포지션·스택에 따라 달라짐.</b>{' '}
+          두 장만 들고 상대 한 명(아무 두 장)과 보드 5장을 끝까지 봤을 때 이길 확률이며, 비기면 절반으로 셉니다.
+        </p>
+      )}
 
       {/* 13×13 격자 — 대각선 페어, 위 수딧, 아래 오프수트 */}
       <div className="mx-auto w-full max-w-[420px]" data-testid="startrank-grid">
@@ -91,7 +88,7 @@ export default function StartingHandRankPanel() {
                   type="button"
                   onClick={() => setSel(on ? null : name)}
                   aria-pressed={on}
-                  aria-label={`${name} ${r.rank}위 승률 ${r.eq.toFixed(1)}%`}
+                  aria-label={r.eq === null ? `${name} ${r.rank}위` : `${name} ${r.rank}위 승률 ${r.eq.toFixed(1)}%`}
                   className={[
                     'relative aspect-square flex items-center justify-center rounded-[3px] text-[10px] font-bold leading-none tracking-tighter whitespace-nowrap',
                     cellOf(tierOf(r.rank), theme),
@@ -127,7 +124,7 @@ export default function StartingHandRankPanel() {
             <span className="shrink-0 text-2xs tabular-nums text-ink-muted">169개 중 <b className="text-ink-primary">{selRow.rank}위</b></span>
           </div>
           <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2">
-            <span className="text-2xs text-ink-secondary">승률 <b className="text-sm tabular-nums text-ink-primary">{selRow.eq.toFixed(2)}%</b></span>
+            {selRow.eq !== null && <span className="text-2xs text-ink-secondary">승률 <b className="text-sm tabular-nums text-ink-primary">{selRow.eq.toFixed(2)}%</b></span>}
             <span className="text-2xs tabular-nums text-ink-muted">여기까지가 전체 두 장의 상위 {selRow.topPct.toFixed(1)}%</span>
           </div>
         </div>
@@ -172,7 +169,7 @@ export default function StartingHandRankPanel() {
         {list.length === 0 ? (
           <p className="py-4 text-center text-2xs text-ink-muted">맞는 핸드가 없습니다. 예: AK · T9s · 22</p>
         ) : (
-          <ol className="rounded-aura border card-aura divide-y divide-border-subtle" aria-label="스타팅 핸드 순위 — 강한 순서" data-testid="startrank-list">
+          <ol className="rounded-aura border card-aura divide-y divide-border-subtle" aria-label={`스타팅 핸드 순위(${RANK_BASIS_LABEL[basis]}) — 강한 순서`} data-testid="startrank-list">
             {list.map((r) => {
               const on = sel === r.hand;
               return (
@@ -186,7 +183,7 @@ export default function StartingHandRankPanel() {
                     <span className="w-8 shrink-0 text-2xs font-bold tabular-nums text-ink-muted">{r.rank}</span>
                     <span className={`inline-flex h-6 w-10 shrink-0 items-center justify-center rounded-[4px] text-xs font-bold ${cellOf(tierOf(r.rank), theme)}`}>{r.hand}</span>
                     <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">{r.kind}</span>
-                    <span className="shrink-0 text-xs font-bold tabular-nums text-ink-primary">{r.eq.toFixed(1)}%</span>
+                    <span className="shrink-0 text-xs font-bold tabular-nums text-ink-primary">{r.eq === null ? `상위 ${r.topPct.toFixed(1)}%` : `${r.eq.toFixed(1)}%`}</span>
                   </button>
                 </li>
               );

@@ -9,7 +9,7 @@ import {
 import type { Card } from './gto.types';
 
 export type EquityJob =
-  | { id: number; kind: 'equity'; hero: [Card, Card]; villain: [Card, Card]; board: Card[]; iterations?: number }
+  | { id: number; kind: 'equity'; hero: [Card, Card]; villain: [Card, Card]; board: Card[] }
   | { id: number; kind: 'vsRange'; hero: [Card, Card]; range: WeightedCombo[]; board: Card[]; iterations?: number }
   | { id: number; kind: 'rangeVsRange'; heroRange: WeightedCombo[]; villainRange: WeightedCombo[]; board: Card[]; iterations?: number }
   | { id: number; kind: 'outs'; hero: [Card, Card]; villain: [Card, Card]; board: Card[] }
@@ -20,7 +20,7 @@ self.onmessage = (e: MessageEvent<EquityJob>) => {
   const job = e.data;
   let result: unknown;
   switch (job.kind) {
-    case 'equity': result = computeEquity(job.hero, job.villain, job.board, job.iterations); break;
+    case 'equity': result = computeEquity(job.hero, job.villain, job.board); break;
     case 'multi': result = computeEquityMulti(job.hero, job.villains, job.board, job.iterations); break;
     case 'vsRange': result = computeEquityVsRange(job.hero, job.range, job.board, job.iterations); break;
     case 'rangeVsRange': result = computeRangeVsRange(job.heroRange, job.villainRange, job.board, job.iterations); break;
