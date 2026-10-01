@@ -2065,6 +2065,15 @@ body { overscroll-behavior-y: contain; }
    이음새 없이 순환(복제본 간격 pr-8 = 세트 경계 간격). reduced-motion 폴백은 아래 블록에 등록. */
 @keyframes marquee-loop { to { transform: translateX(-50%); } }
 .marquee-loop { animation: marquee-loop var(--marquee-dur, 12s) linear infinite; }
+/* 흐르는 줄 양 끝 14px 페이드(M-12, 2026-10-01) — mask-image 가 아니라 **지면색 오버레이**다.
+   mask 는 줄마다 합성면을 만들어 하위 탭 전환 첫 프레임의 타일 래스터를 늦췄다(e2e tab-handoff-gate ④).
+   지면색은 소비처가 --marquee-fade(오른쪽·기본) / --marquee-fade-l(왼쪽) 로 준다. 기본 = 카드 지면(surface-low).
+   합성층을 만드는 속성(mask·filter·will-change·transform)은 여기 쓰지 않는다. 동작 줄이기에서는 없음(정적 말줄임). */
+@media (prefers-reduced-motion: no-preference) {
+  .marquee-fade::before, .marquee-fade::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 14px; pointer-events: none; }
+  .marquee-fade::before { left: 0; background: linear-gradient(90deg, var(--marquee-fade-l, var(--marquee-fade, rgb(var(--surface-low)))), transparent); }
+  .marquee-fade::after { right: 0; background: linear-gradient(270deg, var(--marquee-fade, rgb(var(--surface-low))), transparent); }
+}
 
 /* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
 
@@ -2232,6 +2241,19 @@ html.light .text-orange-400 { color: #B45309; }
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #5C3BBF; }
 html.light .text-pink-300 { color: #BE185D; }
+/* 어두운 포스터 위 배지(M-01, 2026-10-01) — 위 딥 톤 보정은 **밝은 지면**을 전제한다. 포스터·그라데이션 위에서는
+   딥 톤이 오히려 1.9:1 로 묻혔다(MTT 1.87 · GTD 1.96). 이미지 위 배지 줄에 data-on-dark 를 붙이면 그 줄만 밝은 파스텔을 유지한다.
+   값은 오너 확정 After 캡처의 주입값 그대로다(emerald 는 팔레트 토큰 #32D993 이 아니라 #6EE7B7). */
+html.light [data-on-dark] .text-blue-300    { color: #93C5FD; }
+html.light [data-on-dark] .text-purple-300  { color: #D8B4FE; }
+html.light [data-on-dark] .text-teal-300    { color: #5EEAD4; }
+html.light [data-on-dark] .text-amber-300   { color: #FCD34D; }
+html.light [data-on-dark] .text-pink-300    { color: #F9A8D4; }
+html.light [data-on-dark] .text-emerald-300 { color: #6EE7B7; }
+/* 이미지 위 배지 칩 면을 어둡게(M-01 보완, 오너 결정 2026-10-01 · review-m-1001.md §3 대안 ①) — 테마 무관.
+   M-08(42svh)로 포스터가 좁아지면 배지 줄이 레터박스(surface-base)+상단 그라데이션 위에 걸려 라이트 MTT 2.31,
+   밝은 포스터 위 다크 3.44 였다. 반투명 -500/30 칩 면만 slate 72% 로 덮는다(글자·테두리·크기 불변). */
+[data-on-dark] > span[class*="-500/30"] { background-color: rgb(15 23 42 / .72); }
 
 /* ── ⚠ 알파 변형(`text-x/60`)은 위 보정을 **하나도 받지 못한다** (2026-09-12 실측으로 발견) ──
    Tailwind 의 `text-sky-400/60` 은 `.text-sky-400` 이 아니라 `.text-sky-400\/60` 이라는

@@ -7,7 +7,7 @@ import SlidingPill from './SlidingPill';
 export interface SegItem<T extends string> { key: T; label: string }
 
 export default function SegmentedTabs<T extends string>({
-  items, value, onChange, size = 'sm', className = '', grow = false, hitUp = false,
+  items, value, onChange, size = 'sm', className = '', grow = false, hitUp = false, quiet = false,
 }: {
   items: SegItem<T>[];
   value: T;
@@ -21,12 +21,15 @@ export default function SegmentedTabs<T extends string>({
    *  기본 꺼짐 — 아래로 넓히면 scrollHeight 넘침(글자 잘림 게이트)이 생기고, 위로 넓히면 바로 위 이웃을 덮을 수 있다
    *  (푸시·폴드 차트에서 위 스택 버튼 면적을 17~20% 뺏었다, 2026-09-28 실측). 위 이웃과의 간격을 재고 켠다. */
   hitUp?: boolean;
+  /** 하위 필터용 옅은 알약(액센트 틴트 + 액센트 글자). 기본 꺼짐 = 채운 알약(pill-active).
+   *  같은 줄에 상위 탭(채움)과 하위 필터가 나란하면 채움이 2곳이 되어 현재 모드가 흐려진다(M-06, 2026-10-01). */
+  quiet?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div role="tablist" ref={ref}
       className={['relative inline-flex items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5', className].join(' ')}>
-      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[6px] pill-active" />
+      <SlidingPill containerRef={ref} activeKey={value} className={quiet ? 'rounded-[6px] bg-accent-300/16' : 'rounded-[6px] pill-active'} />
       {items.map((it) => {
         const on = it.key === value;
         return (
@@ -41,7 +44,7 @@ export default function SegmentedTabs<T extends string>({
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab). 굵기는 위 줄의 font-bold 가 이긴다.
               size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-1.5 t-tab',
               // §T1 탭 굵기 규격: 비활성 600(t-* 기본) / 활성 700
-              on ? 'font-bold text-white' : 'text-ink-secondary hover:text-ink-primary',
+              on ? (quiet ? 'font-bold text-accent-200' : 'font-bold text-white') : 'text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
             <span className="relative">{it.label}</span>

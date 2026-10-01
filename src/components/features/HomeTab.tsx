@@ -331,7 +331,8 @@ export default function HomeTab({
         const today = p.dataset.today === '1';
         // 2026-09-24 오너(3차): "흐림이 너무 짙어, 조금만 덜 흐리게" — 곡선(거리 비례)은 그대로, 강도만 낮췄다.
         //   투명도 최소 0.4 → 0.6 · 블러 최대 1.8 → 0.8px · 크기 최소 0.9 → 0.94. 오늘은 투명도만 절반(최소 0.8)·블러 없음.
-        const op = 1 - (today ? 0.2 : 0.4) * t;
+        // 2026-10-01 오너 선택(M-10): 흐림(투명도) 세기를 다시 절반으로 — 최소 0.6 → 0.8 · 오늘 0.8 → 0.9. 블러·크기 곡선은 그대로.
+        const op = 1 - (today ? 0.1 : 0.2) * t;
         const blur = today ? 0 : Math.round(8 * t) / 10;                 // 최대 0.8px
         face.style.opacity = op.toFixed(3);
         face.style.filter = blur ? `blur(${blur}px)` : '';
@@ -789,7 +790,7 @@ export default function HomeTab({
                         절대 px 는 루트 글자 크기를 따라가지 않는다. 루트가 사용자 설정을 따르게 되면 이 칸도 같이 커진다. */}
                     <span data-pill-face className="flex flex-col items-center">
                       <span className="text-[calc(11rem/17)] font-bold tabular-nums md:text-[calc(13rem/17)]">{mm}.{dd}</span>
-                      <span className={`text-[calc(9rem/17)] md:text-[calc(11rem/17)] ${isToday ? 'font-bold text-accent-200' : on ? 'text-ink-secondary' : 'text-ink-muted'}`}>{isToday ? '오늘' : `(${dow})`}</span>
+                      <span className={`text-2xs leading-[1.1] ${isToday ? 'font-bold text-accent-200' : 'text-ink-secondary'}`}>{isToday ? '오늘' : `(${dow})`}</span>
                       {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
                       <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />
                     </span>

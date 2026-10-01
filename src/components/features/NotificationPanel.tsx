@@ -410,7 +410,8 @@ export default function NotificationPanel({
                     모두 읽음
                   </button>
                 )}
-                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안 읽음' }]} value={filter} hitUp
+                {/* 하위 필터는 옅은 알약(quiet) — 상위 쪽지/알림 탭만 채운다(M-06: 헤더 채운 알약 2→1). */}
+                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안 읽음' }]} value={filter} hitUp quiet
                   onChange={(v) => goSubTab('notif-filter', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
               </>
             )}
