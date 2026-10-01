@@ -85,7 +85,7 @@ function rowToSaved(r: any): SavedSpot | null {
 // ── 내 스팟 ───────────────────────────────────────────────────────────────────
 
 /** 최근순. 조회가 실패하면 **throw** 한다 — 빈 배열로 삼키면 '못 불러옴'이 '저장한 스팟 없음'으로 보인다(2026-10-01).
- *  호출부: MySpotList(.catch→실패 문구), CalendarPanel(allSettled — 보조 표시라 실패는 무시). */
+ *  호출부: MySpotList(.catch→실패 문구를 그대로 보여 준다), CalendarPanel(`.catch(() => [])` — 보조 표시라 실패해도 캘린더는 정상 표시). */
 export async function listMySpots(limit = 50): Promise<SavedSpot[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase

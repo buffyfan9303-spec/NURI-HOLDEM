@@ -36,6 +36,7 @@ import type { DeepGtoInit } from './gto/useDeepGto';
 import type { HandReviewInit } from './gto/HandReviewTool';
 import type { SpotReview } from '../../lib/spot';
 import { matchesToolQuery } from '../../lib/toolSearch';
+import { josa } from '../../lib/josa';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
@@ -436,7 +437,10 @@ export default function ToolsPanel() {
     const next = favs.includes(k) ? favs.filter((x) => x !== k) : [...favs, k].slice(-FAV_MAX);
     // 7번째를 추가하면 가장 오래된 것이 조용히 빠졌다(2026-10-01) — 어떤 항목이 빠졌는지 알린다.
     const dropped = favs.includes(k) ? [] : favs.filter((x) => !next.includes(x));
-    if (dropped.length) toast.show(`즐겨찾기는 최대 ${FAV_MAX}개입니다. 가장 오래된 '${TOOLS.find((t) => t.key === dropped[0])?.name ?? dropped[0]}'을(를) 뺐습니다.`, 'info');
+    if (dropped.length) {
+      const droppedName = TOOLS.find((t) => t.key === dropped[0])?.name ?? dropped[0];
+      toast.show(`즐겨찾기는 최대 ${FAV_MAX}개입니다. 가장 오래된 '${droppedName}'${josa(droppedName, '을')} 뺐습니다.`, 'info');
+    }
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
     setFavs(next);
   };
