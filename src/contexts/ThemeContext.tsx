@@ -1,5 +1,5 @@
 // src/contexts/ThemeContext.tsx
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useLayoutEffect } from 'react';
 import type { ReactNode } from 'react';
 
 export type Theme = 'dark' | 'light';
@@ -38,8 +38,13 @@ function resolveInitialTheme(): Theme {
 /** <html> 클래스(.dark/.light)를 실제 DOM에 반영 */
 function applyThemeClass(theme: Theme) {
   const root = document.documentElement;
+  // R-07(2026-10-01) — 실제로 바뀌는 순간에만 전이를 끈다(index.css html[data-theme-switching]). 클래스와 같은 스타일 계산에 들어가
+  //   전이가 아예 시작되지 않는다 — 강제 레이아웃 없이. 두 프레임 뒤 걷는다(값이 안 바뀌므로 걷어도 전이는 생기지 않는다).
+  const switching = !root.classList.contains(theme) && (root.classList.contains('dark') || root.classList.contains('light'));
+  if (switching) root.setAttribute('data-theme-switching', '');
   root.classList.remove('dark', 'light');
   root.classList.add(theme);
+  if (switching) requestAnimationFrame(() => requestAnimationFrame(() => root.removeAttribute('data-theme-switching')));
   // 상태바/주소창·설치형 TWA 툴바 색을 테마에 맞춰 동기화(앱 느낌).
   // ⚠ 색은 정본 토큰과 같아야 한다 — 예전 값(#0A0C0F/#F2F3F5)은 팔레트가 트와일라잇 플럼으로
   //   바뀌기 전 잔재라 오버스크롤 영역이 지면색과 다르게 보였다.
@@ -56,7 +61,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(resolveInitialTheme);
 
   // theme 변경 시: DOM 클래스 + localStorage 동기화
-  useEffect(() => {
+  // layout 단계 — 테마를 읽는 컴포넌트의 새 렌더와 <html> 클래스가 **같은 프레임**에 칠해진다(passive 면 한 프레임 어긋날 수 있다 · R-07).
+  useLayoutEffect(() => {
     applyThemeClass(theme);
     // 저장 실패(할당량 초과·프라이빗 모드)가 화면 반영을 되돌리면 안 된다 — 클래스는 위에서 이미 붙었다.
     // 이 세션 안에서는 전환이 정상 동작하고, 다음 방문에 기억되지 않을 뿐이다.

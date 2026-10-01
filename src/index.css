@@ -2073,7 +2073,9 @@ body { overscroll-behavior-y: contain; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* R-07(2026-10-01) — 0.01ms 가 아니라 none. 0.01ms 는 기본 `transition-property: all` 과 만나 **모든 요소의 모든 속성 변화**가
+       전이 객체를 만들었다(판 안 실행 중 전이 94 → 485 · LoAF 301 → 567ms @CPU6). 전이 끝(transitionend)에 기대는 코드는 0곳(2026-10-01 grep). */
+    transition: none !important;
     scroll-behavior: auto !important;
   }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
@@ -2096,6 +2098,12 @@ body { overscroll-behavior-y: contain; }
   }
   .marquee-loop > span + span { display: none !important; }
 }
+
+/* R-07(2026-10-01) — 테마 전환은 **한 프레임에** 바뀐다. 색 전환(transition-colors 등)이 걸린 요소만 보간하고 나머지는 즉시 바뀌어
+   섞인 프레임이 3~5장 나왔다(다크→라이트 휘도 182 → 3~5프레임 뒤 199). ThemeContext 가 클래스를 바꾸는 그 스타일 계산에만 켠다.
+   ⚠ html 자신도 넣는다 — 위 `html { transition: … color 0.2s }` 가 0.2초 동안 상속 글자색을 매 프레임 바꿔, 색 전환이 걸린
+   자손마다 **프레임마다 새 전이**가 생겼다(transitionrun 프레임당 ~107개 · 7프레임). 이게 '두 단계' 의 실제 원인이었다. */
+html[data-theme-switching], html[data-theme-switching] *, html[data-theme-switching] *::before, html[data-theme-switching] *::after { transition: none !important; }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
    고정 브랜드색 중 흰 배경에서 대비가 무너지는 "텍스트"만 딥 톤으로 교정.
