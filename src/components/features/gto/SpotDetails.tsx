@@ -13,18 +13,27 @@
 //   표시만 한다. 그래서 props 도 `SpotReview` 하나와 모드뿐이다.
 import { memo } from 'react';
 import type { SpotReview } from '../../../lib/spot';
-import { actionLabel, hasStackPair, streetLabel } from '../../../lib/spot';
+import { actionLabel, EXTRA_LETTERS, hasStackPair, streetLabel } from '../../../lib/spot';
+
+// ── 줄 격자(2026-10-01 오너: "villan A 이런식으로 표기하고 위아래 줄, 칸간격 맞춰주면 되잖아") ─────────────
+//   예전 줄은 `items-baseline` 이라 카드 칩(테두리+위아래 여백)이 있는 줄만 키가 컸고, 라벨이 칩 글자 기준선에
+//   붙어 위아래로 흔들렸다. 이제 모든 줄이 **같은 한 줄 높이(LINE = 22px + 위아래 3px = 28px)** 를 쓴다:
+//   · 라벨·값 둘 다 `py-[3px] leading-[22px]` — 글자 한 줄도 22px, 카드 칩도 22px(h-[22px]) 라 줄 키가 같다.
+//   · 칩 묶음은 블록 flex 다 — inline-flex 를 글줄 안에 두면 기준선 정렬로 줄 상자가 22px 를 넘는다.
+//   · 값이 두 줄 이상(진행·메모·좁은 폭에서 칩 줄바꿈)이어도 라벨은 **첫 줄의 가운데**에 선다(items-start + 같은 py).
+//   e2e/spot-details-align.spec.ts 가 소비 화면마다 값 열 x·한 줄 높이·라벨/칩 가운데선을 computed 로 잰다.
+const LINE = 'py-[3px] leading-[22px]';
 
 /** 카드 한 장 — 무늬로 색을 준다. 값이 없으면 자리를 만들지 않는다(빈 카드 = 모른다). */
 function Cards({ codes, empty = '—' }: { codes: string[]; empty?: string }) {
   if (!codes.length) return <span className="text-ink-muted">{empty}</span>;
   return (
-    <span className="inline-flex flex-wrap gap-1">
+    <span className="flex flex-wrap gap-1" data-spot-cards>
       {codes.map((c, i) => {
         const red = c[1] === 'h' || c[1] === 'd';
         return (
-          <span key={`${c}-${i}`}
-            className={['inline-flex min-w-[1.65rem] justify-center rounded-[4px] border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-extrabold tabular-nums',
+          <span key={`${c}-${i}`} data-spot-chip
+            className={['inline-flex h-[22px] min-w-[1.65rem] items-center justify-center rounded-[4px] border border-border-default bg-surface-high px-1 text-2xs font-extrabold leading-none tabular-nums',
               red ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>
             {c}
           </span>
@@ -37,12 +46,15 @@ function Cards({ codes, empty = '—' }: { codes: string[]; empty?: string }) {
 /** 라벨 + 값 한 줄. 값이 비면 렌더하지 않는다(빈 줄로 화면을 늘리지 않는다). */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 items-baseline gap-2 py-1">
-      <span className="w-18 shrink-0 text-2xs text-ink-muted">{label}</span>
-      <span className="min-w-0 flex-1 text-xs text-ink-primary wrap-anywhere">{children}</span>
+    <div className="flex min-w-0 items-start gap-2 py-0.5" data-spot-row>
+      <span className={`w-18 shrink-0 text-2xs text-ink-muted ${LINE}`} data-spot-label>{label}</span>
+      <div className={`min-w-0 flex-1 text-xs text-ink-primary wrap-anywhere ${LINE}`} data-spot-value>{children}</div>
     </div>
   );
 }
+
+/** 상대 이름표 — 'Villain A' · 'Villain B' …(오너 2026-10-01). 한 명일 때도 붙인다. 자리 줄과 상대 카드 줄이 같은 이름을 쓴다. */
+const villainName = (letter: string) => `Villain ${letter}`;
 
 export type SpotDetailsMode =
   /** 작성자 본인 화면(작성 중·내 스팟) — `SpotReview` 에 있는 값을 전부 보여 준다. */
@@ -68,7 +80,7 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
   const ante = spot.anteBb > 0 ? ` · BB앤티 ${spot.anteBb}BB` : '';
   const villains = [
     { label: 'A', pos: spot.villainPos, cards: spot.villain },
-    ...spot.extra.map((v, i) => ({ label: ['B', 'C', 'D', 'E'][i] ?? '?', pos: v.pos, cards: v.cards })),
+    ...spot.extra.map((v, i) => ({ label: EXTRA_LETTERS[i] ?? '?', pos: v.pos, cards: v.cards })),
   ];
 
   return (
@@ -81,8 +93,8 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
       {/* ② 자리와 스택 */}
       <Row label="자리">
         나 <b className="font-bold">{spot.heroPos}</b>
-        {' · 상대 '}
-        {villains.map((v) => `${v.label}(${v.pos})`).join(', ')}
+        {' · '}
+        {villains.map((v) => `${villainName(v.label)} (${v.pos})`).join(', ')}
       </Row>
       <Row label="유효 스택">
         <span className="tabular-nums">{spot.effectiveBb}BB</span>
@@ -94,10 +106,11 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
       <Row label="상대 카드">
         {/* data-testid 는 e2e 손잡이다 — 라벨 문구에 셀렉터를 묶지 않는다(문구를 바꾸면 검사가 조용히 빗나간다). */}
         {hideSecrets ? <span data-testid="spot-villain-hidden">{secret}</span> : (
-          <span className="inline-flex flex-wrap items-center gap-2" data-testid="spot-villain-cards">
+          // 이름표와 칩의 간격(gap-1)은 Cards 안 칩 사이 간격과 같다 — 내 카드 줄과 상대 카드 줄의 칩 리듬이 같아 보이게.
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="spot-villain-cards">
             {villains.map((v) => (
-              <span key={v.label} className="inline-flex items-center gap-1">
-                <span className="text-2xs text-ink-muted">{v.label}</span>
+              <span key={v.label} className="flex items-center gap-1" data-spot-villain>
+                <span className="text-2xs text-ink-muted" data-spot-villain-label>{villainName(v.label)}</span>
                 <Cards codes={v.cards} empty="모름" />
               </span>
             ))}
@@ -105,7 +118,7 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
         )}
       </Row>
       <Row label="보드">
-        <span className="inline-flex items-center gap-2">
+        <span className="flex items-center gap-2">
           <Cards codes={spot.board} empty="없음" />
           <span className="text-2xs text-ink-muted">{streetLabel(spot.street)}</span>
         </span>
@@ -113,7 +126,7 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
       {/* ④ 결정 전 액션 — **적은 순서 그대로**. 정렬하거나 합치지 않는다. */}
       <Row label="진행">
         {spot.actions.length === 0 ? <span className="text-ink-muted">액션 없음</span> : (
-          <span className="flex flex-col gap-0.5">
+          <span className="flex flex-col">
             {spot.actions.map((a, i) => (
               <span key={i} className="tabular-nums">
                 <span className="text-ink-muted">{streetLabel(a.street)}</span>{' '}
