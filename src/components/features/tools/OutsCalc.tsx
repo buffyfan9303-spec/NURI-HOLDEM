@@ -114,7 +114,7 @@ export default function OutsCalc() {
       )}
 
       <div className="space-y-1.5 rounded-aura border card-aura p-3">
-        <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
+        <p className="text-2xs leading-relaxed text-ink-muted">(상대 벳까지 합친 팟) ÷ 콜 금액이 위 비율 이상이면 콜이 이득입니다. 예: 3:1이면 상대 벳이 벳 전 팟의 절반 이하일 때입니다.</p>
         {/* 중복 인지 제거 — 실제 팟·콜 금액 대입은 팟 오즈 계산기로(딥링크, 계산 로직 불변) */}
         <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
           실제 팟·콜 금액으로 손익 따지기 — 팟 오즈 계산기 →
