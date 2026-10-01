@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseStoreLink, notifGlyph } from './notifLink';
+import { parseStoreLink, notifGlyph, needsStoreAccess } from './notifLink';
 
 const VID = '615376fa-ffc4-420b-85a0-b9847520c12f';
 const root = join(__dirname, '../..');
@@ -84,5 +84,43 @@ describe('생산자 → 소비자 계약', () => {
     expect(tab).toMatch(/if \(!deepSection \|\| !permsLoaded \|\| deepVenueId\) return;/);
     expect(tab).toMatch(/setMemberVenueId\(deepVenueId\)/);
     expect(tab).toMatch(/event: 'event'/);
+  });
+});
+
+// F-1 (review-notify-1002): approval + /rank 가 매장 판정에 먼저 걸려 일반 회원이 순위 화면으로 못 가던 결함.
+describe('needsStoreAccess — 알림 목적지가 업주/직원 탭을 요구하는가 (link·type·admin → 판정)', () => {
+  type T = 'approval' | 'system' | 'qna' | 'comment' | 'reminder';
+  const table: Array<[T, string | null, boolean, boolean]> = [
+    // [type, link, isAdmin, 매장 권한 필요]
+    ['approval', '/rank', false, false], // F-1 — 순위 인증 승인: 일반 회원도 순위로
+    ['system', '/rank', false, false], // 순위 인증 반려
+    ['approval', '/wallet', false, false],
+    ['approval', '/support', false, false],
+    ['approval', '/', false, false],
+    ['approval', '/my-store/ledger', false, true], // 매장 경로는 그대로 매장
+    ['approval', `/my-store/voucher?venue=${VID}`, false, true],
+    ['system', '/my-store/partners', false, true],
+    ['system', '/staff-schedule', false, true], // 출근 관리
+    ['system', '/my-store/ledger', true, true], // admin 이어도 매장 경로는 매장 탭
+    ['approval', '/admin', false, true], // 포스터 승인 — 업주
+    ['system', '/admin', false, true],
+    ['approval', '/admin', true, false], // admin 본인은 admin 탭
+    ['approval', null, false, true], // link 없는 approval = 종전대로 매장
+    ['approval', '', false, true],
+    ['approval', '/my-store/xyz', false, true], // 모르는 섹션도 종전대로
+    ['approval', null, true, false],
+    ['system', null, false, false],
+    ['qna', '/community/abc', false, false],
+    ['comment', null, false, false],
+    ['reminder', '/support', false, false],
+  ];
+  it.each(table)('%s · %s · admin=%s → %s', (type, link, isAdmin, expected) => {
+    expect(needsStoreAccess({ type, link }, isAdmin)).toBe(expected);
+  });
+
+  it('App 라우터는 매장 판정을 이 함수 한 곳에서 한다(approval 타입을 따로 보지 않는다)', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('needsStoreAccess({ type: n.type, link }, isAdmin)');
+    expect(app).not.toMatch(/const storeDest = [^;]*n\.type === 'approval'/);
   });
 });

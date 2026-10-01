@@ -53,3 +53,15 @@ export function notifGlyph(n: { type: NotificationType; link?: string | null }):
   if (l.startsWith('/community/')) return 'store';
   return TYPE_GLYPH[n.type] ?? 'bell';
 }
+
+// 일반 화면(매장 권한이 필요 없는 목적지) — type 이 approval 이어도 매장 판정에 걸리면 안 된다(순위 인증 승인 알림: approval + /rank).
+const GENERAL_LINKS = new Set(['/rank', '/wallet', '/support', '/']);
+
+/** 이 알림의 목적지가 업주/직원 탭을 요구하는가. App 라우터가 '탭 없는 계정' 안내 토스트를 띄울지 가른다. */
+export function needsStoreAccess(n: { type: NotificationType; link?: string | null }, isAdmin: boolean): boolean {
+  const l = (n.link ?? '').trim();
+  if (l.startsWith('/my-store') || l === '/staff-schedule') return true;
+  if (isAdmin) return false;
+  if (l === '/admin') return true;
+  return n.type === 'approval' && !GENERAL_LINKS.has(l);
+}

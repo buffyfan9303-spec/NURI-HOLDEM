@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
-import { parseStoreLink, type StoreDeepSection } from './lib/notifLink';
+import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -3270,7 +3270,7 @@ export default function App() {
     // 🔴 2026-09-25 FULL-ERROR-SWEEP-A ⑥ — 내 매장·출근·승인 목적지는 업주/직원 탭이 있어야 열린다. 탭이 없는 계정이 누르면
     //   changeTab 가드가 홈으로 조용히 튕겨 '무반응' 이었다. 프로필이 온 뒤(user)에도 탭이 없으면 안내하고 끝낸다.
     //   ⚠ 부팅 딥링크(openNotifLink)는 권한이 늦게 올 수 있어 pendingDeepTab 을 걸고 들어온다 — 그 경우는 종전 경로 그대로.
-    const storeDest = link.startsWith('/my-store') || link === '/staff-schedule' || ((link === '/admin' || n.type === 'approval') && !isAdmin);
+    const storeDest = needsStoreAccess({ type: n.type, link }, isAdmin);
     if (storeDest && user && !hasStoreTabs && pendingDeepTab.current !== 'my-store') {
       toast.show('매장 운영자·직원 계정에서만 열 수 있는 알림입니다', 'info');
       return;
