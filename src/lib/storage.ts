@@ -27,8 +27,25 @@ async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> 
   });
 }
 
-function toWebp(canvas: HTMLCanvasElement, q: number): Promise<Blob | null> {
-  return new Promise((res) => canvas.toBlob((b) => res(b), 'image/webp', q));
+function encodeAs(canvas: HTMLCanvasElement, type: string, q: number): Promise<Blob | null> {
+  return new Promise((res) => canvas.toBlob((b) => res(b), type, q));
+}
+
+/**
+ * S-12(2026-10-01) — webp 인코딩을 못 하는 브라우저(구형 Safari 등)는 toBlob(…,'image/webp') 에 **PNG 를 돌려준다**.
+ * 예전엔 blob.type 을 안 보고 'image/webp'·.webp 로 올려 ① 형식 표기가 거짓이 되고 ② PNG 는 품질 인자를 무시해
+ * 품질 낮추기 루프가 헛돌아 목표(포스터 250KB)를 넘기거나 버킷 5MB 에 걸렸다.
+ * 첫 인코딩 결과가 webp 가 아니면 jpeg(모든 브라우저 지원·품질 인자 유효)로 고정한다 — 버킷 허용 형식(jpeg|png|webp) 안이다.
+ */
+export async function encodeImage(canvas: HTMLCanvasElement, q: number, prefer = 'image/webp'): Promise<Blob | null> {
+  const b = await encodeAs(canvas, prefer, q);
+  if (!b || b.type === prefer) return b;
+  return encodeAs(canvas, 'image/jpeg', q);
+}
+
+/** 올릴 파일 확장자 — blob 의 실제 형식을 따른다(경로 확장자와 Content-Type 을 한 출처로). */
+export function extOf(blob: Blob): 'webp' | 'jpg' | 'png' {
+  return blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/png' ? 'png' : 'webp';
 }
 
 // ── 이미지 리사이징 + webp 인코딩 (Canvas API) ──────────────────────────────
@@ -57,12 +74,24 @@ export async function resizeImage(
   canvas.getContext('2d')!.drawImage(src as CanvasImageSource, 0, 0, width, height);
   if (src instanceof ImageBitmap) src.close();
 
-  // 적응형 품질 — 목표 용량을 넘으면 품질을 0.12씩 낮춰 최대 3회 재인코딩(최저 0.5)
+  // 적응형 품질 — 목표 용량을 넘으면 품질을 0.12씩 낮춰 최대 3회 재인코딩(최저 0.5).
+  // 형식은 첫 인코딩에서 정한다(webp 불가 → jpeg) — 루프 안에서 형식이 바뀌지 않게.
   let q = quality;
-  let blob = await toWebp(canvas, q);
+  let blob = await encodeImage(canvas, q);
+  const type = blob?.type || 'image/webp';
   while (blob && blob.size > targetBytes && q > 0.5) {
     q = Math.max(0.5, q - 0.12);
-    blob = await toWebp(canvas, q);
+    blob = await encodeAs(canvas, type, q);
+  }
+  // S-12 — 최저 품질에서도 목표를 넘으면 해상도를 한 단계(0.8배)씩, 최대 2회 줄인다(품질만으론 못 줄이는 큰 사진).
+  for (let i = 0; i < 2 && blob && blob.size > targetBytes && canvas.width > 480; i++) {
+    const w = Math.round(canvas.width * 0.8), h = Math.round(canvas.height * 0.8);
+    const next = document.createElement('canvas');
+    next.width = w; next.height = h;
+    next.getContext('2d')!.drawImage(canvas, 0, 0, w, h);
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d')!.drawImage(next, 0, 0);
+    blob = await encodeAs(canvas, type, q);
   }
   if (!blob) throw new Error('이미지 처리에 실패했습니다');
   return blob;
@@ -79,8 +108,10 @@ async function uploadToStorage(
     return URL.createObjectURL(blob);
   }
 
+  // S-12 — 형식은 blob 이 정한다. 호출부가 '.webp' 로 적은 경로도 실제 형식 확장자로 맞춘다.
+  path = path.replace(/\.webp$/, `.${extOf(blob)}`);
   const { error } = await supabase.storage.from(bucket).upload(path, blob, {
-    contentType: 'image/webp',
+    contentType: blob.type || 'image/webp',
     upsert: true,
     // 💰 Egress 절감(무료 한도 5GB/월 유지의 핵심) — 이미지 경로는 타임스탬프 파일명이라
     //    내용이 바뀌면 경로도 바뀐다(아바타는 고정 경로 upsert 라 uploadAvatar 가 ?v= 쿼리로 캐시 키를 바꾼다).
@@ -98,7 +129,7 @@ export async function uploadPoster(ownerId: string, file: File): Promise<string>
   // 오너 2026-09-30 "원본 말고 webp 로 압축 — 용량이 너무 크다": 목표 250KB(종전 500KB).
   //   실측: 715×1440 포스터 q0.80 ≈ 130~160KB 로 표·작은 글자까지 읽힌다. 품질은 0.5 아래로는 내리지 않는다(resizeImage).
   const blob = await resizeImage(file, 1200, 1600, 0.82, 250_000);
-  const ext  = 'webp';
+  const ext  = extOf(blob);
   const path = `${ownerId}/${Date.now()}.${ext}`;
   return uploadToStorage(BUCKET_POSTERS, path, blob);
 }

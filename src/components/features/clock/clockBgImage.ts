@@ -6,7 +6,7 @@
 // 그래서 이 한 가지가 더 필요하다 — 올리는 순간 밝기 상한을 굽는 것(clockTheme.ts CLOCK_BG_BAKE_CEIL).
 // 리사이즈·EXIF 회전·webp 인코딩은 중복 구현하지 않고 lib/storage 의 resizeImage 를 그대로 쓴다.
 import { supabase, IS_MOCK } from '../../../lib/supabase';
-import { resizeImage } from '../../../lib/storage';
+import { resizeImage, encodeImage, extOf } from '../../../lib/storage';
 import {
   CLOCK_BG_BUCKET, CLOCK_BG_LUM_CAP, CLOCK_BG_SCRIM_MID, CLOCK_BG_MAX_PX, CLOCK_BG_TARGET_BYTES,
   clockBgObjectPath,
@@ -104,18 +104,20 @@ export async function uploadClockBg(venueId: string, file: File): Promise<string
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
+  // S-12 — webp 를 못 만드는 브라우저는 PNG 를 돌려준다 → encodeImage 가 jpeg 로 고정한다(형식·확장자는 blob 기준).
   let q = 0.85;
-  let blob = await toWebp(canvas, q);
+  let blob = await encodeImage(canvas, q);
+  const type = blob?.type || 'image/webp';
   while (blob && blob.size > CLOCK_BG_TARGET_BYTES && q > 0.5) {
     q = Math.max(0.5, q - 0.12);
-    blob = await toWebp(canvas, q);
+    blob = type === 'image/webp' ? await toWebp(canvas, q) : await encodeImage(canvas, q, type);
   }
   if (!blob) throw new Error('이미지 처리에 실패했습니다');
 
   // ③ 업로드 — 경로 첫 칸이 venue_id 다(스토리지 RLS 가 '본인 매장 폴더'를 이 값으로 판정).
-  const path = `${venueId}/${Date.now()}.webp`;
+  const path = `${venueId}/${Date.now()}.${extOf(blob)}`;
   const { error } = await supabase.storage.from(CLOCK_BG_BUCKET).upload(path, blob, {
-    contentType: 'image/webp',
+    contentType: blob.type || 'image/webp',
     // upsert 를 쓰지 않는다 — 경로가 타임스탬프라 충돌이 없고, 덮어쓰기는 CDN 1년 캐시와 상극이다.
     // (참고: upsert 경로는 충돌 행을 읽어야 해서 **버킷에 SELECT 정책이 없으면 RLS 로 거부**된다.
     //  clock_bg 는 본인 매장 한정 SELECT 가 있어 되지만, 공개 버킷 전반의 upsert 는 지금 막혀 있다 —
