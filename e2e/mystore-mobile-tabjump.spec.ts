@@ -14,7 +14,7 @@
 //   고침: VenueManageTab.tsx data-step-chrome — 레일 섹션 3개가 같은 머리 칸(칩 바 + 헤더 겹침 격자)을 쓴다.
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_DAY, MOCK_VENUE } from './_mockOwner';
+import { bootOwner, openMyStore, MOCK_DAY, MOCK_VENUE, MOCK_VENUE_NAME } from './_mockOwner';
 
 const RAIL = '[data-mystore-rail]';
 const TABS = ['요약', '포스터', '장부', '클락', '순위', '정산', '이용권'] as const;
@@ -31,19 +31,41 @@ const session = (seq: number, title: string) => ({
   opened_by: null, opened_at: new Date().toISOString(), reg_closed: false, closed: false, schedule_id: null, voucher_issued: 0,
 });
 
-async function open(page: Page, w: number) {
+async function open(page: Page, w: number, delayMs = 0) {
   await bootOwner(page, {
     viewport: { width: w, height: 844 }, appSettings: { identity_voucher_enabled: 'on' },
     extra: async (p) => {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
-      // 메인+사이드 = 칩 줄이 뜨는 날(실매장 흔한 상태)
-      await p.route(/\/rest\/v1\/ledger_sessions\?/, get([session(1, '수요 딥스택'), session(2, '사이드 터보')]));
+      // 메인+사이드 = 칩 줄이 뜨는 날(실매장 흔한 상태). delayMs = 요약 줄 '조회 전' 자리표시를 재기 위한 지연.
+      const body = get([session(1, '수요 딥스택'), session(2, '사이드 터보')]);
+      await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => { if (delayMs) await new Promise((res) => setTimeout(res, delayMs)); return body(r); });
     },
   });
   await openMyStore(page);
   await expect(page.locator(RAIL), '목킹 업주로 내 매장 단계 바를 열지 못했다').toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(2500);
+  if (!delayMs) await page.waitForTimeout(2500);
 }
+
+/** 보이는 요약 줄 하나를 잰다 — 한 줄인가(높이 ≤ 글자 줄 1.5배), 넘침이 말줄임으로 처리됐나, 시작선. */
+const sumLine = (page: Page) => page.evaluate((sel) => {
+  const rail = document.querySelector<HTMLElement>(sel)!;
+  const els = [...document.querySelectorAll<HTMLElement>('[data-summary-line]')].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible');
+  const p = els[0];
+  const pane = [...document.querySelectorAll<HTMLElement>('[data-mystore-secpanel] [data-pane]')].find((e) => e.getClientRects().length > 0);
+  if (!p) return { count: els.length };
+  const lh = parseFloat(getComputedStyle(p).fontSize) * 1.5;
+  const game = p.querySelector<HTMLElement>('[data-summary-game]');
+  // 말줄임 칸(truncate)이 실제로 잘렸는지 — 잘렸다면 ellipsis 가 걸린 칸이어야 한다
+  //   (sr-only 는 설계상 1px 상자라 제외 — 화면에 보이는 칸만 본다)
+  const clipped = [...p.querySelectorAll<HTMLElement>('span:not(.sr-only)')].filter((s) => s.scrollWidth > s.clientWidth + 1)
+    .map((s) => ({ t: s.textContent, ellipsis: getComputedStyle(s).textOverflow === 'ellipsis' }));
+  return {
+    count: els.length, text: p.textContent?.replace(/\s+/g, ' ').trim() ?? '', h: Math.round(p.getBoundingClientRect().height * 10) / 10, lh,
+    lineOverflow: p.scrollWidth - p.clientWidth, clipped, gameText: game?.textContent ?? '', gameH: game ? game.getBoundingClientRect().height : 0,
+    lineTop: Math.round((p.getBoundingClientRect().top - rail.getBoundingClientRect().bottom) * 10) / 10,
+    placeholder: game?.getAttribute('role') === 'img', off: pane ? Math.round((pane.getBoundingClientRect().top - rail.getBoundingClientRect().bottom) * 10) / 10 : null,
+  };
+}, RAIL);
 
 type Frame = { t: number; off: number | null; pane: string | null; y: number; H: number };
 /** 레일 칸 하나를 DOM click 하고 1.2s 동안 rAF 프레임마다 잰다. 칸이 없으면 null(호출부가 실패시킨다). */
@@ -97,3 +119,70 @@ for (const [W, Y] of [[360, 0], [390, 0], [412, 0], [390, 600]] as const) {
     expect(Math.max(...g) - Math.min(...g), `탭별 레일 아래 시작선이 다르다: ${TABS.map((n) => `${n} ${settled[n]}`).join(' · ')}`).toBeLessThanOrEqual(1);
   });
 }
+
+// 🔴 오너 2026-10-01 결정 — 요약(·이용권)의 머리 칸 빈 띠를 '매장 › 날짜(요일) › 오늘 게임' 요약 줄로 채운다.
+//   같은 자리·같은 높이(시작선 불변), 실제 값, 320·390 에서 한 줄(nowrap · 넘치면 말줄임), 조회 전엔 같은 높이 자리표시(CLS 0).
+const DATE_RE = /\d{1,2}월 \d{1,2}일 \([일월화수목금토]\)/;
+for (const W of [320, 390] as const) {
+  test(`${W}px — 요약·이용권 요약 줄: 한 줄 · 실제 값 · 시작선 불변`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, W);
+    const offs: number[] = [];
+    for (const n of ['요약', '이용권', '포스터'] as const) {
+      expect(await step(page, n), `레일에 «${n}» 칸이 없다`).not.toBeNull();
+      await page.waitForTimeout(400);
+      const m = await sumLine(page);
+      console.log(`${W} ${n} 요약 줄`, JSON.stringify(m));
+      if (n === '포스터') {
+        // 게임 단계에선 종전 문맥 줄이다 — 요약 줄 표식이 보이면 안 된다
+        expect(m.count, '게임 단계에 요약 줄이 떴다').toBe(0);
+        const fr = await step(page, '포스터');
+        offs.push(fr!.at(-1)!.off!);
+        continue;
+      }
+      expect(m.count, `«${n}»에 보이는 요약 줄이 없다 — 빈 띠 그대로`).toBe(1);
+      expect(m.text, '요약 줄에 매장 이름이 없다').toContain(MOCK_VENUE_NAME);
+      expect(m.text, '요약 줄에 요일이 붙은 오늘 날짜가 없다').toMatch(DATE_RE);
+      expect(m.gameText, '요약 줄 게임 칸이 실제 값(목킹 2게임)이 아니다').toBe('오늘 게임 2개');
+      expect(m.h!, `요약 줄이 한 줄이 아니다(높이 ${m.h} / 줄 ${m.lh})`).toBeLessThanOrEqual(m.lh! * 1.2);
+      expect(m.lineOverflow!, '요약 줄이 줄 밖으로 넘쳤다').toBeLessThanOrEqual(1);
+      for (const c of m.clipped ?? []) expect(c.ellipsis, `잘린 칸 «${c.t}» 에 말줄임이 없다`).toBe(true);
+      offs.push(m.off!);
+    }
+    expect(offs.length, '시작선 측정 수').toBe(3);
+    expect(Math.max(...offs) - Math.min(...offs), `요약·이용권·포스터 시작선이 다르다: ${offs}`).toBeLessThanOrEqual(1);
+    // 넘침 실측 — 요약으로 돌아가 긴 매장명을 화면에 그대로 넣어 본다(CSS 의 말줄임·한 줄 유지를 실제로 잰다. 상태·데이터는 안 바꾼다)
+    expect(await step(page, '요약'), '레일에 «요약» 칸이 없다').not.toBeNull();
+    await page.waitForTimeout(400);
+    await page.evaluate((name) => {
+      const p = [...document.querySelectorAll<HTMLElement>('[data-summary-line]')].find((e) => e.getClientRects().length > 0)!;
+      const v = [...p.querySelectorAll<HTMLElement>('span')].find((s) => s.textContent === name)!;
+      v.textContent = '아주 긴 이름의 홀덤펍 강남역 본점 2호점 VIP 라운지';
+    }, MOCK_VENUE_NAME);
+    const L = await sumLine(page);
+    console.log(`${W} 긴 매장명`, JSON.stringify(L));
+    expect(L.h!, '긴 매장명에서 요약 줄이 두 줄이 됐다').toBeLessThanOrEqual(L.lh! * 1.2);
+    expect(L.lineOverflow!, '긴 매장명이 줄 밖으로 넘쳤다').toBeLessThanOrEqual(1);
+    expect(L.clipped?.length ?? 0, '긴 매장명이 잘리지 않았다 — 넘침 검사가 공허하다').toBeGreaterThan(0);
+    for (const c of L.clipped ?? []) expect(c.ellipsis, `잘린 칸 «${c.t}» 에 말줄임이 없다`).toBe(true);
+    expect(L.gameText, '긴 매장명 때문에 게임 칸이 사라졌다').toBe('오늘 게임 2개');
+  });
+}
+
+test('390px — 요약 줄 조회 전 자리표시는 같은 높이(시작선·줄 높이 불변)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 390, 6000);
+  // 칩 목록 응답이 6초 늦다 — 그 사이 요약 줄 게임 칸은 자리표시여야 한다
+  await expect(page.locator('[data-summary-game][role=img]').first(), '조회 전 자리표시가 없다').toBeVisible({ timeout: 5000 });
+  const before = await sumLine(page);
+  await expect(page.locator('[data-summary-game]:not([role])').first(), '응답 뒤 실제 값으로 바뀌지 않았다').toHaveText('오늘 게임 2개', { timeout: 15_000 });
+  await page.waitForTimeout(800);
+  const after = await sumLine(page);
+  console.log('자리표시 전/후', JSON.stringify(before), JSON.stringify(after));
+  expect(before.placeholder, '첫 측정이 자리표시가 아니다 — 빈 검사').toBe(true);
+  expect(Math.abs(before.h! - after.h!), '자리표시 ↔ 실제 값에서 요약 줄 높이가 바뀌었다').toBeLessThanOrEqual(0.5);
+  expect(Math.abs(before.lineTop! - after.lineTop!), '자리표시 ↔ 실제 값에서 요약 줄 위치가 바뀌었다').toBeLessThanOrEqual(0.5);
+  expect(before.gameH, '자리표시 칸 높이가 0 — 보이지 않는 자리표시').toBeGreaterThan(0);
+  // ⚠ 판 시작선(off)은 여기서 단언하지 않는다 — 조회 전엔 games=[] 라 칩 줄(멀티게임 날만 생기는 invisible 예약)이 아직 없다.
+  //   이것은 게임 단계에도 같은 기존 동작(VenueManageTab F5 주석 · chipCache 선데우기로 완화)이고 요약 줄 자리표시와 무관하다. 수치는 로그로만 남긴다.
+});

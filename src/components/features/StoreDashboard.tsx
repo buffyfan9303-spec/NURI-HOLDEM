@@ -24,6 +24,7 @@ import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { isDenied } from '../../lib/dbError';
 // 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
@@ -265,6 +266,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // 이게 없을 때 대시보드는 실패를 '미시작'으로 위장했고, '지금 할 일'이 그 거짓 근거로
   // [장부 시작하기]를 권했다(누르면 진행 중이던 장부의 마감·단가·할인이 덮인다).
   const [loadErr, setLoadErr] = useState<unknown>(null);
+  // 오늘 장부 조회 실패의 원문은 화면 대신 콘솔·Sentry 로(보안 표준 6). Sentry 는 DSN 이 있을 때만 init 되고, 없으면 capture 는 no-op.
+  useEffect(() => {
+    if (!loadErr || isDenied(loadErr)) return;
+    console.error('[store-dashboard] 오늘 장부 조회 실패', loadErr);
+    if (import.meta.env.VITE_SENTRY_DSN) import('@sentry/react').then((S) => { S.captureException(loadErr); }).catch(() => {});
+  }, [loadErr]);
 
   const upcoming = schedules
     .filter((s) => s.venueId === venueId && s.date >= d)
@@ -915,7 +922,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {caps.ledger && (loadErr ? (
         /* 실패는 '미시작'이 아니다 — 배지·숫자·[장부로 이동]을 통째로 걷어내고 못 불러왔다고 말한다.
            (카드 안 '다시 시도' 버튼이 button 중첩이 되지 않게 밴드 자체를 대체한다) */
-        <LoadErrorCard error={loadErr} what="오늘 장부" onRetry={() => { setLoading(true); reload(); }} />
+        /* 🔴 2026-10-01(보안 표준 6) — 종전엔 error 를 그대로 넘겨 카드가 PostgREST 원문
+           ('JSON object requested, multiple (or no) rows returned')을 화면에 그렸다(msgOf 는 PGRST* 원문을 통과시킨다).
+           화면엔 사용자 문구만: 권한 거부일 때만 error 를 넘긴다(msgOf 가 '이 계정에는 권한이 없습니다'로 옮긴다).
+           원문은 아래 effect 가 콘솔·Sentry 로만 남긴다. */
+        <LoadErrorCard error={isDenied(loadErr) ? loadErr : undefined} what="오늘 장부"
+          hint="잠시 후 다시 시도해 주세요. 아직 등록된 내용이 없는 것과는 다릅니다."
+          onRetry={() => { setLoading(true); reload(); }} />
       ) : (
         <button type="button" onClick={gotoTodayLedger}
           className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
