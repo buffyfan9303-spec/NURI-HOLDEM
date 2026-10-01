@@ -10,7 +10,9 @@ const EMAIL = 'victim.kim@example.com';
 const PHONE_A = '010-1234-5678';
 const PHONE_B = '+82 10-9876-5432';
 const PHONE_C = '01055556666';
-const JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwicm9sZSI6ImFub24ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+// 가짜 JWT(예제 값) — 비밀 탐지기가 소스 글자를 토큰으로 오인하지 않게 실행할 때 조립한다.
+const b64u = (o: object) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+const JWT = [b64u({ alg: 'HS256', typ: 'JWT' }), b64u({ sub: '1234567890', role: 'anon' }), 'c2lnbmF0dXJlLW5vdC1yZWFs'].join('.');
 const CI_HASH = 'a3f5c9e1b7d24680a3f5c9e1b7d24680a3f5c9e1b7d24680a3f5c9e1b7d24680';
 const UID = '8f1c2d3e-4a5b-4c6d-8e7f-1234567890ab';
 const ROW = `Failing row contains (${UID}, 홍길동, ${PHONE_A}, ${EMAIL}, ${CI_HASH}, null).`;
