@@ -89,9 +89,9 @@ begin
   if not p_archived and v_old is distinct from 'hidden'::public.venue_status then
     raise exception '숨김(보관) 상태인 매장만 해제할 수 있습니다 (현재 %)', v_old;
   end if;
-  -- 같은 이유로 정지 매장을 보관했다가 해제해 정지를 세탁하는 길도 막는다.
-  if p_archived and v_old = 'suspended'::public.venue_status then
-    raise exception '정지(suspended) 중인 매장은 보관할 수 없습니다 — 정지 상태를 먼저 정리하세요';
+  -- 보관은 활성 매장만(리드 결정 10-01): 정지·비활성 매장을 보관→해제하면 이전 상태가 active 로 바뀌어 사라진다.
+  if p_archived and v_old is distinct from 'active'::public.venue_status then
+    raise exception '활성(active) 매장만 보관할 수 있습니다 (현재 %)', v_old;
   end if;
   update public.venues
      set status = case when p_archived then 'hidden'::public.venue_status else 'active'::public.venue_status end,
@@ -119,6 +119,9 @@ begin
   end if;
   if position('숨김(보관) 상태인 매장만 해제할 수 있습니다' in pg_get_functiondef('public.admin_set_venue_archived(uuid,boolean,text)'::regprocedure)) = 0 then
     raise exception '20261001d: 보관 해제가 이전 상태를 보지 않는다';
+  end if;
+  if position('활성(active) 매장만 보관할 수 있습니다' in pg_get_functiondef('public.admin_set_venue_archived(uuid,boolean,text)'::regprocedure)) = 0 then
+    raise exception '20261001d: 보관이 이전 상태를 보지 않는다';
   end if;
   if has_function_privilege('authenticated', 'public._guard_venue_hard_delete()', 'execute')
      or has_function_privilege('anon', 'public._guard_venue_hard_delete()', 'execute') then
@@ -213,9 +216,16 @@ begin
     if sqlerrm not like '%숨김(보관) 상태인 매장만 해제할 수 있습니다%' then raise exception 'FAIL: 엉뚱한 오류: %', sqlerrm; end if; end;
   begin perform public.admin_set_venue_archived(c_r, true, null); raise exception 'FAIL: 정지 매장 보관 통과';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
-    if sqlerrm not like '%정지(suspended) 중인 매장은 보관할 수 없습니다%' then raise exception 'FAIL: 엉뚱한 오류: %', sqlerrm; end if; end;
+    if sqlerrm not like '%활성(active) 매장만 보관할 수 있습니다%' then raise exception 'FAIL: 엉뚱한 오류: %', sqlerrm; end if; end;
   select status::text into v_st from public.venues where id = c_r;
   if v_st <> 'suspended' then raise exception 'FAIL: 정지 상태가 바뀜 %', v_st; end if;
+  -- 음성(리드 보강): 비활성 매장 보관 → raise, 상태 inactive 유지
+  update public.venues set status = 'inactive' where id = c_r;
+  begin perform public.admin_set_venue_archived(c_r, true, null); raise exception 'FAIL: 비활성 매장 보관 통과';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%활성(active) 매장만 보관할 수 있습니다%' then raise exception 'FAIL: 엉뚱한 오류: %', sqlerrm; end if; end;
+  select status::text into v_st from public.venues where id = c_r;
+  if v_st <> 'inactive' then raise exception 'FAIL: 비활성 상태가 바뀜 %', v_st; end if;
 
   raise exception 'REHEARSAL_OK 20261001d';
 end $$;
