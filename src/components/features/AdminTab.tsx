@@ -13,7 +13,7 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
-  getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
+  getPendingGroups, getPendingVenues, approveGroup, rejectGroup, logActivity, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
   adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
   adminSetPostBlinded, adminSetPostPinned, type Shout, type PostCategory } from '../../api/community';
 import { getNotices, deleteNotice, setNoticeOrder, type MarketplaceNotice } from '../../api/marketplace';
@@ -44,11 +44,13 @@ import SectionHeader from '../atoms/SectionHeader';
 import { PAGE_ENTER } from '../atoms/pageMotion';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, askRankDecision, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, sendInquiryReplyEmail, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
+import { ownerDisplayName, ownerChoices } from '../../lib/adminVenueOwner';
+import { usePendingCounts, sumKnown, type PendingKey, type PendingCounts } from './adminPendingCounts';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
@@ -145,7 +147,7 @@ function BoostContactCard() {
 }
 
 // ── 순위 인증 승인(운영자) — 외부 대회 입상 증빙 검토. 승인/거절 시 신분증 즉시 삭제 ──
-function VenueOwnerRequestsCard() {
+function VenueOwnerRequestsCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [reqs, setReqs] = useState<OwnerRequest[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -157,7 +159,7 @@ function VenueOwnerRequestsCard() {
     try {
       await adminDecideVenueOwner(r.venueId, r.userId, approve);
       toast.show(approve ? `${r.nickname} 사장님을 ${r.venueName} 공동 업주로 승인했습니다` : '요청을 거절했습니다', approve ? 'success' : 'info');
-      load();
+      load(); onChanged?.();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
@@ -185,7 +187,7 @@ function VenueOwnerRequestsCard() {
   );
 }
 
-function VoucherQuotaAdminCard() {
+function VoucherQuotaAdminCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [reqs, setReqs] = useState<AdminCreditRequest[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -207,7 +209,7 @@ function VoucherQuotaAdminCard() {
           : '요청을 반려했습니다',
         approve ? 'success' : 'info',
       );
-      load();
+      load(); onChanged?.();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
@@ -255,7 +257,7 @@ const VERIFY_CHECKS: { key: string; label: string }[] = [
   { key: 'edit', label: '편집 흔적이 없는가(글꼴 불일치·경계 부자연·해상도 차이)' },
 ];
 
-function RankVerifyAdminCard() {
+function RankVerifyAdminCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -281,13 +283,17 @@ function RankVerifyAdminCard() {
     catch { toast.show('이미지 열람 실패', 'error'); }
   };
   const decide = async (v: RankVerification, ok: boolean) => {
+    // 🔴 점검 A-05(2026-10-01): 예전엔 사유 창에서 '취소'(null)를 눌러도 undefined 로 바뀌어 **그대로 반려**됐고,
+    //   그 함수는 신분증을 먼저 지운다 — 되돌릴 수 없다. 취소는 '아무것도 안 함'이다.
+    //   승인도 신분증이 즉시 삭제되므로 확인을 한 번 받는다. 창은 busy 잠금 **전에** 띄운다(취소 시 잠금이 남지 않게).
+    const ask = askRankDecision(ok, window);
+    if (!ask.go) return;
+    const note = ask.note;
     setBusy(v.id);
     try {
-      // 반려는 사유 없이는 재신청만 부른다 — 신청자 화면(TierLeaderboard 내 인증 이력)에 그대로 보인다.
-      const note = ok ? undefined : (window.prompt('반려 사유 (신청자에게 그대로 보입니다)')?.trim() || undefined);
       await adminDecideRankVerification(v, ok, { note });
       toast.show(ok ? '대회로 승인했습니다. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
-      reload();
+      reload(); onChanged?.();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     finally { setBusy(null); }
@@ -472,12 +478,17 @@ function HallOfFameAdminCard() {
   const toast = useToast();
   const last = lastMonthPeriod();
   const [rows, setRows] = useState<HallOfFameRow[]>([]);
+  // 점검 A-10: 목록을 못 읽은 채 빈 폼이 '비어 있는 것'처럼 보이면 기존 등록을 덮어쓰게 된다 — 못 읽으면 저장을 막는다.
+  const [rowsErr, setRowsErr] = useState<unknown>(null);
+  const [rowsLoaded, setRowsLoaded] = useState(false);
   const [period, setPeriod] = useState(last);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Record<number, { nickname: string; note: string }>>({
     1: { nickname: '', note: '' }, 2: { nickname: '', note: '' }, 3: { nickname: '', note: '' },
   });
-  const reload = useCallback(() => { adminListHallOfFame().then(setRows).catch(() => {}); }, []);
+  const reload = useCallback(() => {
+    adminListHallOfFame().then((r) => { setRowsErr(null); setRows(r); setRowsLoaded(true); }).catch((e) => { setRowsErr(e); });
+  }, []);
   useEffect(() => { reload(); }, [reload]);
   // 기간을 바꾸면 그 기간에 이미 등록된 값을 폼에 싣는다(없으면 빈칸)
   useEffect(() => {
@@ -506,6 +517,7 @@ function HallOfFameAdminCard() {
 
   const saveRank = async (rank: number) => {
     const d = draft[rank];
+    if (!rowsLoaded) { toast.show('등록된 명예의 전당을 읽지 못했습니다 — 다시 불러온 뒤 저장해 주세요', 'error'); return; }
     if (!d?.nickname.trim()) { toast.show('닉네임을 입력해 주세요', 'error'); return; }
     setBusy(true);
     try {
@@ -539,6 +551,10 @@ function HallOfFameAdminCard() {
         아무것도 등록하지 않으면 지금처럼 <b className="text-ink-secondary">입상 기록 자동 집계</b>가 그대로 표시됩니다.
       </p>
 
+      {rowsErr != null && (
+        <LoadErrorCard error={rowsErr} what="등록된 명예의 전당" onRetry={reload} compact
+          hint="지금 저장하면 이미 등록된 순위를 덮어쓸 수 있어 저장을 막았습니다 — 다시 불러온 뒤 수정해 주세요." />
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <label className="flex items-center gap-1 text-xs text-ink-muted">기간
           <select value={period} onChange={(e) => setPeriod(e.target.value)} className="input w-auto text-sm">
@@ -563,7 +579,7 @@ function HallOfFameAdminCard() {
             <input value={draft[rank]?.note ?? ''} maxLength={60}
               onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], note: e.target.value } }))}
               placeholder="한 줄 소개 (예: ○○ 인비테이셔널 우승)" className="input min-w-48 flex-2 text-sm" />
-            <button type="button" onClick={() => saveRank(rank)} disabled={busy}
+            <button type="button" onClick={() => saveRank(rank)} disabled={busy || !rowsLoaded}
               className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
           </div>
         ))}
@@ -1036,60 +1052,85 @@ function ErrorLogPanel() {
   );
 }
 
-// ── 그룹 개설 승인(운영자) ────────────────────────────────────────────────────
-function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
+// ── 입점·그룹 개설 승인(운영자) ──────────────────────────────────────────────
+// 점검 A-03(2026-10-01): 그룹(kind≠venue)만 나열해서, 승인 업주가 만든 **새 매장**은 승인할 곳이 없었다.
+//   이제 매장·그룹을 한 대기열에서 승인/반려한다(서버는 원래 관리자 승인을 허용한다).
+function PendingGroupsPanel({ users, onChanged }: { users: User[]; onChanged: () => void }) {
   const toast = useToast();
   const [groups, setGroups] = useState<Venue[]>([]);
   const [err, setErr] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  // 처리 중 잠금(점검 A-14) — 연타가 같은 신청을 두 번 처리하지 않게 한다. 한 번에 한 건만 처리한다.
+  const [busy, setBusy] = useState<string | null>(null);
   const reload = () => {
     setLoading(true);
-    getPendingGroups().then((g) => { setErr(null); setGroups(g); }).catch((e) => { setErr(e); setGroups([]); }).finally(() => setLoading(false));
+    Promise.all([getPendingVenues(), getPendingGroups()])
+      .then(([v, g]) => { setErr(null); setGroups([...v, ...g]); })
+      .catch((e) => { setErr(e); setGroups([]); })
+      .finally(() => setLoading(false));
   };
   useEffect(() => { reload(); }, []);
+  const isVenue = (g: Venue) => g.kind === 'venue';
+  const ownerOf = (g: Venue) => { const u = users.find((x) => x.id === g.ownerId); return u ? (u.nickname ?? u.name) : null; };
   const approve = async (g: Venue) => {
-    try { await approveGroup(g.id); toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged(); }
+    if (busy) return;
+    setBusy(g.id);
+    try {
+      await approveGroup(g.id);
+      await logActivity({ action: 'approve', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 승인 · ${g.name}` });
+      toast.show(`'${g.name}' ${isVenue(g) ? '매장' : '그룹'}을 승인했습니다`, 'success'); reload(); onChanged();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
   };
   const reject = async (g: Venue) => {
-    if (!confirm(`'${g.name}' 개설 신청을 거절(삭제)하시겠습니까?`)) return;
-    try { await deleteVenue(g.id); toast.show('거절했습니다', 'info'); reload(); }
+    if (busy) return;
+    if (!confirm(`'${g.name}' ${isVenue(g) ? '입점' : '개설'} 신청을 반려하시겠습니까? 신청은 삭제되지 않고 '숨김'으로 남습니다.`)) return;
+    setBusy(g.id);
+    try {
+      await rejectGroup(g.id);
+      await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 반려 · ${g.name}` });
+      toast.show('반려했습니다', 'info'); reload(); onChanged();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
   };
   if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
   return (
     <section className="rounded-card border border-accent-400/30 bg-surface-low p-3 space-y-2">
       {/* 실패했을 때 '(0)' 은 거짓말이라 개수를 감춘다 — 아래 실패 카드가 이유를 말한다 */}
-      <h3 className="text-sm font-bold text-accent-300">그룹 개설 승인{err == null ? ` (${groups.length})` : ''}</h3>
+      <h3 className="text-sm font-bold text-accent-300">입점·그룹 개설 승인{err == null ? ` (${groups.length})` : ''}</h3>
       {err != null ? (
-        <LoadErrorCard error={err} what="그룹 개설 신청" onRetry={reload} compact />
+        <LoadErrorCard error={err} what="입점·그룹 개설 신청" onRetry={reload} compact />
       ) : groups.length === 0 ? (
-        <p className="text-2xs text-ink-muted py-1">대기 중인 그룹 개설 신청이 없습니다</p>
+        <p className="text-2xs text-ink-muted py-1">대기 중인 입점·그룹 개설 신청이 없습니다</p>
       ) : (
         <ul className="space-y-2">
           {groups.map((g) => (
             <li key={g.id} className="rounded-input border border-border-default bg-surface-high p-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
+                <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{isVenue(g) ? '홀덤펍 입점' : GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
                 <span className="text-sm font-semibold text-ink-primary">{g.name}</span>
                 {g.region && <span className="text-2xs text-ink-muted">{g.region}</span>}
+                {ownerOf(g) && <span className="text-2xs text-ink-muted">· 업주 {ownerOf(g)}</span>}
               </div>
-              {/* 가입 방식 — 자동가입 그룹이 더 위험한데 예전엔 이 정보 없이 승인하고 있었다 */}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {isVenue(g) && g.address && <p className="mt-1 text-2xs text-ink-secondary"><b className="text-ink-primary">주소</b> {g.address}</p>}
+              {/* 가입 방식 — 자동가입 그룹이 더 위험한데 예전엔 이 정보 없이 승인하고 있었다(매장은 해당 없음) */}
+              {!isVenue(g) && <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold',
                   g.joinApproval === false ? 'bg-danger/15 text-danger-light' : 'chip-aura'].join(' ')}>
                   {g.joinApproval === false ? '자동 가입' : '승인제'}
                 </span>
-              </div>
+              </div>}
               {/* 개설 목적 — 승인 판단의 근거. 없으면 그 사실을 드러낸다(구 클라이언트로 신청한 건) */}
-              <p className="mt-1 text-2xs text-ink-secondary">
+              {!isVenue(g) && <p className="mt-1 text-2xs text-ink-secondary">
                 <b className="text-ink-primary">목적</b>{' '}
                 {g.openPurpose?.trim() ? g.openPurpose : <span className="text-ink-muted">미기재 — 신청자에게 확인 필요</span>}
-              </p>
+              </p>}
               {g.description && <p className="mt-1 text-2xs text-ink-muted line-clamp-2">소개 · {g.description}</p>}
               <div className="mt-1.5 flex gap-1.5">
-                <button type="button" onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1">승인</button>
-                <button type="button" onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light">거절</button>
+                <button type="button" disabled={busy != null} onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1 disabled:opacity-50">{busy === g.id ? '처리 중…' : '승인'}</button>
+                <button type="button" disabled={busy != null} onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light disabled:opacity-50">반려</button>
               </div>
             </li>
           ))}
@@ -1105,12 +1146,12 @@ const aic = (children: ReactNode) => (
 // 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
 const ADMIN_DESC: Record<Section, string> = {
   analytics: '플랫폼 핵심 지표 · 회원·매장·대회·출석·추천·푸시 한눈에',
-  pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
-  reorder: '포스터 노출 순서 · 부스트 연락처 · 공동 업주 승인 · 이용권 충전 요청 · 순위 인증 심사 · 주간 미션 · 명예의 전당',
+  pending: '처리할 승인 대기 전부 — 포스터 · 입점·그룹 개설 · 공동 업주 · 이용권 한도 · 이벤트 신청 · 순위 인증',
+  reorder: '포스터 노출 순서 · 부스트 연락처 · 주간 미션 · 명예의 전당 · 매장 노출 순서',
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
   switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
   users: '회원 검색 · 제재 · 섀도우밴 · 닉네임 변경 · 활동점수(구매 환불 · 지급)',
-  venues: '매장 생성 · 인증 · 그룹 승인',
+  venues: '매장 생성 · 인증 · 매장별 관리(입점·그룹 개설 승인은 승인 대기)',
   events: '제휴 이벤트 캠페인 · 카드판 구성(서버 셔플) · 검증 · 공개/종료 · 경품 이용권 집계',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',
@@ -1119,7 +1160,7 @@ const ADMIN_DESC: Record<Section, string> = {
 
 const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'analytics', label: '운영 분석', icon: aic(<><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></>) },
-  { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
+  { id: 'pending', label: '승인 대기', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
   { id: 'reorder', label: '게시글 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
   // lucide eye 경로(Icon.tsx LUCIDE 와 같은 글리프)
   { id: 'exposure', label: '노출 관리', icon: aic(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>) },
@@ -1156,8 +1197,15 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
 function PlatformStatsCard() {
   const [s, setS] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { getAdminPlatformStats().then(setS).catch(() => {}).finally(() => setLoading(false)); }, []);
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => {
+    setLoading(true);
+    getAdminPlatformStats().then((x) => { setErr(null); setS(x); }).catch((e) => { setErr(e); setS(null); }).finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
   if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  // 점검 A-10: 오류를 삼키던 자리 — 이유와 재시도를 준다
+  if (err != null) return <LoadErrorCard error={err} what="운영 지표" onRetry={load} compact />;
   if (!s) return <p className="py-8 text-center text-2xs text-ink-muted">지표를 불러올 수 없습니다 (관리자 전용).</p>;
   const cells: { label: string; value: string; sub?: string; accent?: boolean }[] = [
     { label: '총 회원', value: s.users.toLocaleString(), sub: `+${s.newUsers7d} (7일)`, accent: true },
@@ -1195,7 +1243,11 @@ function PlatformStatsCard() {
  *      지금은 화면 문구만 고치고 이 사실을 여기 적어 둔다. */
 function PlanUsageCard() {
   const [rows, setRows] = useState<PlanUsageRow[]>([]);
-  useEffect(() => { getFreePlanUsage().then(setRows).catch(() => {}); }, []);
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => { getFreePlanUsage().then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); }); }, []);
+  useEffect(() => { load(); }, [load]);
+  // 점검 A-10: 실패하면 카드가 사라져 '사용량 여유'와 구분이 안 됐다 — 실패 카드를 남긴다
+  if (err != null) return <LoadErrorCard error={err} what="Supabase 사용량" onRetry={load} compact />;
   if (rows.length === 0) return null;
   const worst = Math.max(...rows.map((r) => r.pct));
   return (
@@ -1234,6 +1286,8 @@ export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts, tabActive = true,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
+  /** 신고 큐 '작성자 제재' → 회원 관리 검색창에 미리 넣을 닉네임(점검 A-07). 일반 메뉴 이동은 비운다. */
+  const [userSearch, setUserSearch] = useState('');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
   // ⚠ `tabActive &&` 가 핵심이다 — 숨은 pane 이 뒤로가기를 먹지 않게(위 tabActive 주석).
   useBackClose(tabActive && section !== 'analytics', () => setSection('analytics'));
@@ -1243,6 +1297,10 @@ export default function AdminTab({
   // 반려된 포스터는 대기열에서 뺀다 — 반려는 삭제가 아니라 상태다(20260911o).
   // 마이그레이션 전 서버에서는 rejectedAt 이 전부 null 이라 종전(미승인=대기)과 똑같이 동작한다.
   const pending = schedules.filter((s) => !s.approved && !s.rejectedAt);
+  // 승인 대기 합계(점검 A-09) — 포스터 + 입점·그룹 + 공동 업주 + 이용권 한도 + 이벤트 신청 + 순위 인증.
+  //   섹션을 옮길 때마다 다시 센다. 조회 실패한 대기열은 0 이 아니라 '—'(모름)다.
+  const { counts: pendingCounts, reload: reloadPendingCounts } = usePendingCounts(section);
+  const pendingTotal = sumKnown(pendingCounts, pending.length);
 
   /* ⚠ 폭은 다른 탭과 같아야 한다(오너 2026-09-15 "내 매장 들어가는 순간 전체가 넓어져 이질감").
      관리자만 max-w-5xl(1088px) 단독이라 다른 탭 본문(1188px)보다 100px 좁았다.
@@ -1255,7 +1313,7 @@ export default function AdminTab({
       <div className="lg:flex lg:gap-4">
         <nav data-admin-secbar="" className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
           {ADMIN_SECTIONS.map((a) => (
-            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => setSection(a.id))} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
+            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => { setUserSearch(''); setSection(a.id); })} badge={a.id === 'pending' && pendingTotal > 0 ? pendingTotal : undefined}>{a.label}</AdminNavBtn>
           ))}
         </nav>
 
@@ -1270,13 +1328,23 @@ export default function AdminTab({
           {section === 'analytics' && <PlatformStatsCard />}
           {section === 'venues' && (
             <div className="space-y-3">
-              <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
               <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
             </div>
           )}
 
           {section === 'pending' && (
-            <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+            <div className="space-y-3" data-testid="admin-pending-section">
+              <PendingSummary posters={pending.length} counts={pendingCounts} />
+              <PendingGroupsPanel users={users} onChanged={() => { onReloadVenues?.(); reloadPendingCounts(); }} />
+              <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+              <VenueOwnerRequestsCard onChanged={reloadPendingCounts} />
+              <VoucherQuotaAdminCard onChanged={reloadPendingCounts} />
+              {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
+                  업주 쪽 신청 화면(VenueEventRequestPanel)과 **같은 커밋**에 넣는다 —
+                  오늘 한도 증액에서 요청 화면만 만들어 막다른 길을 낸 실수를 반복하지 않는다. */}
+              <VenueEventAdminCard onChanged={reloadPendingCounts} />
+              <RankVerifyAdminCard onChanged={reloadPendingCounts} />
+            </div>
           )}
           {section === 'reorder' && (
             <div className="space-y-3">
@@ -1288,13 +1356,6 @@ export default function AdminTab({
                 ? (
                   <>
                     <BoostContactCard />
-                    <VenueOwnerRequestsCard />
-                    <VoucherQuotaAdminCard />
-                    {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
-                        업주 쪽 신청 화면(VenueEventRequestPanel)과 **같은 커밋**에 넣는다 —
-                        오늘 한도 증액에서 요청 화면만 만들어 막다른 길을 낸 실수를 반복하지 않는다. */}
-                    <VenueEventAdminCard />
-                    <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <HallOfFameAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
@@ -1330,10 +1391,20 @@ export default function AdminTab({
               onRetryUsers={onRetryUsers}
               postsErr={postsErr}
               onRetryPosts={onRetryPosts}
+              initialQuery={userSearch}
             />
           )}
           {section === 'events' && <EventOpsAdmin venues={venues} />}
-          {section === 'reports' && <ReportQueue />}
+          {section === 'reports' && (
+            <ReportQueue
+              users={users}
+              onSanction={(uid) => {
+                const u = users.find((x) => x.id === uid);
+                setUserSearch(u ? (u.nickname ?? u.name) : '');
+                goSubTab('admin-sec', ADMIN_ORDER, section, 'users', () => setSection('users'));
+              }}
+            />
+          )}
           {section === 'support' && <SupportInquiriesPanel />}
           {section === 'errors' && <ErrorLogPanel />}
         </div>
@@ -1437,7 +1508,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
         ) : (
           <ul className="space-y-1.5">
             {manageable.map((v) => (
-              <VenueAdminRow key={v.id} venue={v} candidates={candidates} onChanged={changed} />
+              <VenueAdminRow key={v.id} venue={v} candidates={candidates} allUsers={users} onChanged={changed} />
             ))}
           </ul>
         )}
@@ -1447,7 +1518,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
 }
 
 // ── 매장 1건 관리(수정/업주 변경/인증/삭제) ──────────────────────────────────
-function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candidates: User[]; onChanged: () => void }) {
+function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venue; candidates: User[]; allUsers: User[]; onChanged: () => void }) {
   const toast = useToast();
   const [open, setOpen]       = useState(false);
   const [name, setName]       = useState(venue.name);
@@ -1467,7 +1538,9 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
   const [quotaAmt, setQuotaAmt] = useState('');
   const [quotaBusy, setQuotaBusy] = useState(false);
 
-  const owner = candidates.find((u) => u.id === venue.ownerId);
+  // 업주 '표시'와 선택 목록은 관리자 업주를 포함해야 한다(점검 A-08 — 후보 목록은 관리자를 빼서 '미지정'으로 보였다).
+  const ownerName = ownerDisplayName(venue.ownerId, allUsers);
+  const ownerOptions = ownerChoices(candidates, allUsers, venue.ownerId);
 
   // ⚠ 조회가 실패하면 vIssue 는 null 로 남는다. 예전에는 그 상태에서 눌러도 `!null === true` 가 되어
   //   **현재 승인 상태를 모르는 채로 '승인 ON' 을 서버에 썼다**(이용권 발급은 돈이 걸린 스위치다).
@@ -1555,7 +1628,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-ink-primary truncate">{venue.name}</p>
-          <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
+          <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {ownerName}</p>
         </div>
         {venue.verificationStatus === 'verified' && (
           <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
@@ -1641,8 +1714,8 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
             <span className="block text-2xs text-ink-secondary mb-1">관리 업주</span>
             <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="input w-full text-sm">
               <option value="">미지정</option>
-              {candidates.map((u) => (
-                <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
+              {ownerOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
               ))}
             </select>
             <span className="block text-2xs text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다. <b className="text-amber-400">이전 업주</b>는 이 매장에서 제외됩니다 — 사장님(공동 업주)·장부·이용권 권한이 함께 회수됩니다.</span>
@@ -1745,6 +1818,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [staff, setStaff]     = useState<VenueStaff[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<unknown>(null);   // 점검 A-10: 실패를 '직원 없음'으로 그리지 않는다
   const [login, setLogin]     = useState('');
   const [position, setPosition] = useState('');
   const [busy, setBusy]       = useState(false);
@@ -1752,7 +1826,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
   const load = useCallback(() => {
     setLoading(true);
     // 실패를 삼키면 '등록된 직원이 없습니다'(빈 상태)로 위장돼 이미 있는 딜러를 다시 추가하게 만든다
-    getVenueStaff(venueId).then(setStaff).catch(() => toast.show('직원 목록을 불러오지 못했습니다', 'error')).finally(() => setLoading(false));
+    getVenueStaff(venueId).then((s) => { setLoadErr(null); setStaff(s); }).catch((e) => { setLoadErr(e); setStaff([]); }).finally(() => setLoading(false));
   }, [venueId, toast]);
   useEffect(() => { load(); }, [load]);
 
@@ -1789,6 +1863,8 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       {/* 직원 목록 */}
       {loading ? (
         <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중…</p>
+      ) : loadErr != null ? (
+        <LoadErrorCard error={loadErr} what="직원 목록" onRetry={load} compact />
       ) : staff.length === 0 ? (
         <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 닉네임 또는 이메일로 추가하세요.</p>
       ) : (
@@ -1893,19 +1969,45 @@ function PendingApprovalSection({
 }) {
   if (pending.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-2 text-ink-muted">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <p className="text-sm">승인 대기 중인 포스터가 없습니다</p>
-        <p className="text-2xs">업주가 등록한 포스터가 여기에서 검토됩니다</p>
-      </div>
+      <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+        <h3 className="text-sm font-bold text-ink-primary">포스터 승인</h3>
+        <p className="mt-1 text-2xs text-ink-muted">승인 대기 중인 포스터가 없습니다 · 업주가 등록한 포스터가 여기에서 검토됩니다</p>
+      </section>
     );
   }
 
   return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-bold text-amber-400">포스터 승인 ({pending.length})</h3>
     <ul className="space-y-2">
       {pending.map((s) => (
         <PendingRow key={s.id} schedule={s} onApprove={() => onApprove(s.id)} onReject={() => onReject(s.id)} />
       ))}
+    </ul>
+    </section>
+  );
+}
+
+// 승인 대기 요약 — 대기열 6종의 개수를 **0 까지 포함해** 한 줄에 보인다(비면 카드가 접혀 사라지기 때문).
+// 모름(조회 실패)은 '—' 다. 0 은 '없다'는 단정이라 쓰지 않는다.
+const PENDING_SUMMARY_LABEL: { key: PendingKey | 'posters'; label: string }[] = [
+  { key: 'posters', label: '포스터' }, { key: 'listings', label: '입점·그룹' }, { key: 'owners', label: '공동 업주' },
+  { key: 'quota', label: '이용권 한도' }, { key: 'events', label: '이벤트 신청' }, { key: 'rank', label: '순위 인증' },
+];
+function PendingSummary({ posters, counts }: { posters: number; counts: PendingCounts }) {
+  const val = (k: PendingKey | 'posters') => (k === 'posters' ? posters : counts[k]);
+  return (
+    <ul data-testid="admin-pending-summary" className="flex flex-wrap gap-1.5">
+      {PENDING_SUMMARY_LABEL.map(({ key, label }) => {
+        const n = val(key);
+        return (
+          <li key={key} data-pending-key={key}
+            className={['rounded-badge border px-2 py-1 text-2xs font-semibold tabular-nums',
+              n ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-border-subtle bg-surface-low text-ink-muted'].join(' ')}>
+            {label} <b>{n == null ? '—' : n}</b>
+          </li>
+        );
+      })}
     </ul>
   );
 }

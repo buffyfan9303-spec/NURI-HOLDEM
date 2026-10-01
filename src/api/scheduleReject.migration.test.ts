@@ -125,10 +125,13 @@ describe('20260911o — 클라이언트: 앱이 먼저 배포돼도 화면이 �
     expect(API).toContain('approved: false');
   });
 
-  it('컬럼 부재(PGRST204 / 42703)면 종전 동작으로 폴백해 관리자가 큐를 못 비우는 일이 없다', () => {
-    expect(API).toContain("if (error.code !== 'PGRST204' && error.code !== '42703') throw error;");
-    expect(API).toContain('await deleteSchedule(id);');
-    expect(API).toContain("return 'deleted';");
+  it('반려 함수는 어떤 오류에서도 포스터를 삭제하지 않는다(점검 A-12 — 옛 컬럼 부재 폴백 제거)', () => {
+    const start = API.indexOf('export async function rejectSchedule(');
+    const body = API.slice(start, API.indexOf('\n}\n', start));
+    expect(body).not.toContain('deleteSchedule');
+    expect(body).not.toContain('PGRST204');
+    expect(body).not.toContain('42703');
+    expect(body).toContain('if (error) throw error;');
   });
 
   it('업주의 진짜 삭제 경로(deleteSchedule)는 그대로 남는다 — 기능 보존', () => {

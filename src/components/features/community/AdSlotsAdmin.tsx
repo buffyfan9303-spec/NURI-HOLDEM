@@ -98,7 +98,12 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   const [savingEvery, setSavingEvery] = useState(false);
   // 못 읽은 값 위에 저장하면 서버에 있던 6이 화면 기본값 4로 덮인다 — AdminTab 의 BoostContactCard 와 같은 가드.
   const [everyLoaded, setEveryLoaded] = useState(false);
-  useEffect(() => { getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => { setEvery(parseAdsEvery(v)); setEveryLoaded(true); }).catch(() => {}); }, []);
+  // 점검 A-10: 못 읽었다는 사실을 삼키면 화면의 기본값(4)이 서버 값처럼 보인다 — 실패를 보이고 재시도를 준다.
+  const [everyErr, setEveryErr] = useState<unknown>(null);
+  const loadEvery = useCallback(() => {
+    getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => { setEveryErr(null); setEvery(parseAdsEvery(v)); setEveryLoaded(true); }).catch(setEveryErr);
+  }, []);
+  useEffect(() => { loadEvery(); }, [loadEvery]);
   const saveEvery = async () => {
     if (!everyLoaded) { toast.show('현재 빈도 설정을 읽지 못했습니다 — 새로고침 뒤 다시 시도해 주세요', 'error'); return; }
     const n = parseAdsEvery(String(every));
@@ -135,13 +140,17 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
         <span className="text-xs font-normal text-ink-muted">게시판 글을 골라 광고로 올립니다. 손님 화면에선 평소 글과 같은 모습으로 보이고, 누르면 그 글의 상세가 열립니다.</span>
       </p>
 
+      {everyErr != null && (
+        <LoadErrorCard error={everyErr} what="게시판 광고 빈도 설정" onRetry={loadEvery} compact
+          hint="아래 숫자는 서버 값이 아니라 기본값입니다 — 다시 불러오기 전에는 저장할 수 없습니다." />
+      )}
       <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5 text-xs">
         <label htmlFor="ads-every" className="text-ink-secondary">게시판 글</label>
         <input id="ads-every" type="number" inputMode="numeric" min={2} max={10} value={every}
           onChange={(e) => setEvery(Number(e.target.value) || COMMUNITY_ADS_EVERY_DEFAULT)}
           className="input w-16 text-sm tabular-nums" />
         <span className="text-ink-secondary">개마다 광고 1칸 (2~10)</span>
-        <button type="button" onClick={saveEvery} disabled={savingEvery} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+        <button type="button" onClick={saveEvery} disabled={savingEvery || !everyLoaded} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
         <span className="ml-auto flex items-center gap-1">
           <span className="text-ink-muted">미리보기</span>
           {(['feed', 'compact'] as const).map((v) => (

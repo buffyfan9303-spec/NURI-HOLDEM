@@ -49,6 +49,11 @@ export async function getReports(scope: 'open' | 'all' = 'open'): Promise<Report
   }));
 }
 
+/** 신고 대상의 작성자(제재 대상) id — 회원 신고는 대상 자체, 그 밖에는 저장된 작성자. 없으면 null. */
+export function reportedUserId(r: Pick<ReportEntry, 'targetType' | 'targetId' | 'targetOwnerId'>): string | null {
+  return (r.targetType === 'user' ? r.targetId : r.targetOwnerId) ?? null;
+}
+
 export async function updateReportStatus(id: string, status: 'resolved' | 'dismissed'): Promise<void> {
   if (IS_MOCK) return;
   // PostgREST 는 RLS 가 막은 UPDATE 를 오류가 아니라 0행으로 돌려준다 — 반환 행으로 도달을 확인한다.
