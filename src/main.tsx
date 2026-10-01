@@ -12,6 +12,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './components/atoms/Toast';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import { initErrorLog } from './lib/errorLog';
+import { registerAndroidFallbackFont } from './lib/androidFallbackFont';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { initMonitoring, initMotionTelemetry } from './lib/monitoring';
 
@@ -21,6 +22,9 @@ import { initMonitoring, initMotionTelemetry } from './lib/monitoring';
 let savedTheme: string | null = null;
 try { savedTheme = localStorage.getItem('nuri-theme'); } catch { /* storage 차단 환경 */ }
 document.documentElement.classList.add(savedTheme === 'light' ? 'light' : 'dark');
+
+// R-04 — 안드로이드 Noto CJK 크기 맞춘 폴백은 그 글꼴이 실제로 있을 때만 붙인다(Windows 11 의 Noto Sans KR 이 맞아 PC 한글 첫 조판이 652ms 늘던 것 방지).
+void registerAndroidFallbackFont();
 
 // 전역 에러 감시망 — 런타임 오류·프로미스 거부를 관리자 화면으로 수집
 initErrorLog();

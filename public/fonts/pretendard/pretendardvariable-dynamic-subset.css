@@ -933,6 +933,7 @@ http://scripts.sil.org/OFL
      Noto CJK   한글 95.5%            · 라틴/숫자 99.87%
      ascent 95% · descent 24% · line-gap 0 = Pretendard 원값. ⚠ size-adjust 로 나누지 않는다(Chrome 문서식은 1280 에서 상단 블록 +4px 로 악화).
    Apple(애플 SD 산돌고딕) 값은 미측정 — 스택에 넣지 않았다. 스택: src/index.css body · tailwind.config.js fontFamily.sans. */
+/* R-04(2026-10-01) — 'Pretendard FB Android'(Noto CJK 한글 95.5% · 라틴 99.87%)는 여기서 뺐다. PC 에서도 local('Noto Sans KR')(Windows 11 기본 NotoSansKR-VF)이 맞아 이 폴백이 한글 첫 조판에 끼었고 레이아웃이 652ms 늘었다(장부 첫 진입). 이제 src/lib/androidFallbackFont.ts 가 글꼴이 실제로 있을 때만 FontFace API 로 같은 값을 등록한다(main.tsx). 스택 이름은 그대로 둔다. */
 @font-face {
 	font-family: 'Pretendard FB Win';
 	font-display: swap; /* 로컬 글꼴이라 차단 구간이 없지만 src/fontDisplay.contract.test.ts 의 'face 전부 swap' 계약을 지킨다 */
@@ -949,26 +950,6 @@ http://scripts.sil.org/OFL
 	src: local('Malgun Gothic'), local('MalgunGothic');
 	unicode-range: U+0000-00FF, U+2000-206F, U+20A0-20CF;
 	size-adjust: 99.26%;
-	ascent-override: 95%;
-	descent-override: 24%;
-	line-gap-override: 0%;
-}
-@font-face {
-	font-family: 'Pretendard FB Android';
-	font-display: swap; /* 로컬 글꼴이라 차단 구간이 없지만 src/fontDisplay.contract.test.ts 의 'face 전부 swap' 계약을 지킨다 */
-	src: local('Noto Sans CJK KR'), local('NotoSansCJKkr-Regular'), local('Noto Sans KR');
-	unicode-range: U+1100-11FF, U+3000-303F, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+FF00-FFEF;
-	size-adjust: 95.5%;
-	ascent-override: 95%;
-	descent-override: 24%;
-	line-gap-override: 0%;
-}
-@font-face {
-	font-family: 'Pretendard FB Android';
-	font-display: swap; /* 로컬 글꼴이라 차단 구간이 없지만 src/fontDisplay.contract.test.ts 의 'face 전부 swap' 계약을 지킨다 */
-	src: local('Noto Sans CJK KR'), local('NotoSansCJKkr-Regular'), local('Noto Sans KR');
-	unicode-range: U+0000-00FF, U+2000-206F, U+20A0-20CF;
-	size-adjust: 99.87%;
 	ascent-override: 95%;
 	descent-override: 24%;
 	line-gap-override: 0%;
