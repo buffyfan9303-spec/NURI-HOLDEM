@@ -167,12 +167,22 @@ describe('불변식', () => {
       return sql.slice(i, sql.indexOf('\nend', i));
     };
     const MSG = '이용권으로 승인한 바인은 결제 수단·할인·이용권 장수를 바꿀 수 없습니다(남은 금액의 결제 방법만 바꿀 수 있습니다). 바꾸려면 바인을 취소한 뒤 다시 승인하십시오.';
+    // critical-reviewer 10-01 F1 — 장수·분납·할인은 언제나, 전액 이용권 행은 결제수단·미수까지 잠근다(두 곳 같은 조건).
+    const lockRe = (n: string, o: string) => new RegExp(
+      `${o}\\.request_id is not null and coalesce\\(${o}\\.ticket_count, 0\\) > 0\\s+`
+      + `and \\(\\(${n}\\.ticket_count, ${n}\\.is_split, ${n}\\.discount_index\\) is distinct from \\(${o}\\.ticket_count, ${o}\\.is_split, ${o}\\.discount_index\\)\\s+`
+      + `or \\(not coalesce\\(${o}\\.is_split, false\\)\\s+`
+      + `and \\(${n}\\.payment_method, ${n}\\.is_unpaid\\) is distinct from \\(${o}\\.payment_method, ${o}\\.is_unpaid\\)\\)\\)`);
     const reduce = fn('update_ledger_buyin_reduce');
-    expect(reduce).toMatch(/r\.request_id is not null and coalesce\(r\.ticket_count, 0\) > 0\s+and \(x\.ticket_count is distinct from r\.ticket_count or x\.is_split is distinct from r\.is_split\)/);
+    expect(reduce).toMatch(lockRe('x', 'r'));
     expect(reduce).toContain(MSG);
-    // 감액 금액 규칙은 그대로 거친다(양성: 금액만 줄이는 수정은 통과 — 리허설 R3·R4)
+    // 감액 금액 규칙은 그대로 거친다(양성: 금액만 줄이는 수정은 통과 — 리허설 L8·R4)
     expect(reduce).toContain('x := public._ledger_buyin_apply_amount_rule(x);');
-    expect(fn('_ledger_buyins_client_guard')).toContain(MSG);
+    const guard = fn('_ledger_buyins_client_guard');
+    expect(guard).toMatch(lockRe('new', 'old'));
+    expect(guard).toContain(MSG);
+    // 1만 원 미만 이용권 거절(유지) — 접수대용 합니다체 문구
+    expect(fn('approve_buyin_request')).toContain("'참가비(할인 후 %원)가 1만 원 미만인 게임은 이용권으로 낼 수 없습니다. 요청을 거절하고 현금·카드·계좌로 받으십시오.'");
     // 라이브 정의 게이트 4개 · 적용 전 초안 표기
     for (const m of ['de5cd99da0c1aadb34e5535bcb7705da', '35e7504abaae6d7c62ce93f3eaebdfde', 'eee44d4d0c9c53e9fda390227d5f30c2', 'a74bbdeaaeea76735902521a400a720e']) {
       expect(sql.split('do $gate$')[1]?.split('end $gate$')[0], m).toContain(m);
