@@ -20,6 +20,7 @@ import { Cast, RECORDER, center, press, FLAT_STD, type Finder } from './_flicker
 import { bootOwner, openMyStore } from './_mockOwner';
 
 const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
+const DEST: Record<string, string> = { 라이브: 'live', 커뮤니티: 'community', GTO: 'tools', 캘린더: 'calendar', 홈: 'home' };
 const TAB = (label: string): Finder => ({ sel: 'nav[aria-label="하단 내비게이션"] button', text: label, exact: true });
 const NAV = 'nav[aria-label="하단 내비게이션"]';
 
@@ -87,6 +88,27 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         await cast.start(crop);
         await page.waitForTimeout(100);
         await page.evaluate((m) => performance.mark(m), `tap:${id}`);
+        // 판 교체 구간의 끝 — 목적지 판이 보이고 떠나는 판(·복제본)이 모두 걷힌 다음 프레임에 표식(R-05 ① A/B 2026-10-01).
+        //   표식은 rAF 로 매 프레임 확인한다(누르기 전부터 — 커밋 프레임을 놓치지 않게).
+        await page.evaluate(([mid, tab]) => {
+          const t0 = performance.now();
+          const tick = () => {
+            const pane = document.querySelector<HTMLElement>(`.tab-pane[data-tab="${tab}"]`);
+            const shown = !!pane && pane.style.display !== 'none' && !pane.hasAttribute('data-pane-leaving');
+            if (shown && !document.querySelector('[data-pane-leaving]')) {
+              requestAnimationFrame(() => {
+                performance.mark(`swapEnd:${mid}`);
+                // 교체가 끝난 뒤 목적지 판 안에 **새 내용이 커밋된 순간**(늦게 온 데이터)을 표식으로 남긴다 — 1.1초 동안만.
+                const mo = new MutationObserver(() => performance.mark(`commit:${mid}`));
+                mo.observe(pane!, { childList: true, subtree: true, characterData: true });
+                setTimeout(() => mo.disconnect(), 1100);
+              });
+              return;
+            }
+            if (performance.now() - t0 < 3000) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }, [id, DEST[label]] as [string, string]);
         await tapTab(page, cdp, label, id);
         await page.waitForTimeout(1100);
         const frames = await cast.stop();
@@ -106,11 +128,33 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     const taps = ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('tap:')).sort((a, b) => a.ts - b.ts);
     const pipeline = ev.filter((e) => e.name === 'PipelineReporter' && e.args?.frame_reporter);
     const near = (ts: number) => { let best: Ev | null = null; for (const m of taps) if (m.ts <= ts && (!best || m.ts > best.ts)) best = m; return best ? { tap: best.name.slice(4), dt: Math.round((ts - best.ts) / 1000) } : null; };
-    const missing = pipeline.filter((e) => e.args!.frame_reporter!.has_missing_content).map((e) => near(e.ts)).filter((n): n is { tap: string; dt: number } => !!n && n.dt <= 1100);
-    console.log(`[handoff-light] taps=${taps.length} pipelineFrames=${pipeline.length} missing=${missing.length} bodyFlat=${flatRows.length}`);
+    // 🔵 2026-10-01(R-05 ① A/B · root-cause-debugger) — 빠진 타일을 **판 교체 구간**(탭 → 떠나는 판이 걷힌 다음 프레임)에서만 막는다.
+    //   그 뒤의 빠진 타일은 다시 켜진 탭이 늦게 받은 데이터(라이브 clock_states · 커뮤니티 첫 섹션 · 캘린더 재조회)를 커밋하는
+    //   프레임의 래스터 지연이고, base(b7ad649c)에서도 40회 중 4회(10%) 나는 다른 부류다 — 판 교체 결함과 섞어 세면 이 게이트가 흔들린다.
+    //   그래서 그 부류는 '데이터 커밋 래스터 지연' 으로 **기록만** 한다(주간 측정 몫 · audit-regress-1001 'R-05 ① A/B').
+    //   음성 대조: 판 교체에서 빠진 타일이 나던 옛 main(2f2a7dcf)은 이 판정으로도 FAIL 이다.
+    const swapEnd = new Map(ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('swapEnd:')).map((e) => [e.name.slice(8), e.ts] as const));
+    const miss = pipeline.filter((e) => e.args!.frame_reporter!.has_missing_content).map((e) => ({ n: near(e.ts), ts: e.ts }))
+      .filter((m): m is { n: { tap: string; dt: number }; ts: number } => !!m.n && m.n.dt <= 1100);
+    // 판 교체 구간 = 탭 → 교체 끝 표식(swapEnd) + 래스터 여유 300ms. 그 여유 안이라도 직전 200ms 안에 목적지 판 DOM 이 바뀌었으면
+    //   (commit 표식 = 늦게 온 데이터) 그 빠진 타일은 데이터 커밋 몫으로 돌린다. 여유가 필요한 이유(2026-10-01 실측):
+    //   떠나는 판이 없던 옛 main(2f2a7dcf)은 교체 다음 프레임이 아니라 +200~330ms 동안 새 판 타일이 비었다 — '교체 끝 +1프레임' 만
+    //   세면 그 결함을 놓쳐 음성 대조가 1/2 만 빨갰다. 여유 300ms + 커밋 구분으로 3/3 FAIL, 현재 빌드는 통과한다.
+    const SWAP_RASTER_GRACE_US = 300_000;
+    const commits = ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('commit:')).map((e) => ({ tap: e.name.slice(7), ts: e.ts }));
+    const inSwap = (m: { n: { tap: string }; ts: number }) => {
+      const end = swapEnd.get(m.n.tap);
+      if (end === undefined || m.ts <= end) return true;
+      if (m.ts > end + SWAP_RASTER_GRACE_US) return false;
+      return !commits.some((c) => c.tap === m.n.tap && c.ts > end && c.ts <= m.ts && m.ts - c.ts <= 200_000);
+    };
+    const missing = miss.filter(inSwap).map((m) => m.n);
+    const late = miss.filter((m) => !inSwap(m)).map((m) => m.n);
+    console.log(`[handoff-light] taps=${taps.length} pipelineFrames=${pipeline.length} missing=${missing.length} lateDataRaster=${late.length}${late.length ? ` (${late.map((m) => `${m.tap} +${m.dt}ms`).join(' ')})` : ''} bodyFlat=${flatRows.length}`);
     expect(taps.length, '트레이스에서 탭 표식을 못 찾았다').toBe(MENUS.length * 2);
+    expect(swapEnd.size, '판 교체 끝 표식을 못 찾았다 — 구간 판정이 비면 이 게이트가 공허해진다(또는 떠나는 판이 3초 안에 안 걷혔다)').toBe(MENUS.length * 2);
     expect(pipeline.length, 'PipelineReporter 가 0 — 트레이스 범주(cc)가 빠져 게이트가 공허해진다').toBeGreaterThan(50);
-    expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다(빠진 타일 = 지면색)').toEqual([]);
+    expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '판 교체 구간에 새 판 타일이 래스터되기 전 프레임이 나갔다(빠진 타일 = 지면색)').toEqual([]);
     expect.soft(flatRows, '본문 영역이 한 색으로 평평해진 프레임').toEqual([]);
   });
 
