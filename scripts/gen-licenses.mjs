@@ -151,6 +151,7 @@ function render(records) {
     '  <meta name="robots" content="noindex, follow">',
     `  <link rel="canonical" href="${SITE}/legal/licenses.html">`,
     '  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">',
+    '  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">',
     '  <meta property="og:type" content="article">',
     `  <meta property="og:title" content="${esc(TITLE)} | NURI HOLDEM">`,
     `  <meta property="og:description" content="${esc(DESC)}">`,

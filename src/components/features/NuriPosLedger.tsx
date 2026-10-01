@@ -45,7 +45,7 @@ import { clockPhase, formatCountdown } from '../../lib/clockLevel';
 import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
-import { planBuyinApprovals } from '../../lib/buyinApproval';
+import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
@@ -564,7 +564,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     // C06: target 이 지금 화면 게임과 다르면 그 게임 자신의 할인·레벨로 다시 계산한다.
     return discIdxFor(target)
       .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx, voucherUse))
-      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); warnVoucherLeftover(r); })
       .catch((e) => {
         const s = voucherShortOf(e);
         if (s) { setShortFor({ id: r.id, target, use: voucherUse, s }); toast.show(ledgerErrorText(e, '승인 실패'), 'info'); loadPending(); return; }
@@ -579,8 +579,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     return discIdxFor(sf.target)
       .then((discIdx) => approveBuyinRequest(r.id, sf.target, true, method, undefined, discIdx, sf.use))
-      .then(() => { toast.show(`${r.playerName} 승인 · 이용권 ${sf.s.have}장 + 남은 ${sf.s.remainder.toLocaleString()}원 ${method === 'unpaid' ? '미수' : method === 'card' ? '카드' : method === 'transfer' ? '계좌' : '현금'}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 · 이용권 ${sf.s.have}장 + 남은 ${sf.s.remainder.toLocaleString()}원 ${method === 'unpaid' ? '미수' : method === 'card' ? '카드' : method === 'transfer' ? '계좌' : '현금'}`, 'success'); loadPending(); warnVoucherLeftover(r); })
       .catch((e) => { toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending(); });
+  };
+  // S-15 — 이용권 승인 뒤 같은 손님 이용권 요청이 남았으면 알린다(다음 승인에 바인 1회로 묶이는 것을 막을 기회).
+  const warnVoucherLeftover = (r: BuyinRequest) => {
+    if (!r.voucherId) return;
+    getPendingBuyinRequests(venueId, date)
+      .then((rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); })
+      .catch(() => {});
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
@@ -2004,7 +2011,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
           전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
           예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      {/* S-04(2026-10-01) — `lg:pr-16`: PC 폭에서 바가 화면 오른쪽 끝 가까이 닿으면(1024·1280) '맨 위로' FAB(App.tsx `.scroll-top-fab`,
+          lg:bottom-5 right-4 z-40, 42.5px)가 맨 아래 스크롤 때 '정산 마감' 버튼을 덮었다(버튼 면 21점 중 1024 11점 · 1280 4점이 FAB — '정' 한 글자만 보임).
+          FAB 자리(right 17 + 폭 42.5 ≈ 59.5px)+여백만큼 오른쪽을 비운다. 아래 실행 버튼 바(`pr-12`)와 같은 처방 — FAB 는 App.tsx(공용)라 손대지 않는다. */}
+      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
@@ -2024,7 +2034,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
-            {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
+            {/* T = 차감된 이용권 장수(2026-10-01) — 원(아래 대차표 tender.ticket)과 다를 수 있다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
             <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
@@ -3824,7 +3834,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
             <div className="flex justify-between"><dt className="text-ink-muted">현금</dt><dd className="text-emerald-300">{wonToMan(stats.tender.cash)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">카드</dt><dd className="text-emerald-300">{wonToMan(stats.tender.card)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">이체</dt><dd className="text-emerald-300">{wonToMan(stats.tender.transfer)}만원</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : ''} · 1T=1만)</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : ''})</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">가게지원 <span className="text-2xs">({stats.support}건)</span></dt><dd className="text-indigo-300">{wonToMan(stats.tender.support)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">미수</dt><dd className="text-danger-light">{wonToMan(stats.tender.unpaid)}만원</dd></div>
             {(() => {

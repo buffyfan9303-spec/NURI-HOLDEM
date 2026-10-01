@@ -19,6 +19,7 @@ import { useClockSecond } from '../../lib/clockTick';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
+import { voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
 import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
@@ -604,6 +605,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
       await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq), voucherUse);
       setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
+      // S-15 — 남은 이용권 요청 장수를 알린다(목록 자체는 실시간 구독이 맞춘다 — 여기서 덮으면 매장 전환 경합이 생긴다).
+      if (r.voucherId) {
+        getPendingBuyinRequests(venueId, r.sessionDate).then((rs) => {
+          const n = voucherLeftover(r, rs);
+          if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info');
+        }).catch(() => {});
+      }
     }
     catch (e) {
       // 20260930i — 이용권이 모자라면 서버가 숫자를 실어 준다. 남은 금액 결제 선택은 장부 접수대 카드에 있다.
@@ -832,7 +840,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           </button>
           <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
             className="min-h-[44px] flex-1 rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none lg:min-h-[32px] lg:border-transparent lg:bg-transparent lg:px-[8px] lg:underline lg:underline-offset-3 lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-7px]">
-            슬라이드
+            가이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
             className="grid min-h-[44px] flex-1 place-items-center rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none lg:min-h-[32px] lg:border-transparent lg:bg-transparent lg:px-[8px] lg:underline lg:underline-offset-3 lg:relative lg:before:absolute lg:before:inset-x-0 lg:before:inset-y-[-7px]">
@@ -1032,20 +1040,22 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                         {/* ⚠ 승인(✓)과 거절(✕)이 24px 로 6px 간격에 붙어 있었다.
                             접수대에서 한 손으로 누르는 자리인데, 오탭하면 손님이 거절되거나
                             엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
-                            시각 크기는 유지하면서 히트영역만 40px 로 키우고(-my 로 줄 높이는 그대로),
-                            둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
+                            히트영역을 40px 로 키우고 둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다.
+                            S-13(2026-10-01) — 예전엔 -my-2 로 줄 높이를 접어 42.5px 상자가 줄(25.5px) 밖으로 8.5px 씩 넘쳤다:
+                            마지막 줄 버튼이 아래 '장부에서 전체 관리' 링크를 9px 덮고(1440·1280·1024 실측), 요청이 2건 이상이면
+                            윗줄 ✓ 와 아랫줄 ✓ 가 서로 겹쳤다(오탭 = 엉뚱한 손님 승인). 음수 여백 없이 줄이 버튼 높이를 갖는다. */}
                         {r.voucherId != null && gameIsAddon(r.requestedGameSeq) && (
                           <button type="button" data-testid="dash-approve-voucher-addon" disabled={reqBusy === r.id} onClick={() => quickApprove(r, 'addon')}
                             title="이용권 → 최근 바인에 애드온(애드온 금액 ÷ 1만 장)"
-                            className="shrink-0 -my-2 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
+                            className="shrink-0 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
                         )}
                         <button type="button" disabled={reqBusy === r.id}
                           onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
                           onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}
                           title="탭: 승인(게임 추가) · 길게: 결제수단 선택해 바인 기록" aria-label="승인"
-                          className="shrink-0 -my-2 ml-0.5 flex h-10 min-w-10 items-center justify-center rounded-input bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-40"><Icon name="check" size={15} strokeWidth={2.6} /></button>
+                          className="shrink-0 ml-0.5 flex h-10 min-w-10 items-center justify-center rounded-input bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-40"><Icon name="check" size={15} strokeWidth={2.6} /></button>
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절" aria-label="거절"
-                          className="shrink-0 -my-2 ml-2 flex h-10 min-w-10 items-center justify-center rounded-input bg-danger/15 text-danger-light hover:bg-danger/25 active:scale-95 disabled:opacity-40"><Icon name="close" size={15} strokeWidth={2.6} /></button>
+                          className="shrink-0 ml-2 flex h-10 min-w-10 items-center justify-center rounded-input bg-danger/15 text-danger-light hover:bg-danger/25 active:scale-95 disabled:opacity-40"><Icon name="close" size={15} strokeWidth={2.6} /></button>
                         {payFor === r.id && (
                           <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-2 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
                             {/* 바인 금액 직접 수정(리바인·할인) */}

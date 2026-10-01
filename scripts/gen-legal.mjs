@@ -37,9 +37,9 @@ export const DOCS = [
   },
   {
     slug: 'privacy', export: 'privacy',
-    title: '개인정보 수집·이용 동의',
+    title: '개인정보처리방침',
     consent: '필수 동의',
-    desc: 'NURI HOLDEM 개인정보처리방침 및 개인정보 수집·이용 동의 — 회원가입 시 필수 동의 항목입니다.',
+    desc: 'NURI HOLDEM 개인정보처리방침 — 회원가입 시 개인정보 수집·이용 동의(필수)의 대상 문서입니다.',
   },
   {
     slug: 'anti-gambling', export: 'antiGambling',
@@ -142,12 +142,15 @@ const esc = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
-// ── 4) 페이지 템플릿 (JS 0줄 · 외부 리소스 0개 · 다크/라이트 양쪽) ───────────
+// ── 4) 페이지 템플릿 (JS 0줄 · 외부 출처 0개 — 같은 출처 글꼴 CSS 하나만 · 다크/라이트 양쪽) ───────────
 const CSS = [
   ":root{color-scheme:light dark;--bg:#FFFFFF;--panel:#F5F4F8;--line:#E2E0EA;--ink:#17151F;--sub:#3D3950;--mute:#6C6684;--accent:#6946C8;--danger:#B02A1E;--gold:#8A6D24}",
   "@media (prefers-color-scheme:dark){:root{--bg:#151221;--panel:#1D192E;--line:#2C2742;--ink:#F4F5F6;--sub:#CFCBDE;--mute:#948EB0;--accent:#A98BEC;--danger:#F1837A;--gold:#D9B25A}}",
   "*{box-sizing:border-box;margin:0}",
-  "body{background:var(--bg);color:var(--ink);font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;line-height:1.75;-webkit-text-size-adjust:100%}",
+  // 글꼴: 앱과 같은 self-host Pretendard. family 는 서브셋 CSS 가 정의하는 'Pretendard Variable' 이어야 실제로 붙는다
+  //   (예전 'Pretendard' 는 정의된 face 가 없어 전부 맑은 고딕으로 그려졌다 — 2026-09-30 CDP 실측, 10-01 수정).
+  //   'Pretendard FB Win/Android' = 같은 CSS 끝의 크기 맞춘 폴백(woff2 도착 전 첫 페인트와 도착 뒤 줄 배치를 맞춘다).
+  "body{background:var(--bg);color:var(--ink);font-family:'Pretendard Variable','Pretendard','Pretendard FB Win','Pretendard FB Android','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;line-height:1.75;-webkit-text-size-adjust:100%}",
   ".wrap{max-width:760px;margin:0 auto;padding:40px 20px 72px}",
   ".brand{display:block;font-size:12px;font-weight:700;letter-spacing:.2em;color:var(--gold);text-decoration:none}",
   "h1{font-size:26px;letter-spacing:-.01em;margin-top:10px}",
@@ -207,6 +210,7 @@ function page(doc, bodyHtml, biz) {
     '  <meta name="robots" content="index, follow">',
     '  <link rel="canonical" href="' + SITE + '/legal/' + doc.slug + '.html">',
     '  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">',
+    '  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">',
     '  <meta property="og:type" content="article">',
     '  <meta property="og:title" content="' + esc(doc.title) + ' | NURI HOLDEM">',
     '  <meta property="og:description" content="' + esc(doc.desc) + '">',
