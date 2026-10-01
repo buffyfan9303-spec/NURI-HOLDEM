@@ -31,9 +31,9 @@ const session = (seq: number, title: string) => ({
   opened_by: null, opened_at: new Date().toISOString(), reg_closed: false, closed: false, schedule_id: null, voucher_issued: 0,
 });
 
-async function open(page: Page, w: number, delayMs = 0, games = 2) {
+async function open(page: Page, w: number, delayMs = 0, games = 2, opts: { clock?: unknown; fail?: boolean } = {}) {
   await bootOwner(page, {
-    viewport: { width: w, height: 844 }, appSettings: { identity_voucher_enabled: 'on' },
+    viewport: { width: w, height: 844 }, appSettings: { identity_voucher_enabled: 'on' }, clock: opts.clock,
     extra: async (p) => {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
       // 메인+사이드 = 칩 줄이 뜨는 날(실매장 흔한 상태). delayMs = 요약 줄 '조회 전' 자리표시를 재기 위한 지연.
@@ -41,6 +41,7 @@ async function open(page: Page, w: number, delayMs = 0, games = 2) {
       //   game_seq=eq.N 조회(장부 보드 단건)는 그 게임 행만 돌려준다 — 칩 → 장부 보드 착지를 재려면 단건이 맞는 게임이어야 한다.
       const all = [session(1, '수요 딥스택'), session(2, '사이드 터보')].slice(0, games);
       await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => {
+        if (opts.fail && r.request().method() === 'GET') return r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'mock fail' }) });
         if (delayMs) await new Promise((res) => setTimeout(res, delayMs));
         const m = /game_seq=eq\.(\d+)/.exec(r.request().url());
         return get(m ? all.filter((s) => String(s.game_seq) === m[1]) : all)(r);
@@ -400,4 +401,103 @@ test('1440px — PC 요약은 대시보드 머리줄 그대로(매장 이름·�
   expect(m.headH, "PC 에 모바일 '오늘 장부 요약' 제목 줄이 보인다").toBeNull();
   expect(m.btns, 'PC 의 보이는 «대시보드 새로고침» 이 하나가 아니다').toBe(1);
   await expect(page.locator('[data-pane="dashboard"]').getByText(MOCK_VENUE_NAME, { exact: true }), 'PC 머리줄의 매장 이름이 없다').toBeVisible();
+});
+
+// ── 독립 검토 F1~F4(review-tabjump-e-1001.md, 2026-10-02) ─────────────────────────────────────────────
+
+/** 새 문서(리로드 직후)가 열린 순간부터 판 윗변(레일 밑변 기준)과 layout-shift 합을 rAF 로 기록한다. */
+const RECORD = `(() => {
+  const w = window; w.__cls = 0; w.__offs = [];
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) w.__cls += e.value; }).observe({ type: 'layout-shift', buffered: true }); } catch (_) {}
+  const tick = () => {
+    const rail = document.querySelector('[data-mystore-rail]');
+    const pane = [...document.querySelectorAll('[data-mystore-secpanel] [data-pane]')].find((e) => e.getClientRects().length > 0);
+    if (rail && pane) w.__offs.push(Math.round((pane.getBoundingClientRect().top - rail.getBoundingClientRect().bottom) * 10) / 10);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();`;
+
+test('F1 · 390px · 게임 2개 — 캐시가 있는 재진입은 첫 화면(요약)부터 칩 줄이 있어 CLS 0 · 판 이동 0', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 390, 800);
+  await expect(page.locator('[data-mystore-secpanel] [data-pane]').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('group', { name: '오늘 게임 선택' }), '첫 진입(캐시 없음)에서도 칩 줄은 결국 떠야 한다').toBeVisible({ timeout: 10_000 });
+  await page.addInitScript(RECORD);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await openMyStore(page);
+  await expect(page.locator(RAIL)).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(3500);
+  const r = await page.evaluate(() => ({ cls: (window as unknown as { __cls: number }).__cls, offs: (window as unknown as { __offs: number[] }).__offs }));
+  console.log('F1 재진입', JSON.stringify({ cls: r.cls, n: r.offs.length, min: Math.min(...r.offs), max: Math.max(...r.offs) }));
+  expect(r.offs.length, '판을 한 번도 못 쟀다(거짓 통과 방지)').toBeGreaterThan(20);
+  expect(Math.max(...r.offs) - Math.min(...r.offs), `재진입 중 판 윗변이 움직였다: ${Math.min(...r.offs)}~${Math.max(...r.offs)}`).toBeLessThanOrEqual(1);
+  expect(r.cls, `재진입 CLS ${r.cls}`).toBeLessThan(0.001);
+  // 칩 목록이 매장|영업일 키로 sessionStorage 에 남았다(재진입 측정 뒤 확인 — 밀림 단언이 먼저 실패해야 음성 대조가 성립한다)
+  const keys = await page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('nuri:chips:')));
+  expect(keys.length, '칩 목록이 sessionStorage 에 저장되지 않았다').toBeGreaterThanOrEqual(1);
+  expect(keys.every((k) => k.includes(MOCK_VENUE)), `매장 키가 없는 캐시 키: ${keys.join(',')}`).toBe(true);
+});
+
+test('F1 · 다른 매장·영업일 키의 캐시는 읽지 않는다(매장 섞임 0)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    try { sessionStorage.setItem('nuri:chips:00000000-0000-4000-8000-0000000000aa|2000-01-01', JSON.stringify([{ gameSeq: 1, buyinAmount: 0, regClosed: false, closed: false }, { gameSeq: 2, buyinAmount: 0, regClosed: false, closed: false }])); } catch { /* */ }
+  });
+  await open(page, 390, 0, 1);
+  await expect(page.locator('[data-pane]').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('group', { name: '오늘 게임 선택' }), '다른 매장 캐시의 칩 줄이 이 매장에 떴다').toHaveCount(0);
+});
+
+test('F2 · 390px — 포스터 헤더 ⓘ 누름 상자 44px(세로 4점 적중), 겉보기 크기 그대로', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 390);
+  expect(await step(page, '포스터'), '레일에 «포스터» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(500);
+  const m = await page.evaluate(() => {
+    const b = [...document.querySelectorAll<HTMLElement>('[data-desc-toggle]')].find((e) => e.getClientRects().length > 0 && !e.closest('[inert]'))!;
+    const r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const hit = [[0, -21.5], [0, 21.5], [-21.5, 0], [21.5, 0]].filter(([dx, dy]) => { const el = document.elementFromPoint(cx + dx, cy + dy); return !!el && (el === b || b.contains(el)); }).length;
+    return { w: r.width, h: r.height, hit };
+  });
+  console.log('F2 ⓘ', JSON.stringify(m));
+  expect(m.hit, 'ⓘ 누름 상자가 세로 44px 에 못 미친다(4점 적중 아님)').toBe(4);
+  expect(m.h, '겉보기 높이가 달라졌다').toBeLessThanOrEqual(34.5);
+});
+
+test('F3 · 320px · 진행 클락(라이브) — 요약 제목과 갱신 시각·라이브 칩이 겹치지 않는다', async ({ page }) => {
+  test.setTimeout(120_000);
+  const clock = {
+    venue_id: MOCK_VENUE, game_seq: 1, session_date: null, title: '수요 딥스택',
+    config: { title: '수요 딥스택', startStack: 50_000, rebuyStack: 70_000, addonStack: 0, isAddon: false, earlyBonus: 0, doubleEarlyBonus: 0, regCloseLevel: 3, maxLevel: 26,
+      earlyDoubleLevel: 0, earlySingleLevel: 0, earlyDoubleMin: 0, earlySingleMin: 0, mysteryBounty: 0, prizes: [], levels: [{ kind: 'level', sb: 100, bb: 200, ante: 200, minutes: 20 }] },
+    current_index: 0, running: true, ends_at: new Date(Date.now() + 12 * 60_000).toISOString(), remaining_ms: 0,
+    adj_entries: 0, adj_rebuys: 0, adj_earlies: 0, adj_addons: 0, eliminations: 0,
+    live_stats: { entries: 10, rebuys: 0, earlies: 0, addons: 0, alive: 10, eliminations: 0, avgStack: 50_000, totalStack: 500_000, buyInAmount: 100_000 },
+  };
+  await open(page, 320, 0, 2, { clock });
+  expect(await step(page, '요약'), '레일에 «요약» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(800);
+  const m = await page.evaluate(() => {
+    const head = document.querySelector<HTMLElement>('[data-dash-head]')!;
+    const h2 = head.querySelector('h2')!;
+    const slot = head.querySelector<HTMLElement>('[data-dash-refresh-slot]')!;
+    const vis = [...slot.children].filter((e) => e.getClientRects().length > 0) as HTMLElement[];
+    const left = Math.min(...vis.map((e) => e.getBoundingClientRect().left));
+    return { gap: left - h2.getBoundingClientRect().right, live: vis.some((e) => e.textContent?.includes('라이브')), n: vis.length };
+  });
+  console.log('F3 320 라이브', JSON.stringify(m));
+  expect(m.live, '라이브 칩이 보이지 않는다(라이브 상태 재현 실패 — 거짓 통과 방지)').toBe(true);
+  expect(m.gap, `제목 오른쪽 끝과 오른쪽 묶음 사이 ${m.gap}px(겹침)`).toBeGreaterThanOrEqual(0);
+});
+
+test('F4 · 390px — 요약 조회 실패 시 제목 줄에 «불러오는 중» 이 남지 않는다', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 390, 0, 2, { fail: true });
+  expect(await step(page, '요약'), '레일에 «요약» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(1500);
+  const t = await page.locator('[data-dash-head] [data-dash-refreshed]').first().textContent();
+  console.log('F4 실패 상태 시각 칸', JSON.stringify(t));
+  expect(t ?? '', "실패했는데 제목 줄이 '불러오는 중' 이다").not.toContain('불러오는 중');
 });

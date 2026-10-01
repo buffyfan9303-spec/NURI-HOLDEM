@@ -874,8 +874,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           자리가 없으면(머리 칸 미렌더) 종전대로 표지판 줄을 보인다 — 새로고침이 사라지는 경로는 없다. PC 는 종전 그대로. */}
       {refreshSlot && createPortal(
         <>
-          <span className="text-2xs tabular-nums text-ink-muted" data-dash-refreshed="">
-            {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : '불러오는 중'}
+          {/* F3: 320px + 라이브 칩이면 제목과 2.1px 겹쳤다 — 그 폭에서만 시각을 접는다(라이브 칩·새로고침이 우선) */}
+          <span className={`text-2xs tabular-nums text-ink-muted${liveWidget ? ' max-[339px]:hidden' : ''}`} data-dash-refreshed="">
+            {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : loadErr ? '불러오지 못함' : '불러오는 중'}
           </span>
           {liveWidget && (
             <span className="flex shrink-0 items-center gap-1 rounded-chip border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">
@@ -929,7 +930,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               같은 줄 오른쪽 끝에 붙인다(ml-auto). 시각은 PC 에서만 — 360px 에선 매장명이 먼저다. */}
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             <span className="hidden text-2xs tabular-nums text-ink-muted lg:inline">
-              {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : '불러오는 중'}
+              {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : loadErr ? '불러오지 못함' : '불러오는 중'}
             </span>
             {/* 2026-09-24 모바일 44px — 종전 h-8(34px). 음수 세로 여백으로 이 표지판 줄 높이는 그대로 둔다(py-2 안에서 겹침).
                 PC(lg)는 종전 h-8 그대로. */}

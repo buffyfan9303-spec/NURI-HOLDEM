@@ -1143,7 +1143,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               const oneLine = 'max-lg:[&_.flex-wrap]:flex-nowrap max-lg:[&_h2]:shrink-0 max-lg:[&_.t-desc]:min-w-0 max-lg:[&_.t-desc]:truncate';
               const fold = (open: boolean) => (open ? '' : oneLine);
               const descBtn = (id: string, open: boolean) => (SECTION_DESC[id as keyof typeof SECTION_DESC] ? (
-                <button type="button" className="lg:hidden text-ink-muted" data-desc-toggle=""
+                <button type="button" className="relative lg:hidden text-ink-muted before:absolute before:-inset-y-[5px] before:inset-x-0" data-desc-toggle=""
                   aria-expanded={open} aria-controls={`step-head-${id}`} aria-label={open ? '설명 접기' : '설명 펼치기'}
                   onClick={() => setDescOpenKey(open ? null : descKey)}>
                   <Icon name="info" size={16} />
@@ -1481,7 +1481,27 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
 // F5(2026-09-29) — 칩 목록 캐시(매장|영업일). GameChipBar 는 게임 단계에서만 마운트돼 들어올 때마다 games=[] 로 시작했고,
 //   조회가 끝난 뒤에야 칩 줄(46.75px)이 끼어 본문이 47px 밀렸다(1280 실측, 600ms 지연 CLS 0.0164).
 //   마지막으로 받은 목록으로 첫 렌더를 하고, 조회는 종전대로 다시 한다(stale-while-revalidate).
-const chipCache = new Map<string, LedgerGame[]>();
+// F1(2026-10-02) — 앱을 새로 열 때도 첫 화면(요약)에서 칩 줄이 뒤늦게 끼어 판이 46.7px 밀렸다(CLS 0.038). 같은 키로 sessionStorage 에도
+//   남겨 두고 첫 렌더에 읽는다. 키가 매장|영업일이라 다른 매장·다른 날 캐시는 읽히지 않는다. 서버 응답이 오면 덮어쓴다.
+//   저장소 접근은 전부 try/catch(사생활 보호 모드·차단 시 메모리 캐시만 쓴다). 첫 설치(캐시 없음) 1회 밀림은 남는다.
+const chipCache = {
+  m: new Map<string, LedgerGame[]>(),
+  has(k: string) { return this.get(k) !== undefined; },
+  get(k: string): LedgerGame[] | undefined {
+    const hit = this.m.get(k);
+    if (hit) return hit;
+    try {
+      const raw = sessionStorage.getItem(`nuri:chips:${k}`);
+      const v: unknown = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(v) && v.every((x) => x && typeof (x as LedgerGame).gameSeq === 'number')) { this.m.set(k, v as LedgerGame[]); return v as LedgerGame[]; }
+    } catch { /* 저장소 차단·깨진 값 — 캐시 없음으로 */ }
+    return undefined;
+  },
+  set(k: string, g: LedgerGame[]) {
+    this.m.set(k, g);
+    try { sessionStorage.setItem(`nuri:chips:${k}`, JSON.stringify(g)); } catch { /* 용량·차단 */ }
+  },
+};
 function warmGameChips(venueId: string) {
   const key = `${venueId}|${businessDateOf(venueId)}`;
   if (chipCache.has(key)) return;
