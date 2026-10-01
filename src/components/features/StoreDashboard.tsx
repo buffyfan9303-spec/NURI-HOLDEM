@@ -1,5 +1,6 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -113,6 +114,9 @@ interface Props {
   active?: boolean;
   /** 오늘 5단계의 완료·목적지를 상위 단계 알약 바로 올린다(대시보드 안 숫자 스트립의 후계). */
   onProgress?: (steps: StoreStepMap | null) => void;
+  /** 모바일(<1024) 머리 칸 '오늘 장부 요약' 제목 줄의 오른쪽 자리(VenueManageTab). 있으면 갱신 시각·라이브·새로고침을 그리로 보낸다.
+   *  오너 10-02 「중복 줄을 빈칸으로 올리기」 — 모바일에선 아래 표지판 줄(매장 · 날짜)이 위 요약 줄을 되풀이해 숨긴다. */
+  refreshSlot?: HTMLElement | null;
 }
 
 /**
@@ -123,7 +127,7 @@ interface Props {
 // 소수 4자리·천단위 없이 떴다. 장부 바(NuriPosLedger '티켓')와 **같은 표기**(소수 1자리 + 천단위)로 맞춘다.
 const fmtT = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
-export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
+export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress, refreshSlot }: Props) {
   const toast = useToast();
   // B1(2026-09-28) — '오늘'은 매장 **영업일**이다(서버 ledger_business_date 와 같은 값). 자정을 넘긴 토너에서
   //   달력 오늘을 쓰면 00:30 에 '미시작'이 뜨고 손님 바인 요청(날짜=어제 영업일)이 대기열에서 사라졌다.
@@ -865,7 +869,28 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             (bg-surface-base 는 평평한 #06080F 라 아우라 블룸이 깔린 주변 위에서 검은 상자로 떴고,
              블룸을 섞은 subbar-aura 로 바꿔 보니 이번엔 보라 띠가 돼 더 도드라졌다 — 실측 확인.)
           PC(lg+): 종전 그대로 sticky + 불투명 배경 — 업주는 밀도가 우선이라 표지판을 붙들어 둔다. */}
-      <div className="border-b border-border-subtle py-2 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)-1px)] lg:z-20 lg:-mb-1 lg:bg-surface-base lg:before:pointer-events-none lg:before:absolute lg:before:inset-x-0 lg:before:-top-3 lg:before:h-3 lg:before:bg-surface-base">
+      {/* 🔴 오너 10-02 「중복 줄을 빈칸으로 올리기」 — 모바일은 아래 표지판 줄(위 요약 줄과 같은 말)을 숨기고,
+          갱신 시각·라이브·새로고침만 머리 칸 '오늘 장부 요약' 오른쪽(refreshSlot)으로 portal 한다. 상태·동작은 여기 그대로.
+          자리가 없으면(머리 칸 미렌더) 종전대로 표지판 줄을 보인다 — 새로고침이 사라지는 경로는 없다. PC 는 종전 그대로. */}
+      {refreshSlot && createPortal(
+        <>
+          <span className="text-2xs tabular-nums text-ink-muted" data-dash-refreshed="">
+            {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : '불러오는 중'}
+          </span>
+          {liveWidget && (
+            <span className="flex shrink-0 items-center gap-1 rounded-chip border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />라이브
+            </span>
+          )}
+          {/* 머리 칸 action 은 버튼을 h-8(34px)로 맞춘다 — 누름 상자는 before 로 사방 5px 를 보태 44px(2026-09-24 히트영역). */}
+          <button type="button" title="새로고침" aria-label="대시보드 새로고침"
+            disabled={refreshing || loading}
+            onClick={() => { setRefreshing(true); void Promise.resolve(reload()).finally(() => setRefreshing(false)); }}
+            className="relative grid w-8 place-items-center px-0! rounded-input text-ink-muted transition-colors before:absolute before:-inset-[5px] hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
+            <Icon name="refresh" size={13} className={refreshing ? 'animate-spin' : undefined} />
+          </button>
+        </>, refreshSlot)}
+      <div className={`border-b border-border-subtle py-2 ${refreshSlot ? 'max-lg:hidden ' : ''}lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)-1px)] lg:z-20 lg:-mb-1 lg:bg-surface-base lg:before:pointer-events-none lg:before:absolute lg:before:inset-x-0 lg:before:-top-3 lg:before:h-3 lg:before:bg-surface-base`}>
         {/* 이 줄은 파이프라인의 '지금 어디' 표지판이다 — 매장 · 진행 여부 · 날짜.
             2026-09-04 오너 지시로 다듬음. 원칙 3가지:
              ① **한 줄 유지** — 스티키라 높이를 늘리면 PC 대시보드의 세로를 영구히 먹는다(업주는 밀도 우선).

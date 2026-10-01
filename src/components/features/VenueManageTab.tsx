@@ -852,6 +852,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [descOpenKey, setDescOpenKey] = useState<string | null>(null);
   if (descOpenKey !== null && descOpenKey !== descKey) setDescOpenKey(null);
   const descOpen = descOpenKey === descKey;
+  // 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약 머리 칸의 '오늘 장부 요약' 제목 줄 오른쪽 자리.
+  //   StoreDashboard 가 자기 새로고침(갱신 시각·라이브·버튼)을 이 자리로 portal 한다(상태·동작은 대시보드에 그대로).
+  const [dashRefreshSlot, setDashRefreshSlot] = useState<HTMLElement | null>(null);
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -1171,13 +1174,24 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                         </div>
                       );
                     })}
-                    {/* 요약 헤더는 모바일에서 계속 숨긴다(2026-09-24 결정 — 단계 바 '요약'과 같은 말 두 번 금지, e2e store-nav).
-                        invisible 이라 칸은 그대로 예약되고 낭독·포커스에서도 빠진다. PC 는 그대로 보인다. */}
+                    {/* '대시보드' 헤더는 모바일에서 계속 숨긴다(2026-09-24 결정 — 단계 바 '요약'과 같은 말 두 번 금지, e2e store-nav).
+                        그 칸은 아래 '오늘 장부 요약' 머리줄(모바일 전용)이 쓴다. PC 는 그대로 보인다. */}
                     {!isGame && (
                       <div id={`step-head-${renderSection}`}
-                        className={[renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:invisible' : '[grid-area:1/1]', fold(descOpen)].join(' ')}>
+                        className={[renderSection === 'dashboard' ? '[grid-area:1/1] max-lg:hidden' : '[grid-area:1/1]', fold(descOpen)].join(' ')}>
                         <SectionHeader title={dItem?.label ?? ''} desc={SECTION_DESC[renderSection]} icon={SECTION_ICON[renderSection]}
                           action={descBtn(renderSection, descOpen)} />
+                      </div>
+                    )}
+                    {/* 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약은 이 칸에 '오늘 장부 요약' 제목 + 새로고침.
+                        종전엔 이 칸이 invisible 로 비고(≈60px 빈 띠), 그 아래 대시보드 머리줄 '매장 · 날짜 · ⟳' 이
+                        바로 위 요약 줄(매장 › 날짜 › 오늘 게임)을 되풀이했다. 그 줄은 모바일에서 숨기고 새로고침만 여기로 올린다.
+                        제목은 단계 바 '요약' 과 같은 말이 아니게 '오늘 장부 요약'(store-nav '대시보드' 헤더 숨김 계약 유지).
+                        PC(lg+)는 종전 '대시보드' 헤더 + 대시보드 머리줄 그대로. */}
+                    {renderSection === 'dashboard' && (
+                      <div data-dash-head="" className={['[grid-area:1/1] lg:hidden', oneLine].join(' ')}>
+                        <SectionHeader title="오늘 장부 요약" icon={SECTION_ICON.dashboard}
+                          action={<span ref={setDashRefreshSlot} data-dash-refresh-slot="" className="flex items-center gap-1.5" />} />
                       </div>
                     )}
                   </div>
@@ -1223,7 +1237,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
-                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo}
+                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}

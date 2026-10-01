@@ -216,9 +216,10 @@ const chrome = (page: Page) => page.evaluate((sel) => {
     lineTop: line ? line.getBoundingClientRect().top - rb : null, heads, over };
 }, RAIL);
 
-// 상한(수정 후 실측 + 여유): 요약 = 숨긴 제목 줄 34 + 표준 간격 12.75×2 ≈ 59.5 → ≤ 62 · 이용권 = 보이는 헤더까지 간격 12.75 → ≤ 16.
-//   수정 전 63f77152(칩 invisible): 2게임 요약 107.3 · 이용권 ≈ 68 로 빨갛다. 1게임 날은 칩 줄이 없어(게임 단계와 같은 규칙) 전후 같다.
-const BLANK_MAX = { 요약: 62, 이용권: 16 } as const;
+// 상한: 머리 칸 마지막 줄 → 보이는 헤더까지 = 표준 간격(space-y-3 = 12.75) → ≤ 16. 요약·이용권 같은 값.
+//   이력: 63f77152(칩 invisible) 요약 107.3 · 이용권 ≈ 68 → 9e0a5326(칩 보임) 요약 60.5(숨긴 제목 줄 34 + 12.75×2)로 빨갛다.
+//   🔴 오너 10-02 「중복 줄을 빈칸으로 올리기」 — 요약도 그 칸에 '오늘 장부 요약' 제목 줄을 보여 다른 단계와 같은 간격이 됐다.
+const BLANK_MAX = { 요약: 16, 이용권: 16 } as const;
 for (const G of [2, 1] as const) for (const W of [360, 390, 412] as const) {
   test(`${W}px · 게임 ${G}개 — 레일 헤더는 한 줄, 요약·이용권 머리 칸 빈 칸 상한(요약 ≤ ${BLANK_MAX.요약} · 이용권 ≤ ${BLANK_MAX.이용권})`, async ({ page }) => {
     test.setTimeout(120_000);
@@ -332,3 +333,71 @@ for (const from of ['요약', '이용권'] as const) {
       .toHaveText([/사이드1/], { timeout: 10_000 });
   });
 }
+
+// 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약 판의 대시보드 머리줄('매장 · 날짜 · ⟳')은
+//   바로 위 요약 줄(매장 › 날짜 › 오늘 게임)을 되풀이했다. 그 줄을 모바일에서 없애고, 비어 있던 머리 칸 제목 자리에
+//   '오늘 장부 요약' 제목 + 새로고침(갱신 시각·접근성 이름 그대로)을 둔다. PC 는 머리줄 그대로.
+//   재는 것: ① 보이는 매장 이름이 요약 줄 하나뿐(중복 0) ② 제목 줄이 보이고 다른 단계 헤더와 같은 높이·자리 ③ 보이는 새로고침은 정확히 하나,
+//   그 줄 안에 있고 누름 상자 ≥44 ④ 누르면 오늘 장부를 다시 조회한다 ⑤ 'HH:MM 기준' 표시. 9e0a5326(머리줄 남음·제목 숨김)에서 빨갛다.
+const dashHead = (page: Page, venue: string) => page.evaluate(([sel, v]) => {
+  const vis = (e: Element) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible';
+  const tab = document.querySelector<HTMLElement>('[data-tab="my-store"]')!;
+  // 매장 이름이 보이는 잎 요소 — 요약 줄 1개만 있어야 한다(머리줄이 남으면 2)
+  const names = [...tab.querySelectorAll<HTMLElement>('span')].filter((s) => s.children.length === 0 && s.textContent?.trim() === v && vis(s));
+  const btns = [...tab.querySelectorAll<HTMLElement>('button[aria-label="대시보드 새로고침"]')].filter(vis);
+  const head = [...tab.querySelectorAll<HTMLElement>('[data-step-header] header')].find((h) => vis(h) && h.querySelector('h2')?.textContent === '오늘 장부 요약');
+  const b = btns[0];
+  let hit = 0;
+  if (b) {
+    const r = b.getBoundingClientRect(); const cx = r.left + r.width / 2; const cy = r.top + r.height / 2;
+    // 누름 상자 — 중심에서 ±21px 네 점이 모두 그 버튼에 닿는가(before 확장 포함 = 지름 42 이상, 테두리까지 44)
+    hit = [[cx, cy - 21], [cx, cy + 21], [cx - 21, cy], [cx + 21, cy]].filter(([x, y]) => b.contains(document.elementFromPoint(x, y))).length;
+  }
+  const rb = document.querySelector<HTMLElement>(sel)!.getBoundingClientRect().bottom;
+  return { names: names.length, btns: btns.length, inHead: !!(b && head?.contains(b)), headH: head ? head.getBoundingClientRect().height : null,
+    headTop: head ? head.getBoundingClientRect().top - rb : null, hit, stamp: head?.querySelector('[data-dash-refreshed]')?.textContent ?? null };
+}, [RAIL, venue] as const);
+
+test('390px · 게임 2개 — 요약: 대시보드 머리줄 중복 0 · 제목 줄에 새로고침(동작·이름·갱신 시각) · 다른 단계와 같은 헤더', async ({ page }) => {
+  test.setTimeout(120_000);
+  let calls = 0;
+  page.on('request', (r) => { if (/\/rest\/v1\/ledger_sessions\?/.test(r.url()) && r.method() === 'GET') calls++; });
+  await open(page, 390);
+  expect(await step(page, '요약'), '레일에 «요약» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(600);
+  const m = await dashHead(page, MOCK_VENUE_NAME);
+  console.log('요약 머리', JSON.stringify(m));
+  expect(m.names, `보이는 매장 이름이 ${m.names}곳 — 요약 줄 하나여야 한다(대시보드 머리줄 중복)`).toBe(1);
+  expect(m.headH, "'오늘 장부 요약' 제목 줄이 보이지 않는다").not.toBeNull();
+  expect(m.btns, '보이는 «대시보드 새로고침» 이 정확히 하나가 아니다').toBe(1);
+  expect(m.inHead, '새로고침이 제목 줄 안에 있지 않다').toBe(true);
+  expect(m.hit, '새로고침 누름 상자가 44px 미만이다').toBe(4);
+  expect(m.stamp ?? '', '마지막 갱신 시각이 없다').toMatch(/^\d{2}:\d{2} 기준$/);
+  // 다른 단계 제목 줄과 같은 높이·같은 자리
+  expect(await step(page, '클락'), '레일에 «클락» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(400);
+  const c = await page.evaluate((sel) => {
+    const h = [...document.querySelectorAll<HTMLElement>('[data-step-header] header')].find((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible')!;
+    return { h: h.getBoundingClientRect().height, top: h.getBoundingClientRect().top - document.querySelector<HTMLElement>(sel)!.getBoundingClientRect().bottom };
+  }, RAIL);
+  expect(Math.abs(m.headH! - c.h), `제목 줄 높이 ${m.headH} ≠ 클락 ${c.h}`).toBeLessThanOrEqual(1);
+  expect(Math.abs(m.headTop! - c.top), `제목 줄 위치 ${m.headTop} ≠ 클락 ${c.top}`).toBeLessThanOrEqual(1);
+  // 새로고침 동작 — 오늘 장부를 다시 조회한다
+  expect(await step(page, '요약'), '레일에 «요약» 칸이 없다').not.toBeNull();
+  await page.waitForTimeout(400);
+  const before = calls;
+  await page.getByRole('button', { name: '대시보드 새로고침' }).click();
+  await expect.poll(() => calls > before, { message: '새로고침을 눌렀는데 오늘 장부를 다시 조회하지 않았다', timeout: 10_000 }).toBe(true);
+  await expect(page.getByRole('button', { name: '대시보드 새로고침' }), '새로고침이 끝나지 않는다').toBeEnabled({ timeout: 10_000 });
+});
+
+test('1440px — PC 요약은 대시보드 머리줄 그대로(매장 이름·새로고침 하나), 모바일 제목 줄 없음', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page, 1440);
+  await expect(page.locator('[data-pane="dashboard"]')).toBeVisible({ timeout: 20_000 });
+  const m = await dashHead(page, MOCK_VENUE_NAME);
+  console.log('PC 요약 머리', JSON.stringify(m));
+  expect(m.headH, "PC 에 모바일 '오늘 장부 요약' 제목 줄이 보인다").toBeNull();
+  expect(m.btns, 'PC 의 보이는 «대시보드 새로고침» 이 하나가 아니다').toBe(1);
+  await expect(page.locator('[data-pane="dashboard"]').getByText(MOCK_VENUE_NAME, { exact: true }), 'PC 머리줄의 매장 이름이 없다').toBeVisible();
+});
