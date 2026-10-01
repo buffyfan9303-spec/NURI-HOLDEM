@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
-import type { AppNotification, NotificationType } from '../../api/notifications';
+import type { AppNotification } from '../../api/notifications';
 import {
   listMyThreads, listThread, sendMessage, markThreadRead,
   type DirectMessage, type MessageThread,
@@ -12,7 +12,8 @@ import { blockUser } from '../../api/blocks';
 import { useToast } from '../atoms/Toast';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import Icon, { type IconName } from '../atoms/Icon';
+import Icon from '../atoms/Icon';
+import { notifGlyph } from '../../lib/notifLink';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 import { relativeTime } from '../../lib/relativeTime';
@@ -37,16 +38,7 @@ interface NotificationPanelProps {
   onInternalLink?: (u: URL) => boolean;
 }
 
-// ── 타입 → Icon 레지스트리 글리프 매핑 (커스텀 인라인 SVG 제거, PATHS 단일 소스) ──
-// qna·comment 는 둘 다 대화성 알림이라 가장 가까운 글리프가 동일하다(제목 텍스트로 구분).
-const TYPE_GLYPH: Record<NotificationType, IconName> = {
-  qna: 'comment',
-  comment: 'comment',
-  mention: 'user',
-  approval: 'check-circle',
-  system: 'info',
-  reminder: 'clock',
-};
+// ── 아이콘: link(결정 결과 알림의 종류) → type 순으로 읽는다 — 정본 src/lib/notifLink.ts(라우터와 같은 해석) ──
 
 
 // 말풍선 옆 시각 — 당일이면 HH:MM, 그 외엔 M/D
@@ -671,12 +663,12 @@ export default function NotificationPanel({
                   >
                     {n.avatarText
                       ? <span className="text-sm font-bold leading-none">{n.avatarText}</span>
-                      : <Icon name={TYPE_GLYPH[n.type]} size={16} />}
+                      : <Icon name={notifGlyph(n)} size={16} />}
                   </div>
                   {/* 우하단 겹침 타입 글리프 배지 (텍스트 아바타일 때) */}
                   {n.avatarText && (
                     <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-surface-mid border border-border-default flex items-center justify-center text-ink-secondary">
-                      <Icon name={TYPE_GLYPH[n.type]} size={10} strokeWidth={2.5} />
+                      <Icon name={notifGlyph(n)} size={10} strokeWidth={2.5} />
                     </span>
                   )}
                 </div>
