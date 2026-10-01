@@ -159,6 +159,27 @@ describe('불변식', () => {
     expect(panel).not.toMatch(/t\.revenue - t\.targetRevenue/);
   });
 
+  it('🔴 6 서버(20261001j) — 비밀번호 감액도 이용권 장수를 못 바꾸고, 잠금 문구는 접수대용 합니다체(오너 10-01 ①②)', () => {
+    const sql = readFileSync(join(__dirname, '../../supabase/migrations/20261001j_voucher_t_is_count.sql'), 'utf-8').replace(/\r\n/g, '\n');
+    const fn = (name: string) => {
+      const i = sql.indexOf(`create or replace function public.${name}(`);
+      expect(i, name).toBeGreaterThan(-1);
+      return sql.slice(i, sql.indexOf('\nend', i));
+    };
+    const MSG = '이용권으로 승인한 바인은 결제 수단·할인·이용권 장수를 바꿀 수 없습니다(남은 금액의 결제 방법만 바꿀 수 있습니다). 바꾸려면 바인을 취소한 뒤 다시 승인하십시오.';
+    const reduce = fn('update_ledger_buyin_reduce');
+    expect(reduce).toMatch(/r\.request_id is not null and coalesce\(r\.ticket_count, 0\) > 0\s+and \(x\.ticket_count is distinct from r\.ticket_count or x\.is_split is distinct from r\.is_split\)/);
+    expect(reduce).toContain(MSG);
+    // 감액 금액 규칙은 그대로 거친다(양성: 금액만 줄이는 수정은 통과 — 리허설 R3·R4)
+    expect(reduce).toContain('x := public._ledger_buyin_apply_amount_rule(x);');
+    expect(fn('_ledger_buyins_client_guard')).toContain(MSG);
+    // 라이브 정의 게이트 4개 · 적용 전 초안 표기
+    for (const m of ['de5cd99da0c1aadb34e5535bcb7705da', '35e7504abaae6d7c62ce93f3eaebdfde', 'eee44d4d0c9c53e9fda390227d5f30c2', 'a74bbdeaaeea76735902521a400a720e']) {
+      expect(sql.split('do $gate$')[1]?.split('end $gate$')[0], m).toContain(m);
+    }
+    expect(sql.split('\n')[0]).toMatch(/^-- ⏳ 초안\(미적용\)/);
+  });
+
   it('5 분납·수동 행은 예전과 같은 수(음성 대조군)', () => {
     const s = sess(100_000);
     // 접수대 분납: 7장 + 현금 3만 → T 7 · 이용권 7만 · 현금 3만

@@ -11,7 +11,7 @@
 --     → 12만·N=10 게임 10장이면 장부 12T 인데 지갑에서 사라진 건 10장(S-01).
 --   · N 미설정(·N=1) 게임은 바인·애드온 모두 1장 = 참가 1회(결정 ②) → 10만 바인 1장이 장부 10T(S-02).
 --
--- 이 파일이 바꾸는 것(두 함수 · create or replace → ACL 보존, REVOKE/GRANT 재기재 · 스키마·테이블·트리거 정의 변경 없음)
+-- 이 파일이 바꾸는 것(네 함수 · create or replace → ACL 보존, REVOKE/GRANT 재기재 · 스키마·테이블·트리거 정의 변경 없음)
 --   §1 _ledger_buyin_addon_rule(트리거 함수) — 전액 이용권 애드온이 장수 k 를 가질 수 있게:
 --      · 'ticket' 으로 **바꾸는** 분납 애드온만 막는다(예전: 몫 > 0 인 'ticket' 행 전부 거절 → k 기록 불가).
 --      · 몫 × 1만 검사: 분납 < 금액(그대로) · 전액 이용권 ≤ 금액(새로).
@@ -24,22 +24,27 @@
 --      · 남은 금액이 없을 때(전액 이용권) 행에 k 를 남긴다: 바인 ticket_count = k · 애드온 addon_ticket_count = k.
 --        돈은 안 바뀐다 — 분납 아닌 ticket 행은 _ledger_buyin_tiers·buyinFinance 가 참가비 − 할인으로 세고 ticket_count 를 읽지 않는다.
 --        라이브 §E(client_guard)가 이미 'request_id 있고 ticket_count > 0' 행의 장수·분납 여부를 화면에서 잠근다 → 이제 전액 행도 잠긴다.
+--   §3 _ledger_buyins_client_guard(트리거 함수) — 본문은 라이브(20260930i §E)와 같고 장수 잠금 오류 문구만 접수대용 합니다체로(오너 10-01 ①).
+--   §4 update_ledger_buyin_reduce(비밀번호 감액 RPC) — 접수대 이용권 승인 행(request_id 있고 ticket_count > 0)의 ticket_count·is_split 을
+--      바꾸려 하면 42501(오너 10-01 ②). 금액 감액(남은 금액 수단·미수 전환·현금 행 할인 등)은 그대로. 나머지 본문은 라이브(md5 a74bbdea)와 같다.
 --   클라이언트(같은 브랜치 NURI/money-1001): buyinFinance ticket 분기 T = requestId && ticketCount > 0 ? ticketCount : net ÷ 1만,
 --      addonFinance.ticketT = 전액 이용권이면 addon_ticket_count(없으면 금액 ÷ 1만), ticketUsedT = 바인 장수 + 애드온 장수.
 --      클라를 먼저 배포해도 안전하다(서버 적용 전 행은 장수 0 → 예전 식). 서버를 먼저 적용해도 옛 클라는 ticket_count 를 안 읽어 예전 표시 그대로.
 --
--- 바뀌는 동작(의도) — 리드 확인 요망
---   B1 전액 이용권으로 승인된 바인을 화면에서 현금 등으로 고치거나 할인을 바꾸면 42501('이용권 장수는 바꿀 수 없습니다 — 취소하고 다시 승인')
+-- 바뀌는 동작(오너 10-01 확정)
+--   B1 전액 이용권으로 승인된 바인을 화면에서 현금 등으로 고치거나 할인을 바꾸면 42501 — '취소 후 다시 승인'
 --      (upsertBuyin 이 ticket_count 0 을 보내기 때문). 예전엔 통과해 이용권은 쓰인 채 행만 현금이 됐다(20260930i 머리말 '남은 틈' 첫 항목).
---   B2 N 미설정 게임의 이용권 바인은 1장 → 참가비 ÷ 1만 장. 손님 화면 안내 문구(1장 = 참가 1회)가 있으면 같이 바꿔야 한다.
+--      비밀번호 감액 RPC 도 같은 잠금(§4) — 20260930i 머리말 '남은 틈' 둘째 항목을 닫는다.
+--   B2 N 미설정 게임의 이용권 바인은 1장 → 참가비 ÷ 1만 장, 애드온은 금액 ÷ 1만 장(09-30 오너 결정과 같다 — 리드 10-01 확인).
 --
 -- 적용 전 확인(쓰기 없음) — §0 이 자동으로 멈춘다:
---   select proname, md5(prosrc) from pg_proc where proname in ('approve_buyin_request','_ledger_buyin_addon_rule');
---   → approve de5cd99da0c1aadb34e5535bcb7705da · rule 35e7504abaae6d7c62ce93f3eaebdfde (2026-10-01 실측). 다르면 대조 뒤 적용.
+--   select proname, md5(prosrc) from pg_proc where proname in ('approve_buyin_request','_ledger_buyin_addon_rule','_ledger_buyins_client_guard','update_ledger_buyin_reduce');
+--   → approve de5cd99da0c1aadb34e5535bcb7705da · rule 35e7504abaae6d7c62ce93f3eaebdfde · client_guard eee44d4d0c9c53e9fda390227d5f30c2 ·
+--     reduce a74bbdeaaeea76735902521a400a720e (2026-10-01 실측). 다르면 대조 뒤 적용.
 --   라이브 노출(2026-10-01 select): 이용권 승인 바인 0행 · voucherPerEntry 포스터 0건 → 소급 대상 없음.
 --
 -- 리허설: 보고서 C:\Users\buffy\Documents\누리홀덤_영상분석_0930\money-fix-report.md §리허설(라이브 한 방 트랜잭션 + 끝 RAISE 로 전량 롤백).
--- 적용 후 기대 md5(prosrc): approve f82545490dcd5a67946577e37da9d843 · rule 80bd1d70abf215513bebb2f5c9690880 (이 파일 본문 그대로, LF 기준).
+-- 적용 후 기대 md5(prosrc): approve f82545490dcd5a67946577e37da9d843 · rule 80bd1d70abf215513bebb2f5c9690880 · client_guard 259c8f94d24540c96056c2a189b3f0de · reduce 17c9cb58dc4f57adeb6e4d12112ee403 (이 파일 본문 그대로, LF 기준).
 
 -- §0 ── 라이브 정의 게이트 ──────────────────────────────────────────────────────────────
 do $gate$
@@ -53,6 +58,10 @@ begin
   if (select md5(prosrc) from pg_proc where proname = '_ledger_buyins_client_guard' and pronamespace = 'public'::regnamespace)
        is distinct from 'eee44d4d0c9c53e9fda390227d5f30c2' then
     raise exception 'ABORT: _ledger_buyins_client_guard(§E 장수 잠금)가 20260930i 본문(eee44d4d)이 아니다';
+  end if;
+  if (select md5(prosrc) from pg_proc where proname = 'update_ledger_buyin_reduce' and pronamespace = 'public'::regnamespace)
+       is distinct from 'a74bbdeaaeea76735902521a400a720e' then
+    raise exception 'ABORT: update_ledger_buyin_reduce 가 라이브 기준 본문(a74bbdea)이 아니다';
   end if;
 end $gate$;
 
@@ -395,7 +404,127 @@ $function$;
 revoke all on function public.approve_buyin_request(uuid, smallint, boolean, text, boolean, integer, integer, integer, integer, text) from public, anon;
 grant execute on function public.approve_buyin_request(uuid, smallint, boolean, text, boolean, integer, integer, integer, integer, text) to authenticated, service_role;
 
--- §3 ── 자가검사 ─────────────────────────────────────────────────────────────────────────
+-- §3 ── 화면 가드(장수 잠금 문구만 접수대용으로) ─────────────────────────────────────────────
+create or replace function public._ledger_buyins_client_guard()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+declare v_price numeric; v_discs jsonb; o bigint[]; n bigint[];
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.request_id is not null then
+      raise exception '바인 요청 연결은 서버만 설정할 수 있습니다' using errcode = '42501';
+    end if;
+    new.created_by := auth.uid();
+    new.buyin_at := now();
+    if coalesce(public.can_access_ledger(new.venue_id), false) then
+      new := public._ledger_buyin_apply_amount_rule(new);
+    end if;
+  else
+    if new.request_id is distinct from old.request_id
+       or new.created_by is distinct from old.created_by
+       or new.buyin_at is distinct from old.buyin_at
+       or new.venue_id is distinct from old.venue_id
+       or new.session_date is distinct from old.session_date then
+      raise exception '기록자·기록 시각·매장·요청 연결은 바꿀 수 없습니다' using errcode = '42501';
+    end if;
+    if new.game_seq is distinct from old.game_seq then
+      raise exception '기록의 게임 번호는 바꿀 수 없습니다' using errcode = '42501';
+    end if;
+    if new.player_name is distinct from old.player_name or new.entry_no is distinct from old.entry_no then
+      raise exception '바인의 손님·순번은 직접 바꿀 수 없습니다 — 이름 변경은 플레이어 이름 수정으로 하세요' using errcode = '42501';
+    end if;
+    -- 20261001j(오너 10-01) — 전액 이용권 승인 행도 장수 k 를 가지므로 이 잠금에 든다. 현금·할인으로 바꾸려면 '취소 후 다시 승인'.
+    if old.request_id is not null and coalesce(old.ticket_count, 0) > 0
+       and (new.ticket_count is distinct from old.ticket_count or new.is_split is distinct from old.is_split) then
+      raise exception '이용권으로 승인한 바인은 결제 수단·할인·이용권 장수를 바꿀 수 없습니다(남은 금액의 결제 방법만 바꿀 수 있습니다). 바꾸려면 바인을 취소한 뒤 다시 승인하십시오.'
+        using errcode = '42501';
+    end if;
+    if (new.payment_method, new.is_unpaid, new.is_split, new.cash_amount, new.card_amount, new.transfer_amount,
+        new.ticket_count, new.unpaid_amount, new.discount_index)
+       is distinct from
+       (old.payment_method, old.is_unpaid, old.is_split, old.cash_amount, old.card_amount, old.transfer_amount,
+        old.ticket_count, old.unpaid_amount, old.discount_index) then
+      new := public._ledger_buyin_apply_amount_rule(new);
+    end if;
+    select s.buyin_amount, s.discounts into v_price, v_discs
+      from public.ledger_sessions s
+     where s.venue_id = old.venue_id and s.session_date = old.session_date and s.game_seq = old.game_seq;
+    o := public._ledger_buyin_tiers(old, v_price, v_discs);
+    n := public._ledger_buyin_tiers(new, v_price, v_discs);
+    if n[1] < o[1] or n[2] < o[2] or n[3] < o[3] then
+      raise exception '매출이 줄어드는 수정은 업주 취소 비밀번호가 필요합니다'
+        using errcode = '42501', hint = 'LEDGER_REDUCE_NEEDS_PASSWORD';
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function public._ledger_buyins_client_guard() from public, anon, authenticated;
+
+-- §4 ── 비밀번호 감액: 금액만, 이용권 장수는 못 바꾼다 ─────────────────────────────────────────
+create or replace function public.update_ledger_buyin_reduce(p_id uuid, p_fields jsonb, p_password text)
+ returns void
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+declare r public.ledger_buyins; x public.ledger_buyins; k text;
+begin
+  if auth.uid() is null then raise exception '로그인이 필요합니다' using errcode = '42501'; end if;
+  if jsonb_typeof(p_fields) is distinct from 'object' then
+    raise exception '수정 내용이 올바르지 않습니다' using errcode = '22023';
+  end if;
+  for k in select jsonb_object_keys(p_fields) loop
+    if not (k = any (array['payment_method','is_unpaid','is_split','cash_amount','card_amount','transfer_amount',
+                           'ticket_count','unpaid_amount','discount_level','discount_index','early_override'])) then
+      raise exception '수정할 수 없는 항목입니다: %', k using errcode = '42501';
+    end if;
+  end loop;
+  select * into r from public.ledger_buyins where id = p_id for update;
+  if not found then raise exception '기록을 찾을 수 없습니다 — 화면을 새로 불러와 주세요' using errcode = 'P0002'; end if;
+  if not coalesce(can_access_ledger(r.venue_id), false) then raise exception '권한이 없습니다' using errcode = '42501'; end if;
+  if public.ledger_is_closed(r.venue_id, r.session_date, r.game_seq) then
+    raise exception '마감된 장부의 바인은 수정할 수 없습니다 — 먼저 마감을 해제하세요';
+  end if;
+  perform public._ledger_require_cancel_auth(r.venue_id, p_password);
+  x := jsonb_populate_record(r, p_fields);
+  -- 20261001j(오너 10-01 ②) — 비밀번호 감액은 금액만 줄인다. 접수대 이용권 승인 행(request_id 있고 장수 > 0)의
+  --   이용권 장수·분납 여부는 바꿀 수 없다(이 함수는 SECURITY DEFINER 라 client_guard 의 같은 잠금을 건너뛰었다).
+  if r.request_id is not null and coalesce(r.ticket_count, 0) > 0
+     and (x.ticket_count is distinct from r.ticket_count or x.is_split is distinct from r.is_split) then
+    raise exception '이용권으로 승인한 바인은 결제 수단·할인·이용권 장수를 바꿀 수 없습니다(남은 금액의 결제 방법만 바꿀 수 있습니다). 바꾸려면 바인을 취소한 뒤 다시 승인하십시오.'
+      using errcode = '42501';
+  end if;
+  if x.payment_method is null or x.payment_method not in ('ticket','cash','transfer','card','support') then
+    raise exception '결제수단이 올바르지 않습니다' using errcode = '22023';
+  end if;
+  if least(coalesce(x.cash_amount,0), coalesce(x.card_amount,0), coalesce(x.transfer_amount,0),
+           coalesce(x.ticket_count,0), coalesce(x.unpaid_amount,0), coalesce(x.discount_index,0)) < 0 then
+    raise exception '금액은 0 이상이어야 합니다' using errcode = '22023';
+  end if;
+  if x.early_override is not null and x.early_override not in ('double','single','none') then
+    raise exception '얼리 유형이 올바르지 않습니다' using errcode = '22023';
+  end if;
+  if (x.payment_method, x.is_unpaid, x.is_split, x.cash_amount, x.card_amount, x.transfer_amount,
+      x.ticket_count, x.unpaid_amount, x.discount_index)
+     is distinct from
+     (r.payment_method, r.is_unpaid, r.is_split, r.cash_amount, r.card_amount, r.transfer_amount,
+      r.ticket_count, r.unpaid_amount, r.discount_index) then
+    x := public._ledger_buyin_apply_amount_rule(x);
+  end if;
+  update public.ledger_buyins set
+    payment_method = x.payment_method, is_unpaid = coalesce(x.is_unpaid, false), is_split = coalesce(x.is_split, false),
+    cash_amount = coalesce(x.cash_amount, 0), card_amount = coalesce(x.card_amount, 0), transfer_amount = coalesce(x.transfer_amount, 0),
+    ticket_count = coalesce(x.ticket_count, 0), unpaid_amount = coalesce(x.unpaid_amount, 0),
+    discount_level = coalesce(x.discount_level, 0), discount_index = coalesce(x.discount_index, 0),
+    early_override = x.early_override
+  where id = p_id;
+end $function$;
+revoke all on function public.update_ledger_buyin_reduce(uuid, jsonb, text) from public, anon;
+grant execute on function public.update_ledger_buyin_reduce(uuid, jsonb, text) to authenticated, service_role;
+
+-- §5 ── 자가검사 ─────────────────────────────────────────────────────────────────────────
 do $check$
 begin
   if (select count(*) from pg_proc where proname = 'approve_buyin_request' and pronamespace = 'public'::regnamespace) <> 1 then
@@ -411,6 +540,14 @@ begin
   end if;
   if not exists (select 1 from pg_trigger where tgrelid = 'public.ledger_buyins'::regclass and tgname = 'ledger_buyins_addon_rule' and not tgisinternal) then
     raise exception 'ABORT: ledger_buyins_addon_rule 트리거가 없다';
+  end if;
+  if has_function_privilege('anon', 'public.update_ledger_buyin_reduce(uuid, jsonb, text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.update_ledger_buyin_reduce(uuid, jsonb, text)', 'execute')
+     or has_function_privilege('authenticated', 'public._ledger_buyins_client_guard()', 'execute') then
+    raise exception 'ABORT: update_ledger_buyin_reduce(anon=f·authenticated=t) 또는 client_guard(authenticated=f) ACL 이 어긋난다';
+  end if;
+  if position('x.ticket_count is distinct from r.ticket_count' in (select prosrc from pg_proc where proname = 'update_ledger_buyin_reduce' and pronamespace = 'public'::regnamespace)) = 0 then
+    raise exception 'ABORT: update_ledger_buyin_reduce 가 이용권 장수를 잠그지 않는다';
   end if;
   if position('ticket_count = v_k where id = v_bid' in (select prosrc from pg_proc where proname = 'approve_buyin_request' and pronamespace = 'public'::regnamespace)) = 0 then
     raise exception 'ABORT: approve_buyin_request 가 전액 이용권 행에 장수를 남기지 않는다';
