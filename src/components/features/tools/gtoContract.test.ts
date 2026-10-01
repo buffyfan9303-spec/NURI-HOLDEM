@@ -75,7 +75,7 @@ describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
   it("'오늘의 드릴' 은 GTO 카탈로그·검색·즐겨찾기에서 빠졌다 — 딥링크 키는 남는다(2026-09-14 오너 지시)", () => {
     expect(TOOLS_PANEL).toContain("const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill', 'deal'])");
     expect(TOOLS_PANEL).toContain('t.cat === l.id && !HIDDEN_SET.has(t.key)');   // 카탈로그 섹션
-    expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && (t.name');            // 검색
+    expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && matchesToolQuery(');            // 검색
     expect(TOOLS_PANEL).not.toContain("open('drill')");                            // 상단 카드 진입 없음
     expect(entries.some((e) => e.key === 'drill'), '#tool=drill 딥링크가 죽었다').toBe(true);
   });

@@ -112,7 +112,7 @@ export default function TdaRulesTool() {
 
         <form className="mt-2.5 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={TDA_QUESTION_MAX}
-            placeholder="예) 딜러가 카드를 쏟았어요" aria-label="규칙 질문"
+            placeholder="예) 카드를 쏟았어요" aria-label="규칙 질문"
             className="input min-h-[44px] min-w-0 flex-1 text-sm" />
           <button type="submit" disabled={busy || q.trim().length < 2}
             className="btn-primary min-h-[44px] shrink-0 px-4 text-sm disabled:opacity-50">

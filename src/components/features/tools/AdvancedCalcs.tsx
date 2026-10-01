@@ -91,24 +91,25 @@ export function AggroChart() {
           약속해 놓고 실제로는 배지가 없었다. 출처는 결과 바로 옆(RangeGuide.tsx 와 같은 자리). */}
       <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-104 text-center text-xs">
+        {/* 2026-10-01: 442px 고정 표가 390px 카드(359px)에 들어가지 않아 마지막 열이 화면 밖이었다 — 좁은 폭에서는 막대를 숨기고 수치만 둔다. */}
+        <table className="w-full text-center text-xs">
           <thead>
             <tr className="text-2xs text-ink-muted">
-              <th className="py-1.5 px-2 text-left font-semibold">포지션</th>
-              <th className="py-1.5 px-2 font-semibold">오픈레이즈</th>
-              <th className="py-1.5 px-2 font-semibold"><Term name="3벳">3벳</Term></th>
-              <th className="py-1.5 px-2 font-semibold">콜드콜</th>
-              <th className="py-1.5 px-2 font-semibold">3벳에 폴드</th>
+              <th className="py-1.5 px-1 sm:px-2 text-left font-semibold">포지션</th>
+              <th className="py-1.5 px-1 sm:px-2 font-semibold">오픈레이즈</th>
+              <th className="py-1.5 px-1 sm:px-2 font-semibold"><Term name="3벳">3벳</Term></th>
+              <th className="py-1.5 px-1 sm:px-2 font-semibold">콜드콜</th>
+              <th className="py-1.5 px-1 sm:px-2 font-semibold">3벳에 폴드</th>
             </tr>
           </thead>
           <tbody>
             {AGGRO_ROWS.map((r) => (
               <tr key={r.pos} className="border-t border-border-subtle">
-                <td className="py-1.5 px-2 text-left font-bold text-accent-300">{r.pos}</td>
-                <td className="py-1.5 px-2"><Bar v={r.open} max={50} /></td>
-                <td className="py-1.5 px-2"><Bar v={r.threeBet} max={12} /></td>
-                <td className="py-1.5 px-2"><Bar v={r.coldCall} max={32} /></td>
-                <td className="py-1.5 px-2 tabular-nums text-ink-secondary">{r.foldTo3bet}%</td>
+                <td className="py-1.5 px-1 sm:px-2 text-left font-bold text-accent-300">{r.pos}</td>
+                <td className="py-1.5 px-1 sm:px-2"><Bar v={r.open} max={50} /></td>
+                <td className="py-1.5 px-1 sm:px-2"><Bar v={r.threeBet} max={12} /></td>
+                <td className="py-1.5 px-1 sm:px-2"><Bar v={r.coldCall} max={32} /></td>
+                <td className="py-1.5 px-1 sm:px-2 tabular-nums text-ink-secondary">{r.foldTo3bet}%</td>
               </tr>
             ))}
           </tbody>
@@ -122,10 +123,10 @@ export function AggroChart() {
 function Bar({ v, max }: { v: number; max: number }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-high">
+      <span className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-surface-high sm:block">
         <span className="block h-full rounded-full bg-accent-300/80" style={{ width: `${Math.min(100, (v / max) * 100)}%` }} />
       </span>
-      <span className="w-9 shrink-0 text-right tabular-nums text-ink-primary font-semibold">{v}%</span>
+      <span className="w-9 shrink-0 text-center tabular-nums text-ink-primary font-semibold sm:text-right">{v}%</span>
     </span>
   );
 }

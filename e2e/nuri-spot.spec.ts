@@ -100,6 +100,13 @@ test.describe('NURI SPOT — 분석 흐름', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, height: 844 }); });
 
   test('🔴 두 축(분석 · 내 스팟)만 선다 — 토론 축은 도구에 없다', async ({ page }) => {
+    // 2026-10-01: 내 스팟 조회 실패는 이제 '저장한 스팟이 없어요' 가 아니라 실패 문구로 보인다(listMySpots 가 throw).
+    //   예전엔 stubLogin 가짜 세션의 조회 거부(RLS)가 빈 목록으로 삼켜져 이 단언이 우연히 통과했다 —
+    //   '빈 목록' 상태를 단언하려면 그 응답을 스펙이 명시해야 한다. 단언은 그대로, 조회만 `[]` 로 목킹한다.
+    await page.route(/\/rest\/v1\/spot_reviews\?/, (r) =>
+      r.request().method() === 'GET'
+        ? r.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+        : r.fallback());
     const dlg = await openSpot(page);
     for (const t of ['스팟 작성', '내 스팟']) {   // 🔴 2026-09-22 요구 A: '분석' → '스팟 작성'
       await expect(dlg.getByRole('tab', { name: t, exact: true }), `${t} 축이 없다`).toBeVisible();
