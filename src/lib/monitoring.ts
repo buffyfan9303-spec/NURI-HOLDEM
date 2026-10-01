@@ -60,6 +60,39 @@ export function initMotionTelemetry(): void {
   } catch { /* 미지원 스킵 */ }
 }
 
+// ── Sentry 전송 전 개인정보 스크러빙(2026-10-01 독립 검토 병합 조건) ─────────────────────────────
+// 왜: 콘솔 breadcrumb·오류 메시지·extra 에 DB 오류 원문이 실린다. 23502 의 details `Failing row contains (…)` 는
+// profiles 행 전체(전화·이메일·ci_hash)를 담는다. 앱 전체 이벤트에 한 번에 건다 — 호출부마다 막지 않는다.
+const PII_RULES: [RegExp, string][] = [
+  [/Failing row contains \([^]*$/i, 'Failing row contains (***)'],        // 행 전체 — 괄호 안 값은 끝까지 지운다
+  [/\bKey \([^)]*\)=\([^]*?\)/gi, 'Key (***)=(***)'],                     // 23505·23503·23P01 의 컬럼=값
+  [/eyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]*/g, '[jwt]'],                          // JWT(anon·세션·서비스 키 모두)
+  [/\bBearer\s+[\w.~+/=-]+/gi, 'Bearer [token]'],
+  [/\bsb_(?:publishable|secret)_[\w-]+/g, '[key]'],
+  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]'],
+  [/(?<!\w)(?:\+?82[-\s.]?0?|0)\d{1,2}[-\s.]?\d{3,4}[-\s.]?\d{4}(?![\w])/g, '[phone]'], // 휴대폰·지역번호(+82 포함)
+  [/\b[0-9a-f]{64}\b/gi, '[hash]'],                                       // ci_hash 같은 sha-256
+];
+export function scrubPii(s: string): string {
+  let out = s;
+  for (const [re, to] of PII_RULES) out = out.replace(re, to);
+  return out;
+}
+function scrubDeep<T>(v: T, depth = 0): T {
+  if (typeof v === 'string') return scrubPii(v) as T;
+  if (!v || typeof v !== 'object' || depth > 10) return v;
+  if (Array.isArray(v)) return v.map((x) => scrubDeep(x, depth + 1)) as T;
+  const o: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v)) o[k] = scrubDeep(x, depth + 1);
+  return o as T;
+}
+/** Sentry.init 의 beforeSend·beforeBreadcrumb 에 그대로 꽂는다. user 의 email·ip·이름은 값 대신 아예 제거한다. */
+export function scrubSentryEvent<T extends object>(event: T): T {
+  const e = scrubDeep(event) as T & { user?: Record<string, unknown> };
+  if (e.user) { delete e.user.email; delete e.user.ip_address; delete e.user.username; }
+  return e;
+}
+
 export function initMonitoring(): void {
   if (!DSN) return; // DSN 미설정 → 비활성. 인앱 errorLog(관리자 화면 수집)는 그대로 동작.
 
@@ -72,6 +105,8 @@ export function initMonitoring(): void {
       tracesSampleRate: 0.1,        // 성능 트레이스 10% 샘플
       replaysSessionSampleRate: 0,  // 세션 리플레이 미사용(비용/프라이버시)
       replaysOnErrorSampleRate: 0,
+      beforeSend: scrubSentryEvent,
+      beforeBreadcrumb: scrubSentryEvent,
     });
   }).catch((e) => console.warn('[monitoring] Sentry init 실패', e));
 }
