@@ -326,8 +326,8 @@ test('PB2 흐름 기준선 — 탭 전환 · 모달 · 검색 · 스크롤 · �
         await page.locator('header button[aria-label^="알림"]').first().click({ timeout: ACT_TIMEOUT });
         await page.locator('[role="dialog"]').first().waitFor({ timeout: 10_000 });
       }));
-      // ⚠ 알림 패널에는 Escape 핸들러가 없다(NotificationPanel.tsx — 확인함). 닫는 길은 뒤로가기(backstack)와
-      //   모바일 dim 탭 둘뿐이다. Escape 로 닫으려다 20분을 날렸다 — 닫히지 않은 스크림이 다음 클릭을 무한 대기시켰다.
+      // 측정 기준선은 뒤로가기로 닫는다(예전 수치와 같은 경로). 알림 패널은 2026-10-02(B2)부터 Escape 로도 닫히지만 —
+      //   그 전엔 Escape 핸들러가 없어 닫히지 않은 스크림이 다음 클릭을 무한 대기시켰다(20분 소실).
       push('알림닫기', await timed(page, async () => {
         await page.goBack();
         await page.locator('[role="dialog"]').first().waitFor({ state: 'detached', timeout: 10_000 });

@@ -179,15 +179,22 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   // 로그아웃→다른 손님 로그인은 이 서비스의 실제 동선이다.
   // reloadSeq = '가장 최근 reload 만 화면에 닿는다'. 계정이 바뀌면 세대를 올려 비행 중인 응답을 전부 버리고 상태를 비운다.
   const reloadSeq = useRef(0);
+  // 이 계정으로 한 번이라도 다 받아 그렸는가 — 그 뒤 다시 열 때는 받아 둔 내역을 그대로 두고 뒤에서 새로 받는다(stale-while-revalidate).
+  //   예전엔 열 때마다 스켈레톤으로 다시 그려 판이 짧아졌다가 돌아왔고, 맨 아래까지 읽다 닫았다 연 사용자는 그만큼 미끄러졌다
+  //   (audit-motion-1002 M-1 · 390 판 scrollTop 2676 → 2162(스켈레톤 12) → 2675, 360 은 514px). 스켈레톤은 이 계정의
+  //   첫 조회와 '다시 시도'(누른 사람이 기다림을 안다)에서만 보인다.
+  const shownOnce = useRef(false);
   useEffect(() => {
     reloadSeq.current++;
+    shownOnce.current = false;
     setVisits([]); setPlays([]); setResv([]); setRanks([]); setRefStats({ invited: 0, rewarded: 0 });
     setPercentile(null); setChampionships(0); setBadgeStats(null); setBadgeErr(null); setVisitStats(null);
     setUsageErr(null); setResvErr(null); setRanksErr(null);
+    setMyPosts([]); setMyPostTotal(0); // 내 글도 계정 경계에서만 비운다 — 닫을 때 비우면 다시 열 때 섹션이 통째로 빠졌다 들어온다(위 shownOnce 와 같은 이유)
   }, [user?.id]);
 
   useEffect(() => {
-    if (!shown || !user) { setMyPosts([]); setMyPostTotal(0); return; }
+    if (!shown || !user) return;
     let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다
     getPostsByUser(user.id).then(({ posts, total }) => { if (!alive) return; setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
     return () => { alive = false; };
@@ -198,9 +205,9 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   // 였을 때는 하나만 실패해도 **성공한 나머지까지 버려지고** 실패가 통째로 삼켜져,
   // 세 섹션이 동시에 '아직 없습니다'로 떨어졌다 — 실패를 빈 결과로 위장하는 바로 그 패턴이다.
   // 이제 성공한 섹션은 그리고, 실패한 섹션만 이유와 재시도(LoadErrorCard)를 보여준다.
-  const reload = () => {
+  const reload = (skeleton = !shownOnce.current) => {
     const seq = ++reloadSeq.current;
-    setLoading(true);
+    if (skeleton) setLoading(true);
     Promise.allSettled([
       myVisitedVenues(), myPlayHistory(),
       getMyReservations(),
@@ -235,7 +242,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
         const idx = nick ? totals.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
         setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / totals.length) * 100)) : null);
       })
-      .finally(() => { if (seq === reloadSeq.current) setLoading(false); });
+      .finally(() => { if (seq === reloadSeq.current) { setLoading(false); shownOnce.current = true; } });
   };
   // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
   // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
@@ -244,9 +251,10 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   useEffect(() => {
     if (!open || !user) return;
     let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다 — '내 업적'은 loading 게이트 없이 즉시 그려진다
-    setBadgeErr(null);
+    // 실패 표시는 다음 결과가 올 때까지 둔다 — 다시 열 때 먼저 지우면 오류 카드(248px)가 자리 예약 줄(57px)로 줄었다가
+    //   실패가 다시 오며 돌아와 판이 그만큼 미끄러졌다(B2 실측 390: 맨 아래 1810 → 1619 → 1810). 위 shownOnce 와 같은 이유.
     getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0)
-      .then((s) => { if (alive) setBadgeStats(s); })
+      .then((s) => { if (alive) { setBadgeStats(s); setBadgeErr(null); } })
       .catch((e: unknown) => { if (alive) setBadgeErr(e); });   // 실패 ≠ 없음 — 섹션을 숨기지 않고 오류 카드로 말한다
     return () => { alive = false; };
   }, [open, user, badgeTick]);
@@ -577,7 +585,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                 박스 안이라 빈 상태는 자기 테두리를 또 두르지 않는다(테두리 두 겹 금지). */}
             <div className="mt-2">
               {loading ? <SkeletonList rows={meUsageSeenRows()} rowClassName="h-14" />
-                : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
+                : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={() => reload(true)} compact />
                 : usage.length === 0 ? <EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." />
                   : <ul className="space-y-1.5">{usage.map((u, i) => (
                     <li key={i}>
@@ -609,7 +617,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                 단 직전에 받아 둔 목록이 있으면 지우지 않는다(오프라인에서 내역이 사라지지 않게). */}
             <div className="mt-2">
             {loading ? <SkeletonList rows={meResvSeenRows()} rowClassName="h-14" />
-              : resvErr !== null && resv.length === 0 ? <LoadErrorCard error={resvErr} what="대회 참가 내역" onRetry={reload} compact />
+              : resvErr !== null && resv.length === 0 ? <LoadErrorCard error={resvErr} what="대회 참가 내역" onRetry={() => reload(true)} compact />
               : resv.length === 0 ? <EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." />
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
@@ -677,7 +685,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                 <SkeletonList rows={meRanksSeenRows()} rowClassName="h-[56px]" />
               </>
             )
-              : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
+              : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={() => reload(true)} compact />
               : !user?.nickname ? <EmptyState icon={<Icon name="trophy" />} title="프로필에서 닉네임을 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">닉네임 설정하기</button>} />
               : ranks.length === 0 ? <EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." />
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
