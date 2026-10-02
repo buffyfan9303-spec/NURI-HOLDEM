@@ -28,6 +28,7 @@ const MEASURE = () => [...document.querySelectorAll<HTMLElement>('header')]
       제목: h.querySelector('h2')!.textContent?.trim() ?? '',
       높이: +h.getBoundingClientRect().height.toFixed(2),
       중심차: tile ? +(((tile.top + tile.bottom) / 2) - ((t2.top + t2.bottom) / 2)).toFixed(2) : null,
+      타일top: tile ? +(tile.top - h.getBoundingClientRect().top).toFixed(2) : null,
       액션: !!h.querySelector('button'),
     };
   });
@@ -89,7 +90,11 @@ test.describe('PC 내 매장 — 섹션 헤더는 액션 유무와 무관하게 
   //   모바일은 설명이 제목 아래로 내려가 블록이 64px 인데 거기서 가운데 정렬하면
   //   타일이 제목이 아니라 **설명 옆**에 뜬다(390 실측: 타일 top 2.1 -> 17.2).
   //   그래서 모바일에서는 타일이 제목보다 **아래에 남아 있어야** 정상이다(실측 +6.16px).
-  test('390 — 모바일은 종전 정렬 유지(타일이 제목 위로 올라오지 않는다)', async ({ page }) => {
+  // 🔁 2026-10-02 정렬 전수(오너 "정렬이 이런 부분도 찾아서 전체 다 수정") — 위 +6.16px 은 '제목 글자가 타일·액션보다 위에 뜬'
+  //   어긋남 그 자체였다(액션 ⓘ·새로고침도 제목보다 5.44px 아래). 지금 원자는 lg 미만에서 **첫 줄을 34px(h-8) 한 줄로**
+  //   잡는다: 타일은 예전 자리(top 2.1, mt-0.5) 그대로, 제목(min-h-8 가운데)과 액션(min-h-8)이 그 줄 가운데로 온다.
+  //   → 지키는 것은 같다: 타일이 **설명 옆(top 17.2)으로 내려가지 않는다**(타일top ≤ 4). 바뀐 것: 중심차 ≥3 → |중심차| ≤ 0.5.
+  test('390 — 모바일은 타일이 첫 줄에 남고(설명 옆으로 안 내려감) 제목과 중심이 맞는다', async ({ page }) => {
     test.setTimeout(120_000);
     await bootOwner(page, { viewport: { width: 390, height: 844 }, appSettings: { identity_voucher_enabled: 'on' } });
     await openMyStore(page);
@@ -103,7 +108,8 @@ test.describe('PC 내 매장 — 섹션 헤더는 액션 유무와 무관하게 
     console.log('[모바일 390 섹션 헤더]', JSON.stringify(m));
     expect(m.length, '모바일에서 타일 달린 섹션 헤더를 못 찾았다 — 이 반례가 빈 검사다').toBeGreaterThan(0);
     for (const x of m) {
-      expect(x.중심차!, `모바일 타일이 제목 중심으로 올라왔다(${x.중심차}px) — lg 전용이어야 할 가운데 정렬이 샜다`).toBeGreaterThanOrEqual(3);
+      expect(x.타일top!, `모바일 타일이 첫 줄을 떠나 설명 옆으로 내려갔다(top ${x.타일top}px) — 블록 가운데 정렬이 샜다`).toBeLessThanOrEqual(4);
+      expect(Math.abs(x.중심차!), `모바일 타일·제목 첫 줄 중심이 ${x.중심차}px 어긋났다 — ${x.제목}`).toBeLessThanOrEqual(0.5);
     }
   });
 });

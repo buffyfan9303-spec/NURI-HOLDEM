@@ -52,13 +52,20 @@ export function SectionHead({ icon, tone, title, count, unit = '개', desc }: { 
 
 export default function SectionHeader({ title, desc, icon, tone = 'violet', action }: Props) {
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-border-subtle pb-3">
+    // 2026-10-02 정렬 전수 — lg 미만은 첫 줄(타일·제목·액션)을 34px(h-8) 한 줄로 맞춘다.
+    //   예전엔 header 가 items-center 라 액션이 '제목 줄'이 아니라 왼쪽 묶음 전체(타일 31.9px 또는 제목+설명 2줄)의
+    //   가운데에 섰다 → 390 실측 제목 글자 중심보다 액션(ⓘ·새로고침)이 5.44px 아래. 타일 mt-0.5(2.125px)는
+    //   원래 34px 줄 안의 가운데 값이라 그대로 두고, 제목(min-h-8 flex)·액션(min-h-8)이 같은 34px 줄을 쓴다.
+    //   lg 이상은 종전과 같다(행 lg:min-h-8 가운데 정렬 · 헤더 47.75px).
+    <header className="flex items-start justify-between gap-3 border-b border-border-subtle pb-3 lg:items-center">
       {/* 2026-09-18 PC 실측(1280·1440·1920 동일): 예전 items-start + 타일 mt-0.5 는 타일 중심이 제목 글자 중심보다
           4.5px 아래였고, 행 높이를 글자(26.6)가 아니라 타일(31.9)이 잡아 제목 아래 5px 가 비었다. 액션이 있는
           포스터만 items-end 로 제목이 6.4px 내려가 헤더가 52 vs 45.6 으로 갈렸다. lg 부터 행을 액션 높이(h-8)로
           예약하고 가운데 정렬 — 액션 유무와 무관하게 전 섹션 헤더 47.75px · 제목/타일 중심 일치.
           ⚠ lg 미만은 종전 그대로(items-start + mt-0.5). 모바일은 설명이 제목 아래로 2줄 내려가 블록이 64px 인데,
-            거기서 가운데 정렬하면 타일이 제목이 아니라 설명 옆에 떠 보였다(390 실측: 타일 top 2.1 → 17.2). */}
+            거기서 가운데 정렬하면 타일이 제목이 아니라 설명 옆에 떠 보였다(390 실측: 타일 top 2.1 → 17.2).
+            그래서 lg 미만은 items-start 를 유지하되, 2026-10-02 부터 제목 h2 가 min-h-8 가운데라 타일(top 2.1)·제목·액션이
+            첫 34px 줄의 가운데(17px)를 공유한다(계약: e2e/pc-store-regression '390' · e2e/title-action-align ⑧). */}
       <div className="flex min-w-0 items-start gap-2 lg:min-h-8 lg:items-center">
         {icon && (
           <span className={['mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad lg:mt-0',
@@ -74,7 +81,7 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
               통과하는 **한 개의 공유 헤더**라, 한 화면만 1행으로 만들면 섹션마다 헤더 높이가 갈린다.
             ⚠ 설명을 지우지 않는다 — 같은 파일의 SectionHead(유저용)가 이미 쓰는 문법 그대로다. */}
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-          <h2 className="text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
+          <h2 className="flex min-h-8 items-center text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
           {/* 설명문 행간은 §T1 t-desc(12.75/19.13 = 1.5배) 한 값으로.
               leading-snug(17.53px)는 한글 두 줄이 붙어 보였고, 같은 12.75px 설명문이
               화면마다 17 / 17.53 두 값으로 갈려 있었다(1440 실측). break-keep 은
@@ -85,7 +92,7 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
       {action && (
         // 자식 버튼 규격 강제: 높이 34px(=btn-sm·행 예약 min-h-8 과 같은 값)·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지
         // (min-h-0: .btn-primary 기본 min-h 40.8px가 h-9를 이기는 것 차단)
-        <div className="flex shrink-0 items-center gap-1.5 [&_button]:h-8 [&_button]:min-h-0 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
+        <div className="flex min-h-8 shrink-0 items-center gap-1.5 [&_button]:h-8 [&_button]:min-h-0 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
           {action}
         </div>
       )}

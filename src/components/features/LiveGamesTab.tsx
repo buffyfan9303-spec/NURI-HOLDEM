@@ -198,7 +198,11 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             1280 은 설명이 1줄이라 렌더가 변하지 않는다. */}
         <div data-main-enter className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 대회 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
+            {/* 2026-10-02 정렬 전수 — items-start 라 제목 글자(줄 높이 22.6px)와 오른쪽 정렬·새로고침 묶음(34px)의
+                글자 중심이 390 에서 5.97px · 1440 에서 2.97px 어긋났다(새로고침이 제목보다 아래). 제목 첫 줄을
+                버튼 높이(min-h-8 = 34px)로 예약하고 가운데 정렬 — 아래 거리 안내 줄이 붙어도 첫 줄끼리 맞는다.
+                flex 는 글 끝 공백을 그리지 않으므로 개수와의 간격은 gap-1 이 맡는다(textContent·낭독은 공백 그대로). */}
+            <h2 className="flex min-h-8 items-center gap-1 text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 대회 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
             {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 대회'가 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
             {/* LOCATION-READY(2026-09-26): 가까운 순은 기기 안에서만 계산한다(위치정보지원센터 FAQ 9 — 서버 미전송) — 그 사실을 고른 사람에게만 한 줄로 알린다 */}
             {sortBy === 'distance' && geo && <p data-testid="live-distance-local-note" className="mt-0.5 text-2xs text-ink-muted">위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않습니다</p>}
