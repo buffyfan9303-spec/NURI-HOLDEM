@@ -1061,7 +1061,7 @@ function BlockListSection() {
     <div className="px-4 pb-4 -mt-1">
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">차단한 사용자 {blocks.length > 0 && <span className="text-ink-muted">({blocks.length})</span>}</h3>
       {blocks.length === 0 ? (
-        <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다</p>
+        <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다 · 글·매물의 ‘차단’으로 추가</p>
       ) : (
         <ul className="space-y-1.5">
           {blocks.map((b) => (

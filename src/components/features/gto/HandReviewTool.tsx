@@ -107,7 +107,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
           </div>
         ) : (
           <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs leading-relaxed text-ink-muted">
-            내 핸드 2장부터 골라 보세요.
+            내 핸드 2장부터 골라 보세요 · 상대 핸드를 넣으면 승률 추이도 나옵니다.
           </p>
         )}
       </div>
