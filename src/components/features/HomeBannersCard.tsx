@@ -24,6 +24,7 @@ import {
 import { getEventBoard } from '../../api/events';
 import * as eventStateMod from '../../lib/eventState';
 import { homeCarouselPreview, eventStateOf, BRAND_SLIDE_TITLES, type HomeCarouselInput } from '../../lib/homeCarousel';
+import { msgOf } from '../../lib/dbError';
 
 const KIND_LABEL = { banner: '등록 배너', event: '이벤트', brand: '브랜드' } as const;
 
@@ -109,7 +110,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       setDraft((d) => ({ ...d, imageUrl: url }));
       toast.show('이미지를 올렸습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '이미지 업로드 실패', 'error');
+      toast.show(msgOf(e, '이미지 업로드 실패'), 'error');
     } finally { setUploading(false); }
   };
 
@@ -132,14 +133,14 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       setDraft({ ...EMPTY });
       changed();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+      toast.show(msgOf(e, '저장 실패'), 'error');
     } finally { setBusy(null); }
   };
 
   const toggle = async (b: HomeBanner) => {
     setBusy(b.id);
     try { await saveHomeBanner({ ...b, active: !b.active }); changed(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
     finally { setBusy(null); }
   };
 
@@ -147,7 +148,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
     if (!window.confirm(`'${b.title || '제목 없음'}' 배너를 삭제하시겠습니까?`)) return;
     setBusy(b.id);
     try { await deleteHomeBanner(b.id); toast.show('삭제했습니다', 'success'); changed(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
     finally { setBusy(null); }
   };
 
@@ -170,7 +171,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       //   실려 방금 바꾼 순서가 되돌아간다(2026-09-04 리뷰 지적).
       changed();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); changed(); }
+    catch (e) { toast.show(msgOf(e, '순서 변경 실패'), 'error'); changed(); }
     finally { setBusy(null); }
   };
 
@@ -182,7 +183,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       toast.show(n > 0 ? `${n}건을 정리했습니다` : '정리할 배너가 없습니다', 'success');
       changed();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '정리 실패', 'error');
+      toast.show(msgOf(e, '정리 실패'), 'error');
     } finally { setBusy(null); }
   };
 
@@ -435,7 +436,7 @@ function useSlideSetting(settingKey: string, label: string, onChanged?: () => vo
       onChanged?.();   // 홈 배너 피드를 다시 불러 화면이 바로 따라오게 한다
       toast.show(next ? `${label} 노출을 켰습니다` : `${label} 노출을 껐습니다`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '변경하지 못했습니다', 'error');
+      toast.show(msgOf(e, '변경하지 못했습니다'), 'error');
       setServer(undefined); // 다시 읽는 동안 스위치를 막는다(종전 load 의 리셋을 이 경로로 옮겼다 — 첫 그림은 지난 값이어야 해서)
       load();
     } finally { setBusy(false); }

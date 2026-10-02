@@ -35,6 +35,7 @@ import { fetchAttachment, castPollVote, subscribePollResults, pollFromEmbed } fr
 // (복사하면 목록 뱃지와 상세 뱃지가 언젠가 다른 색이 된다).
 import { categoryPillClass, postCategoryLabel } from '../../lib/postCategory';
 import type { Attachment, PollOption } from '../../api/postAttachments';
+import { msgOf } from '../../lib/dbError';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -84,7 +85,7 @@ export async function submitPostComment(content: string, deps: SubmitPostComment
     if (getCurrentPostId() !== postId) return;
     onSaved(saved);
   } catch (err) {
-    onError(err instanceof Error ? err.message : '댓글 등록에 실패했습니다');
+    onError(msgOf(err, '댓글 등록에 실패했습니다'));
     throw err; // 호출부(CommentThread)가 원문을 지우지 않도록 다시 던진다
   }
 }
@@ -434,7 +435,7 @@ export default function PostDetailModal({
       }
     } catch (e) {
       setMyReaction(before.my); setBb(before.bb); setGr(before.gr);
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
     }
   };
 
@@ -450,7 +451,7 @@ export default function PostDetailModal({
       setBumpUntil(r.untilAt);
       toast.show(`끌올했습니다. ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '끌올에 실패했습니다', 'error');
+      toast.show(msgOf(e, '끌올에 실패했습니다'), 'error');
     } finally { if (currentPostIdRef.current === startId) setBumpBusy(false); }
   };
 
@@ -478,7 +479,7 @@ export default function PostDetailModal({
   const handleDeleteComment = (commentId: string) => {
     deleteComment(commentId) // 권한은 RLS(본인·관리자)가 강제
       .then(() => setReplies((prev) => (prev ?? []).filter((c) => c.id !== commentId && c.parentId !== commentId)))
-      .catch((err) => toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'));
+      .catch((err) => toast.show(msgOf(err, '삭제에 실패했습니다'), 'error'));
   };
 
   // 투표 배선 — 서버 집계가 최종. 실패는 토스트 + rethrow(PostAttachments 가 낙관 갱신 롤백).
@@ -492,7 +493,7 @@ export default function PostDetailModal({
         : prev));
       return options;
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '투표에 실패했습니다', 'error');
+      toast.show(msgOf(e, '투표에 실패했습니다'), 'error');
       throw e;
     }
   };
@@ -669,7 +670,7 @@ export default function PostDetailModal({
               acts.push({ key: 'block', label: '차단', onClick: async () => {
                 if (!confirm(`'${post.userName}' 님을 차단하시겠습니까?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
                 try { await block(post.userId, post.userName); toast.show('차단했습니다. 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
-                catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
+                catch (e) { toast.show(msgOf(e, '차단 실패'), 'error'); }
               } });
             }
             /* 삭제도 평상시엔 중립 — 파괴적 확인은 confirm() 이 이미 잡고 있고,
@@ -737,7 +738,7 @@ export default function PostDetailModal({
               <button type="button"
                 onClick={async () => {
                   try { await adminSetPostBlinded(post.id, false); toast.show('숨김을 해제했습니다', 'success'); onClose(); }
-                  catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+                  catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
                 }}
                 className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-200">숨김 해제</button>
             )}

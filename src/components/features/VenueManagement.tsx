@@ -18,6 +18,7 @@ import {
 import { removeOrArchiveVenue } from '../../lib/venueRemove';
 import type { Venue, VenueStatus, VenueVerificationStatus } from '../../api/community';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 const STATUS_LABEL: Record<VenueStatus, { label: string; cls: string }> = {
   active:    { label: '활성',   cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -121,7 +122,7 @@ export default function VenueManagement() {
       });
       setVenues((prev) => prev.filter((x) => x.id !== v.id));
       toast.show(`${v.name} 삭제됨`, 'error');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '삭제에 실패했습니다'), 'error'); }
   };
 
   // 드래그 종료 → 순서 재배치 + 저장(낙관적, 실패 시 롤백)

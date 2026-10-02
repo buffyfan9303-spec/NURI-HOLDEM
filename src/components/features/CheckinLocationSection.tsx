@@ -10,6 +10,7 @@ import { getVenueCheckinSpot } from '../../api/checkins';
 import { setVenueCoords } from '../../api/community';
 import { getCheckinPosition, isLowAccuracy, CheckinGeoError, useCheckinGeoEnabled } from '../../lib/checkinGeo';
 import { naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, geocodeAddress } from '../../lib/naverMap';
+import { msgOf } from '../../lib/dbError';
 
 type Spot = { lat: number | null; lng: number | null; address: string };
 type Msg = { tone: 'ok' | 'err'; text: string } | null;
@@ -64,7 +65,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
     if (venueRef.current !== id) return;
     setMsg({ tone: 'err', text: e instanceof CheckinGeoError && e.code === 'denied'
       ? '위치 권한을 허용해야 지금 위치로 등록할 수 있습니다. 브라우저 설정에서 이 사이트의 위치 권한을 켜 주세요'
-      : e instanceof Error && e.message ? e.message : fallback });
+      : msgOf(e, fallback) });
   };
 
   const registerHere = async () => {

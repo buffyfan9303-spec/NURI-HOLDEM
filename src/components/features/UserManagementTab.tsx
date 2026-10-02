@@ -16,6 +16,7 @@ import Icon from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 import { relativeTime } from '../../lib/relativeTime';
+import { msgOf } from '../../lib/dbError';
 
 /** 회원 → 게시글 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const USERMGMT_ORDER = ['users', 'posts'] as const;
@@ -242,7 +243,7 @@ function UserRow({ user, onUpdate, onReload }: {
       await adminRejectSignup(user.id, '가입 심사 거절');
       toast.show(`${user.name} 가입 거절 — 일반 회원으로 되돌렸습니다`, 'info');
       close(); onReload?.();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '가입 거절에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '가입 거절에 실패했습니다'), 'error'); }
     finally { busyRef.current = false; setBusy(false); }
   };
   // 운영자: 회원 닉네임 변경 — 30일 규칙 면제(admin_set_nickname RPC · 이력은 서버 트리거가 source=admin 으로 남긴다)
@@ -252,7 +253,7 @@ function UserRow({ user, onUpdate, onReload }: {
     const t = v.trim();
     if (t.length < 2) { toast.show('닉네임은 2자 이상이어야 합니다', 'error'); return; }
     try { await adminSetNickname(user.id, t); onUpdate(user.id, { nickname: t, name: t }); toast.show('닉네임을 변경했습니다', 'success'); close(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
   // 운영자: 섀도우밴 토글 — 오류 없이 콘텐츠는 그대로, 활동 랭킹에서만 조용히 제외/복귀.
   const toggleShadowban = async () => {
@@ -262,7 +263,7 @@ function UserRow({ user, onUpdate, onReload }: {
       onUpdate(user.id, { shadowbanned: next });
       toast.show(next ? `${user.name} 섀도우밴 · 활동 순위에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
       close();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
 
   // 사유 입력 후 제재 확정 — 자동 이메일은 App handleUpdateUser → updateUserStatus 에서 발송
@@ -508,7 +509,7 @@ function PointsPanel({ userId, userName }: { userId: string; userName: string })
       setBalance(b); setPurch(p); setGrants(g);
     } catch (e) {
       setPurch([]); setGrants([]);
-      toast.show(e instanceof Error ? e.message : '활동점수 정보를 불러오지 못했습니다', 'error');
+      toast.show(msgOf(e, '활동점수 정보를 불러오지 못했습니다'), 'error');
     }
   }, [userId, toast]);
 
@@ -524,7 +525,7 @@ function PointsPanel({ userId, userName }: { userId: string; userName: string })
       toast.show(`${refundTarget.label} 환불 · ${res.refunded.toLocaleString()}점 반환 (사용 가능 ${res.available.toLocaleString()}점)`, 'success');
       setRefundTarget(null); setRefundReason('');
       await reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '환불에 실패했습니다'), 'error'); }
     finally { setBusy(false); }
   };
 
@@ -539,7 +540,7 @@ function PointsPanel({ userId, userName }: { userId: string; userName: string })
       toast.show(`${userName} ${sign > 0 ? '+' : '−'}${n.toLocaleString()}점 · 누적 ${after.toLocaleString()}점`, 'success');
       setGrantAmount(''); setGrantReason('');
       await reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '처리에 실패했습니다'), 'error'); }
     finally { setBusy(false); }
   };
 

@@ -29,6 +29,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 import { useBackClose } from '../../lib/backstack';
 import { isStaleResponse } from '../../lib/staleResponse';
+import { msgOf } from '../../lib/dbError';
 
 export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, onBuyin }: {
   open: boolean;
@@ -133,7 +134,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
       onClose();
       onVenue?.(venueId);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '출석에 실패했어요', 'error');
+      toast.show(msgOf(e, '출석에 실패했어요'), 'error');
     } finally { setBusy(false); }
   };
 

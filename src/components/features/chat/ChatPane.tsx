@@ -7,6 +7,7 @@ import { useToast } from '../../atoms/Toast';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import type { ChatMessage } from '../../../api/chat';
 import { getThreadMessages, sendChatMessage, subscribeThread, subscribeThreadReads, markThreadRead, getThreadReads } from '../../../api/chat';
+import { msgOf } from '../../../lib/dbError';
 
 const NEAR_BOTTOM_PX = 80;       // 이 안쪽이면 '하단 근처' — 새 메시지에 자동 추종
 const COMPOSER_MAX_PX = 118;     // textarea 최대 높이 ≈ 5줄(줄 20px × 5 + 패딩/보더)
@@ -168,7 +169,7 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
     } catch (err) {
       stickToBottomRef.current = false;
       setDraft(text);
-      toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
+      toast.show(msgOf(err, '전송에 실패했습니다'), 'error');
     } finally { setSending(false); }
   };
 

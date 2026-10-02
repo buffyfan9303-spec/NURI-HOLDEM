@@ -228,6 +228,7 @@ const EventPage = lazyWithReload(() => import('./components/features/EventPage')
 const EventListPage = lazyWithReload(() => import('./components/features/EventListPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 import { readSeenCount, writeSeenCount } from './lib/seenCount';
+import { msgOf } from './lib/dbError';
 /** 일정 탐색 목록이 지난 방문에 몇 줄이었나 — 스켈레톤 자리 예약용(홈의 nuri:upcoming-seen 과 같은 조리법). */
 const BROWSE_SEEN = 'nuri:browse-seen';
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
@@ -1418,7 +1419,7 @@ export default function App() {
   }, [user, isOwner, isAdmin]);
   const doEnablePush = async () => {
     try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다. 중요한 소식을 폰으로 받습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '알림 설정 실패'), 'error'); }
   };
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
 
@@ -1557,7 +1558,7 @@ export default function App() {
   const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
     const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
       .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다. 매장 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
+      .catch((e) => toast.show(msgOf(e, '요청 전송 실패'), 'error'));
     if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
     (async () => {
       const games = await ledgerMod().then((m) => m.venueTodayGames(venueId)).catch(() => [] as { gameSeq: number; title: string }[]);
@@ -2973,21 +2974,31 @@ export default function App() {
       if (!err && !code) return;
       oauthErrShown.current = true;
 
-      // 자주 나오는 원인은 사람 말로 바꾸고, 모르는 건 원문을 그대로 보여 준다(추측 금지).
-      const raw = decodeURIComponent(desc).replace(/\+/g, ' ');
-      const known =
-        /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
-        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료되었습니다. 다시 시도해 주세요'
-        : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
-        : '';
-      const detail = [code || err, raw].filter(Boolean).join(' · ').slice(0, 160);
-      toast.show(known ? `${known}\n(${detail})` : `로그인에 실패했습니다. ${detail}`, 'error');
-
-      // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게.
-      const url = new URL(window.location.href);
-      ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
-      const cleanHash = /error/.test(url.hash) ? '' : url.hash;
-      window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
+      try {
+        // 🔴 화면에는 **고정 문장만** 보인다(2026-10-03 C2 독립 검증 N2). URL 의 error_description 은 링크를 만든 사람이
+        //   아무 문구나 심을 수 있어(가짜 안내 문구 위조) 토스트에 그대로 싣지 않는다 — 제공자의 영문 원문도 마찬가지.
+        //   error_code 는 인증 오류 코드 표(authCodeText)로, 모르는 코드는 고정 문구로. 원문은 콘솔에만 남겨 진단한다.
+        //   (URLSearchParams 가 이미 디코딩한 값이다 — decodeURIComponent 를 또 걸면 '100%25' 같은 값에서 던져 아래 정리까지 건너뛰었다.)
+        console.warn('[oauth-return]', { error: err.slice(0, 80), code: code.slice(0, 80), description: desc.slice(0, 300) });
+        const known =
+          /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
+          : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료되었습니다. 다시 시도해 주세요'
+          : /redirect|uri/i.test(desc) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
+          : '';
+        if (known) toast.show(known, 'error');
+        else {
+          // 코드 표(40문장)는 로그인 창 청크에 있다 — 첫 화면 임계 경로(예산 여유 2%)에 얹지 않으려고 이 드문 경로에서만 받는다.
+          void import('./lib/authError')
+            .then((m) => m.authCodeText(code), () => undefined)
+            .then((t) => toast.show(t || '로그인을 완료하지 못했습니다. 다시 시도해 주세요', 'error'));
+        }
+      } finally {
+        // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게. 안내가 던져도 반드시 실행한다.
+        const url = new URL(window.location.href);
+        ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
+        const cleanHash = /error/.test(url.hash) ? '' : url.hash;
+        window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
+      }
     } catch { /* ignore */ }
   }, [toast]);
 
@@ -3338,7 +3349,7 @@ export default function App() {
         setComments((prev) => [saved, ...prev]);
       } catch (err) {
         // 사유를 버리면 제재된 회원이 왜 막혔는지 모른 채 계속 재시도한다(PostDetailModal 과 같은 처리).
-        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        toast.show(msgOf(err, '댓글 등록에 실패했습니다'), 'error');
         throw err;   // 입력 보존은 호출부(CommentThread)가 이 예외로 판단한다
       }
     },
@@ -3358,7 +3369,7 @@ export default function App() {
         });
         setComments((prev) => [saved, ...prev]);
       } catch (err) {
-        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        toast.show(msgOf(err, '댓글 등록에 실패했습니다'), 'error');
         throw err;
       }
     },
@@ -3417,7 +3428,7 @@ export default function App() {
   // 큐는 첫 누름 때 불러온다 — 이 파일은 첫 화면 임계 경로라 번들 예산(entryGzipKb) 여유가 0 이다(전송·반영 묶음은 lib/postLikeQueue).
   //   누름 순서는 같은 프라미스의 then 순서(FIFO)로 지켜진다. 청크를 못 받으면 그 누름의 뒤집기를 되돌린다.
   const likeTapRef = useRef<Promise<(id: string, uid: string | null) => void> | null>(null);
-  const likeFail = useCallback((e: unknown) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'), [toast]);
+  const likeFail = useCallback((e: unknown) => toast.show(msgOf(e, '좋아요 처리 실패'), 'error'), [toast]);
   const handleLikePost = useCallback((postId: string) => {
     const uid = userRefForGate.current?.id;
     if (!uid) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
@@ -3458,7 +3469,7 @@ export default function App() {
     } catch (e) {
       // 실패는 반드시 보인다 — 서버 메시지를 그대로 띄우고(예: RPC 미적용·매장 대표) 목록을 서버와
       // 재동기화해 낙관적으로 바뀐 배지를 원상 복구한다. 그리고 **던져서** 호출부가 성공 표시를 막게 한다.
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
       loadUsers();
       throw e;
     }
@@ -3520,7 +3531,7 @@ export default function App() {
       setNotices((prev) => prev.filter((n) => n.id !== id));
       setOpenNotice(null);
       toast.show('공지사항이 삭제되었습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '삭제에 실패했습니다'), 'error'); }
   }, [toast]);
 
   // 매장 소개/이미지 저장 — 실패 시 낙관적 반영을 서버 상태로 되돌림(저장된 것처럼 보이는 불일치 방지)
@@ -4572,7 +4583,7 @@ export default function App() {
                           .then((m) => m.cancelBuyinRequest(r.id)
                             .then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))
                             .then(() => toast.show(r.usedVoucher ? '요청을 취소했습니다 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했습니다', 'success')))
-                          .catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                          .catch((e) => toast.show(msgOf(e, '취소 실패'), 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
                   </div>
@@ -4767,7 +4778,7 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(msgOf(e, '요청 실패'), 'error'));
         };
         return (
           <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>

@@ -121,7 +121,7 @@ function BoostContactCard() {
       await setAppSetting(BOOST_CONTACT_PHONE_KEY, phone.trim());
       toast.show('부스트 문의 연락처를 저장했습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+      toast.show(msgOf(e, '저장에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }
@@ -161,7 +161,7 @@ function VenueOwnerRequestsCard({ onChanged }: { onChanged?: () => void }) {
       await adminDecideVenueOwner(r.venueId, r.userId, approve);
       toast.show(approve ? `${r.nickname} 사장님을 ${r.venueName} 공동 업주로 승인했습니다` : '요청을 거절했습니다', approve ? 'success' : 'info');
       load(); onChanged?.();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '처리 실패'), 'error'); }
     setBusy(null);
   };
   // 실패했을 때는 카드를 남긴다 — 조회 실패로 카드가 통째로 사라지면
@@ -211,7 +211,7 @@ function VoucherQuotaAdminCard({ onChanged }: { onChanged?: () => void }) {
         approve ? 'success' : 'info',
       );
       load(); onChanged?.();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '처리 실패'), 'error'); }
     setBusy(null);
   };
   // 실패 시에는 카드를 남긴다(위 공동 업주 카드와 같은 이유 — 사라지면 대기열의 존재 자체가 숨는다)
@@ -296,7 +296,7 @@ function RankVerifyAdminCard({ onChanged }: { onChanged?: () => void }) {
       toast.show(ok ? '대회로 승인했습니다. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload(); onChanged?.();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '처리 실패'), 'error'); }
     finally { setBusy(null); }
   };
   return (
@@ -371,7 +371,7 @@ function MissionsAdminCard() {
   const [reward, setReward] = useState(30);
   const [editRow, setEditRow] = useState<CustomMissionRow | null>(null);
   // 조회 실패를 삼키면 '아직 안 만든 미션'과 구별되지 않아 같은 미션이 두 번 등록된다(custom_missions 에 title 유니크 없음).
-  const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch((e) => toast.show(e instanceof Error ? `미션 목록을 불러오지 못했습니다: ${e.message}` : '미션 목록을 불러오지 못했습니다', 'error')); }, [toast]);
+  const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch((e) => toast.show(`미션 목록을 불러오지 못했습니다: ${msgOf(e, '잠시 후 다시 시도해 주세요')}`, 'error')); }, [toast]);
   useEffect(() => { reload(); }, [reload]);
 
   const resetForm = () => { setEditRow(null); setTitle(''); setGoalType('checkin'); setGoal(3); setReward(30); };
@@ -388,7 +388,7 @@ function MissionsAdminCard() {
       toast.show(editRow ? '미션을 수정했습니다. 이용자 화면은 다음 접속부터 반영됩니다' : '미션을 추가했습니다. 이용자 화면은 다음 접속부터 반영됩니다', 'success');
       resetForm(); reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : (editRow ? '수정 실패' : '추가 실패'), 'error');
+      toast.show(msgOf(e, (editRow ? '수정 실패' : '추가 실패')), 'error');
     } finally { setBusy(false); }
   };
   const toggle = async (m: CustomMissionRow) => {
@@ -398,7 +398,7 @@ function MissionsAdminCard() {
       toast.show(m.active ? '미션을 중단했습니다(보상 수령도 차단)' : '미션을 다시 켰습니다', 'success');
       reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '변경 실패', 'error');
+      toast.show(msgOf(e, '변경 실패'), 'error');
     } finally { setBusy(false); }
   };
   const remove = async (m: CustomMissionRow) => {
@@ -409,7 +409,7 @@ function MissionsAdminCard() {
       toast.show('미션을 삭제했습니다', 'success');
       reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제 실패', 'error');
+      toast.show(msgOf(e, '삭제 실패'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -525,7 +525,7 @@ function HallOfFameAdminCard() {
       await adminSaveHallEntry({ period, rank, nickname: d.nickname, note: d.note });
       toast.show(`${period} ${rank}위를 저장했습니다. 순위 > 명예의 전당에 바로 반영됩니다`, 'success');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setBusy(false); }
   };
 
@@ -536,7 +536,7 @@ function HallOfFameAdminCard() {
       await adminDeleteHallEntry(r.id);
       toast.show('등록을 삭제했습니다', 'success');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
     finally { setBusy(false); }
   };
 
@@ -641,7 +641,7 @@ function ShoutsAdminCard() {
       await hideShout(s.id);
       toast.show('외침을 내렸습니다', 'success');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
     finally { setBusy(null); }
   };
   const refund = async (s: AdminShout) => {
@@ -655,7 +655,7 @@ function ShoutsAdminCard() {
       toast.show(`외침을 내리고 ${res.refunded.toLocaleString()}점을 돌려줬습니다`, 'success');
       setRefundId(null); setReason('');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '환불에 실패했습니다'), 'error'); }
     finally { setBusy(null); }
   };
   // 2026-08-30 슬롯 전환: '노출 중'이 두 상태로 갈렸다 — 지금 20초를 쓰고 있는 것(방송 중)과
@@ -673,7 +673,7 @@ function ShoutsAdminCard() {
       await adminShoutBump(s.id);
       toast.show('외침을 맨 앞으로 보냈습니다', 'success');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
     finally { setBusy(null); }
   };
   return (
@@ -775,7 +775,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
         setPatch((m) => ({ ...m, [p.id]: { ...m[p.id], blinded: next } }));
         toast.show(next ? '블라인드 처리했습니다' : '블라인드를 해제했습니다', 'success');
       }
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
     finally { setBusy(null); }
   };
   return (
@@ -856,7 +856,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
       await Promise.all(renum.filter((n) => prev.get(n.id) !== n.sortOrder).map((n) => setNoticeOrder(n.id, n.sortOrder)));
       setRows(renum);
       onChanged?.();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); load(); }
+    } catch (e) { toast.show(msgOf(e, '순서 변경 실패'), 'error'); load(); }
     finally { setBusy(false); }
   };
   const remove = async (n: MarketplaceNotice) => {
@@ -867,7 +867,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
       setRows((r) => (r ?? []).filter((x) => x.id !== n.id));
       toast.show('공지를 삭제했습니다', 'success');
       onChanged?.();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
     finally { setBusy(false); }
   };
   return (
@@ -921,7 +921,7 @@ function SupportInquiriesPanel() {
     if (!text) { toast.show('답변 내용을 입력하세요', 'error'); return; }
     setBusy(id);
     try { await answerInquiry(id, text); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); setBusy(null); return; }
+    catch (e) { toast.show(msgOf(e, '답변 실패'), 'error'); setBusy(null); return; }
     setDrafts((d) => ({ ...d, [id]: '' })); load();
     // 답변은 이미 저장됐다 — 메일 실패가 저장을 되돌리거나 초안을 살리지 않는다. 결과는 따로 알린다.
     try {
@@ -930,7 +930,7 @@ function SupportInquiriesPanel() {
         : r === 'skipped' ? '답변을 등록했습니다 · 이메일 인증을 하지 않은 회원이라 메일은 보내지 않았습니다'
         : '답변을 등록하고 문의자에게 메일을 보냈습니다', 'success');
     } catch (e) {
-      toast.show(`답변은 등록했지만 메일을 보내지 못했습니다 — ${e instanceof Error ? e.message : '알 수 없는 오류'}`, 'error');
+      toast.show(`답변은 등록했지만 메일을 보내지 못했습니다 — ${msgOf(e, '알 수 없는 오류')}`, 'error');
     } finally { setBusy(null); }
   };
 
@@ -1005,7 +1005,7 @@ function ErrorLogPanel() {
     //   mustAffect 를 쓰지 않는 이유: clearAll 에 try/catch 가 없어 throw 가 조용히 삼켜진다.
     //   .select('id') — 무인자 .select() 는 message·stack 을 통째로 되받는다(민감 컬럼).
     const { data, error } = await supabase.from('client_errors').delete().gte('created_at', '1970-01-01').select('id');
-    if (error) toast.show(error.message, 'error');
+    if (error) toast.show(msgOf(error, '오류 로그를 비우지 못했습니다'), 'error');
     else if (!data || data.length === 0) toast.show('비우지 못했습니다 — 권한이 없거나 이미 비어 있습니다', 'error');
     else { toast.show('오류 로그를 비웠습니다', 'success'); reload(); }
   };
@@ -1081,7 +1081,7 @@ function PendingGroupsPanel({ users, onChanged }: { users: User[]; onChanged: ()
       await logActivity({ action: 'approve', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 승인 · ${g.name}` });
       toast.show(`'${g.name}' ${isVenue(g) ? '매장' : '그룹'}을 승인했습니다`, 'success'); reload(); onChanged();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
     finally { setBusy(null); }
   };
   const reject = async (g: Venue) => {
@@ -1093,7 +1093,7 @@ function PendingGroupsPanel({ users, onChanged }: { users: User[]; onChanged: ()
       await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 반려 · ${g.name}` });
       toast.show('반려했습니다', 'info'); reload(); onChanged();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
     finally { setBusy(null); }
   };
   if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
@@ -1452,7 +1452,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
       setName(''); setRegion(''); setAddress(''); setOwnerId('');
       onCreated();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '생성에 실패했습니다', 'error');
+      toast.show(msgOf(e, '생성에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -1578,7 +1578,7 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
       setQuotaAmt('');
       toast.show(`전송 한도를 ${n}개 ${sign > 0 ? '충전' : '차감'}했습니다 · 잔여 ${left}개`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '한도 변경에 실패했습니다', 'error');
+      toast.show(msgOf(e, '한도 변경에 실패했습니다'), 'error');
     } finally { setQuotaBusy(false); }
   };
 
@@ -1590,7 +1590,7 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
     const next = !vIssue;
     setVIssue(next);
     try { await setVoucherIssueApproval(venue.id, next); toast.show(next ? '매장이용권 전송을 승인했습니다' : '전송 승인을 해제했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); setVIssue(!next); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); setVIssue(!next); }
   };
 
   const save = async () => {
@@ -1602,7 +1602,7 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
         // 여기서 실패해도 위 수정은 이미 저장됐다 — 부분 성공을 '전부 실패'로 보고하지 않는다
         try { await setVenueVerification(venue.id, verif); }
         catch (e2) {
-          toast.show(`매장 정보는 저장했지만 인증 상태 변경에 실패했습니다: ${e2 instanceof Error ? e2.message : ''}`, 'error');
+          toast.show(`매장 정보는 저장했지만 인증 상태 변경에 실패했습니다: ${msgOf(e2, '잠시 후 다시 시도해 주세요')}`, 'error');
           setOpen(false); onChanged(); return;
         }
       }
@@ -1610,7 +1610,7 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
       setOpen(false);
       onChanged();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '수정에 실패했습니다', 'error');
+      toast.show(msgOf(e, '수정에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -1623,7 +1623,7 @@ function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venu
       toast.show(r === 'archived' ? '숨김(보관) 처리했습니다 — 기록은 보존됩니다' : '매장을 삭제했습니다', 'info');
       onChanged();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+      toast.show(msgOf(e, '삭제에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -1843,7 +1843,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       setLogin(''); setPosition('');
       load();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '직원 추가에 실패했습니다', 'error');
+      toast.show(msgOf(e, '직원 추가에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -1893,7 +1893,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
       toast.show('직원 정보를 수정했습니다', 'success');
       onChanged();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '수정에 실패했습니다', 'error');
+      toast.show(msgOf(e, '수정에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
   const remove = async () => {
@@ -1904,7 +1904,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
       toast.show('직원을 삭제했습니다', 'info');
       onChanged();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+      toast.show(msgOf(e, '삭제에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 

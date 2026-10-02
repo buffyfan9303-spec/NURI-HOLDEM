@@ -43,6 +43,7 @@ import { kstToday } from '../../lib/kst';
 import { listMySpots, type SavedSpot } from '../../api/spots';
 import { villainsLabel } from '../../lib/spot';
 import { compactWon } from '../../lib/compactWon';
+import { msgOf } from '../../lib/dbError';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const ymd = (d: Date) => d.toLocaleDateString('en-CA');
@@ -674,14 +675,14 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
       else toast.show(sign === 0 ? '계획을 적었습니다' : sign > 0 ? '플러스로 기록했습니다' : '마이너스로 기록했습니다', 'success');
       onChanged();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '기록 실패', 'error');
+      toast.show(msgOf(e, '기록 실패'), 'error');
     } finally { setBusy(false); }
   };
 
   const remove = async (id: string) => {
     setBusy(true);
     try { await deleteBankrollEntry(id); onChanged(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
     finally { setBusy(false); }
   };
 

@@ -24,6 +24,7 @@ import { askTdaAssist, TDA_QUESTION_MAX } from '../../../api/tdaAssist';
 import { searchTda, tdaRuleKey, type Scored } from '../../../lib/tdaSearch';
 import type { TdaRule } from '../../../data/tdaRules';
 import { loadTdaRules, peekTdaRules, type TdaData } from '../../../lib/tdaRulesLoad';
+import { msgOf } from '../../../lib/dbError';
 
 /** 첫 커밋에 그릴 규칙 카드 수 — 390×844 첫 화면을 넘치게 채우는 양(카드 ≈ 40px). */
 const FIRST_RULES = 16;
@@ -82,7 +83,7 @@ export default function TdaRulesTool() {
       setAnswer(out);
     } catch (e) {
       // AI 가 실패해도 규칙은 아래에 그대로 있다 — '아무것도 못 얻는 실패'로 끝내지 않는다.
-      setAiErr(e instanceof Error ? e.message : 'AI 답변을 받지 못했습니다. 아래 규칙 원문을 확인해 주세요.');
+      setAiErr(msgOf(e, 'AI 답변을 받지 못했습니다. 아래 규칙 원문을 확인해 주세요.'));
     } finally { setBusy(false); }
   }, [data, user]);
 

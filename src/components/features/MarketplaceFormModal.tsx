@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { filterListing } from '../../lib/content-filter';
 import { uploadListingImages } from '../../lib/storage';
 import type { ListingCategory, ListingCondition } from '../../api/marketplace';
+import { msgOf } from '../../lib/dbError';
 
 export interface MarketplaceFormData {
   title: string;
@@ -135,7 +136,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
       toast.show('상품이 등록되었습니다', 'success');
       onClose();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '상품 등록에 실패했습니다', 'error');
+      toast.show(msgOf(err, '상품 등록에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }

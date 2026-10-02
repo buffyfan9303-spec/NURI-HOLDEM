@@ -4,6 +4,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import type { NoticeType, NoticeBoard, MarketplaceNotice } from '../../api/marketplace';
 import { NoticeTile } from './NoticeSection';
+import { msgOf } from '../../lib/dbError';
 
 export interface NoticeFormData {
   type: NoticeType;
@@ -61,7 +62,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
       toast.show(editing ? '공지사항이 수정되었습니다' : '공지사항이 등록되었습니다', 'success');
       onClose();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '공지 등록에 실패했습니다', 'error');
+      toast.show(msgOf(err, '공지 등록에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }

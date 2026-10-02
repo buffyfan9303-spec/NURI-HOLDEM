@@ -21,6 +21,7 @@ import Icon from '../atoms/Icon';
 import { regCloseLevelFromText } from '../../lib/regClose';
 import { posterFormFromSchedule, posterSaveParts, sameJson, type PosterLevel, type PosterSaveForm, type PosterSaveParts } from '../../lib/posterPayload';
 import { MAX_EARLY_TIERS, MAX_VOUCHER_PER_ENTRY, voucherPerEntryMismatch } from '../../lib/chipRules';
+import { msgOf } from '../../lib/dbError';
 
 /** 포스터 저장의 **실제 결과**. 반복 등록이 있어 '성공/실패' 두 값으로는 부족하다 —
  *  3주 중 2주만 나간 경우를 사용자가 구별할 수 있어야 한다(App 이 이미 그렇게 판정하고 있었다). */
@@ -359,7 +360,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (alsoPreset && presetVenueId && form.title.trim()) {
       saveGamePreset(presetVenueId, form.title.trim(), presetFromPosterForm({ ...form, regCloseTime: regClose, posterUrl }))
         .then(() => toast.show('게임 프리셋으로도 저장했어요. 장부·클락에서 그대로 불러올 수 있어요', 'success'))
-        .catch((err) => toast.show(err instanceof Error ? err.message : '프리셋 저장 실패', 'error'));
+        .catch((err) => toast.show(msgOf(err, '프리셋 저장 실패'), 'error'));
     }
     onClose();
   };

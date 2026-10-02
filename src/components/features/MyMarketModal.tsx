@@ -15,6 +15,7 @@ import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
+import { msgOf } from '../../lib/dbError';
 
 function Thumb({ src, size = 'w-12 h-12' }: { src: string | null; size?: string }) {
   return (
@@ -174,12 +175,12 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
   const setStatus = async (l: MarketplaceListing, status: ListingStatus) => {
     if (l.status === status) return;
     try { await updateListingStatus(l.id, status); setItems((arr) => arr.map((x) => x.id === l.id ? { ...x, status } : x)); onChanged?.(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
   const del = async (l: MarketplaceListing) => {
     if (!confirm(`"${l.title}" 판매글을 삭제하시겠습니까?`)) return;
     try { await deleteListing(l.id); setItems((arr) => arr.filter((x) => x.id !== l.id)); onChanged?.(); toast.show('삭제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
   };
 
   return (

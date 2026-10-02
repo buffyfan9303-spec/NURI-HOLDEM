@@ -1053,7 +1053,7 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
       toast.show(next ? '내 캘린더에 담았어요' : '캘린더에서 뺐어요', 'success');
     } catch (e) {
       setLiked(!next);
-      toast.show(e instanceof Error ? e.message : '변경 실패', 'error');
+      toast.show(msgOf(e, '변경 실패'), 'error');
     } finally { setLikeBusy(false); }
   };
 
@@ -1101,7 +1101,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
     setSending(true);
     requestBuyin(venueId, null, undefined, eventDate)
       .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'))
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
+      .catch((e) => toast.show(msgOf(e, '요청 전송 실패'), 'error'))
       .finally(() => setSending(false));
   };
   return (
@@ -1212,7 +1212,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       await createReservation(scheduleId, n); // 중복 닉네임이면 '이미 등록된 닉네임입니다' throw
     } catch (e) {
       // 중복 닉네임 등 — 입력은 유지되어 닉네임만 바꿔 바로 다시 예약 가능
-      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+      toast.show(msgOf(e, '처리 실패'), 'error');
       throw e;
     }
   };
@@ -1230,7 +1230,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   const ddayLabel = ddayNum <= 0 ? '오늘' : ddayNum === 1 ? '내일' : `D-${ddayNum}`;
   const enableReminderPush = async () => {
     try { await enablePush(); setPushOn(true); toast.show('알림을 켰습니다. 시작 1시간 전에 알려드려요', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '알림 설정 실패'), 'error'); }
   };
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 

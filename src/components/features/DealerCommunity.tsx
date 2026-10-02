@@ -22,6 +22,7 @@ import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 import { promptLogin } from '../../lib/requireLogin';
+import { msgOf } from '../../lib/dbError';
 
 /** 구인/구직 필터 칩 — 진열 순서가 곧 하위 탭 전환 방향(forward/back)의 기준. */
 const KIND_FILTERS: [DealerPostKind | 'all', string][] = [['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']];
@@ -113,7 +114,7 @@ export default function DealerCommunity() {
       toast.show('등록되었습니다', 'success');
       reload();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '등록에 실패했습니다', 'error');
+      toast.show(msgOf(err, '등록에 실패했습니다'), 'error');
     } finally {
       setSending(false);
     }
@@ -126,7 +127,7 @@ export default function DealerCommunity() {
       toast.show('삭제되었습니다', 'info');
       reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+      toast.show(msgOf(e, '삭제에 실패했습니다'), 'error');
     }
   };
 
@@ -320,7 +321,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
       setApplied(true); setPhone(''); setMsg('');
       toast.show('지원이 접수되었습니다', 'success');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '지원에 실패했습니다', 'error');
+      toast.show(msgOf(err, '지원에 실패했습니다'), 'error');
     } finally {
       setSending(false);
     }
