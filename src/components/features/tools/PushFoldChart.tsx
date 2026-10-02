@@ -98,7 +98,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       </div>
 
       {/* 스택(bb) — 오너 지시(2026-09-17) "칩이 크고 두 줄로 깨진다": 12구간을 **한 줄 슬라이더**(44px 트랙)로,
-          아래 눈금은 데이터가 실제로 있는 깊이(NASH_STACKS)만 — 눈금도 눌러서 바로 갈 수 있다(flex-1: 375px 에서 26px, 320px 에서 21.6px — 주 과녁은 44px 슬라이더다. min-w-[24px] 는 320px 에서 288>259 로 넘쳤다). */}
+          아래 눈금은 데이터가 실제로 있는 깊이(NASH_STACKS)만 — 눈금도 눌러서 바로 갈 수 있다(flex-1: 375px 에서 26px, 320px 에서 21.6px — 주 과녁은 44px 슬라이더다. min‑w‑[24px] 는 320px 에서 288>259 로 넘쳤다). */}
       <div className="space-y-1" data-testid="pushfold-stack-picker">
         <div className="flex items-baseline justify-between">
           {/* 🔴 G5(2026-09-20) — **언제 기준의 스택인가**를 결과 가까이에 못박는다.

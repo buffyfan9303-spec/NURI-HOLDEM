@@ -552,7 +552,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         {/* 액션바 — 하단 고정(sticky). 문서 흐름 최하단에 두면 빈 폼에서도 '게시하기'가 접힘 아래로
             밀려나(375×667 실측 165.2px 아래) 첫 화면에서 보이지 않았다.
             문법은 앱에 이미 있는 선례를 따른다: ListingDetailModal 의 하단 고정 CTA
-            (sticky bottom-0 / border-t / 불투명 bg-surface-mid). backdrop-filter 는 쓰지 않는다 —
+            (sticky bottom-0 / border-t / 불투명 bg-surface-mid). backdrop‑filter 는 쓰지 않는다 —
             상시 노출 요소의 blur 는 스크롤 중 페인트 폭탄이다(모션 헌법 §20.4-3·5).
             버튼·제목 입력칸은 min-h-[44px](M-09, 2026-10-01) — 전역 .btn/.input 기본(2.4rem=40.8px)은 그대로 둔다. */}
         <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3">

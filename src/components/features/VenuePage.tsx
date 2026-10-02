@@ -1880,7 +1880,7 @@ function PostersPanel({
             <span className="text-2xs text-ink-muted font-normal">({todayPosters.length})</span>
           </span>
           {/* 펼침/접힘 화살표 — 손그림 SVG(viewBox 16)를 레지스트리 글리프(viewBox 24)로 통일.
-              duration-200 유틸은 모션 헌법 §20.4 #2 위반(토큰과 분리돼 표류) → --dur-base 토큰으로. */}
+              duration‑200 유틸은 모션 헌법 §20.4 #2 위반(토큰과 분리돼 표류) → --dur-base 토큰으로. */}
           <Icon
             name="chevron-down"
             size={16}

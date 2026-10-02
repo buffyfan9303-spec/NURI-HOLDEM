@@ -752,7 +752,7 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
             · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이) — 단 **70px 에 한 줄로
               들어가는 이름은 표에 없다**(TITLE_LINES 주석의 실측표). 그 이름들은 한 줄이다.
             · 오른쪽 `pr-7` 은 우상단 즐겨찾기 별(h-8 w-8 · right-1)을 피하는 자리다.
-          ⚠ `flex-wrap` + 제목 칸 `flex-[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
+          ⚠ `flex-wrap` + 제목 칸 `flex‑[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
             확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
             그때 제목 칸이 **스스로 아이콘 아래로 내려가** 카드 전폭을 쓴다(예전 세로 배치로 자동 복귀).
             실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.

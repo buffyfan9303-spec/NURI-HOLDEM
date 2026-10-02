@@ -1937,7 +1937,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
         /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
            `px-2 !`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
            정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
-           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px-3!`
+           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px‑3!`
            그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
         className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:px-3!'].join(' ')}>
         <span className="relative">요약</span>

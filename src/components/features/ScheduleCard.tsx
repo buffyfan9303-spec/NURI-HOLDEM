@@ -906,7 +906,7 @@ function TimetableCard({
         {/* 🔴 2026-09-25 FULL-ERROR-SWEEP-A ① — 제목을 **터치**하면 매장 페이지가 열리던 결함(마우스는 정상). 원인은 둘이다
             (scratchpad sweepA/exp1~3 실측 · CDP Input.dispatchTouchEvent 반경 1/4/8 · 390/360 · 홈·일정 탐색):
             ① 매장 링크의 `tap-up-24`(위로 8px 의사요소)가 제목 아래 5px 를 덮었다 — 여기선 제목이 매장 줄 **위**다(ListCard 와 반대).
-               → 의사요소 대신 실제 박스: 매장 줄(row)에 `py-[3.25px]`, 버튼에 `my-[-3.25px] py-[3.25px]` → 17.53 + 6.5 = 24.03px(AA 24).
+               → 의사요소 대신 실제 박스: 매장 줄(row)에 `py-[3.25px]`, 버튼에 `my‑[-3.25px] py-[3.25px]` → 17.53 + 6.5 = 24.03px(AA 24).
                  버튼 박스가 줄의 padding 박스에 정확히 들어가 제목·③줄과 겹치지도, 줄 밖으로 넘치지도 않는다(넘치면 잘림 게이트가 잡는다).
             ② Chromium 터치 보정은 터치 사각형(최소 20px)에 걸린 '응답 요소' 중 가까운 것으로 **touchstart 부터** 옮긴다.
                응답 요소 = 네이티브 button/link · focusable · :hover/:active 규칙이 있는 요소이고, **다른 응답 요소의 조상은 뺀다**.

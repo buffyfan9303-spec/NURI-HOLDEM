@@ -218,7 +218,7 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
 // 2px 뚱뚱해지고 모서리가 뭉갠다(별 뾰족한 끝·하트 골이 특히 심하다).
 // heroicons solid 는 처음부터 채움용으로 그린 단일 패스라 stroke 가 없다 — 여기가 제자리다.
 //
-// ⛔ 두 팩을 아무 데나 섞지 마라. lucide 는 stroke 2 / heroicons outline 은 1.5 라
+// ⛔ 두 팩을 아무 데나 섞지 마라. lucide 는 stroke 2 / heroicons 외곽선(Outline) 팩은 1.5 라
 //    같은 화면에 나란히 두면 굵기가 갈려 조잡해진다(2026-08-29 에 이모지 300곳을 SVG 로
 //    통일한 이유가 정확히 그것이다). 그래서 **아웃라인은 lucide 로 통일**하고,
 //    heroicons 는 stroke 가 아예 없는 solid 만 쓴다 — 굵기가 갈릴 여지 자체를 없앤다.
