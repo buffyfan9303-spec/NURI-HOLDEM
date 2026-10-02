@@ -5,3 +5,6 @@ import { createContext, type ReactNode } from 'react';
 
 /** 작업대 밖(관리자 탭 등)에서는 null — 도구 없이 그린다. */
 export const LedgerToolsContext = createContext<ReactNode>(null);
+
+/** 전체화면 작업대 안인가 — 그 안에서는 장부 머리줄(날짜·게임)을 셸 칩 줄 자리로 portal 하지 않는다(그 자리는 전체화면 뒤에 가려진다). */
+export const LedgerFullscreenContext = createContext(false);

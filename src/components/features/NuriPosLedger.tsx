@@ -8,7 +8,7 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
 // (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { LedgerToolsContext } from './ledgerTools';
+import { LedgerToolsContext, LedgerFullscreenContext } from './ledgerTools';
 import { createPortal } from 'react-dom';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
@@ -190,6 +190,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   settleSignal?: number;
 }) {
   const toast = useToast();
+  const inFullscreen = useContext(LedgerFullscreenContext);
   const wsTools = useContext(LedgerToolsContext); // 작업대 도구([이용권 확인]·[전체화면]) — 날짜 줄·목록 검색 줄 끝에 그린다
   const { user, isAdmin } = useAuth();
   const operatorOk = isAdmin || !!user?.approved; // 담당직원: 승인된 계정만 운영
@@ -239,6 +240,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // 보드 상단 '바인 할인' 고정 선택. null = 자동(클락 레벨) — **기본값이라 기존 운영이 그대로다**.
   // 0 = 할인 없음 고정, 1~5 = 그 프리셋 고정. 결제창·QR 승인이 모두 이 값을 기본으로 받는다.
   const [discPick, setDiscPick] = useState<number | null>(null);
+  const [discHelp, setDiscHelp] = useState(false); // 할인 안내 ⓘ 펼침
+  const [exOpen, setExOpen] = useState(false);     // 정산 제외 펼침(PC 는 접힘 줄·내용이 갈라져 있어 위로 올렸다)
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -1420,12 +1423,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     ? <GameSwitcher games={games} gameSeq={gameSeq} onSelect={pickGame} onAddSide={addSide} canAdd={operatorOk} date={date} today={date === biz} />
     : null;
   const dateBar = (withTools: boolean) => <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} tools={withTools ? wsTools : null} />;
-  const slotted = !!gameSlot && mode === 'board';
+  const slotted = !!gameSlot && mode === 'board' && !inFullscreen;
   const headPortal = slotted && gameSlot ? createPortal(isDesktopLedger ? (
-    <div data-ledger-head="" className="flex min-w-0 items-center gap-2">
+    // flex-wrap — 좁은 PC(1024)에서는 게임 칩 칸이 0 으로 짜부라지지 않고 다음 줄로 내려간다(칸 하한 16rem).
+    <div data-ledger-head="" className="flex min-w-0 flex-wrap items-center gap-2">
       <div className="shrink-0">{dateBar(false)}</div>
-      <div className="min-w-0 flex-1">{switcher}</div>
-      {wsTools && <div className="flex shrink-0 items-center gap-1.5">{wsTools}</div>}
+      <div className="order-last min-w-0 basis-full empty:hidden xl:order-none xl:basis-0 xl:flex-1 xl:min-w-[16rem]">{switcher}</div>
+      {wsTools && <div className="ml-auto flex shrink-0 items-center gap-1.5">{wsTools}</div>}
     </div>
   ) : (switcher ?? (loading ? <div aria-hidden className="h-9 animate-pulse rounded-badge bg-surface-high" /> : null)), gameSlot) : null;
   const headInline = slotted ? (isDesktopLedger ? null : dateBar(true)) : <>{dateBar(true)}{switcher}</>;
@@ -1639,7 +1643,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
 
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 pb-48 lg:pb-28">
+    <div className="space-y-2 pb-48 lg:pb-28">
       {headPortal}
       {slotted ? headInline : dateBar(true)}
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
@@ -1654,8 +1658,11 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
       {!slotted && switcher}
 
       {/* 세션 요약 */}
-      <div className="rounded-aura border card-aura p-2.5 flex items-center gap-2 flex-wrap">
-        <span className="text-pretty text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
+      {/* 2026-10-02 감사 L-1·L-8 — 한 줄로 조였다: 왼쪽(제목·단가·담당·대회)은 줄바꿈해도 오른쪽 버튼 둘은 같은 줄 오른쪽에 남는다
+          (종전: 긴 대회명이면 [클락]·[세션 정보 수정] 이 다음 줄 왼쪽으로 흩어졌다). 버튼은 .btn-sm(34px)+tap-y-44 — 누름영역 44 유지. */}
+      <div className="rounded-aura border card-aura px-2.5 py-1.5 flex items-center gap-2">
+        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="min-w-0 max-w-full truncate text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
@@ -1667,9 +1674,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
               aria-label={`대회 ${scheduleTitle(session.scheduleId)} — 손님이 보는 대회 상세 열기`}
               className="max-w-full truncate py-1 text-left text-2xs text-accent-300 font-semibold hover:underline underline-offset-2">· 대회 {scheduleTitle(session.scheduleId)}</button>
           : <span className="inline-block max-w-full truncate align-bottom text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>)}
-        <span className="flex-1" />
-        {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost inline-flex items-center gap-1.5 text-sm px-3.5 py-2 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
-        {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
+        </div>
+        {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost btn-sm tap-y-44 inline-flex shrink-0 items-center gap-1.5 px-3 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
+        {!closed && <button type="button" onClick={() => setEditOpen(true)} aria-label="세션 정보 수정" className="btn-ghost btn-sm tap-y-44 shrink-0 px-3 font-semibold"><span className="max-sm:hidden">세션 정보 </span>수정</button>}
       </div>
 
       {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용).
@@ -1678,18 +1685,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           띠에만 있던 '생존' 은 정산 바 칸으로 옮겼다(aliveMetric). 모바일(<1024)은 그대로.
           F4(2026-09-29): PC(lg+)는 헤더 밑에 상단 메뉴줄(GNB)이 하나 더 있어 --header-now 에 붙으면 띠가 통째로 가려졌다
           (1280·1440 실측 y60~107, 5점 모두 GNB). 내 매장 사이드바·대시보드 바와 같은 --stack-top(헤더+GNB 실측)에 붙인다. */}
-      {!closed && (
-        <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
-          onClick={pointAtSettle}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-(--header-now) lg:top-[var(--stack-top,6.0625rem)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4 lg:hidden">
-          <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-          <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
-          {aliveMetric}
-          <Metric label="미수" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone={stats.unpaid + stats.addon.unpaid > 0 ? 'danger' : undefined} />
-        </div>
-      )}
-
+      {/* 2026-10-02 감사 L-6 — 모바일 상단 고정 요약 띠(엔트리·완납·생존·미수)를 걷었다. 아래 고정 정산바가 같은 숫자를 이미 보여 줘
+          표로 내려가면 두 고정 크롬(88+166px)이 표 가용 높이를 844 중 450 으로 깎았다. 띠에만 있던 '생존' 은 정산바 '총 바인' 칸 보조 줄로 옮겼다
+          (PC 는 P-02 대로 정산바 칸). '탭하면 정산 마감 지목' 은 정산바가 늘 화면에 있어 필요 없다(settleSignal 지목은 그대로). */}
       {/* 손님 자가 바인 요청(QR) — 운영자 원탭 승인 → 현재 게임 명단 추가 */}
       {!closed && pendingReqs.length > 0 && (
         <div className="rounded-card border border-sky-500/40 bg-sky-500/6 p-2.5 space-y-2">
@@ -1847,7 +1845,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           <p className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">
             {roundPresetState === 'done'
               ? <>프리셋으로 저장됐어요. 다음엔<b className="text-ink-primary">1탭</b>으로 그대로 열 수 있어요.</>
-              : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b>할까요? 다음엔 포스터·장부·클락을 한 번에 채워요.</>}
+              : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b> — 다음엔 한 번에 채워요</>}
           </p>
           {roundPresetState === 'done'
             ? <span className="shrink-0 text-2xs font-bold text-emerald-400">저장됨 ✓</span>
@@ -1882,42 +1880,6 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
         </div>
       )}
 
-      {/* 바인 할인 빠른 선택 — 새로 찍는 바인의 기본 할인. 상시 크롬이라 진입 애니 없음(§20.4-7).
-          프리셋이 하나도 없으면 줄 자체를 그리지 않는다(빈 크롬 금지). */}
-      {!closed && session.discounts.some((d) => d.amount > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low px-2 py-1.5">
-          <span className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</span>
-          {(() => {
-            const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
-            const chip = (on: boolean) => ['min-h-11 rounded-badge border px-3 text-xs font-bold transition-colors',
-              on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
-            return (
-              <>
-                <button type="button" onClick={() => setDiscPick(null)} className={chip(discPick === null)}>
-                  자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}
-                </button>
-                <button type="button" onClick={() => setDiscPick(0)} className={chip(discPick === 0)}>할인 없음</button>
-                {/* 비운 자리(0원)는 감추되 자리번호는 그대로 — 바인 계산의 기준이라 재배열 불가 */}
-                {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
-                  <button key={i} type="button" onClick={() => setDiscPick(i + 1)} className={chip(discPick === i + 1)}>
-                    <span className="tabular-nums">{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</span>
-                  </button>
-                )))}
-                {/* ⚠ 2026-09-14 실측: 할인 프리셋이 3개면 이 안내문이 flex-wrap 에서 남은 ~20px 를 받아
-                    **한 글자씩 세로로** 내려와 박스가 490px 가 됐다. break-keep 이 있어도 전역
-                    overflow-wrap:break-word(index.css)가 한 글자 단위로 쪼갠다.
-                    basis-full 로 **줄 전체**를 차지하게 해 칩과 같은 줄을 다투지 않게 한다. */}
-                <p className="basis-full break-keep text-2xs leading-tight text-ink-muted">
-                  {discPick === null
-                    ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
-                    : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
-                </p>
-              </>
-            );
-          })()}
-        </div>
-      )}
-
       {/* 검색 + 유저 추가 */}
       {!closed && (
         <div className="space-y-1.5">
@@ -1931,6 +1893,31 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 <circle cx="9" cy="9" r="6" /><line x1="14" y1="14" x2="18" y2="18" strokeLinecap="round" />
               </svg>
             </div>
+            {/* 바인 할인 기본값 — 2026-10-02 감사 L-5: 칩 6개 상자(모바일 203px·PC 82px)를 선택 하나로 접어 검색 줄에 올렸다.
+                값·의미는 그대로다(null=자동(클락 레벨) · 0=할인 없음 · 1~5=그 프리셋 고정, 비운 자리는 자리번호 유지). 결제창·QR 승인이 이 값을 기본으로 받는다.
+                긴 안내는 ⓘ 로 펼친다(지우지 않는다). 프리셋이 하나도 없으면 그리지 않는다(빈 크롬 금지). */}
+            {session.discounts.some((d) => d.amount > 0) && (() => {
+              const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
+              return (
+                <div data-ledger-disc="" className="flex shrink-0 items-center gap-1 max-sm:order-last max-sm:basis-full">
+                  <label htmlFor="ledger-disc-pick" className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</label>
+                  <select id="ledger-disc-pick" value={discPick === null ? 'auto' : String(discPick)}
+                    onChange={(e) => setDiscPick(e.target.value === 'auto' ? null : Number(e.target.value))}
+                    className={['input h-10 min-w-0 py-0 text-xs font-bold max-sm:flex-1 sm:max-w-48', discPick === null ? '' : 'text-accent-300'].join(' ')}>
+                    <option value="auto">자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}</option>
+                    <option value="0">할인 없음</option>
+                    {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
+                      <option key={i} value={String(i + 1)}>{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</option>
+                    )))}
+                  </select>
+                  <button type="button" onClick={() => setDiscHelp((v) => !v)} aria-expanded={discHelp} aria-controls="ledger-disc-help"
+                    aria-label={discHelp ? '할인 안내 접기' : '할인 안내 펼치기'}
+                    className="flex h-10 w-8 shrink-0 items-center justify-center text-ink-muted hover:text-ink-secondary">
+                    <Icon name="info" size={15} />
+                  </button>
+                </div>
+              );
+            })()}
             {/* 정렬 — 100명+ 명단 빨리 찾기: 등록순/이름순/바인순 */}
             <SegmentedTabs className="shrink-0"
               items={[{ key: 'recent', label: '등록순' }, { key: 'name', label: '가나다' }, { key: 'bins', label: '바인순' }]}
@@ -1940,6 +1927,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
               : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0 max-sm:ml-auto">+ 유저 추가</button>}
           </div>
 
+          {discHelp && session.discounts.some((d) => d.amount > 0) && (
+            <p id="ledger-disc-help" className="break-keep text-2xs leading-tight text-ink-muted">
+              {discPick === null
+                ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
+                : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
+            </p>
+          )}
           <Fold open={addOpen && !regClosed}>
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
@@ -2169,11 +2163,21 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
       <div ref={settleBarRef} data-ledger-settlebar="" className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
-        <SettleFilter
+        {/* 2026-10-02 감사 L-1 — PC(lg+)는 [정산 제외] 접힘 줄(33px)을 숫자 줄 왼쪽 칸으로 올리고, 펼친 내용만 숫자 위에 둔다(바 높이 회수).
+            모바일은 종전 그대로(한 상자). 펼침 상태는 하나라 폭이 바뀌어도 이어진다. */}
+        <SettleFilter part={isDesktopLedger ? 'panel' : 'all'} open={exOpen} setOpen={setExOpen}
           exKeys={exKeys} setExKeys={setExKeys} counts={exCounts}
           removed={stats.removed} players={players}
         />
         <div className="flex items-center gap-2">
+          {isDesktopLedger && (
+            <div className="w-40 shrink-0">
+              <SettleFilter part="toggle" open={exOpen} setOpen={setExOpen}
+                exKeys={exKeys} setExKeys={setExKeys} counts={exCounts}
+                removed={stats.removed} players={players}
+              />
+            </div>
+          )}
           {/* ⚠ 2026-09-14 실측(375): 4열이면 칸이 좁아 값이 숫자 중간에서 끊겼다("7,194 / .44만").
               가장 좁은 폭만 2×2 로 내린다 — sm 이상은 종전 4열 그대로(PC 렌더 불변). */}
           <div className={['grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4', !closed ? 'lg:grid-cols-5' : ''].join(' ')}>
@@ -2182,7 +2186,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
             <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
-              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
+              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · ${aliveLive != null ? '생존' : '생존(추정)'} ${aliveLive != null ? aliveLive : aliveEst}` : ''}`} />
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
@@ -4249,14 +4253,17 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
 //                       "티켓·현금·카드 등도 뺄 수 있게".
 // 축이 둘(방문자 유형 × 결제수단)뿐이라 별도 화면을 만들지 않고 정산바 바로 위에 접어 둔다 —
 // 지금 보는 숫자가 '무엇을 뺀 결과'인지 같은 시야에서 읽혀야 오정산이 안 난다.
-function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
+function SettleFilter({ exKeys, setExKeys, counts, removed, players, part = 'all', open, setOpen }: {
+  /** all = 접힘 줄 + 펼친 내용(모바일) · toggle = 접힘 줄만(PC 숫자 줄 왼쪽 칸) · panel = 펼친 내용만(PC 숫자 줄 위) */
+  part?: 'all' | 'toggle' | 'panel';
+  open: boolean;
+  setOpen: (f: (v: boolean) => boolean) => void;
   exKeys: Set<string>;
   setExKeys: (f: (prev: Set<string>) => Set<string>) => void;
   counts: Map<string, number>;
   removed: { count: number; entries: number; value: number; revenue: number };
   players: LedgerPlayer[];
 }) {
-  const [open, setOpen] = useState(false);
   const toggle = (k: string) => setExKeys((prev) => {
     const next = new Set(prev);
     if (next.has(k)) next.delete(k); else next.add(k);
@@ -4286,11 +4293,12 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
     );
   };
 
+  if (part === 'panel' && !open) return null;
   return (
-    <div className="pb-1">
+    <div className={part === 'toggle' ? undefined : 'pb-1'}>
       <div className="rounded-input border border-border-subtle bg-surface-low/70 px-2.5 py-1.5">
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-          className="flex min-h-[24px] w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary">
+        {part !== 'panel' && <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className={['flex min-h-[24px] w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary', part === 'toggle' ? 'flex-wrap' : ''].join(' ')}>
           <Icon name="filter" size={12} className={['shrink-0 transition-transform', open ? '' : '-rotate-90'].join(' ')} />
           정산 제외
           {exKeys.size === 0
@@ -4300,10 +4308,10 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
                 {exKeys.size}개 · 바인 {removed.count}건 · 엔트리 −{removed.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · −{wonToMan(removed.value)}만
               </span>
             )}
-        </button>
+        </button>}
 
-        <Fold open={open}>
-          <div className="mt-1.5 space-y-1.5 border-t border-border-subtle pt-1.5">
+        {part !== 'toggle' && <Fold open={open}>
+          <div className={['space-y-1.5', part === 'panel' ? '' : 'mt-1.5 border-t border-border-subtle pt-1.5'].join(' ')}>
             <div className="flex flex-wrap items-center gap-1">
               <span className="w-14 shrink-0 text-2xs text-ink-muted">방문 유형</span>
               {visitorKeys.map((v) => chip(`visitor:${v}`, visitorLabel(v)))}
@@ -4323,7 +4331,7 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
                 className="text-2xs font-semibold text-accent-300 hover:text-accent-200">전부 포함으로 되돌리기</button>
             )}
           </div>
-        </Fold>
+        </Fold>}
       </div>
     </div>
   );

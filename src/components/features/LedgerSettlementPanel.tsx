@@ -145,14 +145,14 @@ function Report({ r }: { r: SettlementReport }) {
           장부 화면의 '정산 제외'(관계자·가게지원 등)는 그 화면에서만 살아 있는 일회성 필터라,
           같은 날짜인데 장부 정산바와 여기 숫자가 다를 수 있다. 둘이 다른 이유를 화면에 밝혀 둔다 —
           숫자가 갈리는 것보다, 갈리는 이유를 모르는 것이 더 위험하다. */}
+      {/* 감사 S-3(2026-10-02) — 3줄 → 한 문장. 뜻(장부 화면의 정산 제외는 여기 안 들어가 정산바와 다를 수 있다)은 그대로. */}
       <p className="text-2xs leading-relaxed text-ink-muted">
-        이 정산은 <b className="text-ink-secondary">그날 장부에 남은 바인 전부</b>를 셉니다.
-        장부 화면에서 건 ‘정산 제외’ 필터는 그 화면에만 적용되므로, 제외를 걸어 둔 날은 장부 하단 정산바와 숫자가 다를 수 있습니다.
+        <b className="text-ink-secondary">그날 장부 바인 전부</b> 기준 · 장부의 ‘정산 제외’ 필터는 반영되지 않아 정산바와 다를 수 있어요.
       </p>
 
       {/* ── ② 기준 엔트리 대비 ── */}
       <Card title="기준 엔트리 대비" icon="target"
-        note="엔트리는 금액 기준입니다 — 10만 게임에 5만 할인 손님은 바인 1회지만 엔트리는 0.5입니다. 상금·인건비·임대료는 장부에 없어, 여기 '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
+        note="엔트리는 금액 기준(10만 게임 5만 할인 = 바인 1회·엔트리 0.5). '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
         {hasTarget ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Line label="엔트리" value={ent(t.entries)} sub={`달성 ${entryRate}% · 바인 ${t.buyinCount}회`}
@@ -234,7 +234,8 @@ function Report({ r }: { r: SettlementReport }) {
       </Card>
 
       {/* ── ⑤ 순위 셋 ── */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* 감사 S-1 — 등높이 그리드라 '미수 손님' 카드 안이 467px 비었다. 카드 높이는 내용대로. */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
         <Rank title="바인을 많이 한 손님" icon="chip-stack" rows={r.topByBuyins}
           value={(p) => `${p.buyins}회`} sub={(p) => man(p.moneyIn)}
           empty="바인 기록이 없습니다." />

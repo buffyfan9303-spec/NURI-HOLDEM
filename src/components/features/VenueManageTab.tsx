@@ -1026,7 +1026,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       )}
 
       {/* S-06 — 인증 등급은 대표 업주만, 숨김 안내는 이 매장을 다루는 모두에게(지금 고른 매장 기준). */}
-      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner} />}
+      {/* 2026-10-02 감사 H-2 — 인증 등급 배너(62px)가 모든 메뉴 맨 위에 상시라 장부 첫 화면에 표가 0행이었다. 등급 배너는 대시보드 판 **안**으로
+          옮겼다(여기 두고 대시보드에서만 그리면 단계 바가 요약↔포스터 사이에서 62px 오르내린다). '숨김 상태' 경고(S-06)는 포스터·장부
+          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다. */}
+      {venueId && <VenueVerificationCard venueId={venueId} part="hidden" />}
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
@@ -1359,6 +1362,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
+                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" /></div>}
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
@@ -1708,13 +1712,14 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변).
             P-05(2026-10-01) — PC(lg+)는 flex-initial(내용 폭): flex-1 이 매장명 뒤에 179px 빈 칸을 만들었다. 상한은 max-w-56 그대로. */}
         {venueName && (<>
-          <span className="min-w-0 max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
+          {/* 감사 H-1(2026-10-02) — 긴 매장명이 28px('누…')까지 짜부라졌다. 하한 4.5rem(≈4글자) — 게임명은 max-w-[50%] 그대로라 둘 다 남는다. */}
+          <span className="min-w-[4.5rem] max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
         {sep}
-        {!summary ? <span className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{gLabel}</span>
-          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{sumLabel}</span>
+        {!summary ? <span className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{gLabel}</span>
+          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{sumLabel}</span>
           : <span data-summary-game="" role="img" aria-label={sumState === 'fail' ? '오늘 게임 정보 없음' : '오늘 게임 불러오는 중'}
               className={['inline-block h-[1em] w-16 shrink-0 rounded-badge bg-surface-high', sumState === 'loading' ? 'animate-pulse' : ''].join(' ')} />}
       </p>

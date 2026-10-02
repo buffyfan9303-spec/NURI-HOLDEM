@@ -8,7 +8,8 @@ import { venueHiddenFromGuests } from '../../lib/venueHidden';
  * venueId 를 주면 **지금 고른 매장**을 읽는다. 예전엔 owner_id 로 첫 매장 하나만 읽어(getMyVenue)
  * 매장이 여럿인 업주는 다른 매장의 등급을 봤다. showVerification=false 면 숨김 안내만(공동 운영자·직원).
  */
-export default function VenueVerificationCard({ venueId, showVerification = true }: { venueId?: string | null; showVerification?: boolean } = {}) {
+// part — 2026-10-02(감사 H-2): 'hidden' = 숨김 경고만(전 메뉴 상단), 'grade' = 인증 등급만(대시보드 판 안). 기본 'all' 은 종전 그대로.
+export default function VenueVerificationCard({ venueId, showVerification = true, part = 'all' }: { venueId?: string | null; showVerification?: boolean; part?: 'all' | 'hidden' | 'grade' } = {}) {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +37,8 @@ export default function VenueVerificationCard({ venueId, showVerification = true
       </p>
     </div>
   ) : null;
+  if (part === 'hidden') return hiddenBand;
+  if (part === 'grade' && (hidden || !showVerification)) return null;
   if (!showVerification) return hiddenBand;
   if (hidden) return hiddenBand;   // 숨김이면 '즉시 게시됩니다' 류 안내는 거짓이 된다 — 숨김 안내만.
 

@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Icon from '../atoms/Icon';
 import LedgerVoucherRail from './LedgerVoucherRail';
-import { LedgerToolsContext } from './ledgerTools';
+import { LedgerToolsContext, LedgerFullscreenContext } from './ledgerTools';
 import { useIsDesktop, useIsMdUp, useIsWide } from '../../lib/responsive';
 
 /** 판 폭 상한을 푸는 자리 — 장부 판이 보이는 동안만, 조상 중 max-width 가 걸린 것(앱 프레임·main·내 매장 판)의 상한을 푼다.
@@ -184,7 +184,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
         {/* 좌: 장부(스크롤) / 우: 이용권 레일(고정). 레일은 세로로 길수록 쓸모가 커진다. */}
         <div className="flex min-h-0 flex-1">
           <div className="min-w-0 flex-1 overflow-y-auto px-3 py-2">
-            <LedgerToolsContext.Provider value={null}>{children}</LedgerToolsContext.Provider>
+            <LedgerFullscreenContext.Provider value><LedgerToolsContext.Provider value={null}>{children}</LedgerToolsContext.Provider></LedgerFullscreenContext.Provider>
           </div>
           {canViewVouchers && (
             <div className="hidden w-[20rem] shrink-0 border-l border-border-subtle p-3 md:block">

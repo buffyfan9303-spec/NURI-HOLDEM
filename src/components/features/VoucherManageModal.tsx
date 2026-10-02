@@ -757,10 +757,11 @@ ${cards}
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
                     오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
                     ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
-                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 이 매장의 업주·공동운영자 중 관리자 승인을 받은 계정만 할 수 있습니다.</b><br />
-                손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
+                {/* 감사 V-1(2026-10-02) — 법적 고지 성격이라 접지 않고 문장만 줄였다(4줄+3줄 → 2줄+2줄). 범위·양도 불가·금전적 가치 없음은 그대로. */}
+                <b data-testid="voucher-issue-scope" className="text-ink-primary">전송은 관리자 승인을 받은 이 매장의 업주·공동운영자만 할 수 있습니다.</b><br />
+                손님끼리 주고받을 수 없고 <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 참가비로만 사용).
               </p>
-              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증 회원에게만 · 받는 분은 <b className="text-ink-secondary">닉네임·실명(정확히)·전화번호</b>로 지정 · 손님은 ‘사용하기 → 매장 QR 스캔’.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
