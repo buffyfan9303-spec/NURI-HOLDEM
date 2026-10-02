@@ -1,4 +1,5 @@
 import type { Schedule } from '../api/schedules';
+import { startAtMs } from './scheduleStatus';
 
 /** browse 목록 기본 정렬 — 날짜+시각이 1차 키, 부스트(isPremium)는 동일 시각 내 tie-break.
  *
@@ -49,4 +50,28 @@ export function compareByDistanceThenStart<T extends Pick<Schedule, 'date' | 'st
 
   // 둘 다 미상이거나 거리가 같다 — 기존 시간·부스트 계약 그대로.
   return compareByStartThenBoost(a, b);
+}
+
+/** '곧 시작' — **지금 이후에 시작하는** 승인 대회만, 시작 시각 오름차순(2026-10-02).
+ *  예전엔 `date >= today` 로 날짜만 걸러, 오늘 이미 시작한 대회가 '곧 시작' 에 남았다.
+ *  시작 시각은 scheduleStatus.startAtMs(KST 고정 · 미입력 19:00 폴백) — 진행 중 판정과 같은 기준이다.
+ *  nowMs 는 호출부가 서버 시각(serverNow)을 넘긴다. */
+export function upcomingSoon<T extends Pick<Schedule, 'date' | 'startTime' | 'isPremium' | 'approved'>>(
+  schedules: readonly T[], nowMs: number, max: number,
+): T[] {
+  return schedules
+    .map((s) => ({ s, at: startAtMs(s.date, s.startTime) }))
+    .filter((x): x is { s: T; at: number } => x.s.approved && x.at !== null && x.at > nowMs)
+    .sort((a, b) => a.at - b.at || Number(b.s.isPremium) - Number(a.s.isPremium))
+    .slice(0, max)
+    .map((x) => x.s);
+}
+
+/** 매장 페이지의 일정 목록 — 그 매장의 승인 일정을 **날짜·시작 시각 순**으로(2026-10-02).
+ *  상위 schedules 배열은 부스트→display_order 순이라 그대로 그리면 시간순이 아니다(#08, #15→#09, #07→#01).
+ *  입력은 건드리지 않는다(App state 를 제자리 정렬하면 다른 화면의 순서가 흔들린다). */
+export function venueScheduleList<T extends Pick<Schedule, 'date' | 'startTime' | 'isPremium' | 'approved' | 'venueId'>>(
+  schedules: readonly T[], venueId: string,
+): T[] {
+  return schedules.filter((s) => s.venueId === venueId && s.approved).sort(compareByStartThenBoost);
 }
