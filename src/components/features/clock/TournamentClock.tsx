@@ -242,6 +242,8 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     const ended = state?.gameSeq ?? curGameSeqRef.current;
     try {
       await clearClockState(venueId, ended);
+      // D1 보안 재검토 R-1 — 그새 매장을 바꿨으면 switchGame(1) 이 A 메인 클락을 B 화면에 싣는다. 종료(쓰기)는 A 로 이미 갔다.
+      if (venueNow.current !== venueId) return;
       if (ended > 1) { toast.show('사이드 클락 종료 · 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
       else { setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
     } catch (e) { toast.show(msgOf(e, '종료 실패'), 'error'); }

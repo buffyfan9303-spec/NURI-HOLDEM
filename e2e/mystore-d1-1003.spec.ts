@@ -171,13 +171,20 @@ test('1440 — 관리자: A 연락처 저장 응답이 B 로 바꾼 뒤에 와�
   });
   const A = row(MOCK_VENUE, '테스트 홀덤펍', PHONE_A), B = row(VENUE_B, '둘째 매장', PHONE_B);
   let saved = 0;
+  const kakaoWrites: string[] = [];
+  const KAKAO = 'https://open.kakao.com/o/d1test';
   await bootOwner(page, {
     viewport: { width: 1440, height: 900 },
     profile: { role: 'admin' },
     extra: async (p) => {
       await p.route(/\/rest\/v1\/venues\?/, (r) => {
-        if (r.request().method() !== 'GET') return r.fallback();
         const u = r.request().url();
+        // 카카오 링크 쓰기(updateVenueKakao = venues PATCH) — 목으로 받고 대상 매장을 적는다(R-2).
+        if (r.request().method() === 'PATCH') {
+          kakaoWrites.push(`${/id=eq\.([0-9a-f-]+)/.exec(u)?.[1]} ${(r.request().postDataJSON() as { kakao_url?: string }).kakao_url}`);
+          return r.fulfill(json([A]));
+        }
+        if (r.request().method() !== 'GET') return r.fallback();
         const one = u.includes(`id=eq.${VENUE_B}`) ? B : u.includes(`id=eq.${MOCK_VENUE}`) ? A : null;
         if (single(r)) return r.fulfill(json(one ?? A));
         return r.fulfill(json(one ? [one] : [A, B]));
@@ -193,6 +200,7 @@ test('1440 — 관리자: A 연락처 저장 응답이 B 로 바꾼 뒤에 와�
   await page.evaluate(() => { [...document.querySelectorAll<HTMLElement>('[data-mystore-secbar] button, [data-main-enter] button')].find((b) => b.getClientRects().length && /매장 설정/.test(b.textContent ?? ''))?.click(); });
   const phone = page.getByRole('textbox', { name: '연락처 1 번호' });
   await expect(phone, 'A 연락처를 못 불러왔다(이 검사의 전제)').toHaveValue(PHONE_A, { timeout: 20_000 });
+  await page.getByPlaceholder('https://open.kakao.com/o/…').fill(KAKAO);
   await page.getByRole('button', { name: /위치 · 연락처 · 영업시간 · 카카오톡 저장/ }).click();
   await expect.poll(() => saved, { message: '저장 요청이 나가지 않았다(이 검사의 전제)' }).toBe(1);
   await pick.selectOption(VENUE_B);   // 저장 응답(2초)이 오기 전에 B 로
@@ -202,4 +210,137 @@ test('1440 — 관리자: A 연락처 저장 응답이 B 로 바꾼 뒤에 와�
   console.log('[관리자 전환 연락처] B 입력칸', vals);
   expect(vals, 'A 저장 응답이 B 입력칸을 A 번호로 덮었다').not.toContain(PHONE_A);
   expect(vals).toContain(PHONE_B);
+  // R-2 — 저장 도중 전환해도 누른 매장 A 의 쓰기는 끝까지 간다(카카오만 빠지는 부분 저장 금지).
+  expect(kakaoWrites, '저장 도중 전환하자 A 의 카카오 링크 쓰기가 빠졌다(부분 저장)').toEqual([`${MOCK_VENUE} ${KAKAO}`]);
+  await expect(page.getByPlaceholder('https://open.kakao.com/o/…'), 'A 카카오 링크가 B 입력칸에 들어갔다').toHaveValue('');
 });
+
+// ── ④ 관리자 매장 전환 중 사이드 클락 종료 응답 지연(D1 보안 재검토 R-1) ───────────────────────────────
+test('1440 — 관리자: A 사이드 클락 종료 응답이 B 로 바꾼 뒤에 와도 B 화면에 A 클락이 실리지 않는다', async ({ page }) => {
+  test.setTimeout(120_000);
+  const level = (sb: number, bb: number) => ({ kind: 'level', sb, bb, ante: bb, minutes: 20 });
+  const clock = (seq: number, title: string) => ({
+    venue_id: MOCK_VENUE, game_seq: seq, session_date: null, title,
+    config: { title, startStack: 50_000, rebuyStack: 0, addonStack: 0, isAddon: false, earlyBonus: 0, doubleEarlyBonus: 0, regCloseLevel: 0, maxLevel: 3,
+      earlyDoubleLevel: 0, earlySingleLevel: 0, earlyDoubleMin: 0, earlySingleMin: 0, mysteryBounty: 0, prizes: [], levels: [level(100, 200), level(200, 400)] },
+    current_index: 0, running: false, ends_at: null, remaining_ms: 20 * 60_000,
+    adj_entries: 0, adj_rebuys: 0, adj_earlies: 0, adj_addons: 0, eliminations: 0, live_stats: null, updated_at: new Date().toISOString(),
+  });
+  const rows = [clock(1, 'A매장메인클락'), clock(2, 'A매장사이드클락')];
+  const venueRow = (id: string, name: string) => ({ id, name, region: '서울', address: '', owner_id: '00000000-0000-4000-8000-0000000000aa', approved: true, status: 'active',
+    verification_status: 'verified', is_paid_ad: false, display_order: 1, follower_count: 0, rating: 0, page_config: null, created_at: '2026-01-01T00:00:00Z' });
+  const VA = venueRow(MOCK_VENUE, '테스트 홀덤펍'), VB = venueRow(VENUE_B, '둘째 매장');
+  let deleted = 0;
+  page.on('dialog', (d) => d.accept());
+  await bootOwner(page, {
+    viewport: { width: 1440, height: 900 },
+    profile: { role: 'admin' },
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/clock_ads/, (r) => r.fulfill(json([])));
+      await p.route(/\/rest\/v1\/venues\?/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        const u = r.request().url();
+        const one = u.includes(`id=eq.${VENUE_B}`) ? VB : u.includes(`id=eq.${MOCK_VENUE}`) ? VA : null;
+        if (single(r)) return r.fulfill(json(one ?? VA));
+        return r.fulfill(json(one ? [one] : [VA, VB]));
+      });
+      await p.route(/\/rest\/v1\/clock_states/, async (r) => {
+        const m = r.request().method(), u = r.request().url();
+        const mine = u.includes(`venue_id=eq.${MOCK_VENUE}`) ? rows : [];
+        const seq = /game_seq=eq\.(\d+)/.exec(u)?.[1];
+        const got = seq ? mine.filter((x) => x.game_seq === Number(seq)) : mine;
+        if (m === 'GET') return r.fulfill(json(single(r) ? (got[0] ?? null) : got)).catch(() => {});
+        if (m === 'DELETE') { deleted += 1; await sleep(2000); return r.fulfill(json(got)).catch(() => {}); } // 종료 응답을 2초 늦춘다
+        return r.fallback();
+      });
+    },
+  });
+  await openMyStore(page);
+  const pick = page.locator('#mystore-venue-pick');
+  await expect(pick, '관리자 매장 고르개가 없다(이 검사의 전제)').toBeVisible({ timeout: 20_000 });
+  await expect(pick).toHaveValue(MOCK_VENUE);
+  await page.evaluate(() => {
+    [...document.querySelectorAll<HTMLElement>('[data-mystore-rail] button, [data-mystore-rail] [role=tab]')].find((x) => x.getClientRects().length && x.textContent?.trim() === '클락')?.click();
+  });
+  await expect(page.getByText('A매장메인클락').first(), 'A 메인 클락이 안 떴다(이 검사의 전제)').toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: /^사이드1/ }).first().click();
+  await expect(page.getByText('A매장사이드클락').first(), 'A 사이드 클락으로 못 옮겼다(이 검사의 전제)').toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '토너 종료' }).click();
+  await expect.poll(() => deleted, { message: '종료 요청이 나가지 않았다(이 검사의 전제)' }).toBe(1);
+  await pick.selectOption(VENUE_B);   // 종료 응답(2초)이 오기 전에 B 로
+  await page.waitForTimeout(3500);     // A 종료 응답 + switchGame(1) 조회가 끝난 뒤
+  const leak = await page.getByText(/A매장(메인|사이드)클락/).evaluateAll((els) => els.filter((e) => (e as HTMLElement).getClientRects().length).length);
+  console.log('[관리자 전환 클락] B 화면에 보이는 A 클락 제목 수', leak);
+  await expect(pick).toHaveValue(VENUE_B);
+  expect(leak, 'A 사이드 클락 종료 뒤 switchGame(1) 이 A 메인 클락을 B 화면에 실었다').toBe(0);
+});
+
+// ── ⑤ 모바일 KPI 큰 값 — 숫자·단위 끊김 없음, 칸 높이 불변(D1 디자인 재검토) ─────────────────────────────
+//   종전: 390 '1,025 만'/'원' · 소수 '2,779.'/'63' 분리, 360 바인 4자리 '회' 줄바꿈(+19px, 정착 뒤 아래가 밀림).
+for (const [W, H] of [[390, 844], [360, 780]] as const) {
+  test(`${W} — 큰 값(바인 1,080회·매출 2,779.63만)에서 KPI 숫자·단위가 줄바꿈 없이 칸 안에 들고 칸 높이가 확인 중과 같다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await installSampler(page, 9);
+    const session = {
+      venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, title: '큰 게임', buyin_amount: 25_000, card_amount: null, game_type: 'gtd',
+      target_entries: 20, max_entries: 0, is_addon: false, addon_stack: 0, discounts: [], early_double_min: 0, early_single_min: 0,
+      opened_at: `${MOCK_DAY}T10:00:00+09:00`, operators: [], reg_closed: false, closed: false, closed_at: null,
+      schedule_id: null, tournament_start: null, voucher_issued: 0, created_at: `${MOCK_DAY}T01:00:00Z`,
+    };
+    // 1,079회 × 25,000 + 1회 821,300 = 27,796,300원 = 2,779.63만
+    const buyins = Array.from({ length: 1080 }, (_, i) => ({
+      id: `eeeeeeee-0000-4000-8000-${String(i).padStart(12, '0')}`, venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, player_name: `손님${i % 300}`, entry_no: 1,
+      payment_method: 'cash', is_unpaid: false, buyin_at: `${MOCK_DAY}T11:00:00+09:00`, is_split: false, cash_amount: i === 0 ? 821_300 : 25_000, card_amount: 0, transfer_amount: 0,
+      ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: 0, early_override: null,
+    }));
+    await bootOwner(page, {
+      viewport: { width: W, height: H }, goto: false,
+      extra: async (p) => {
+        await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r: Route) => {
+          if (r.request().method() !== 'GET') return r.fallback();
+          await sleep(FIRST_DELAY);
+          const u = r.request().url();
+          const hit = u.includes(`venue_id=eq.${MOCK_VENUE}`) && !/closed=eq\.(true|false)/.test(u) ? [session] : [];
+          return r.fulfill(json(single(r) ? (hit[0] ?? null) : hit)).catch(() => {});
+        });
+        await p.route(/\/rest\/v1\/ledger_buyins\?/, (r) => (r.request().method() === 'GET'
+          ? r.fulfill(json(r.request().url().includes(`venue_id=eq.${MOCK_VENUE}`) ? buyins : [])) : r.fallback()));
+      },
+    });
+    await page.goto('/');
+    await openMyStore(page);
+    await expect(page.locator('[data-pane="dashboard"] button').filter({ hasText: '진행중' }).first(), '진행중에 닿지 못했다(이 검사의 전제)').toBeVisible({ timeout: 25_000 });
+    await page.waitForTimeout(1500); // CountUp 정착
+    const f = await frames(page);
+    const checking = f.filter((x) => x.badge === '확인 중'), live = f.filter((x) => x.badge === '진행중');
+    // 값 칸 = 격자 칸 > 값 상자(relative) > 값 블록. 판별을 수정 전후 같은 구조로 해야 음성 대조가 성립한다(새 data-kpi-fit 에 기대지 않는다).
+    const cells = await page.locator('[data-testid="dash-kpi-grid"] > span > span.relative > span:last-child').evaluateAll((els) => els.map((e) => {
+      const blk = e as HTMLElement; const el = (blk.querySelector('[data-kpi-fit]') as HTMLElement | null) ?? blk;
+      const box = blk.parentElement!.parentElement!.getBoundingClientRect(); const r = el.getBoundingClientRect();
+      // 값 줄(숫자 + 단위)의 줄 상자 수 — 엔트리 보조줄(블록)은 빼고 그 앞 노드들만 잰다
+      const rg = document.createRange(); rg.setStart(el, 0);
+      const stop = [...el.childNodes].findIndex((n) => n.nodeType === 1 && getComputedStyle(n as Element).display === 'block');
+      rg.setEnd(el, stop < 0 ? el.childNodes.length : stop);
+      // 글자 크기가 다른 숫자(text-lg)와 단위(text-2xs)는 같은 줄이어도 top 이 다르다 — 세로로 겹치면 같은 줄로 센다
+      let lines = 0, bottom = -Infinity;
+      for (const x of [...rg.getClientRects()].filter((q) => q.width > 0).sort((a, b) => a.top - b.top)) {
+        if (x.top >= bottom - 1) { lines += 1; bottom = x.bottom; } else bottom = Math.max(bottom, x.bottom);
+      }
+      const right = Math.max(r.right, ...[...rg.getClientRects()].map((x) => x.right));
+      return { text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(), lines, overflow: Math.round(right - box.right) };
+    }));
+    console.log(`[${W} 큰 값] 확인중 h ${checking[0]?.h.toFixed(1)} → 진행중 h ${live[live.length - 1]?.h.toFixed(1)}`, JSON.stringify(cells));
+    expect(checking.length, '확인 중 프레임을 못 봤다 — 빈 검사').toBeGreaterThan(5);
+    expect(live.length, '진행중 프레임을 못 봤다 — 빈 검사').toBeGreaterThan(5);
+    expect(cells.length, 'KPI 값 칸을 못 찾았다 — 빈 검사').toBe(4);
+    const all = cells.map((c) => c.text).join(' | ');
+    expect(all, '큰 값 목이 화면에 안 나왔다(이 검사의 전제)').toMatch(/1,?080/);
+    expect(all).toMatch(/2,?779\.63/);
+    for (const c of cells) {
+      expect(c.lines, `'${c.text}' 숫자·단위가 줄바꿈됐다`).toBe(1);
+      expect(c.overflow, `'${c.text}' 가 칸 밖으로 넘쳤다`).toBeLessThanOrEqual(1);
+    }
+    const hs = [...checking, ...live].map((x) => x.h);
+    expect(Math.max(...hs) - Math.min(...hs), "'오늘 장부' 칸 높이가 확인 중 → 진행중(큰 값)에서 바뀌었다").toBeLessThanOrEqual(1);
+  });
+}

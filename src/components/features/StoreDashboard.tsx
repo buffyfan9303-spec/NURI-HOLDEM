@@ -1,5 +1,5 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
@@ -486,9 +486,32 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     <span className="relative mt-1 block">
       {loading && <span aria-hidden className="skeleton rounded-input absolute inset-0" />}
       <span style={loading ? { visibility: 'hidden' } : undefined}
-        className={`block text-lg font-extrabold leading-none tabular-nums lg:text-2xl ${!loading && !dayStarted ? 'text-ink-muted' : tone}`}>{children}</span>
+        className={`block text-lg font-extrabold leading-none tabular-nums lg:text-2xl ${!loading && !dayStarted ? 'text-ink-muted' : tone}`}>
+        <span data-kpi-fit className="inline-block origin-left whitespace-nowrap">{children}</span>
+      </span>
     </span>
   );
+  // 2026-10-03 D1 디자인 재검토 — 모바일 한 줄 4칸(칸 약 66px@360)에서 큰 값이 줄바꿈됐다: 390 '1,025 만'/'원', 소수 '2,779.'/'63',
+  //   360 바인 4자리의 '회'(+19px, 정착 뒤 아래가 밀림). 숫자·단위를 한 덩어리(nowrap)로 묶고, 칸보다 넓으면 **transform 으로만** 줄인다
+  //   — 레이아웃 높이는 그대로라 칸 높이가 값에 따라 변하지 않는다. CountUp 이 숫자를 바꿀 때마다 ResizeObserver 가 다시 맞춘다.
+  const kpiGridRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const grid = kpiGridRef.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return;
+    const els = [...grid.querySelectorAll<HTMLElement>('[data-kpi-fit]')];
+    const fit = () => {
+      for (const el of els) {
+        const avail = el.parentElement?.clientWidth ?? 0;
+        const need = el.offsetWidth; // transform 은 offsetWidth 에 영향이 없다
+        el.style.transform = avail > 0 && need > avail ? `scale(${(avail - 1) / need})` : ''; // 1px 여유 — 정수 반올림으로 칸 끝을 넘지 않게
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    els.forEach((el) => ro.observe(el));
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [loadErr]);
   const ledgerStatusCls = loading || !started
     ? 'bg-surface-float text-ink-muted'
     : session?.closed ? 'bg-ink-muted/20 text-ink-secondary'
@@ -998,7 +1021,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               · 모바일도 한 줄 4칸(text-lg) — 2×2 는 칸이 184px 라 360 에서 '순위 입력' 카드가 첫 화면 밖으로 밀렸다. */}
           {(
             /* C1 D-2 — items-start: 엔트리 보조줄이 붙은 칸만 높아져도 옆 칸 라벨 윗줄은 맞는다. */
-            <span data-testid="dash-kpi-grid" aria-busy={loading || undefined} className="mt-2 grid grid-cols-4 items-start gap-x-3 gap-y-3 lg:gap-x-6">
+            <span ref={kpiGridRef} data-testid="dash-kpi-grid" aria-busy={loading || undefined} className="mt-2 grid grid-cols-4 items-start gap-x-3 gap-y-3 lg:gap-x-6">
               <span className="block min-w-0">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 {kv('text-gold-300', <>{wonToMan(day.paid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}

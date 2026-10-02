@@ -195,13 +195,13 @@ function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEd
     if (nextKakao === null) { toast.show('카카오톡 링크는 https://open.kakao.com/… 형식의 주소여야 합니다', 'error'); return; }
     setSaving(true);
     try {
+      // 쓰기는 끝까지 누른 매장 A 로 보낸다(도중 전환으로 카카오만 빠지는 부분 저장 금지 — D1 보안 재검토 R-2).
+      //   전환 뒤라면 화면 상태(B 판)만 건드리지 않는다.
       await updateVenueContact(venueId, { address: addr, hours, contacts: next });
-      if (venueNow.current !== venueId) return; // 저장은 누른 매장 A 로 이미 갔다 — 지금 판(B) 상태는 건드리지 않는다
-      if (nextKakao !== savedKakao) {
-        await updateVenueKakao(venueId, nextKakao);
-        if (venueNow.current !== venueId) return;
-        setSavedKakao(nextKakao); setKakao(nextKakao);
-      }
+      const kakaoChanged = nextKakao !== savedKakao;
+      if (kakaoChanged) await updateVenueKakao(venueId, nextKakao);
+      if (venueNow.current !== venueId) return;
+      if (kakaoChanged) { setSavedKakao(nextKakao); setKakao(nextKakao); }
       setContacts(ensureOneContact(next));
       toast.show(canEditKakao ? '위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다' : '위치 · 연락처 · 영업시간을 저장했습니다', 'success');
     } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
