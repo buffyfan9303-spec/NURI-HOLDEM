@@ -118,13 +118,16 @@ describe('③ 표본 추정치와 전수계산을 같은 문구로 뭉뚱그리�
     expect(SPOT_PANEL, '2인 전용 에퀴티 호출이 들어왔다').not.toMatch(/\bequityAsync\(/);
   });
 
-  it('프리플랍은 실제로 표본이라 흔들린다 — 그래서 정수로 적는 것이다', () => {
+  // 🔴 2026-10-01 반전 — 예전 이 자리는 "프리플랍은 표본이라 흔들린다" 를 **전제로 잠갔다.**
+  //   그 흔들림이 감사 F2(같은 핸드가 볼 때마다 45~48%)였다. 이제 2인 카드 대 카드는 프리플랍까지 전수다.
+  //   상세 대조·10회 반복은 equityStable.test.ts.
+  it('프리플랍도 전수계산이다 — 두 번 돌려도 같은 값이다', () => {
     const hero: [Card, Card] = [C('As'), C('Ks')];
     const vill: [Card, Card] = [C('Qh'), C('Qd')];
-    const runs = Array.from({ length: 8 }, () => computeEquity(hero, vill, [], 2500).hero * 100);
-    expect(Math.max(...runs) - Math.min(...runs),
-      '2500회 표본이 전혀 안 흔들린다면 몬테카를로가 아니다 — 이 계약의 전제가 깨졌다').toBeGreaterThan(0.5);
-    // 8회 × 2,500 = 20,000회. vitest 기본 5,000ms 로는 CI 에서 터진다(실측 12코어 5.0초+).
-    // 근거와 '반복을 줄이지 마라'는 equityMulti.test.ts 의 MC_TIMEOUT 주석에 있다.
+    const a = computeEquity(hero, vill, []);
+    const b = computeEquity(hero, vill, []);
+    expect(a.hero).toBe(b.hero);
+    expect(a.kind).toBe('exact');
+    expect(a.iterations, '보드 5장 전 조합 C(48,5)를 다 돌지 않았다').toBe(1_712_304);
   }, 30_000);
 });

@@ -12,6 +12,7 @@ let lastInsert: Record<string, unknown> | null = null;
 let lastUpdate: Record<string, unknown> | null = null;
 let lastUpdateEqId: string | null = null;
 let selectRow: Record<string, unknown> | null = null;
+let selectError: { message: string } | null = null;
 
 vi.mock('../lib/supabase', () => ({
   IS_MOCK: false,
@@ -29,7 +30,7 @@ vi.mock('../lib/supabase', () => ({
           return { eq: (_col: string, id: string) => { lastUpdateEqId = id; return { select: () => Promise.resolve({ data: [{}], error: null }) }; } };
         },
         select: () => ({
-          order: () => ({ limit: () => Promise.resolve({ data: selectRow ? [selectRow] : [], error: null }) }),
+          order: () => ({ limit: () => Promise.resolve({ data: selectError ? null : selectRow ? [selectRow] : [], error: selectError }) }),
         }),
       };
     },
@@ -39,7 +40,7 @@ vi.mock('../lib/supabase', () => ({
 const { saveMySpot, updateSpotPlayedOn, listMySpots } = await import('./spots');
 
 beforeEach(() => {
-  lastInsert = null; lastUpdate = null; lastUpdateEqId = null; selectRow = null;
+  lastInsert = null; lastUpdate = null; lastUpdateEqId = null; selectRow = null; selectError = null;
 });
 
 const spot = emptySpot();
@@ -100,4 +101,15 @@ describe('listMySpots — played_on 을 읽어 playedOn 으로 돌려준다', ()
 
   // 음성 대조: rowToSaved 에서 `playedOn: (r.played_on as string | null) ?? null,` 을 지우면
   // rows[0].playedOn 이 undefined 가 되어 위 두 단언이 FAIL 한다(실측 확인).
+});
+
+describe('listMySpots — 조회 실패는 빈 목록이 아니라 오류다(2026-10-01)', () => {
+  it('서버 오류면 throw 한다 — MySpotList 의 .catch 가 "불러오지 못했습니다" 를 띄우게', async () => {
+    selectError = { message: 'JWT expired' };
+    await expect(listMySpots()).rejects.toMatchObject({ message: 'JWT expired' });
+  });
+  it('오류 없이 0행이면 정상 빈 배열(진짜 스팟 없음)', async () => {
+    await expect(listMySpots()).resolves.toEqual([]);
+  });
+  // 음성 대조: spots.ts 의 `if (error) throw error;` 를 `if (error || !data) return [];` 로 되돌리면 첫 단언이 FAIL.
 });

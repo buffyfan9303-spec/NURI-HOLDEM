@@ -257,9 +257,9 @@ describe('UI-05 · 보기 전환 두 슬롯', () => {
     const T = COMM.slice(i, i + 2200);
     expect(T).toMatch(/role="group" aria-label="보기 방식"/);
     // 두 슬롯은 같은 map 한 벌에서 나온다 — 한쪽만 radius·보더·크기가 달라질 수 없다(§6-4)
-    expect(T).toMatch(/\{ v: 'feed' as const, label: '카드 보기'/);
-    expect(T).toMatch(/\{ v: 'compact' as const, label: '한 줄 목록'/);
-    expect(T).toMatch(/<button key=\{v\} type="button" aria-label=\{label\} title=\{label\} aria-pressed=\{view === v\}/);
+    // 오너 2026-10-02: 왼쪽 = 모아보기(기본), 오른쪽 = 펼쳐보기 — **순서까지** 계약이다(compact 가 먼저).
+    expect(T).toMatch(/\{ v: 'compact' as const, label: '모아보기'[\s\S]*\{ v: 'feed' as const, label: '펼쳐보기'/);
+    expect(T).toMatch(/<button key=\{v\} type="button" data-testid=\{`board-view-\$\{v\}`\} aria-label=\{label\} title=\{label\} aria-pressed=\{view === v\}/);
     expect(T).toMatch(/relative flex h-11 w-11 items-center justify-center/);
     expect(T).not.toMatch(/h-7 w-7/);
     // 선택 배경은 슬롯 안 inset 3px 의 별도 면 — 아이콘과 같은 버튼 안에서 함께 움직인다

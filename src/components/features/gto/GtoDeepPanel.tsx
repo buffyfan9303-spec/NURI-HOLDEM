@@ -157,7 +157,7 @@ function DeepActionSheet({
     const eqAt = (n: number): Promise<number | null> =>
       n > 0 && b.length < n
         ? Promise.resolve(null)
-        : equityAsync([h[0], h[1]], [v[0], v[1]], b.slice(0, n), 3000).then((r) => r.hero);
+        : equityAsync([h[0], h[1]], [v[0], v[1]], b.slice(0, n)).then((r) => r.hero);
     Promise.all([eqAt(0), eqAt(3), eqAt(4), eqAt(5)]).then(([e0, e3, e4, e5]) => {
       if (!alive) return;
       setRows([

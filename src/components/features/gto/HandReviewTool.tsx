@@ -123,7 +123,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
               <label htmlFor={`${actId}-${k}`} className="text-2xs font-bold text-ink-secondary">{lab}</label>
               <input id={`${actId}-${k}`} type="text" value={acts[k]} maxLength={80}
                 onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
-                placeholder="예: 내가 2.5bb 오픈, 상대 콜" className="input w-full text-sm" />
+                placeholder="예: 내가 2.5bb 오픈" className="input w-full text-sm" />
             </Fragment>
           ))}
         </div>

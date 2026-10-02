@@ -50,9 +50,9 @@ describe('msgOf. 서버가 준 이유를 살린다', () => {
   it('🔴 단서가 전혀 없을 때만 fallback. 있으면 절대 뭉개지 않는다', () => {
     expect(msgOf(null, '장부 저장 실패')).toBe('장부 저장 실패');
     expect(msgOf({}, '장부 저장 실패')).toBe('장부 저장 실패');
-    // details/hint 라도 있으면 원인 추적 단서로 남긴다
-    expect(msgOf({ details: 'column x does not exist' }, '등록 실패'))
-      .toBe('등록 실패 (column x does not exist)');
+    // 한글 details/hint 는 원인 추적 단서로 남긴다(영문 시스템 원문은 2026-10-01 부터 가린다 — dbError.rawHygiene.test.ts)
+    expect(msgOf({ details: '이미 마감된 날짜입니다' }, '등록 실패'))
+      .toBe('등록 실패 (이미 마감된 날짜입니다)');
   });
 
   it('빈 fallback 을 주면 빈 문자열 · 카드에서 "이유 줄"을 숨기는 용도', () => {
@@ -95,9 +95,9 @@ describe('🔴 Postgres 내부 오류 원문이 화면으로 새지 않는다', 
     expect(out).not.toMatch(/venues|venue_id/);
   });
 
-  it('코드가 없는 details 는 그대로 둔다 — 우리 코드가 쓴 문장이라 식별자가 아니다', () => {
-    expect(msgOf({ details: 'column x does not exist' }, '등록 실패'))
-      .toBe('등록 실패 (column x does not exist)');
+  it('코드가 없는 한글 details 는 그대로 둔다 — 우리 코드가 쓴 문장이라 식별자가 아니다', () => {
+    expect(msgOf({ details: '이미 마감된 날짜입니다' }, '등록 실패'))
+      .toBe('등록 실패 (이미 마감된 날짜입니다)');
   });
 });
 
