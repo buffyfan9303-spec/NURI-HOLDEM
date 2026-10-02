@@ -27,6 +27,7 @@ import {
   getGroupPosts, createGroupPost, deleteGroupPost,
   getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice,
   updateVenueImages, updateGroupProfile, getGroupActivityRanking, type GroupRankRow,
+  getGroupBans, unbanGroupMember, type GroupBan,
 } from '../../api/community';
 import { uploadVenueImages } from '../../lib/storage';
 import Icon from '../atoms/Icon';
@@ -54,6 +55,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   // 가입 방식은 group prop 에 실려 오는데 이 화면에서 group 을 다시 읽을 수 없다(부모 소유).
   // 팀 프로필과 같은 방식으로 저장 직후 화면에만 즉시 반영할 오버라이드를 둔다.
   const [joinPolicy, setJoinPolicy] = useState<boolean | null>(null);
+  // 차단 목록(강퇴한 회원) — null = 못 읽음(표 없음·권한 없음) → 칸을 그리지 않는다
+  const [bans, setBans] = useState<GroupBan[] | null>(null);
+  // 가입 거절 사유(강퇴 차단 등) — 토스트는 사라지므로 버튼 아래에 남긴다
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin';
   const isManager = !!group && (isAdmin || group.ownerId === user?.id || membership?.role === 'manager');
@@ -73,6 +78,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
   const reloadMembership = () => { if (group && user) getMyMembership(group.id).then(setMembership).catch(() => {}); };
   const reloadMembers = () => { if (group) getGroupMembers(group.id).then(setMembers).catch(() => {}); };
+  const reloadBans = () => { if (group) getGroupBans(group.id).then(setBans).catch(() => setBans(null)); };
 
   useEffect(() => {
     if (!open || !group) return;
@@ -80,6 +86,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     // B 에 적용돼 멤버 전용 탭·'멤버 관리'가 열리던 레이스(GroupRanking 이 이미 쓰는 같은 가드).
     let alive = true;
     setMembership(null); setMembers([]); setNotices([]); setTab('chat'); setProfile(null); setProfileEditing(false); setJoinPolicy(null);
+    setBans(null); setJoinError(null);
     getVenueNotices(group.id).then((n) => { if (alive) setNotices(n); }).catch(() => {});
     if (user) getMyMembership(group.id).then((m) => { if (alive) setMembership(m); }).catch(() => {});
     return () => { alive = false; };
@@ -93,6 +100,14 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     getGroupMembers(group.id).then((ms) => { if (alive) setMembers(ms); }).catch(() => {});
     return () => { alive = false; };
   }, [isMember, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 운영진이면 차단 목록 로드(서버 RLS 도 개설자·운영진·관리자만)
+  useEffect(() => {
+    if (!isManager || !group) return;
+    let alive = true;
+    getGroupBans(group.id).then((b) => { if (alive) setBans(b); }).catch(() => { if (alive) setBans(null); });
+    return () => { alive = false; };
+  }, [isManager, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
   if (!group) return null;
@@ -130,20 +145,41 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
   const doJoin = async () => {
     if (!user) { toast.show('로그인 후 가입할 수 있습니다', 'error'); return; }
+    setJoinError(null);
     try {
       const st = await joinGroup(group.id);
       toast.show(st === 'approved' ? '가입되었습니다' : '가입 신청이 접수되었습니다(승인 대기)', 'success');
       reloadMembership();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '가입 실패', 'error'); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '가입 실패';
+      setJoinError(msg);
+      toast.show(msg, 'error');
+    }
   };
   const doApprove = async (m: GroupMember) => {
     try { await approveMember(m.id); toast.show(`${m.name} 님을 승인했습니다`, 'success'); reloadMembers(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
   const doKick = async (m: GroupMember, label: string) => {
-    if (!confirm(m.userId === user?.id ? '그룹에서 탈퇴하시겠습니까?' : `${m.name} 님을 ${label}하시겠습니까?`)) return;
-    try { await removeMember(m.id); toast.show(`${label} 완료`, 'info'); reloadMembers(); if (m.userId === user?.id) reloadMembership(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    const self = m.userId === user?.id;
+    // 승인 멤버를 내보내면 서버가 차단 목록에 올린다(20261002g) — 대기 신청 거절·본인 탈퇴는 차단이 아니다.
+    const kick = !self && m.status === 'approved';
+    const ask = self ? '그룹에서 탈퇴하시겠습니까?'
+      : kick ? `${m.name} 님을 ${label}하시겠습니까?\n\n${label}한 회원은 개설자가 차단을 풀기 전까지 이 그룹에 다시 가입할 수 없습니다.`
+      : `${m.name} 님을 ${label}하시겠습니까?`;
+    if (!confirm(ask)) return;
+    try {
+      await removeMember(m.id);
+      toast.show(`${label} 완료`, 'info'); reloadMembers();
+      if (self) reloadMembership();
+      if (kick) reloadBans();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+  };
+  /** 차단 해제 — 개설자·관리자만(서버 unban_group_member 도 같은 선) */
+  const doUnban = async (b: GroupBan) => {
+    if (!confirm(`${b.name} 님의 차단을 해제할까요?\n해제하면 이 그룹에 다시 가입할 수 있습니다.`)) return;
+    try { await unbanGroupMember(group.id, b.userId); toast.show(`${b.name} 님의 차단을 해제했습니다`, 'success'); reloadBans(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '차단 해제 실패', 'error'); }
   };
   const leave = async () => {
     if (!membership) return;
@@ -234,6 +270,9 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                 <span className="inline-block rounded-input bg-surface-high px-3 py-1.5 text-xs font-semibold text-ink-muted">가입 승인 대기 중…</span>
               ) : (
                 <button type="button" onClick={doJoin} className="btn-primary text-sm px-5">{group.joinApproval ? '가입 신청' : '가입하기'}</button>
+              )}
+              {joinError && !membership && !isManager && (
+                <p role="alert" data-testid="group-join-error" className="mt-2 rounded-input bg-surface-high px-3 py-2 text-xs leading-relaxed text-ink-secondary">{joinError}</p>
               )}
             </div>
 
@@ -374,6 +413,31 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                       ))}
                     </ul>
                   </div>
+                  {/* 차단 목록 — 강제 탈퇴한 회원은 개설자가 풀 때까지 재가입 불가(오너 결정 2026-10-02).
+                      운영진은 볼 수만 있고 해제는 개설자·관리자만(서버 unban_group_member 와 같은 선). */}
+                  {bans && (
+                    <div data-testid="group-bans">
+                      <p className="text-2xs font-bold text-ink-secondary mb-1">차단 목록 ({bans.length})</p>
+                      {bans.length === 0 ? (
+                        <p className="text-2xs text-ink-muted">강제 탈퇴한 회원이 없습니다</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {bans.map((b) => (
+                            <li key={b.userId} className="flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
+                              <Avatar name={b.name} size={22} />
+                              <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">{b.name}</span>
+                              <span className="shrink-0 text-2xs text-ink-muted">{relativeTime(b.bannedAt)}</span>
+                              {isOwner && (
+                                <button type="button" onClick={() => doUnban(b)} aria-label={`${b.name} 차단 해제`}
+                                  className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-semibold text-ink-secondary hover:text-accent-200">해제</button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {!isOwner && bans.length > 0 && <p className="mt-1 text-2xs text-ink-muted">차단 해제는 개설자만 할 수 있습니다</p>}
+                    </div>
+                  )}
                 </div>
               </Fold>
             </div>
