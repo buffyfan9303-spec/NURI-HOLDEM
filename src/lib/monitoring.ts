@@ -19,7 +19,7 @@ const RELEASE = (import.meta.env.VITE_SENTRY_RELEASE || import.meta.env.VITE_VER
 // LoAF(스크립트 범인·강제 동기 레이아웃), layout-shift(시프트 유발 요소), INP 후보(200ms+)를
 // 기존 관리자 errorLog 파이프로 보낸다([perf:*] 프리픽스) — 새 인프라 0.
 // 미지원 브라우저(웨일·삼성인터넷 구버전)는 try/catch 로 조용히 스킵.
-import { logClientError } from './errorLog';
+import { logClientError, BENIGN_RO_WARNING } from './errorLog';
 
 export function initMotionTelemetry(): void {
   let sent = 0;
@@ -105,6 +105,7 @@ export function initMonitoring(): void {
       tracesSampleRate: 0.1,        // 성능 트레이스 10% 샘플
       replaysSessionSampleRate: 0,  // 세션 리플레이 미사용(비용/프라이버시)
       replaysOnErrorSampleRate: 0,
+      ignoreErrors: [BENIGN_RO_WARNING],
       beforeSend: scrubSentryEvent,
       beforeBreadcrumb: scrubSentryEvent,
     });

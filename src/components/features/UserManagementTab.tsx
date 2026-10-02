@@ -782,7 +782,7 @@ function SectionPill({ active, onClick, label, count }: { active: boolean; onCli
         'flex-1 py-2 text-xs font-semibold rounded-[6px] transition-colors',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}>
-      {label} <span className="text-2xs opacity-70">({count ?? '—'})</span>
+      {label} <span className="text-2xs font-normal">({count ?? '—'})</span>
     </button>
   );
 }

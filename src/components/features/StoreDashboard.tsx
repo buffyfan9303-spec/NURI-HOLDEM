@@ -1481,7 +1481,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gold-400/15 text-gold-300'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
-            : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>
+            : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
           {loading ? <Skeleton /> : !clockActive || !lvl ? (
             <p className="py-3 text-center text-2xs text-ink-muted">실행 중인 클락이 없습니다.</p>
           ) : lvl.kind === 'break' ? (

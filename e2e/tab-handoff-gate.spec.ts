@@ -17,6 +17,18 @@ import { test, expect } from './_fixtures';
 import { ANON_KEY, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 import { Cast, RECORDER, center, press, FLAT_STD, type Finder } from './_flicker';
+import { normalizedCut } from './_cutNorm';
+
+/** 떠나는 판의 퇴장 페이드(WAAPI)가 시작된 시각을 window.__fade(performance.now)에 쌓는다 — 컷 판정의 기준 시각(e2e/_cutNorm.ts). 읽기만 한다. */
+function installFadeSpy() {
+  const w = window as unknown as { __fade: number[] };
+  w.__fade = [];
+  const orig = Element.prototype.animate;
+  Element.prototype.animate = function (this: Element, ...a: Parameters<Element['animate']>) {
+    if (this.closest('[data-pane-leaving]')) w.__fade.push(performance.now());
+    return orig.apply(this, a);
+  };
+}
 import { bootOwner, openMyStore } from './_mockOwner';
 
 const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
@@ -211,11 +223,13 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
   //   src/lib/tabCover.ts 7차 SUB-HANDOFF). 하위 판은 조건부 마운트라 커밋 전에 떠나는 판을 복제해 세우고 240ms 에 걷는다.
   //   판정(탭마다 · 판을 스크롤한 뒤 · 실제 손가락 110ms):
   //     leave — 판 그림이 바뀐 이동이면 떠나는 판([data-pane-leaving], 메인 탭 판·푸터 복제본 제외)이 섰다
-  //     cut   — 본문 영역(레일 아래) 썸네일의 **연속 두 프레임 차** 최댓값 ≤ 6(한 프레임에 판이 통째로 바뀌는 컷이 없다)
+  //     cut   — 본문 영역(레일 아래) 썸네일의 **연속 두 프레임 차** 최댓값 ≤ 6(한 프레임에 판이 통째로 바뀌는 컷이 없다).
+  //             프레임 간격으로 정규화한다(차 ÷ 간격/16.7ms — 2026-10-03 L-3, 느린 러너가 같은 페이드를 6.2 로 찍던 것). 규칙은 e2e/_cutNorm.ts 머리말.
   //     missing — 트레이스 has_missing_content 0 · hit — 복제본이 서 있는 동안 본문 중앙 입력이 복제본에 닿지 않는다 · stuck — 정착 뒤 남은 것 0
   // 음성 대조(2026-09-26 실행): 9433f190 빌드(하위 탭 즉시 교체) → leave 0/N · cut 9~17 로 FAIL, SUB-HANDOFF 빌드 → PASS.
   test('④ 하위 탭 — 떠나는 판이 서고 걷힌다 · 한 프레임 컷 없음 · 빠진 타일 0 · 입력은 새 판', async ({ page }) => {
     const cdp = await boot(page, 'dark');
+    await page.evaluate(installFadeSpy);
     await page.evaluate(() => {
       const w = window as unknown as { __lv: number[] };
       w.__lv = [];
@@ -255,6 +269,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         expect(b, `${sc.nav}#${i}: 누를 하위 탭을 못 찾았다`).not.toBeNull();
         const id = `${sc.nav}#${i}:${b!.label}`;
         const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
+        const fd0 = await page.evaluate(() => (window as unknown as { __fade: number[] }).__fade.length);
         await cast.start(b!.crop);
         await page.waitForTimeout(120);
         const t0 = Date.now();
@@ -276,8 +291,10 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
           return Array.from(f.th.slice(r0 * TW, Math.min(TH, r1) * TW));
         };
         const d = (a: typeof frames[number], c: typeof frames[number]) => { const x = rowsOf(a), y = rowsOf(c); let s = 0; for (let q = 0; q < x.length; q++) s += Math.abs(x[q] - y[q]); return s / (x.length || 1); };
-        let cut = 0; let prev = pre;
-        for (const f of post) { if (prev) cut = Math.max(cut, d(prev, f)); prev = f; }
+        // 프레임 간격 정규화(e2e/_cutNorm.ts) — 떠나는 판의 퇴장 페이드가 시작된 시각(onset, epoch ms)부터 잰다. 그 전에는 불투명한 복제본이 새 판을 가리고 있어
+        // 새 판이 한 번에 드러나는 컷이 있을 수 없다. 느린 러너의 같은 페이드가 6 을 넘던 것을 보정하고, 떠나는 판이 안 선 즉시 교체(onset 없음)는 원값 그대로 잡는다.
+        const onset = await page.evaluate((k) => { const l = (window as unknown as { __fade: number[] }).__fade; return l.length > k ? performance.timeOrigin + l[k] : null; }, fd0);
+        const cut = normalizedCut(pre, post, d, onset ?? undefined);
         const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
         const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
         const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
@@ -430,6 +447,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
       let consentReads = 0;
       page.on('request', (r) => { if (r.method() === 'GET' && /\/rest\/v1\/legal_consents\?/.test(r.url())) consentReads += 1; });
       const cdp = await boot(page, scheme);
+      await page.evaluate(installFadeSpy);
       await page.evaluate(() => {
         const g = window as unknown as { __lv: number[] };
         g.__lv = [];
@@ -478,6 +496,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
         expect(b, `${name}: 탭을 못 찾았다`).not.toBeNull();
         const id = `${w}${scheme[0]}#${i}:${name}`;
         const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
+        const fd0 = await page.evaluate(() => (window as unknown as { __fade: number[] }).__fade.length);
         await cast.start(b!.crop);
         await page.waitForTimeout(120);
         const t0 = Date.now();
@@ -497,8 +516,10 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
           return Array.from(f.th.slice(r0 * TW, Math.min(TH, r1) * TW));
         };
         const d = (a: typeof frames[number], c: typeof frames[number]) => { const x = rowsOf(a), y = rowsOf(c); let s = 0; for (let q = 0; q < x.length; q++) s += Math.abs(x[q] - y[q]); return s / (x.length || 1); };
-        let cut = 0; let prev = pre;
-        for (const f of post) { if (prev) cut = Math.max(cut, d(prev, f)); prev = f; }
+        // 프레임 간격 정규화(e2e/_cutNorm.ts) — 떠나는 판의 퇴장 페이드가 시작된 시각(onset, epoch ms)부터 잰다. 그 전에는 불투명한 복제본이 새 판을 가리고 있어
+        // 새 판이 한 번에 드러나는 컷이 있을 수 없다. 느린 러너의 같은 페이드가 6 을 넘던 것을 보정하고, 떠나는 판이 안 선 즉시 교체(onset 없음)는 원값 그대로 잡는다.
+        const onset = await page.evaluate((k) => { const l = (window as unknown as { __fade: number[] }).__fade; return l.length > k ? performance.timeOrigin + l[k] : null; }, fd0);
+        const cut = normalizedCut(pre, post, d, onset ?? undefined);
         const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
         const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
         const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
