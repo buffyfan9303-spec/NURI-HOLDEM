@@ -2701,7 +2701,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
         className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:thin]">
         {games.map((g) => (
           <button key={g.gameSeq} type="button" aria-pressed={g.gameSeq === gameSeq} onClick={() => onSelect(g.gameSeq)} className={chip(g.gameSeq === gameSeq)}>
-            <span className="max-w-48 truncate">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
+            <span className="max-w-48 truncate max-sm:max-w-28">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
             {/* '마감' 은 그 게임에 더 못 넣는다는 운영 상태 — 흐리지 않고 의미 토큰으로(셸 칩과 같은 규칙) */}
             {g.closed && <span className="text-2xs font-semibold text-ink-secondary">마감</span>}
           </button>
@@ -2718,7 +2718,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
         // ③ 많으면 한 번에 — 네이티브 select(키보드·낭독기·모바일 휠 피커 그대로). 진행 중이 위.
         <select aria-label={`게임으로 이동 — 진행 ${live} · 마감 ${games.length - live}`} value={showPending ? '' : String(gameSeq)}
           onChange={(e) => { const v = Number(e.target.value); if (v) onSelect(v); }}
-          className="input h-9 w-auto max-w-44 shrink-0 py-0 text-xs font-bold">
+          className="input h-9 w-auto max-w-44 shrink-0 py-0 text-xs font-bold max-sm:max-w-28">
           {showPending && <option value="">{label(gameSeq)} (작성중)</option>}
           <optgroup label={`진행 ${live}`}>
             {games.filter((g) => !g.closed).map((g) => <option key={g.gameSeq} value={g.gameSeq}>{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</option>)}

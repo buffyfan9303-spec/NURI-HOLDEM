@@ -1229,7 +1229,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                      다른 날짜 보드가 그대로** 남는다. StoreDashboard 쪽에서 날짜를 항상 싣도록 고쳤지만,
                      여기도 같이 막는다 — 한쪽만 고치면 다른 호출부가 생길 때 또 샌다. */
                   if (fromDash && !(st === 'ledger' && !(typeof fromDash === 'object' && fromDash.date))) {
-                    return onGotoStore(fromDash);
+                    // 데일리 펍(2026-10-02) — 대시보드 목적지의 게임은 '오늘 메인'이다. 게임을 고른 적 없으면 장부가 진행 중 마지막 게임에 착지한다.
+                    return onGotoStore(st === 'ledger' && typeof fromDash === 'object' && !gameChosen.current ? { ...fromDash, autoLand: true } : fromDash);
                   }
                   return st === 'ledger'
                     ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, autoLand: !ledgerSeed && !gameChosen.current })
