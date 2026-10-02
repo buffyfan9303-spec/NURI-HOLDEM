@@ -1503,8 +1503,11 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 
   const numInput = 'input w-full text-sm tabular-nums';
 
+  // B1(2026-10-02, review-store-ledger-1002b W-1·W-2·W-3) — ≥1440 에서 내 매장 판 상한을 풀자(F-2) 이 폼이 1920 에서 1608px 로 늘어
+  //   한 줄 입력칸(장부 검색·시상 금액)이 화면 끝까지, TV 미리보기가 1612×907 로 커졌다. 폼은 1366 판 폭(≈946) 그대로 읽게 960px 에서 멈춘다.
+  //   ≤1366 은 판이 이보다 좁아 바뀌는 것이 없다. 인라인인 이유: 전역 CSS 예산(35KB) 여유 0.
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" style={{ maxWidth: 960 }}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-bold text-ink-primary">클락 설정</h2>
         {onBackToLive && <button type="button" onClick={onBackToLive} className="btn-ghost text-xs px-3">← 라이브로</button>}

@@ -26,6 +26,8 @@ import './ledgerLazy.css';
 
 // 펼친 띠(표 위로 덮음) — 쌓임 35 는 레일(30)·복제본(tabCover) 사이. 그림자는 종전 큰 그림자 유틸(25px·50px·-12px·25% 검정)과 같다.
 const RAIL_POP_STYLE = { zIndex: 35, boxShadow: '0 25px 50px -12px #00000040' };
+/** 펼친 띠 레일의 최소 높이(px) — 윗변을 표에 맞춰 내려도 검색칸 + 목록 몇 줄은 남게(B1). */
+const RAIL_POP_MIN = 260;
 
 export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
@@ -81,6 +83,31 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       if (box && (!a || a === document.body || box.contains(a))) requestAnimationFrame(() => box.querySelector<HTMLElement>('[data-voucher-strip]')?.focus({ preventScroll: true }));
     }
   }, [railOpen]);
+
+  // B1(2026-10-02, review-store-ledger-1002b §4) — 펼친 띠 레일(20rem)이 띠 상자 꼭대기부터 표 위를 덮어
+  //   장부 도구 줄([+ 유저 추가]·정렬·[클락]·[세션 정보 수정])까지 가렸다 — 덮인 [+ 유저 추가] 를 누르면 레일 안에 맞아 아무 일도 없었다.
+  //   펼친 레일의 윗변을 **표 윗변**에 맞춘다: 도구 줄은 늘 보이고 눌리며, 덮이는 것은 표 오른쪽 열뿐이다(종전 의도 그대로).
+  //   스크롤로 표 윗변이 띠 상자 위로 올라가면 0(띠 상자 꼭대기 = 헤더 밑)이다. 표가 없는 판(목록·세팅)도 0 — 덮을 도구 줄이 표 위에 없다.
+  //   레일이 너무 낮아지지 않게 아래 RAIL_POP_MIN 만큼은 남긴다(그 경우만 표 머리 일부를 덮는다 — 도구 줄은 표 위라 영향 없다).
+  const [popTop, setPopTop] = useState(0);
+  useLayoutEffect(() => {
+    const box = stripBoxRef.current, col = colRef.current;
+    if (!strip || !railOpen || !box || !col) { setPopTop(0); return; }
+    const measure = () => {
+      const t = [...col.querySelectorAll('table')].find((x) => x.getClientRects().length > 0);
+      const b = box.getBoundingClientRect();
+      const top = t ? Math.round(t.getBoundingClientRect().top - b.top) : 0;
+      setPopTop(Math.max(0, Math.min(top, Math.round(b.height) - RAIL_POP_MIN)));
+    };
+    measure();   // 펼친 첫 프레임부터 — 덮었다가 내려가는 프레임이 없게(레이아웃 effect)
+    let raf = 0;
+    const sync = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
+    const ro = new ResizeObserver(sync);
+    ro.observe(col);
+    window.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('scroll', sync); window.removeEventListener('resize', sync); };
+  }, [strip, railOpen]);
 
   // ≥1440 · 장부 판이 보일 때 판 폭 상한을 푼다(감사 시뮬 B: 1440 바인 9칸 · 1920 10칸).
   //   F-2(2026-10-02) — 앱 프레임·main·내 매장 루트는 VenueManageTab 이 탭 단위로 푼다. 여기선 그 루트 **안쪽**만(셸이 튀지 않게).
@@ -230,7 +257,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       {/* 표 옆(≥768) — 펼친 띠는 표 위로 덮는다(표 칸 폭은 그대로라 바인 칸이 다시 접히지 않는다). */}
       {canViewVouchers && side && (
         <div ref={stripBoxRef} style={railBoxStyle} className={[railBox, strip ? 'relative' : ''].join(' ')}>
-          <div style={strip && railOpen ? RAIL_POP_STYLE : undefined} className={strip && railOpen ? 'absolute inset-y-0 right-0 w-[20rem] rounded-aura' : 'h-full'}>
+          <div style={strip && railOpen ? { ...RAIL_POP_STYLE, top: popTop } : undefined} className={strip && railOpen ? 'absolute inset-y-0 right-0 w-[20rem] rounded-aura' : 'h-full'}>
             <LedgerVoucherRail venueId={venueId} active={active} searchRef={searchRef}
               collapsed={strip && !railOpen} onToggle={strip ? () => setRailOpen((v) => !v) : undefined} />
           </div>
