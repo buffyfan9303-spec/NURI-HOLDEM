@@ -1,8 +1,10 @@
 // src/components/features/BrowseSideRail.tsx — PC 우측 위젯 레일(일정 탐색). 2026-09-24 App.tsx 에서 옮겼다(번들 여유 D:
 // 모바일에선 hidden 이고 첫 화면(홈)에 없으므로 shellDeferred 청크로 받는다). 동작·마크업은 옮기기 전과 같다.
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import Icon from '../atoms/Icon';
 import { useBlocks } from '../../contexts/BlockContext';
+import { upcomingSoon } from '../../lib/scheduleSort';
+import { serverNow } from '../../lib/serverTime';
 import type { Schedule } from '../../api/schedules';
 import type { CommunityPost } from '../../api/community';
 
@@ -15,15 +17,15 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 }) {
   const today = new Date().toLocaleDateString('en-CA');
   const { isBlocked } = useBlocks();
+  // 곧 시작은 '지금 이후' 판정이라 열어 둔 채 시작 시각이 지나면 빠져야 한다 — 1분마다 다시 그린다.
+  const [nowTick, setNowTick] = useState(() => serverNow());
+  useEffect(() => { const id = window.setInterval(() => setNowTick(serverNow()), 60_000); return () => window.clearInterval(id); }, []);
   const hot = [...posts]
     .filter((p) => !isBlocked(p.userId) && !p.blinded && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
-  // 곧 시작 — 오늘 이후 가장 가까운 대회 3개(날짜→시간 순)
-  const upcoming = [...schedules]
-    .filter((s) => s.approved && s.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
-    .slice(0, 3);
+  // 곧 시작 — **지금 이후에 시작하는** 가장 가까운 대회 3개(시작 시각 순). 이미 시작한 대회는 진행 중이라 뺀다.
+  const upcoming = upcomingSoon(schedules, nowTick, 3);
   const dday = (date: string) => {
     const diff = Math.round((new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
     return diff === 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;

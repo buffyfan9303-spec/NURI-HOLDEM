@@ -264,6 +264,10 @@ function CommunityTab({
   const selectBoard = useCallback((p: CommunityPost, nav?: PostNavCtx) => { setBoardSelected(p); setBoardNav(nav ?? null); }, []);
   // 인라인 화살표면 FeedSectionM 의 memo 가 서브탭 전환마다 깨진다 — 참조 고정
   const openWriteFree = useCallback(() => onOpenWrite('free'), [onOpenWrite]);
+  // 그룹 만들기(VenuesSection)가 끝나면 옆의 '내 커뮤니티 관리'도 다시 읽는다 — 마운트 때 한 번만 읽어
+  // 방금 만든 그룹이 '내가 운영'에 안 보였다(탭 keep-alive 라 앱을 다시 열 때까지, 2026-10-02 그룹 점검).
+  const [myCommVer, setMyCommVer] = useState(0);
+  const reloadVenuesAndMine = useCallback(() => { onReloadVenues?.(); setMyCommVer((n) => n + 1); }, [onReloadVenues]);
 
   // 서브탭 바(가로 스크롤) — 외부 지정(딥링크·대시보드 바로가기)으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
   const secBarRef = useRef<HTMLDivElement>(null);
@@ -483,13 +487,13 @@ function CommunityTab({
 
       {(visitedSecs.has('venues') || section === 'venues') && (
         <div data-sec="venues" style={{ display: section === 'venues' ? undefined : 'none' }} className="space-y-3">
-          <MyCommunitiesActionM onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
+          <MyCommunitiesActionM onSelectVenue={onSelectVenue} onCreated={onReloadVenues} version={myCommVer} />
           <VenuesSectionM
             sortedVenues={sortedVenues}
             query={query}
             onQuery={setQuery}
             onSelectVenue={onSelectVenue}
-            onReloadVenues={onReloadVenues}
+            onReloadVenues={reloadVenuesAndMine}
           />
         </div>
       )}
@@ -1076,9 +1080,11 @@ function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: numb
 // ── 매장 커뮤니티 섹션 ───────────────────────────────────────────────────────
 
 // 내 커뮤니티 관리 — 내가 운영(매장+그룹) + 가입한 그룹(탈퇴). 업주는 홀덤펍 생성도.
-function MyCommunitiesAction({ onSelectVenue, onCreated }: {
+function MyCommunitiesAction({ onSelectVenue, onCreated, version = 0 }: {
   onSelectVenue: (id: string) => void;
   onCreated?: () => void;
+  /** 바뀌면 다시 읽는다 — 옆 섹션에서 그룹을 만들었을 때 */
+  version?: number;
 }) {
   const { user, refreshProfile } = useAuth();
   const toast = useToast();
@@ -1095,7 +1101,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
     getMyOwnedCommunities().then(setOwned).catch(() => {});
     getMyJoinedGroups().then(setJoined).catch(() => {});
   };
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload(); }, [version]);
 
   if (!user) return null;
   const isOwner = user.role === 'venue_owner';
@@ -1141,7 +1147,11 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
               <ul className="space-y-1">
                 {owned.map((v) => (
                   <li key={v.id}>
-                    <button type="button" onClick={() => onSelectVenue(v.id)} className="w-full min-h-[44px] flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
+                    {/* 승인 전 커뮤니티는 앱의 공개 목록(getVenues: approved=true)에 없어 열 수 없다 — 그대로 넘기면
+                        App 이 '매장을 찾을 수 없습니다. 문을 닫았거나…' 로 답했다(2026-10-02 그룹 점검). 이유를 말한다. */}
+                    <button type="button" onClick={() => (v.approved ? onSelectVenue(v.id)
+                      : toast.show(`관리자 승인 후 ${(v.kind ?? 'venue') === 'venue' ? '매장' : '그룹'} 페이지를 열 수 있습니다`, 'info'))}
+                      className="w-full min-h-[44px] flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
                       <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[v.kind ?? 'venue']}</span>
                       <span className="text-xs font-semibold text-ink-primary truncate">{v.name}</span>
                       {!v.approved && <span className="ml-auto shrink-0 text-2xs text-ink-muted">승인 대기</span>}
