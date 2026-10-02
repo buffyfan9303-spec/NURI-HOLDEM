@@ -124,7 +124,8 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
     await mockAll(page);
     await open(page, 390, 'tab=community');
     await page.waitForTimeout(1500);
-    await check(page, [{ kind: 'F2', title: /전체|매장|홀덤/ }]);
+    const rows = await check(page, [{ kind: 'F2', title: /전체|매장|홀덤/ }]);
+    expect(rows.length, '커뮤니티 머리줄이 잡혀야 한다').toBeGreaterThan(0);
   });
 
   test('⑥ 캘린더 390(로그인 — 날짜 기록 머리줄)', async ({ page }) => {
@@ -132,7 +133,8 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
     await stubLogin(page);
     await open(page, 390, 'tab=calendar');
     await page.waitForTimeout(1500);
-    await check(page, [{ kind: 'F2', title: /기록/ }]);
+    const rows = await check(page, [{ kind: 'F2', title: /기록/ }]);
+    expect(rows.length, '캘린더 기록 머리줄이 잡혀야 한다').toBeGreaterThan(0);
   });
 
   test('⑦ 매장 페이지 390 — 방문 후기 | 평점', async ({ page }) => {
