@@ -143,8 +143,13 @@ export const SUB_PANEL: Readonly<Record<string, string>> = {
   'venue-tab': '[data-venue-tabpanel]',
   'spot-tab': '[data-spot-pane]',
 };
-/** 자기 스크롤 정책(섹션별 복원 — CommunityTab · 탭별 기억 — NuriSpotPanel)이 있는 scope. 공용 스크롤 맞춤을 하지 않는다(이중 적용 금지). */
-export const OWN_SCROLL_SCOPES: ReadonlySet<string> = new Set(['community-sec', 'spot-tab']);
+/** 자기 스크롤 정책(섹션별 복원 — CommunityTab · 탭별 기억 — NuriSpotPanel · 알림 창 탭별 기억 — NotificationPanel)이 있는 scope.
+ *  공용 스크롤 맞춤을 하지 않는다(이중 적용 금지 — 공용 맞춤은 판 스크롤 상자를 맨 위로 되돌려 기억한 자리를 지운다). */
+export const OWN_SCROLL_SCOPES: ReadonlySet<string> = new Set(['community-sec', 'spot-tab', 'notif-tab', 'notif-filter']);
+/** 떠나는 판 복제본 없이 **한 프레임에** 바꾸는 scope — 알림 창(뜨는 카드 안 목록). 오너 2026-10-02 결정:
+ *  행 높이가 다른 두 목록(쪽지 65px · 알림 81px)이 240ms 겹쳐 걷히면 행이 계단처럼 내려가 보였다("드르륵").
+ *  이미 본 목록이고 카드 높이도 두 탭이 같다 — 겹칠 이유가 없다. 다른 하위 탭은 기존 퇴장 페이드 그대로. */
+export const INSTANT_SUB_SCOPES: ReadonlySet<string> = new Set(['notif-tab', 'notif-filter']);
 
 const scroller = (el: Element): HTMLElement | null => {
   for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
@@ -441,6 +446,8 @@ type SubSnap = {
   el: HTMLElement; box: Box; page: boolean; scroll: [HTMLElement, number, number][]; canvas: [HTMLCanvasElement, HTMLCanvasElement][];
   /** 레일 밑변(뷰포트 y — 레일이 판과 가로로 안 겹치면 null)을 받아 복제본을 자른다. 레일은 커밋 뒤에도 움직인다(헤더 접힘·스크롤 깎임). */
   clipBelow: (railBottom: number | null) => void;
+  /** 판을 세로로 자르는 가장 가까운 그릇(뜨는 카드·시트)과 이벤트 시점 높이 — 없으면 null(지면 위 판). */
+  frame: { el: HTMLElement; h: number } | null;
 };
 /** 레일이 판과 가로로 겹치면 그 밑변(뷰포트 y), 아니면 null — 세로 사이드바(PC)는 판과 가로로 안 겹친다. */
 const railBottomOver = (rail: Element | null, box: { left: number; width: number }): number | null => {
@@ -455,6 +462,7 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   if (r.width === 0 || r.height === 0 || r.bottom <= 0 || r.top >= vh) return null;
   let top = Math.max(r.top, 0), bottom = Math.min(r.bottom, vh), left = Math.max(r.left, 0), right = Math.min(r.right, vw);
   let clipY = false;
+  let frame: SubSnap['frame'] = null;
   const layers: string[] = [];
   let base: string | null = null;
   for (let n: HTMLElement | null = root; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
@@ -462,7 +470,7 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     if (n !== root && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible')) {
       const q = n.getBoundingClientRect();
       if (cs.overflowX !== 'visible') { left = Math.max(left, q.left); right = Math.min(right, q.right); }
-      if (cs.overflowY !== 'visible') { top = Math.max(top, q.top); bottom = Math.min(bottom, q.bottom); clipY = true; }
+      if (cs.overflowY !== 'visible') { top = Math.max(top, q.top); bottom = Math.min(bottom, q.bottom); clipY = true; frame ??= { el: n, h: q.height }; }
     }
     if (base !== null) continue;
     if (cs.backgroundImage !== 'none') layers.push(cs.backgroundImage);
@@ -551,7 +559,7 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     el.style.backgroundAttachment = 'scroll';
   }
   place(el, { top: r.top, left: r.left, width: r.width });
-  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow };
+  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow, frame };
 }
 
 // ── 커밋 판정(2026-09-27 COMMIT-SIGNAL) ─────────────────────────────────────────
@@ -606,7 +614,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   const inEvent = !!(globalThis as { event?: Event }).event;
   const key0 = root ? shownPanes(root) : '';
   const keyed = key0 !== '';
-  const skip = !root || rapid || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const skip = !root || rapid || INSTANT_SUB_SCOPES.has(scope) || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
     || (document.documentElement.hasAttribute('data-overlay') && !!root.closest('.tab-pane'))
     || (!keyed && !inEvent);
   // 레일이 판 **안**에 있으면(내 매장 단계 바) 누른 탭바(tablist)를 레일로 본다 — 그 위·그 자신은 복제본에서 잘라 살아 있는 알약이 보이게.
@@ -654,6 +662,12 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     cancel();
     if (!snap || !parent?.isConnected) { afterFirstFrame(releaseSwap); return; }
     const s = snap;
+    // 🔴 2026-10-02 오너 "쪽지함과 알림을 왔다갔다하면 드르륵 내려가는 모션" — 판을 자르는 그릇(내용 높이를 따라가는 뜨는 카드)이
+    //   커밋에서 높이가 바뀌면, 이벤트 시점 모양의 복제본은 새 그릇과 맞지 않는다. fixed 라 그릇의 overflow 도 안 받는다:
+    //   알림(8건)→쪽지(3건)에서 카드는 679→254px 로 줄었는데 알림 목록 복제본(619px)이 카드 밑으로 425px 늘어진 채 240ms 걷혔고,
+    //   반대 방향은 커진 카드 아래 새 목록이 먼저 보이고 위만 겹쳐 걷혔다(390 · 프레임 실측). 이미 본 목록이다 — 한 프레임에 바꾼다.
+    //   그릇이 그대로인 판(내 정보·약관 — 고정 높이 판, 지면 위 판)은 종전 그대로 떠나는 판이 선다.
+    if (s.frame && Math.abs(s.frame.el.getBoundingClientRect().height - s.frame.h) > 0.5) { afterFirstFrame(releaseSwap); return; }
     const { el } = s;
     const dy = s.page ? yLast - y0 : 0;
     if (dy) el.style.setProperty('--leave-top', `${s.box.top - dy}px`);

@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  tabPaneReady, isSettled, waitSettled, SUB_PANEL, OWN_SCROLL_SCOPES, TAB_COVER_WAIT_MAX_MS,
+  tabPaneReady, isSettled, waitSettled, SUB_PANEL, OWN_SCROLL_SCOPES, INSTANT_SUB_SCOPES, TAB_COVER_WAIT_MAX_MS,
 } from './tabCover';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -139,8 +139,12 @@ describe('⑥ 하위 탭 25곳이 같은 전환(P2 스크롤)을 탄다 — goSu
     expect(i).toBeGreaterThan(0);
     expect(g.slice(i, i + 200)).toMatch(/alignSubTabPanel\(scope,/);
   });
-  it('자기 스크롤 정책이 있는 곳(커뮤니티 섹션별 복원 · NURI SPOT 탭별 기억)만 공용 스크롤 맞춤에서 뺀다', () => {
-    expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec', 'spot-tab']);
+  it('자기 스크롤 정책이 있는 곳(커뮤니티 섹션별 복원 · NURI SPOT 탭별 기억 · 알림 창 탭별 기억)만 공용 스크롤 맞춤에서 뺀다', () => {
+    expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec', 'spot-tab', 'notif-tab', 'notif-filter']);
+  });
+  it('복제본 없이 한 프레임에 바꾸는 하위 탭은 알림 창 두 scope 뿐이다(오너 10-02 — 다른 하위 탭은 퇴장 페이드 유지)', () => {
+    expect([...INSTANT_SUB_SCOPES]).toEqual(['notif-tab', 'notif-filter']);
+    expect([...INSTANT_SUB_SCOPES].every((s) => s in SUB_PANEL)).toBe(true);
   });
 });
 
