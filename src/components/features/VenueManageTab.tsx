@@ -392,10 +392,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   스켈레톤이 예약을 넘긴 그 순간 풀어버리면, 그다음 실제 콘텐츠로 줄어들 때는 이미 예약이 없어
     //   그 낙차가 그대로 보인다. 그래서 "넘겼다"를 본 즉시가 아니라 **잠잠해진 뒤**에만 푼다(디바운스) —
     //   높이가 계속 바뀌는 동안은 아직 파도가 진행 중이라는 뜻이다.
-    const release = () => setLockPx(null);
+    // 🔴 PR #100 CI(2026-10-02) — 해제 뒤에는 올림(ratchet)이 DOM 에 쓰면 안 된다. 해제 커밋(React 가 minHeight 를 지움)과
+    //   이 이펙트 정리(ro.disconnect) 사이에 RO 가 한 번 더 돌면 그 값이 React 모르는 인라인 min-height 로 **영구히** 남았다
+    //   (이용권: 예약 1208 → 해제 → 보유자 판이 열리며 1081 기록, 실측). 그 바닥 때문에 접기에서 문서가 덜 줄어 scrollY 가
+    //   애매하게 깎이고(602→584·539), 다시 열어도 판이 바닥 안에서만 자라 되돌아오지 않았다(e2e/voucher-reason-stats 재열림).
+    let off = false;
+    const release = () => { off = true; setLockPx(null); };
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const outer = secPanelRef.current;
     const ro = new ResizeObserver(() => {
+      if (off) return;
       // M-5c(2026-10-02 store-link-1002) — 예약은 로딩 중 '올라가기만' 한다. 새 판의 첫 프레임이 예약보다 커졌다가(장부: 505→671)
       //   스켈레톤으로 줄면(541) 그 낙차가 로딩 중에 보였다(푸터 932→802). 종전엔 화면 높이 바닥(735)이 이 낙차를 가렸는데,
       //   바닥을 '정렬에 필요한 최소'로 줄이면서 드러났다. 안쪽이 예약을 넘으면 그 높이로 예약을 올린다(바깥만 바꾸므로 RO 루프 없음).
@@ -421,7 +427,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   예약은 '로딩 완료'(판 안 스켈레톤·aria-busy 0 + 높이 두 프레임 정지)로만 푼다. PANE_LOCK_ESCAPE_MS 는 타이밍이 아니라
     //   영영 안 끝나는 로딩 표시(버그)에 rAF 가 무한히 도는 것만 끊는 탈출구다 — 정상 경로는 그 전에 반드시 정착한다.
     const stop = waitSettled(() => secInnerRef.current, release, undefined, true, PANE_LOCK_ESCAPE_MS);
-    return () => { ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
+    return () => { off = true; ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
@@ -632,10 +638,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       if (!f || el.offsetParent === null) return;
       const nav = document.querySelector('[data-mystore-secbar]');
       const head = nav ? parseFloat(getComputedStyle(nav).top) || 0 : 0;
-      // ⚠ 레이아웃 좌표(offsetTop 사슬)로 잰다 — 푸터를 감싼 .reveal 은 화면에 들기 전 18px 아래로 옮겨져(transform) 있어
+      // ⚠ 레이아웃 거리로 잰다(transform 제외) — 푸터를 감싼 .reveal 은 화면에 들기 전 18px 아래로 옮겨져(transform) 있어
       //   getBoundingClientRect 로 재면 꼬리가 18px 크게 나오고, 들어오며 제자리로 가면 문서가 18px 줄어 한 번 더 깎였다(600→76→58→76 실측).
-      const docTop = (n: HTMLElement) => { let y = 0; for (let e: HTMLElement | null = n; e; e = e.offsetParent as HTMLElement | null) y += e.offsetTop; return y; };
-      const tail = Math.max(0, docTop(f) + f.offsetHeight - (docTop(el) + el.offsetHeight));
+      // 🔴 PR #100 CI(2026-10-02) — 단, offsetTop·offsetHeight 는 **정수로 반올림**된다. 판 안 접기 판(Fold)이 높이를 소수로 미는 동안
+      //   반올림이 프레임마다 달라 꼬리가 ±1 흔들렸고(바닥 506↔507), 그때마다 판의 min-height 계산값이 바뀌어
+      //   브라우저 스크롤 앵커링이 그 프레임 보정을 멈췄다(min-height 는 앵커링 억제 조건) — 보유자 현황을 접었다 펴면
+      //   클램프로 깎인 scrollY 가 되돌아오지 않았다(602→584→539, e2e/voucher-reason-stats 재열림).
+      //   → 소수(rect)로 재되, 서로 공유하지 않는 조상의 translate(.reveal)만 빼서 레이아웃 거리를 얻는다. 1/64px(레이아웃 단위)로 맞춘다.
+      const shiftY = (n: HTMLElement, other: HTMLElement) => {
+        let y = 0;
+        for (let a: HTMLElement | null = n; a && !a.contains(other); a = a.parentElement) {
+          const t = getComputedStyle(a).transform;
+          if (t && t !== 'none') y += new DOMMatrixReadOnly(t).m42;
+        }
+        return y;
+      };
+      const raw = (f.getBoundingClientRect().bottom - shiftY(f, el)) - (el.getBoundingClientRect().bottom - shiftY(el, f));
+      const tail = Math.max(0, Math.round(raw * 64) / 64);
       const v = `${Math.max(0, Math.ceil(window.innerHeight - head - tail))}px`; // 올림 — 내림이면 문서 끝이 화면 끝보다 1px 모자라 75 로 한 번 더 깎였다(실측)
       if (el.style.getPropertyValue('--pane-floor') !== v) el.style.setProperty('--pane-floor', v);
     };
