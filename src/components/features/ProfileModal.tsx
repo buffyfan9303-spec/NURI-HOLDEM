@@ -29,6 +29,8 @@ import IdentityVerificationButton from './IdentityVerificationButton';
 import LocationPrivacyCard from './LocationPrivacyCard';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
+import { getMyLocationConsent } from '../../api/locationPrivacy';
+import { warm, takeWarm, dropWarm } from '../../lib/warmFetch';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
 import { coverImage, PROFILE_COVERS, COVER_LABEL, type ProfileCover } from '../../lib/profileCover';
@@ -89,6 +91,19 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     getMyVisitStats().then((v) => { setVisitStats(v); setVisitErr(null); }).catch((e) => setVisitErr(e));
   }, []);
   useEffect(() => { if (open) loadVisitStats(); }, [open, loadVisitStats]);
+  // 보안 탭의 늦게 오는 두 칸(약관 동의 이력 · 위치정보 동의)을 열 때 미리 받는다 — 들어가면 이미 내용이 있어 아래 폼을 밀지 않는다
+  //   (audit-motion-1002 M-4 · 390 139px). 받는 쪽은 LegalConsentHistory · LocationPrivacyCard 의 takeWarm. 둘 다 읽기 전용이다
+  //   (get_my_location_consent 는 STABLE select — '열람' 기록을 남기는 이용 내역 조회는 여기서 부르지 않는다).
+  //   보안 탭으로 바로 열면 그 칸들이 이 이펙트보다 먼저(자식 이펙트) 스스로 받으므로 미리 받지 않는다(중복 요청 0).
+  const uid = user?.id;
+  useEffect(() => {
+    if (!open || !uid || tab === 'security') return;
+    warm(`legal-consents:${uid}`, () => getMyLegalConsents(20));
+    warm(`location-consent:${uid}`, getMyLocationConsent);
+    // 닫힐 때(·계정이 바뀔 때) 안 쓴 값을 버린다 — 미리 받은 값은 **이번 열림**에서만 쓴다. 남겨 두면 다음에 보안 탭으로
+    //   바로 열 때(본인인증 안내 등) 그 사이 바뀐 동의 상태 대신 옛 값이 그려지고 다시 받지도 않았다(B2 후속 · 독립 검토 ④-b).
+    return () => { dropWarm(`legal-consents:${uid}`); dropWarm(`location-consent:${uid}`); };
+  }, [open, uid]); // eslint-disable-line react-hooks/exhaustive-deps -- 여는 순간 한 번(탭 이동마다 다시 받지 않는다)
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
   // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
@@ -792,18 +807,21 @@ const CONSENT_CAT_LABEL: Record<'terms' | 'privacy' | 'antiGambling' | 'marketin
 const CONSENT_SOURCE_LABEL: Record<string, string> = { gate: '재동의 화면', settings: '설정에서 변경' };
 
 function LegalConsentHistory() {
+  // '내 정보'를 열 때 ProfilePanels 가 미리 받아 둔 응답(warm) — 다 왔으면 첫 그림부터 목록이다(보안 탭 첫 진입 밀림 M-4).
+  const uid = useAuth().user?.id;
+  const [pre] = useState(() => (uid ? takeWarm<LegalConsentRecord[]>(`legal-consents:${uid}`) : null));
   // null = 아직 조회 전(로딩) · [] = 조회는 성공했는데 이력이 없음 — err 로만 '실패'와 '없음'을 가른다.
-  const [items, setItems] = useState<LegalConsentRecord[] | null>(null);
+  const [items, setItems] = useState<LegalConsentRecord[] | null>(() => (pre?.done ? pre.v! : null));
   const [err, setErr] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     setErr(null);
-    getMyLegalConsents(20)
+    (tick === 0 && pre ? pre.p : getMyLegalConsents(20))
       .then((rows) => { if (alive) setItems(rows); })
       .catch((e: unknown) => { if (alive) setErr(e); }); // 실패 ≠ 없음 — items 를 [] 로 만들지 않는다
     return () => { alive = false; };
-  }, [tick]);
+  }, [tick, pre]); // pre 는 마운트 때 한 번 꺼낸 값이라 바뀌지 않는다
 
   return (
     <div>
