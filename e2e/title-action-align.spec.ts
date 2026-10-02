@@ -151,8 +151,24 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
       await dismissOverlays(page);
       await expect(page.locator('main header h2:visible').first()).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(1500);
-      // 모바일은 '오늘 장부 요약' 머리줄 + 새로고침(⟳) 이 꼭 잡혀야 한다. PC 는 대시보드 머리줄 + 새로고침.
-      await check(page, [{ kind: 'F1', title: w < 1024 ? /오늘 장부 요약/ : /./ }]);
+      // 모바일은 '오늘 장부 요약' 머리줄 + 새로고침(⟳) 이 꼭 잡혀야 한다. PC 는 대시보드 머리줄(매장명 + 새로고침).
+      await check(page, [{ kind: 'F1', title: w < 1024 ? /오늘 장부 요약/ : /테스트 홀덤펍/ }]);
+
+      // 🔴 공용 SectionHeader(atoms/SectionHeader.tsx) — '포스터' 단계는 액션(ⓘ·+ 새 게임)이 붙는 유일한 레일 단계다.
+      //   예전엔 이 줄이 대시보드만 열어서 SectionHeader 의 제목↔액션이 한 번도 재이지 않았다(PC 는 `/./` 가 엉뚱한 행으로 채워졌다).
+      //   (2026-10-02 독립 검토: 설명 두 줄 헤더·ⓘ 펼침에서 액션이 제목 첫 줄이 아니라 묶음 가운데로 21.58px 어긋난 결함을 못 잡았다.)
+      await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-mystore-rail] [role=tab]')].find((b) => b.textContent?.trim() === '포스터')?.click());
+      await expect(page.locator('[data-tab="my-store"] h2:visible', { hasText: '포스터' }).first()).toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+      await check(page, [{ kind: 'F1', title: /^포스터$/ }]);
+      if (w < 1024) {
+        // 모바일 ⓘ 펼침 = 설명이 제목 아래로 두 줄 내려간 헤더 — 그래도 ⓘ 는 제목 첫 줄 가운데에 있어야 한다.
+        await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-desc-toggle]')].find((x) => x.getBoundingClientRect().height > 0)?.click());
+        await expect(page.locator('[data-desc-toggle][aria-expanded="true"]:visible').first()).toBeVisible();
+        await page.waitForTimeout(800);
+        const open = await check(page, [{ kind: 'F1', title: /^포스터$/ }]);
+        expect(open.filter((r) => r.kind === 'F1' && /^포스터$/.test(r.title)).length, 'ⓘ 펼침 헤더가 F1 에서 빠졌다(제외 규칙이 SectionHeader 를 삼켰다)').toBeGreaterThan(0);
+      }
     });
   }
 
@@ -162,6 +178,7 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
     await open(page, 1440, 'tab=admin');
     await expect(page.locator('[data-admin-secbar]')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(1000);
-    await check(page, [{ kind: 'F2', title: /./ }]);
+    // 공용 SectionHeader(제목 + 설명, 같은 줄)의 기준선 — '운영 분석' 이 첫 섹션이라 꼭 잡힌다(`/./` 는 다른 행이 채워도 통과했다).
+    await check(page, [{ kind: 'F2', title: /운영 분석/ }]);
   });
 });

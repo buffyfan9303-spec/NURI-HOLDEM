@@ -24,11 +24,24 @@ const MEASURE = () => [...document.querySelectorAll<HTMLElement>('header')]
   .map((h) => {
     const t2 = h.querySelector('h2')!.getBoundingClientRect();
     const tile = h.querySelector<HTMLElement>('span[aria-hidden]')?.getBoundingClientRect();
+    // 2026-10-02 후속 — 제목 **글자**(Range) 중심 · 액션 중심 · 설명 줄 상자. h2 상자는 34px 칸이라 글자 위치를 가린다.
+    const h2 = h.querySelector('h2')!;
+    const tn = [...h2.childNodes].find((n) => n.nodeType === 3 && n.nodeValue?.trim()) as Text | undefined;
+    const rg = document.createRange(); rg.selectNodeContents(tn ?? h2);
+    const gr = rg.getClientRects()[0];
+    const top = h.getBoundingClientRect().top;
+    const btn = [...h.querySelectorAll<HTMLElement>('button')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect();
+    const desc = h.querySelector<HTMLElement>('.t-desc')?.getBoundingClientRect();
     return {
       제목: h.querySelector('h2')!.textContent?.trim() ?? '',
       높이: +h.getBoundingClientRect().height.toFixed(2),
       중심차: tile ? +(((tile.top + tile.bottom) / 2) - ((t2.top + t2.bottom) / 2)).toFixed(2) : null,
       타일top: tile ? +(tile.top - h.getBoundingClientRect().top).toFixed(2) : null,
+      글자중심: gr ? +(gr.top + gr.height / 2 - top).toFixed(2) : null,
+      타일글자차: tile && gr ? +(tile.top + tile.height / 2 - (gr.top + gr.height / 2)).toFixed(2) : null,
+      액션글자차: btn && gr ? +(btn.top + btn.height / 2 - (gr.top + gr.height / 2)).toFixed(2) : null,
+      설명top: desc ? +(desc.top - top).toFixed(2) : null,
+      설명높이: desc ? +desc.height.toFixed(2) : null,
       액션: !!h.querySelector('button'),
     };
   });
@@ -104,12 +117,38 @@ test.describe('PC 내 매장 — 섹션 헤더는 액션 유무와 무관하게 
     await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-mystore-rail] [role=tab]')].find((b) => b.offsetParent && b.textContent?.trim() === '포스터')?.click());
     await expect(page.locator('[data-tab="my-store"] h2', { hasText: '포스터' }).first()).toBeVisible({ timeout: 20_000 });
 
-    const m = (await page.evaluate(MEASURE)).filter((x) => x.중심차 != null);
-    console.log('[모바일 390 섹션 헤더]', JSON.stringify(m));
-    expect(m.length, '모바일에서 타일 달린 섹션 헤더를 못 찾았다 — 이 반례가 빈 검사다').toBeGreaterThan(0);
-    for (const x of m) {
-      expect(x.타일top!, `모바일 타일이 첫 줄을 떠나 설명 옆으로 내려갔다(top ${x.타일top}px) — 블록 가운데 정렬이 샜다`).toBeLessThanOrEqual(4);
-      expect(Math.abs(x.중심차!), `모바일 타일·제목 첫 줄 중심이 ${x.중심차}px 어긋났다 — ${x.제목}`).toBeLessThanOrEqual(0.5);
+    // 🔴 2026-10-02 독립 검토 반례 — 접힌 '포스터' 한 곳만 재면 `타일top ≤ 4` 가 **정작 지키려는 상황**(설명이 제목 아래로 두 줄 내려간 헤더)에서
+    //   한 번도 실행되지 않는다(왼쪽 묶음을 items-center 로 바꾼 변형에서 두 줄 헤더 타일이 top 24.44 로 처졌는데 이 테스트는 통과했다).
+    //   그래서 세 상태를 잰다: ① 포스터 접힘(한 줄) ② 포스터 ⓘ 펼침(두 줄 + 액션) ③ 매장 설정(설명 두 줄, 접힘 래퍼 밖).
+    const states: { 상태: string; rows: ReturnType<typeof MEASURE> }[] = [];
+    const grab = async (상태: string) => states.push({ 상태, rows: (await page.evaluate(MEASURE)).filter((x) => x.중심차 != null) });
+    await grab('포스터 접힘');
+    await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-desc-toggle]')].find((b) => b.getBoundingClientRect().height > 0)?.click());
+    await expect(page.locator('[data-desc-toggle][aria-expanded="true"]:visible').first()).toBeVisible();
+    await page.waitForTimeout(600);
+    await grab('포스터 ⓘ 펼침');
+    // 매장 설정 = 접힘 래퍼(max-lg:oneLine) 밖에서 그리는 SectionHeader — 설명이 늘 제목 아래로 두 줄이다. 모바일에는 보이는 진입 칸이 없어 PC 사이드바 칸을 evaluate 로 누른다(sweepSections 와 같은 방식).
+    await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-mystore-secbar] button')].find((b) => b.textContent?.includes('매장 설정'))?.click());
+    await page.waitForTimeout(800);
+    await grab('매장 설정');
+
+    console.log('[모바일 390 섹션 헤더]', JSON.stringify(states));
+    const all = states.flatMap((s) => s.rows.map((r) => ({ ...r, 상태: s.상태 })));
+    expect(all.length, '모바일에서 타일 달린 섹션 헤더를 못 찾았다 — 이 반례가 빈 검사다').toBeGreaterThan(0);
+    // 두 줄 설명 헤더가 실제로 잡혔는지(0건 통과 방지) — 설명 높이 ≥ 30px = 19.13px 줄 둘. 액션이 붙은 두 줄 헤더도 한 개는 있어야 한다.
+    const two = all.filter((x) => (x.설명높이 ?? 0) >= 30);
+    expect(two.length, '설명이 두 줄인 모바일 헤더를 못 쟀다 — 처짐 반례가 빈 검사다').toBeGreaterThanOrEqual(2);
+    expect(two.some((x) => x.액션), '액션(ⓘ)이 붙은 두 줄 헤더를 못 쟀다').toBe(true);
+    for (const x of all) {
+      expect(x.타일top!, `모바일 타일이 첫 줄을 떠나 설명 옆으로 내려갔다(top ${x.타일top}px) — 블록 가운데 정렬이 샜다 · ${x.상태} ${x.제목}`).toBeLessThanOrEqual(4);
+      expect(Math.abs(x.중심차!), `모바일 타일·제목 칸 중심이 ${x.중심차}px 어긋났다 — ${x.상태} ${x.제목}`).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(x.타일글자차!), `모바일 타일 중심이 제목 글자 중심에서 ${x.타일글자차}px 어긋났다 — ${x.상태} ${x.제목}`).toBeLessThanOrEqual(0.5);
+      if (x.액션글자차 != null) expect(Math.abs(x.액션글자차), `모바일 액션(ⓘ) 중심이 제목 글자 중심에서 ${x.액션글자차}px 어긋났다 — ${x.상태} ${x.제목}`).toBeLessThanOrEqual(0.5);
+    }
+    // 🔴 빈 공간 금지(오너): 설명이 아래로 접힌 헤더는 **제목 줄 상자(글자 줄 높이 ≈ 22px) + 줄 간격 4px** 바로 아래에서 설명이 시작한다.
+    //   제목 칸을 34px 로 키우는 방식(min-h-8)으로 되돌리면 설명이 38.25px 로 밀려 헤더가 +12.33px 커진다(펼치지 않아도).
+    for (const x of two) {
+      expect(x.설명top!, `설명이 제목 아래로 ${x.설명top}px 에서 시작한다(정상 ≈26) — 제목 칸이 글자보다 커서 헤더가 늘었다 · ${x.상태} ${x.제목}`).toBeLessThanOrEqual(29);
     }
   });
 });
