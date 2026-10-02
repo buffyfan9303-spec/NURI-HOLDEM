@@ -99,6 +99,12 @@ export const NASH_ANTE_QUARANTINE: readonly number[] = [6, 7, 8, 9, 10];
  *    6~10bb 는 −0.9~−4.4%p 라 '추정' 배지로 남긴다. 차트는 2~5bb 의 뒤 3명+ 자리를 '준비 중' 으로 보여 준다. */
 export const NASH_ANTE_APPROX: readonly number[] = [6, 7, 8, 9, 10];
 
+/** 2026-10-02 오너 결정 "푸시폴드 2~5bb 전부 공개(설명 표시)" — 이 칸(빅앤티 · 뒤 3명+ · 2~5bb)은 **콜 인원 제한 없는 다인 게임**의 균형이다.
+ *  인원을 제한한 다른 차트·숏스택 표와 값이 다를 수 있어 차트·드릴·스팟 평가가 같은 문구를 쓴다(문구는 여기 한 곳). */
+export const MULTIWAY_NOTICE_SHORT = '콜 인원 제한 없이 계산한 값';
+export const MULTIWAY_NOTICE_FULL = '여러 명이 동시에 콜할 수 있는 게임(콜 인원 제한 없음)으로 계산한 값 — 인원 제한을 둔 다른 차트와 숏스택에서 다를 수 있어요';
+export const isMultiwayUncapped = (stack: number, k: number, bigAnte: boolean): boolean => bigAnte && k >= 3 && stack >= 2 && stack <= 5;
+
 /** ✅ **정확 게임으로 푼 자리(뒤 인원)** — 격리·추정 목록은 이 자리에 걸리지 않는다.
  *  · k=1: SB vs BB 헤즈업. 169×169 전수 에퀴티 + CFR+(hu-exact.mjs, 착취가능도 ≤1e-7bb).
  *  · k=2: BTN 올인, 뒤에 SB·BB 뿐. 진짜 3인 에퀴티(tri-equity.mjs) + 오버콜까지 든 3인 균형(solve3.mjs, 최선응답 이득 ≤3e-6bb).

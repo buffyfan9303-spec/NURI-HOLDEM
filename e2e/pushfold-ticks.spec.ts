@@ -74,8 +74,18 @@ test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', 
       await expect(cells, `${s}bb CO 행렬이 없다`).toHaveCount(169);
       expect(await colored(), `${s}bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)`).toBeGreaterThan(20);
       await expect(source, `${s}bb CO 배지가 '추정' 이다 — 다인 균형은 정식 등급이다`).toHaveAttribute('data-approx', 'false');
+      // 2026-10-02 오너 "설명 표시": 콜 인원 제한 없는 계산이라는 안내가 한 줄로 보이고(390px 줄바꿈 없음), ⓘ 를 열면 전체 문장이 나온다
+      const notice = dlg.getByTestId('multiway-notice');
+      await expect(notice, `${s}bb CO 에 다인 균형 안내가 없다`).toBeVisible();
+      const sum = notice.locator('summary');
+      const lh = await sum.locator('span').first().evaluate((el) => ({ h: el.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(el).lineHeight) }));
+      expect(lh.h, '안내 요약이 두 줄로 꺾였다').toBeLessThan(lh.lh * 1.5);
+      await sum.click();
+      await expect(notice).toContainText('콜 인원 제한 없음');
+      await sum.click();
     }
     await tick(6).click();
+    await expect(dlg.getByTestId('multiway-notice'), '6bb 는 추정 등급이라 다인 균형 안내가 없다').toHaveCount(0);
     await expect(dlg.getByTestId('pushfold-no-data'), '6bb CO 에 안내 상자가 떴다 — 추정값이 안 읽힌다').toHaveCount(0);
     await expect(cells, '6bb CO 행렬이 없다').toHaveCount(169);
     expect(await colored(), '6bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)').toBeGreaterThan(20);

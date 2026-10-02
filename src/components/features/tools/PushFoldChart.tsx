@@ -3,9 +3,10 @@ import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
+import MultiwayNotice from './MultiwayNotice';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
-import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange, isNashQuarantined, isNashApprox } from '../../../lib/nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange, isNashQuarantined, isNashApprox, isMultiwayUncapped } from '../../../lib/nash.data';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
 
 // 푸시·폴드 차트 — 자체 계산 Nash 균형(fictitious play)로 전면 교체.
@@ -154,6 +155,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
       </div>
+      {hasData && isMultiwayUncapped(stack, k, true) && <MultiwayNotice className="-my-1" />}
       {hasData
         ? <RangeMatrix13 actions={actions} initialSel={highlight} />
         : (
