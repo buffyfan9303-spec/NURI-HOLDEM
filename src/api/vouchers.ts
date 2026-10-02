@@ -105,8 +105,20 @@ export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
     .select('*, venue:venue_id(name), used_venue:used_venue_id(name)')
     .eq('venue_id', venueId).order('created_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []).map(mapRow);
+  const rows = (data ?? []).map(mapRow);
+  knownVenueVoucherIds.set(venueId, new Set(rows.map((r) => r.id)));
+  return rows;
 }
+
+/** 목록이 마지막으로 받은 이용권 id 집합 — DELETE 이벤트는 매장 필터가 안 돼(old 에는 PK 만) 남의 매장 삭제도 온다.
+ *  모르는 id 의 삭제는 무시해 전체 재조회를 막는다. 모르면(집합 없음·old 비어 있음) 다시 읽는다(= 예전 동작, 페일오픈).
+ *  ponytail: 모듈 캐시 — 목록 함수가 늘면 소비처가 predicate 를 넘기는 쪽으로. */
+const knownVenueVoucherIds = new Map<string, Set<string>>();
+const knownMyVoucherIds = new Map<string, Set<string>>();
+export const shouldReloadOnVoucherDelete = (known: Set<string> | undefined, p: { old?: { id?: string } | null }): boolean => {
+  const id = p?.old?.id;
+  return !id || !known || known.has(id);
+};
 
 /** #6(오너 결정 2026-09-29) — 대시보드 이용권 카드의 '전송' 수 = **실제로 보낸 장수**(store_vouchers 행).
  *  예전엔 업주가 장부에 손으로 적는 ledger_sessions.voucher_issued 였다(실제 전송과 무관한 수).
@@ -130,7 +142,10 @@ export function subscribeVenueVouchers(venueId: string, onChange: () => void): (
     .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `venue_id=eq.${venueId}` }, () => onChange())
     // F(2026-09-28) — 이용권 삭제(delete_voucher·일괄 삭제)는 DELETE 라 filter 구독에 안 온다(old 에는 id 만 실린다).
     //   삭제는 드문 업주 조작이라 매장 구분 없이 한 번 다시 읽는다 — 지운 이용권이 다른 기기 레일·관리 모달에 남는 것보다 싸다.
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'store_vouchers' }, () => onChange())
+    //   다른 매장 이용권 삭제에는 다시 읽지 않는다(내 목록 id 가 아니면 무시 — shouldReloadOnVoucherDelete).
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'store_vouchers' }, (p) => {
+      if (shouldReloadOnVoucherDelete(knownVenueVoucherIds.get(venueId), p)) onChange();
+    })
     .subscribe(resubscribeStatus(onChange));
   return () => { supabase.removeChannel(ch); };
 }
@@ -148,6 +163,10 @@ export function subscribeMyVouchers(onChange: () => void): () => void {
     ch = supabase
       .channel(`my_vouchers_${u.id}_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `holder_user_id=eq.${u.id}` }, () => onChange())
+      // DELETE 는 holder 필터가 안 먹어 위 구독에 안 온다 — 업주가 지운 이용권이 지갑에 남지 않게, 내가 가진 id 의 삭제만 다시 읽는다.
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'store_vouchers' }, (p) => {
+        if (shouldReloadOnVoucherDelete(knownMyVoucherIds.get(u.id), p)) onChange();
+      })
       .subscribe(resubscribeStatus(onChange));   // 2026-09-28 — 소켓 재연결 때 놓친 복원·사용을 한 번 다시 읽는다
   });
   return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
@@ -176,6 +195,7 @@ export async function listMyVouchers(): Promise<Voucher[]> {
     .eq('holder_user_id', uid).order('created_at', { ascending: false });
   if (error) throw error;
   const rows = (data ?? []).map(mapRow);
+  knownMyVoucherIds.set(uid, new Set(rows.map((r) => r.id)));
   // 매장명 보강 — venues_select 는 `approved = true or owner or admin` 이라
   // **미승인 매장이 발급한 이용권**은 위 임베드에서 venue 가 통째로 null 로 온다(2026-08-30 기준 미승인 2곳 실재).
   // '어느 매장이 준 것인가'(오너 지시 #19)가 그 경우에만 조용히 사라지므로, 빈 이름이 있을 때만 한 번 더 묻는다.
