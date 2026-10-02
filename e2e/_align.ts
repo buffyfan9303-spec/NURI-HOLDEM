@@ -4,6 +4,7 @@
 // 세 가지를 잰다. 셋 다 **글자 자체**를 잰다 — 상자(rect)는 줄 높이·패딩이 달라 어긋남을 가린다.
 //   F1 제목 + 오른쪽 액션: 보이는 button/a 마다 위로 4단계 안의 flex 행을 찾고, 그 행에서 액션보다 앞선 자식의
 //      굵은(≥600)·h1~h6 글자를 제목으로 잡아 **두 글자 줄 상자의 세로 중심 차**를 잰다(아이콘만 있는 액션은 svg 중심).
+//      제목이 2줄이거나, 제목 아래 설명 줄이 쌓인 카드 묶음(제목/설명 · 가운데 CTA)은 제목 줄 행이 아니라 재지 않는다.
 //   F2 items-baseline 행: 자식마다 첫 글자 앞에 0×0 inline-block 을 끼워 그 바닥(= 그 글자의 실제 기준선)을 읽고
 //      **기준선 퍼짐**을 잰다. 제목이 아이콘으로 시작하는 (inline-)flex 이면 행 기준선이 아이콘 바닥으로 잡혀 여기서 드러난다.
 //      측정용으로 끼운 요소는 즉시 원상 복구한다.
@@ -74,6 +75,10 @@ export async function measureAlign(page: Page, f3Selectors: string[] = []): Prom
         if (tn.parentElement!.closest(EXCLUDE)) break;
         const tb = box(tn);
         if (!tb || tb.lines > 1) break;
+        // 제목 아래에 설명 줄이 **쌓인 묶음**(카드: 제목 / 설명 · 오른쪽 CTA)은 제목 줄이 아니라 카드 가운데에 버튼을
+        //   두는 것이 의도된 문법이다 — 재지 않는다. (실측 2026-10-02: 내 매장 '할 일' 카드는 정오 이후에만 떠서
+        //   이 구분 없이 재면 시각에 따라 결과가 갈렸다.) 제목 '줄' 끼리 비교하는 행만 남긴다.
+        if (texts(tk).some((n) => n !== tn && (box(n)?.top ?? -1) >= tb.bottom - 1)) break;
         if (ar.left < tk.getBoundingClientRect().left) break;
         if (ar.bottom < tb.top || ar.top > tb.bottom) break;
         const an = texts(act)[0];
