@@ -436,6 +436,7 @@ describe('변이 전수 — 영향 행수 확인 계약', () => {
     const keys = sites.filter((s) => s.checked).map((s) => s.key);
     expect(keys).toContain('src/api/auth.ts::approveOwner::update:profiles');
     // reports.updateReportStatus 는 20261002a 로 없어졌다 — 신고 결정은 RPC admin_decide_report(reportDecide.contract.test.ts).
-    expect(keys).toContain('src/api/community.ts::deletePost::delete:community_posts');
+    // deletePost 는 2026-10-02 첫 화면 예산 분할로 communityCore.ts 로 옮겨 갔다(community.ts 가 재수출 — 이름·동작 동일).
+    expect(keys).toContain('src/api/communityCore.ts::deletePost::delete:community_posts');
   });
 });

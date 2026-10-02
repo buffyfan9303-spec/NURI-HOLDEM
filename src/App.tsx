@@ -132,10 +132,13 @@ import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner, adminWithdrawUser } from './api/auth';
 import { bumpScheduleView,
   getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, rejectSchedule, subscribeSchedules, type SchedulePatch } from './api/schedules';
+// ⚠ api/community 가 아니라 api/communityCore 에서 받는다 — community.ts(그룹·딜러·외치기·상점·관리자 포함 2200줄)를
+//   정적으로 물면 파일 전체가 첫 화면 청크에 실린다(실측 2026-10-02: 34.6KB raw / 8.5KB gz, entry 266.9/267).
+//   여기에 새 커뮤니티 함수가 필요하면 communityCore 로 옮기거나 지연 import 로 받는다(criticalPathGraph 계약이 막는다).
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
-} from './api/community';
+} from './api/communityCore';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIntent';
@@ -150,7 +153,7 @@ import { myUnreadMessageCount } from './api/messages';
 import { supabase } from './lib/supabase';
 import type { User, UserUpdateResult } from './api/auth';
 import type { Schedule } from './api/schedules';
-import type { Venue, Comment, CommunityPost, PostCategory } from './api/community';
+import type { Venue, Comment, CommunityPost, PostCategory } from './api/communityCore';
 import type { AppNotification } from './api/notifications';
 import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 
