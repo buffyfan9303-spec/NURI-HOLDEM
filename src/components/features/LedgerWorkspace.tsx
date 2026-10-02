@@ -72,7 +72,27 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       wasOpen.current = true;
       // [이용권 확인] 이 검색칸에 준 포커스는 지킨다 — 그쪽 rAF 가 먼저 돌므로 판정도 rAF 안에서 한다.
       requestAnimationFrame(() => { if (box && !box.contains(document.activeElement)) box.querySelector<HTMLElement>('[data-voucher-collapse]')?.focus({ preventScroll: true }); });
-      const onDown = (e: PointerEvent) => { if (box && !box.contains(e.target as Node)) setRailOpen(false); };
+      // C1 d(2026-10-02, review-mystore-b1-1002 §3-3) — 레일을 펼친 채 표의 빈 + 칸을 누르면 레일이 닫히면서 **결제창까지** 열렸다(클릭 관통).
+      //   표 안을 누른 첫 클릭은 '레일 닫기'로만 쓴다(이어지는 click 한 번을 삼킨다). 표 위 도구 줄·사이드 메뉴 등 표 밖은 종전대로 바로 동작한다.
+      const onDown = (e: PointerEvent) => {
+        const t = e.target as Element;
+        if (!box || box.contains(t)) return;
+        setRailOpen(false);
+        if (!t.closest?.('table') || !colRef.current?.contains(t)) return;
+        // C1 후속(review-mystore-c1-1002 §2-d) — 삼키는 건 **이 누름의 click** 하나뿐이다. 터치 스와이프는 click 없이 pointercancel 로
+        //   끝나서 리스너가 800ms 남아 바로 다음 탭(+ 칸)을 먹었다. 이 누름이 취소되거나 다음 누름이 시작되면 즉시 뗀다.
+        //   (다음 pointerdown 리스너는 지금 디스패치 중에 붙여도 이번 이벤트엔 불리지 않는다 — DOM 은 리스너 목록을 미리 복사한다.)
+        const off = () => {
+          document.removeEventListener('click', eat, true);
+          document.removeEventListener('pointercancel', off, true);
+          document.removeEventListener('pointerdown', off, true);
+        };
+        const eat = (c: MouseEvent) => { c.preventDefault(); c.stopPropagation(); off(); };
+        document.addEventListener('click', eat, true);
+        document.addEventListener('pointercancel', off, true);
+        document.addEventListener('pointerdown', off, true);
+        setTimeout(off, 800);
+      };
       document.addEventListener('pointerdown', onDown, true);
       return () => document.removeEventListener('pointerdown', onDown, true);
     }

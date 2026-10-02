@@ -154,10 +154,10 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
             {/* 🔴 비용 구조를 숨기지 않는다 — 승인 시 **매장 발행 한도에서 빠진다**(오너 결정).
                 이걸 안 적으면 업주는 '공짜로 더 주는 것' 으로 이해하고, 나중에 한도가 줄어 있는 걸
                 보고 사고로 받아들인다. */}
+            {/* C1 E-1(2026-10-02) — 3줄 → 2줄. 한도 차감·보류·증액 경로·비용 없음 네 사실은 그대로 둔다. */}
             <p className="mt-1 font-normal leading-relaxed text-ink-muted">
-              승인되면 이 장수만큼 <b className="text-ink-secondary">매장 발행 한도에서 빠집니다.</b>
-              한도가 모자라면 승인이 보류되니, 그때는 <b className="text-ink-secondary">이용권 · QR</b> 탭에서
-              한도 증액을 요청해 주세요. <b className="text-ink-secondary">비용은 없습니다.</b>
+              승인되면 이 장수만큼 <b className="text-ink-secondary">매장 발행 한도에서 빠져요</b>(<b className="text-ink-secondary">비용 없음</b>).
+              모자라면 승인이 보류되니 <b className="text-ink-secondary">이용권 · QR</b> 탭에서 증액을 요청하세요.
             </p>
           </div>
 

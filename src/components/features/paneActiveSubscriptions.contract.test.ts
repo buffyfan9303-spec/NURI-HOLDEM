@@ -22,7 +22,8 @@ describe('숨은 keep-alive 판은 실시간 채널을 놓는다', () => {
 
   it('🔴 StaffSchedule: subscribeStaffSchedule 가 active 로 막히고 deps 에 있다', () => {
     const c = read('StaffSchedule.tsx');
-    expect(c).toMatch(/StaffSchedule\(\{ venueId, active = true \}/);
+    // C1 T-1(2026-10-02) — 아코디언용 bare 프롭이 뒤에 붙었다. active 기본값 true 계약은 그대로.
+    expect(c).toMatch(/StaffSchedule\(\{ venueId, active = true(, bare = false)? \}/);
     expect(c).toMatch(/if \(!active\) return; reload\(\); return subscribeStaffSchedule\(venueId, reload\); \}, \[venueId, from, to, active\]\)/);
   });
 
@@ -31,5 +32,7 @@ describe('숨은 keep-alive 판은 실시간 채널을 놓는다', () => {
     expect(c).toMatch(/<SeasonPanelM [^>]*active=\{tabActive && renderSection === 'settings' && renderSettingsTab === 'page'\}/);
     // 2026-09-30 — 출근 스케줄은 지연 청크(StaffScheduleL)로 옮겼다(청크 예산). 호출부 계약은 그대로다.
     expect(c).toMatch(/<StaffScheduleL venueId=\{venueId\} active=\{active\} \/>/);
+    // C1 T-1 — 직원 관리 아코디언 안 호출부도 active 를 넘긴다.
+    expect(c).toMatch(/<StaffScheduleL venueId=\{venueId\} active=\{active\} bare \/>/);
   });
 });

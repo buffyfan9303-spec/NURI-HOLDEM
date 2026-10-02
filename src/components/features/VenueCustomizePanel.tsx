@@ -275,7 +275,9 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
         )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-muted">nuriholdem.com/s/</span>
+        {/* C1 P-2(2026-10-02) — 390 에서 주소 앞부분+입력칸이 한 줄을 다 써 [중복 확인·저장]이 다음 줄 왼쪽에 따로 떨어졌다(정렬 차 47px).
+            좁은 폭(<640)은 주소 앞부분을 윗줄로 올리고 입력칸과 버튼 둘을 한 줄에 둔다. */}
+        <span className="w-full shrink-0 text-xs font-semibold tabular-nums text-ink-muted sm:w-auto">nuriholdem.com/s/</span>
         <input value={slug}
           onChange={(e) => { setSlug(normalize(e.target.value)); setCheck('idle'); }}
           placeholder="예: roti-arena" maxLength={20}
@@ -517,9 +519,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
               </button>
             )}
           </div>
+          {/* C1 P-3(2026-10-02) — 3줄(110자) → 2줄. 상한·잘림·최대 등수 세 사실은 그대로. */}
           <p className="text-2xs text-ink-muted">
-            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 집계 순간에 같은 상한으로 잘라내기 때문에,
-            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 집계는 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
+            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span> · 최대 {MAX_PLACEMENT_ROWS}등까지. 더 큰 값은 <span className="font-semibold">집계 때 {PLACEMENT_POINT_MAX}점으로 잘려요.</span>
           </p>
           <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
         </section>

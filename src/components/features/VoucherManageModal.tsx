@@ -47,8 +47,11 @@ function fmtDateTime(iso: string | null): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssueProp, active: shown = true }: {
+export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssueProp, active: shown = true, wide = false }: {
   venueId: string;
+  /** C1 V-2(2026-10-02) — 내 매장 판(≥1440)에서 이용 내역(1열 목록)이 판 전폭이라 행 오른쪽 600px 가 비고 전송 폼은 그 아래였다.
+   *  wide 면 이용 내역 · 전송을 두 칸으로 나란히 둔다. 모달(좁은 창)은 종전 한 줄 흐름. */
+  wide?: boolean;
   prefillReceiver?: string;
   /** 판이 화면에 보이는가 — 내 매장 keep-alive 로 숨은 동안엔 실시간 채널을 놓는다(모달은 기본 true) */
   active?: boolean;
@@ -484,6 +487,7 @@ ${cards}
 
   return (
     <div className="space-y-3">
+      <div className={wide ? undefined : 'space-y-3'} style={wide ? { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 12.75, alignItems: 'start' } : undefined}>
       {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
       <div className="rounded-aura border card-aura p-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -775,6 +779,7 @@ ${cards}
       ) : (
         <p data-testid="voucher-issue-owner-badge" className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
       )}
+      </div>
 
       {/* 2) QR 코드 — 접기 */}
       {canIssue && qr && (
