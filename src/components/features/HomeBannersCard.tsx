@@ -6,7 +6,7 @@
 //
 // AdminTab.tsx 가 아니라 별도 파일인 이유: AdminTab 은 이미 1800줄이고, 이 카드는 자기 API 만
 // 쓰는 자기완결 블록이다. AdminTab 은 lazy 청크라 import 한 줄로 같은 번들에 들어간다.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,9 +55,15 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   const today = kstToday();
 
   const [loadErr, setLoadErr] = useState<unknown>(null);
+  // 조회 순번 — 지난 값으로 먼저 그리니 재조회 중에도 수정·삭제·순서 변경을 누를 수 있다. 그 전에 나간 조회가 뒤늦게 오면
+  //   방금 바꾼 목록을 옛 목록으로 덮었다(B2 후속 · 독립 검토 ⑤-b). 가장 최근에 시작한 조회(또는 낙관적 반영)만 그린다.
+  const rowsGen = useRef(0);
   const reload = useCallback(() => {
+    const g = ++rowsGen.current;
     setLoadErr(null);
-    getAllHomeBanners().then((r) => { last.rows = r; setRows(r); }).catch(setLoadErr);   // 재조회 중에는 이전 목록을 유지한다(깜빡임 방지)
+    getAllHomeBanners()   // 재조회 중에는 이전 목록을 유지한다(깜빡임 방지)
+      .then((r) => { if (g !== rowsGen.current) return; last.rows = r; setRows(r); })
+      .catch((e: unknown) => { if (g === rowsGen.current) setLoadErr(e); });
   }, []);
   useEffect(() => { reload(); }, [reload]);
   /** 등록·수정·삭제·순서변경이 끝나면 홈 캐러셀도 같이 갱신한다(공지 패널과 같은 배선).
@@ -154,6 +160,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
     if (j < 0 || j >= rows.length) return;
     const next = [...rows];
     [next[i], next[j]] = [next[j], next[i]];
+    rowsGen.current++;                   // 이 앞에 나간 조회가 늦게 와도 낙관적 반영을 덮지 않는다
     setRows(next);                       // 낙관적 반영 — 실패하면 reload 가 되돌린다
     setBusy(rows[i].id);
     try {
@@ -400,10 +407,17 @@ function useSlideSetting(settingKey: string, label: string, onChanged?: () => vo
   const [server, setServer] = useState<string | null | undefined>(() => last.settings.get(settingKey)); // 없으면 undefined = 아직 모름
   const [loadErr, setLoadErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  // 조회·저장 공용 순번 — 재진입 때 지난 값으로 스위치가 바로 눌리는데, 저장 전에 나간 재진입 조회가 저장 뒤 조회보다 늦게 오면
+  //   그 옛 값이 화면과 last.settings 를 덮어 '숨김'으로 되돌아갔다(서버는 '노출 중'. B2 후속 · 독립 검토 ⑤-b).
+  //   마지막에 시작한 조회·저장의 응답만 받는다.
+  const gen = useRef(0);
 
   const load = useCallback(() => {
+    const g = ++gen.current;
     setLoadErr(null);
-    getAppSetting(settingKey).then((v) => { last.settings.set(settingKey, v); setServer(v); }).catch(setLoadErr);
+    getAppSetting(settingKey)
+      .then((v) => { if (g !== gen.current) return; last.settings.set(settingKey, v); setServer(v); })
+      .catch((e: unknown) => { if (g === gen.current) setLoadErr(e); });
   }, [settingKey]);
   useEffect(() => { load(); }, [load]);
 
@@ -412,12 +426,12 @@ function useSlideSetting(settingKey: string, label: string, onChanged?: () => vo
 
   const apply = async () => {
     const next = !on;
+    const g = ++gen.current;   // 이 앞에 나간 조회는 이제 버린다
     setBusy(true);
     try {
       await setAppSetting(settingKey, next ? 'on' : 'off');
       const v = await getAppSetting(settingKey);
-      last.settings.set(settingKey, v);
-      setServer(v);
+      if (g === gen.current) { last.settings.set(settingKey, v); setServer(v); }
       onChanged?.();   // 홈 배너 피드를 다시 불러 화면이 바로 따라오게 한다
       toast.show(next ? `${label} 노출을 켰습니다` : `${label} 노출을 껐습니다`, 'success');
     } catch (e) {

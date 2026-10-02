@@ -30,7 +30,7 @@ import LocationPrivacyCard from './LocationPrivacyCard';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import { getMyLocationConsent } from '../../api/locationPrivacy';
-import { warm, takeWarm } from '../../lib/warmFetch';
+import { warm, takeWarm, dropWarm } from '../../lib/warmFetch';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
 import { coverImage, PROFILE_COVERS, COVER_LABEL, type ProfileCover } from '../../lib/profileCover';
@@ -100,6 +100,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     if (!open || !uid || tab === 'security') return;
     warm(`legal-consents:${uid}`, () => getMyLegalConsents(20));
     warm(`location-consent:${uid}`, getMyLocationConsent);
+    // 닫힐 때(·계정이 바뀔 때) 안 쓴 값을 버린다 — 미리 받은 값은 **이번 열림**에서만 쓴다. 남겨 두면 다음에 보안 탭으로
+    //   바로 열 때(본인인증 안내 등) 그 사이 바뀐 동의 상태 대신 옛 값이 그려지고 다시 받지도 않았다(B2 후속 · 독립 검토 ④-b).
+    return () => { dropWarm(`legal-consents:${uid}`); dropWarm(`location-consent:${uid}`); };
   }, [open, uid]); // eslint-disable-line react-hooks/exhaustive-deps -- 여는 순간 한 번(탭 이동마다 다시 받지 않는다)
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────

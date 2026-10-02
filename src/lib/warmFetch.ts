@@ -14,6 +14,10 @@ export function warm<T>(key: string, load: () => Promise<T>): void {
   slots.set(key, s as Slot<unknown>);
 }
 
+/** 미리 받은 값을 버린다 — 연 쪽이 닫힐 때 부른다. 안 쓰고 남은 칸이 나중에 다른 진입로에서 묵은 값으로 넘겨지지 않게
+ *  (B2 후속: 대시보드로 열고 보안 탭은 안 간 채 닫은 뒤 서버 동의가 바뀌고, 보안으로 바로 열면 옛 '미동의'가 보였다). */
+export function dropWarm(key: string): void { slots.delete(key); }
+
 export function takeWarm<T>(key: string): Slot<T> | null {
   const s = slots.get(key) as Slot<T> | undefined;
   if (!s) return null;

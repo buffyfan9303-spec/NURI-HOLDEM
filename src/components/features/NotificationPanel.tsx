@@ -374,6 +374,13 @@ export default function NotificationPanel({
         ref={panelRef}
         role="dialog"
         aria-label="알림"
+        // 글을 쓰던 칸에서 Esc 는 칸만 벗어난다(창을 닫으면 쓰던 쪽지·검색어가 같이 사라진다 — B2 후속 · 독립 검토 ① 관찰).
+        //   preventDefault 를 보면 전역 backstack 의 Esc 가 이 겹을 닫지 않는다(backstack.ts handleEscape). 한 번 더 누르면 닫힌다.
+        onKeyDown={(e) => {
+          const t = e.target;
+          if (e.key !== 'Escape' || e.nativeEvent.isComposing) return;
+          if ((t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) && t.value) { e.preventDefault(); t.blur(); }
+        }}
         className={[
           // 모바일: 화면 우측 1rem 안쪽으로 고정, 헤더 바로 아래(노치 safe-area만큼 헤더가 늘어나므로 포함)
           'fixed top-[calc(var(--header-now)+env(safe-area-inset-top)+0.5rem)] right-page-x',
