@@ -24,6 +24,7 @@ import { serverNow } from '../../../lib/serverTime';
 import { useResyncOnWake } from '../../../lib/realtimeResync';
 import { useClockSecond } from '../../../lib/clockTick';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
+import { msgOf } from '../../../lib/dbError';
 
 // levelNumberAt · formatCountdown 은 src/lib/clockLevel.ts 하나뿐이다.
 
@@ -52,12 +53,12 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
       error: (e, back) => {
         setState((cur) => (cur && cur.venueId === back.venueId && cur.gameSeq === back.gameSeq ? back : cur));
         reloadAfterSaveRef.current = true;
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = String((e as { message?: unknown } | null)?.message ?? e); // 권한 판별용 — 화면에는 msgOf 만 그린다
         if (/permission|policy|403|denied|row-level|권한/i.test(msg)) {
           setReadOnly(true);
           toastRef.current.show('이 매장의 클락을 조작할 권한이 없어요. 매장 운영자·직원 계정으로 로그인해 주세요', 'error');
         } else {
-          toastRef.current.show(`저장에 실패했어요. ${msg}`, 'error');
+          toastRef.current.show(`저장에 실패했어요. ${msgOf(e, '잠시 후 다시 시도해 주세요')}`, 'error');
         }
       },
       idle: () => { if (reloadAfterSaveRef.current) { reloadAfterSaveRef.current = false; loadRef.current(); } },

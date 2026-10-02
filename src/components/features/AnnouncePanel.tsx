@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getVenueAnnounceStatus, sendVenueAnnouncement, type AnnounceStatus } from '../../api/announcements';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
@@ -36,7 +37,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
       const n = await sendVenueAnnouncement(venueId, title.trim(), message.trim());
       toast.show(`${n}명에게 발송했습니다`, 'success');
       setTitle(''); setMessage(''); load();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '발송 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '발송 실패'), 'error'); }
     finally { setBusy(false); }
   };
 

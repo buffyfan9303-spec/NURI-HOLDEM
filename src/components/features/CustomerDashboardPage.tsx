@@ -657,7 +657,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                   );
                 })}</ul>}
             {resv.some((r) => r.date >= new Date().toLocaleDateString('en-CA')) && (
-              <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀면(PC는 마우스 올리면) 취소할 수 있습니다.</p>
+              <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀어(PC는 마우스 올려) 취소</p>
             )}
             </div>
           </section>
@@ -685,7 +685,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             )
               : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={() => reload(true)} compact />
               : !user?.nickname ? <EmptyState icon={<Icon name="trophy" />} title="프로필에서 닉네임을 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">닉네임 설정하기</button>} />
-              : ranks.length === 0 ? <EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." />
+              : ranks.length === 0 ? <EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장이 순위를 등록하면 표시됩니다" />
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => { const vid = onOpenVenue ? venueIdByName.get(r.venueName) : undefined; return (
                   <li key={i}>
@@ -830,7 +830,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
               ring-conic: 정적 conic 시그니처 보더(홈 밖 1곳 규율) — border 유틸 대신 자체 1px 투명 보더 사용 */}
           <section className="ring-conic rounded-card bg-surface-low p-5 text-center">
             <p className="text-base font-extrabold text-ink-primary">전국 홀덤을 한 곳에서</p>
-            <p className="mt-1 text-xs leading-relaxed text-ink-secondary">대회 일정·매장 커뮤니티·GTO 학습까지<br />로그인하면 예약·이용권·전적이 모입니다</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-secondary">로그인하면 예약·이용권·전적이 모입니다</p>
             <div className="mt-4 grid grid-cols-3 gap-2">
               {([['calendar', '대회 일정'], ['users', '매장 커뮤니티'], ['target', 'GTO 학습']] as const).map(([icon, label]) => (
                 <div key={icon} className="flex flex-col items-center gap-1.5 rounded-input bg-surface-high/50 px-1 py-3">
@@ -1249,7 +1249,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
     return (
       <section className="rounded-aura border card-aura p-3">
         <div className="flex items-center gap-2"><Tile icon="gift" tone="fuchsia" /><h2 className="text-sm font-bold text-ink-primary">친구 초대</h2></div>
-        <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">닉네임을 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
+        <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">닉네임을 정하면 초대 링크가 생깁니다(프로필에서)</p>
       </section>
     );
   }

@@ -383,7 +383,7 @@ ${cards}
 </body></html>`);
       w.document.close();
       // QR 생성 실패도 빈 창을 남기지 않는다 — 먼저 열어 둔 대가다.
-    } catch (e) { w.close(); toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
+    } catch (e) { w.close(); toast.show(msgOf(e, '인쇄 준비 실패'), 'error'); }
   };
   const issue = async () => {
     if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 전송 이유를 적어 주세요', 'error'); return; }
@@ -403,7 +403,7 @@ ${cards}
       setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]); setReasonNote('');
       reload(); reloadQuota();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '전송 실패';
+      const msg = msgOf(e, '전송 실패');
       toast.show(msg, 'error');
       setConfirmOpen(false); // 실패 시 확인 화면에 머무르지 않고 조건을 다시 고칠 수 있게 되돌린다
       reloadQuota();
@@ -507,7 +507,7 @@ ${cards}
           // 실패가 빈 상태보다 먼저. 이미 받아 둔 목록이 있으면(재조회 실패) 보던 내역은 그대로 둔다.
           <LoadErrorCard error={listErr} what="이용권 내역" onRetry={reload} compact />
         ) : feed.length === 0 ? (
-          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 전송·사용되면 즉시 표시됩니다.</p>
+          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다</p>
         ) : (
           /* 20줄 창 = 줄 높이 h-7(1.75rem) × 20 + 줄 사이 space-y-1(0.25rem) × 19. 줄 높이를 고정해야 창이 정확히 20줄이다
              (글자 줄높이에 맡기면 폰트·배지에 따라 19.x 줄이 된다 — 실측 종전 28.69px/줄). */
@@ -1084,7 +1084,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
       load();
       onGranted();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '요청하지 못했습니다', 'error');
+      toast.show(msgOf(e, '요청하지 못했습니다'), 'error');
     } finally { setBusy(false); }
   };
 

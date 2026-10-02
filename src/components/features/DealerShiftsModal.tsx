@@ -144,7 +144,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
           </ul>
         )}
         {pay.err && <p role="alert" className="text-2xs text-danger-light">{pay.err} — 급여 명세를 계산하지 않습니다.</p>}
-        <p className="text-2xs text-ink-muted">급여 = 근무 시간(분 단위) × 시급. 종료가 시작보다 빠르면 익일 근무로 계산됩니다. 「인건비 관리」의 급여 계산 설정에서 켠 항목만 더하고, 합계는 급여 정산 화면과 같습니다. 참고용 계산이며 실제 지급액은 직접 확인하세요.</p>
+        <p className="text-2xs text-ink-muted">급여 = 근무 시간(분) × 시급 · 종료가 시작보다 빠르면 익일 근무 · 「인건비 관리」에서 켠 항목만 더함 · 참고용(실제 지급액은 직접 확인)</p>
       </div>
     </Modal>
   );

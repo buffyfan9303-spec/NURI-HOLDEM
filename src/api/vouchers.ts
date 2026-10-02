@@ -15,6 +15,7 @@ import { currentUser } from './_session';
 import { resubscribeStatus } from '../lib/realtimeResync';
 import { makeSearchCache } from '../lib/searchCache';
 import { identityEnabled } from '../lib/identityFlag';
+import { msgOf } from '../lib/dbError';
 
 /** 킬스위치 OFF 에서 상태를 바꾸려는 시도를 막는다 — 놓친 진입점이 조용히 발급하는 일이 없게. */
 function assertVoucherOn(): void {
@@ -283,7 +284,7 @@ async function bulk(ids: string[], fn: (id: string) => Promise<void>): Promise<B
   for (const id of ids) {
     try { await fn(id); ok += 1; }
     catch (e) {
-      const m = e instanceof Error ? e.message : '알 수 없는 오류';
+      const m = e instanceof Error ? e.message : '알 수 없는 오류'; // 원문 — 화면으로 가기 전에 humanize(손님)·ownerSafe(업주)가 거른다
       if (!reasons.includes(m)) reasons.push(m);
     }
   }
@@ -300,8 +301,8 @@ async function bulk(ids: string[], fn: (id: string) => Promise<void>): Promise<B
  * 한글이 들어 있으면 그대로 통과시킨다 — 그건 우리가 RAISE EXCEPTION 으로 쓴 문구라 그 자체가 정본이다
  * (예: '유효기간이 지난 이용권입니다 (만료 2026-09-01)').
  *
- * ⚠ 업주 경로(revokeVouchers·deleteVouchers)에는 걸지 않는다. 그쪽은 "실패 사유를 그대로 들고 나와야
- *   사장님이 다음 행동을 정할 수 있다"가 이 파일의 설계이고, 사장님은 원문을 봐야 문의를 넣을 수 있다.
+ * ⚠ 업주 경로(revokeVouchers·deleteVouchers)에는 걸지 않는다 — 손님용 안내 문장(QR 다시 스캔 등)이 사장님에게는 틀린 말이다.
+ *   업주 경로는 아래 ownerSafe(msgOf)로 거른다: 서버의 한국어 사유는 그대로, SQL·식별자 원문만 막는다(2026-10-03 D1 — 종전엔 원문 그대로였다).
  *   손님 경로(redeemMyVouchersBy*)에만 건다.
  */
 export function voucherErrorText(raw: string): string {
@@ -320,6 +321,9 @@ export function voucherErrorText(raw: string): string {
 }
 /** 손님 화면으로 나가는 BulkResult 의 사유만 사람 말로 바꾼다(장수는 그대로). */
 const humanize = (r: BulkResult): BulkResult => ({ ...r, reasons: r.reasons.map(voucherErrorText) });
+/** 업주 화면(전송 취소·삭제)으로 나가는 사유 — 2026-10-03 D1. 서버가 쓴 한국어 사유(어떤 이용권이 왜: '이미 사용한 이용권입니다' 등)는
+ *  그대로 두고, SQL·제약·테이블 이름 원문만 msgOf 가 막는다(보안 표준 6). 원문은 msgOf 가 콘솔에 남긴다. */
+export const ownerSafe = (r: BulkResult): BulkResult => ({ ...r, reasons: [...new Set(r.reasons.map((m) => msgOf({ message: m })))] });
 
 /**
  * 일괄 회수 — 서버 RPC 한 번. 손님에게 가는 '회수되었습니다' 알림도 한 통으로 묶인다.
@@ -332,14 +336,14 @@ export async function revokeVouchers(rawIds: string[]): Promise<BulkResult> {
   if (IS_MOCK || ids.length === 0) return { ok: 0, failed: 0, reasons: [] };
   const { data, error } = await supabase.rpc('revoke_vouchers', { p_ids: ids });
   if (error) {
-    if (error.code === 'PGRST202') return bulk(ids, revokeVoucher); // 구 DB — 단건 폴백
-    return { ok: 0, failed: ids.length, reasons: [error.message] };
+    if (error.code === 'PGRST202') return bulk(ids, revokeVoucher).then(ownerSafe); // 구 DB — 단건 폴백
+    return { ok: 0, failed: ids.length, reasons: [msgOf(error)] };
   }
   const r = (data ?? {}) as { ok?: number; failed?: number; reasons?: string[] };
-  return { ok: Number(r.ok) || 0, failed: Number(r.failed) || 0, reasons: r.reasons ?? [] };
+  return ownerSafe({ ok: Number(r.ok) || 0, failed: Number(r.failed) || 0, reasons: r.reasons ?? [] });
 }
 /** 일괄 삭제 — 삭제는 알림이 없어 단건 루프로 충분하다(부분 성공 사유만 모은다) */
-export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher);
+export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher).then(ownerSafe);
 
 // 회수(사용): 발급 매장 QR 스캔 — 그 매장에서만 사용 가능. 매장명 반환.
 // ⚠ V06(2026-09-12) — gameSeq 는 QR 이 어느 게임(메인/사이드) 테이블의 것인지를 서버까지 들고 간다.

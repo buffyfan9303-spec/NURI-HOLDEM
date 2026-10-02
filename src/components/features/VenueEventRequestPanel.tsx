@@ -23,6 +23,7 @@ import {
   requestVenueEvent, myVenueEventRequests,
   type VenueEventKind, type VenueEventRequest,
 } from '../../api/venueEvents';
+import { msgOf } from '../../lib/dbError';
 
 /** 경품 장수 빠른 선택. 직접 입력도 함께 둔다 — 매장마다 규모가 다르다. */
 const COUNT_PRESETS = [10, 30, 50, 100, 300] as const;
@@ -87,7 +88,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
     } catch (e) {
       // 서버 거절 문구를 그대로 보여 준다 — '중복 신청'·'지난 날짜'·'권한 없음'이 각각 다른
       // 조치를 요구하는데 '실패'로 뭉개면 업주가 무엇을 고쳐야 할지 알 수 없다.
-      toast.show(e instanceof Error ? e.message : '보내지 못했습니다', 'error');
+      toast.show(msgOf(e, '보내지 못했습니다'), 'error');
     } finally { setBusy(false); }
   };
 

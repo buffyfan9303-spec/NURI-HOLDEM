@@ -7,6 +7,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import Icon from '../atoms/Icon';
 import { goSubTab } from '../../lib/subTabTransition';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 type Range = 'all' | '7' | '30' | '90';
 /** 기간 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
@@ -46,12 +47,12 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const doLink = async (alias: string, t: TransferTarget) => {
     setBusy(true);
     try { await linkCustomerAlias(venueId, alias, t.id); toast.show(`'${alias}' → ${t.display} 연결됨`, 'success'); setLinking(null); setMq(''); setMcands([]); reloadAliases(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '연결 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '연결 실패'), 'error'); }
     finally { setBusy(false); }
   };
   const doUnlink = async (alias: string) => {
     try { await unlinkCustomerAlias(venueId, alias); toast.show('연결 해제됨', 'info'); reloadAliases(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-ink-primary">고객 분석</h3>
-          <p className="text-2xs text-ink-muted">방문했던 손님 전체 — 장부 기준 행동 통계 ({rows.length}명)</p>
+          <p className="text-2xs text-ink-muted">장부 기준 손님 통계 ({rows.length}명)</p>
         </div>
       </div>
 

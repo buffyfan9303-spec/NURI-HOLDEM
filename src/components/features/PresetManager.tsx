@@ -12,6 +12,7 @@ import BlindLevelsEditor from './clock/BlindLevelsEditor';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 const EMPTY: GamePresetData = {
   title: '', gameType: '', buyIn: 0, startStack: 0, rebuyStack: 0, addonStack: 0, addonCost: 0,
@@ -93,12 +94,12 @@ export default function PresetManager({ venueId, active = true }: { venueId: str
     if (!editing.name.trim()) { toast.show('프리셋 이름을 입력하세요', 'error'); return; }
     setBusy(true);
     try { await saveGamePreset(venueId, editing.name, editing.data, editing.id); toast.show('프리셋을 저장했습니다', 'success'); setEditing(null); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); } finally { setBusy(false); }
+    catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); } finally { setBusy(false); }
   };
   const remove = async (p: GamePreset) => {
     if (!window.confirm(`'${p.name}' 프리셋을 삭제하시겠습니까?`)) return;
     try { await deleteGamePreset(p.id); toast.show('삭제했습니다', 'info'); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
   };
 
   const set = (patch: Partial<GamePresetData>) => setEditing((e) => e ? { ...e, data: { ...e.data, ...patch } } : e);

@@ -129,6 +129,10 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   }, [saver, bumpClockReq]);
   // L-06(audit-link-1002) — 매장 전환에 다시 마운트되지 않으므로 늦게 온 A 매장 응답은 run 이 버린다(공용 지점 lib/useVenueScope).
   const run = useVenueScope(venueId);
+  // 2026-10-03 D1 재검토 P2 — 누름 한 번 안의 await 뒤에 A 클로저의 switchGame/startClock 이 새 요청 번호를 받아 나가면
+  //   매장 전환 때 올린 번호에 걸리지 않아 B 화면에 A 클락이 떴다(관리자 전환 경로). await 뒤마다 지금 매장을 확인한다.
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId; // 렌더 중 대입 — effect 한 틱 사이 응답이 새지 않게
   const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
@@ -230,7 +234,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       }
       toast.show('클락을 시작 준비했습니다', 'success');
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '시작 실패'), 'error'); }
   };
 
   const endClock = async () => {
@@ -238,9 +242,11 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     const ended = state?.gameSeq ?? curGameSeqRef.current;
     try {
       await clearClockState(venueId, ended);
+      // D1 보안 재검토 R-1 — 그새 매장을 바꿨으면 switchGame(1) 이 A 메인 클락을 B 화면에 싣는다. 종료(쓰기)는 A 로 이미 갔다.
+      if (venueNow.current !== venueId) return;
       if (ended > 1) { toast.show('사이드 클락 종료 · 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
       else { setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
-    } catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '종료 실패'), 'error'); }
   };
   // 멀티 클락 오버뷰에서 다른 게임 탭 → 그 게임 클락으로 전환
   const switchGame = useCallback((g: number) => {
@@ -256,10 +262,12 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   const addSide = useCallback(async (nextSeq: number) => {
     // C8(2026-09-25): 기기 로컬 오늘이 아니라 **지금 대회의 장부 날짜**(자정 넘긴 대회면 어제) → 메인 클락 → KST 오늘.
     const mainClock = state?.sessionDate ? null : await getClockState(venueId, 1).catch(() => null);
+    if (venueNow.current !== venueId) return;
     const linkDate = sideGameDate(state, mainClock);
     if (window.confirm(`사이드${nextSeq - 1} 게임을 장부에도 만들고 클락을 시작할까요?\n\n확인 = 장부 사이드 게임 생성 + 클락 / 취소 = 클락만`)) {
       try {
         const main = await getLedgerSession(venueId, linkDate, 1);
+        if (venueNow.current !== venueId) return; // 그새 매장을 바꿨다 — A 에 사이드 장부를 만들지도, B 화면을 A 클락으로 돌리지도 않는다
         // ⚠ P1(2026-09-14) — 오늘 메인 장부가 없으면 getLedgerSession 은 **빈 세션**을 돌려준다(ledger.ts:637).
         //   그걸 그대로 복사하면 **단가 0원짜리 사이드 장부**가 생기고, 그 0원 게임이 장부 목록과
         //   venue_today_games(출석 QR)에까지 나타난다. 단가 0 은 정산에서 엔트리 분모가 0 이라 의미도 없다.
@@ -278,13 +286,15 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
           title: `${(main.title || '게임').trim()} 사이드${nextSeq - 1}`,
         });
         toast.show(`사이드${nextSeq - 1} 게임을 장부에 생성했어요`, 'success');
-      } catch (e) { toast.show(e instanceof Error ? e.message : '사이드 게임 생성 실패', 'error'); }
+      } catch (e) { toast.show(msgOf(e, '사이드 게임 생성 실패'), 'error'); }
     }
+    if (venueNow.current !== venueId) return;
     switchGame(nextSeq);
   }, [venueId, switchGame, toast, state]);
   // 빈 슬롯 1탭 시작 — 메인(또는 현재) 클락 설정을 복사해 그 게임 클락을 오늘 장부에 연동하여 바로 시작
   const quickStart = async (g: number) => {
     const main = await getClockState(venueId, 1).catch(() => null);
+    if (venueNow.current !== venueId) return;
     const base = main?.config ?? state?.config ?? defaultClockConfig();
     // 사이드는 제목에 접미 강제 — 같은 event_name 으로 END 순위를 저장하면
     // 메인 대회 순위·점수 지급이 통째로 교체되는 사고가 났다(save 가 (날짜,이벤트) 단위 replace)
@@ -514,20 +524,20 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       //   업주 계정에서는 **항상** 실패하는데 화면은 이미 바뀌어 저장된 것처럼 보였다
       //   (새로고침하면 원래대로 — '바꿨는데 안 바뀐다' 의 정체, 2026-09-11 점검).
       setAdSize(prev);
-      toast.show(e instanceof Error ? e.message : '크기를 저장하지 못했습니다 (운영자만 변경할 수 있어요)', 'error');
+      toast.show(msgOf(e, '크기를 저장하지 못했습니다 (운영자만 변경할 수 있어요)'), 'error');
     }
   };
   const uploadAd = async (file: File | null) => {
     if (!file || !user) return;
     setAdBusy(true);
     try { const url = await uploadPoster(user.id, file); await setAppSetting(CLOCK_AD_KEY, url); setAdImg(url); publishClockSignal('ad'); toast.show('클락 광고를 등록했습니다(전체 클락 적용)', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '업로드 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '업로드 실패'), 'error'); }
     finally { setAdBusy(false); }
   };
   const removeAd = async () => {
     if (!confirm('클락 광고를 삭제할까요?')) return;
     try { await setAppSetting(CLOCK_AD_KEY, ''); setAdImg(null); publishClockSignal('ad'); toast.show('광고를 삭제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
@@ -738,7 +748,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌에 반영됩니다`, 'success');
       setFinishRows(null);
       if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setFinishBusy(false); }
   };
 
@@ -1444,7 +1454,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       }
       toast.show(`클락 프리셋 ${moved}개를 게임 프리셋으로 가져왔습니다${skipped ? ` · ${skipped}개는 같은 이름이 있어 건너뜀` : ''}`, 'success');
       setPickerKey((k) => k + 1); // 위 게임 프리셋 목록 즉시 갱신
-    } catch (e) { toast.show(e instanceof Error ? e.message : '변환 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '변환 실패'), 'error'); }
     finally { setConvertBusy(false); }
   };
   const filteredSessions = sessions.filter((s) => {
@@ -1488,7 +1498,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const delPreset = async (p: ClockPreset) => {
     if (!confirm(`"${p.name}" 프리셋을 삭제할까요?`)) return;
     try { await deleteClockPreset(p.id); onReloadPresets(); toast.show('삭제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   // §28 — 시상 문구·추가 페이지 글자에 금칙 표현이 있으면 시작 전에 막는다(서버 트리거가 같은 칸을 다시 막는다).

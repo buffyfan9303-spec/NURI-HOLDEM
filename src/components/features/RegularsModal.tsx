@@ -12,6 +12,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SkeletonList } from '../atoms/Skeleton';
 import { useToast } from '../atoms/Toast';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 export default function RegularsModal({ open, onClose, venueId, exclude = [], onSendVoucher }: {
   open: boolean; onClose: () => void; venueId: string; exclude?: string[];
@@ -137,7 +138,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
     if (savingBday) return;
     setSavingBday(true);
     try { await saveCustomerProfile(venueId, r.name, { birthday: bday || null }); setHasProfile(true); toast.show('생일을 저장했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '생일 저장에 실패했습니다', 'error'); }
+    catch (e) { toast.show(msgOf(e, '생일 저장에 실패했습니다'), 'error'); }
     finally { setSavingBday(false); }
   };
   // 손님 정보 삭제(오너 2026-09-25 DATA-RETENTION) — 실제 DELETE. 장부·쿠폰은 매장 기록이라 남는다(확인창에 그대로 말한다).
@@ -146,7 +147,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
     if (!window.confirm(`${r.name}님의 손님 정보(생일·연락처·메모·방문 집계)를 삭제하시겠습니까?\n장부·쿠폰 기록은 남습니다. 삭제하면 되돌릴 수 없습니다.`)) return;
     setDeleting(true);
     try { await deleteCustomerProfile(venueId, r.name); setBday(''); setHasProfile(false); toast.show('손님 정보를 삭제했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '손님 정보 삭제에 실패했습니다', 'error'); }
+    catch (e) { toast.show(msgOf(e, '손님 정보 삭제에 실패했습니다'), 'error'); }
     finally { setDeleting(false); }
   };
   // 서버에는 반영됐는데 재조회만 실패한 경우를 '실패'로 말하면 사장님이 같은 쿠폰을 또 발급한다 — 둘을 갈라 말한다.
@@ -168,7 +169,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
     if (!t) return;
     setCouponBusy(true);
     try { await issueCoupon(venueId, r.name, t); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '쿠폰 발급에 실패했습니다', 'error'); setCouponBusy(false); return; }
+    catch (e) { toast.show(msgOf(e, '쿠폰 발급에 실패했습니다'), 'error'); setCouponBusy(false); return; }
     await refreshCoupons('쿠폰을 발급했습니다');
     setCouponBusy(false);
   };
@@ -177,7 +178,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
     if (couponBusy) return;
     setCouponBusy(true);
     try { await setCouponStatus(id, 'used'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '쿠폰 사용 처리에 실패했습니다', 'error'); setCouponBusy(false); return; }
+    catch (e) { toast.show(msgOf(e, '쿠폰 사용 처리에 실패했습니다'), 'error'); setCouponBusy(false); return; }
     await refreshCoupons('쿠폰을 사용 처리했습니다');
     setCouponBusy(false);
   };

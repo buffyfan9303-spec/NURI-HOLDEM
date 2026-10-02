@@ -1,5 +1,5 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
@@ -26,7 +26,7 @@ import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import { isDenied } from '../../lib/dbError';
+import { isDenied, msgOf } from '../../lib/dbError';
 // 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
@@ -460,12 +460,17 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   ⚠ 아래 `weekTicket` 도 같은 척도여야 한다 — 한쪽만 바꾸면 '같은 라벨 다른 척도' 버그가 되돌아온다.
   const started = !!session?.openedAt;
   // PL3①: 마지막 마감 회차 — '지난 게임 그대로 열기' 1탭(오늘 장부 미시작일 때 지금 할 일 후보)
-  const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
+  // 2026-10-03 D1 재검토 D-a — 응답이 **이 매장·날짜의 것인지**를 값과 함께 들고 있는다. '아직 모름'과 '없음(null)'을 갈라야
+  //   아래 '지금 할 일' 자리가 지난 회차 응답을 기다리는 동안 스켈레톤으로 자리를 지킨다(늦게 생기며 아래 격자를 72px 밀던 것).
+  const [lastRoundRes, setLastRoundRes] = useState<{ owner: string; v: LastClosedRound | null } | null>(null);
+  const lastRoundReady = !caps.ledger || lastRoundRes?.owner === `${venueId}#${d}`;
+  const lastRound = lastRoundRes?.owner === `${venueId}#${d}` ? lastRoundRes.v : null;
   useEffect(() => {
     if (!caps.ledger) return;
     // §9-1: 매장 A 의 '지난 회차'가 B 화면의 [지난 게임 그대로 열기] 에 남으면 남의 단가·구조로 장부를 연다.
     const owner = `${venueId}#${d}`;
-    getLastClosedRound(venueId, d).then(ownerOnly(owner, setLastRound)).catch(() => {});
+    getLastClosedRound(venueId, d).then(ownerOnly(owner, (v: LastClosedRound | null) => setLastRoundRes({ owner, v })))
+      .catch(ownerOnly(owner, () => setLastRoundRes({ owner, v: null })));
   }, [venueId, d, caps.ledger]);
   // 장부 탭이 인텐트를 읽어 오늘 시작 화면에 지난 회차를 1회 자동 적용한다(파일 간 계약: nuri:last-round-intent)
   const gotoLedgerWithLastRound = () => {
@@ -475,6 +480,38 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // ⚠ 아직 못 읽은 동안 '미시작'이라고 단언하지 않는다 — 본문은 스켈레톤인데 배지만 결론을 말하면
   //   그 배지가 곧 '장부 시작하기'를 정당화하는 거짓 근거가 된다.
   const ledgerStatus = loading ? '확인 중' : !started ? '미시작' : session?.closed ? '정산 마감' : session?.regClosed ? '레지 마감' : '진행중';
+  // 오늘 장부 KPI 값 한 칸 — 확인 중엔 자리만(값 visibility:hidden + 같은 크기 스켈레톤), 미시작은 흐린 0(아래 밴드 주석).
+  //   ⚠ 컴포넌트가 아니라 함수 호출이다 — 렌더마다 새 컴포넌트를 만들면 안의 CountUp 이 매번 다시 마운트된다.
+  const kv = (tone: string, children: ReactNode) => (
+    <span className="relative mt-1 block">
+      {loading && <span aria-hidden className="skeleton rounded-input absolute inset-0" />}
+      <span style={loading ? { visibility: 'hidden' } : undefined}
+        className={`block text-lg font-extrabold leading-none tabular-nums lg:text-2xl ${!loading && !dayStarted ? 'text-ink-muted' : tone}`}>
+        <span data-kpi-fit className="inline-block origin-left whitespace-nowrap">{children}</span>
+      </span>
+    </span>
+  );
+  // 2026-10-03 D1 디자인 재검토 — 모바일 한 줄 4칸(칸 약 66px@360)에서 큰 값이 줄바꿈됐다: 390 '1,025 만'/'원', 소수 '2,779.'/'63',
+  //   360 바인 4자리의 '회'(+19px, 정착 뒤 아래가 밀림). 숫자·단위를 한 덩어리(nowrap)로 묶고, 칸보다 넓으면 **transform 으로만** 줄인다
+  //   — 레이아웃 높이는 그대로라 칸 높이가 값에 따라 변하지 않는다. CountUp 이 숫자를 바꿀 때마다 ResizeObserver 가 다시 맞춘다.
+  const kpiGridRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const grid = kpiGridRef.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return;
+    const els = [...grid.querySelectorAll<HTMLElement>('[data-kpi-fit]')];
+    const fit = () => {
+      for (const el of els) {
+        const avail = el.parentElement?.clientWidth ?? 0;
+        const need = el.offsetWidth; // transform 은 offsetWidth 에 영향이 없다
+        el.style.transform = avail > 0 && need > avail ? `scale(${(avail - 1) / need})` : ''; // 1px 여유 — 정수 반올림으로 칸 끝을 넘지 않게
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    els.forEach((el) => ro.observe(el));
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [loadErr]);
   const ledgerStatusCls = loading || !started
     ? 'bg-surface-float text-ink-muted'
     : session?.closed ? 'bg-ink-muted/20 text-ink-secondary'
@@ -637,14 +674,14 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     catch (e) {
       // 20260930i — 이용권이 모자라면 서버가 숫자를 실어 준다. 남은 금액 결제 선택은 장부 접수대 카드에 있다.
       const s = voucherShortOf(e);
-      toast.show(s ? `이용권이 모자랍니다 — ${s.have}장 + 남은 ${s.remainder.toLocaleString()}원은 장부 접수대에서 결제 방법을 골라 승인하세요` : (e instanceof Error ? e.message : '승인 실패'), 'error');
+      toast.show(s ? `이용권이 모자랍니다 — ${s.have}장 + 남은 ${s.remainder.toLocaleString()}원은 장부 접수대에서 결제 방법을 골라 승인하세요` : msgOf(e, '승인 실패'), 'error');
     }
     finally { setReqBusy(null); }
   };
   const quickReject = async (r: BuyinRequest) => {
     setReqBusy(r.id);
     try { await rejectBuyinRequest(r.id); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 요청 거절`, 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '거절 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '거절 실패'), 'error'); }
     finally { setReqBusy(null); }
   };
   // ✓ 길게 누르기 → 결제수단(현금/카드/이체) 팝오버 → 바인 기록까지 승인. 짧게 탭 = 결제 기록 없이 게임 추가
@@ -705,7 +742,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       // ⚠ 서버가 계산한 경로에서는 **금액을 말하지 않는다** — 화면의 프리필은 대상 게임에 클락이 없으면
       //   메인 게임 단가로 떨어지므로, 그 숫자를 성공 토스트에 적으면 틀린 금액을 사실처럼 알리게 된다.
       toast.show(method ? `${r.playerName} 승인 · 바인 기록` : `${r.playerName} 승인 · 바인 ${wonToMan(sum)}만`, 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '승인 실패'), 'error'); }
     finally { setReqBusy(null); }
   };
   const PM_LABEL: Record<'cash' | 'card' | 'transfer', string> = { cash: '현금', card: '카드', transfer: '이체' };
@@ -963,7 +1000,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
            화면엔 사용자 문구만: 권한 거부일 때만 error 를 넘긴다(msgOf 가 '이 계정에는 권한이 없습니다'로 옮긴다).
            원문은 아래 effect 가 콘솔·Sentry 로만 남긴다. */
         <LoadErrorCard error={isDenied(loadErr) ? loadErr : undefined} what="오늘 장부"
-          hint="잠시 후 다시 시도해 주세요. 아직 등록된 내용이 없는 것과는 다릅니다."
+          hint="잠시 후 다시 시도해 주세요"
           onRetry={() => { setLoading(true); reload(); }} />
       ) : (
         <button type="button" onClick={gotoTodayLedger}
@@ -971,39 +1008,40 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
+            {/* 2026-10-03 — 합산 안내를 머리 줄 안으로: 별도 줄이면 로딩 뒤에 생겨 아래 카드를 밀었다. */}
+            {!loading && day.games > 1 && <span data-testid="dash-kpi-games" className="text-2xs text-ink-muted">게임 {day.games}개 합산</span>}
           </span>
-          {!loading && day.games > 1 && <span data-testid="dash-kpi-games" className="mt-1 block text-2xs text-ink-muted">게임 {day.games}개 합산</span>}
-          {loading ? <div className="mt-2"><Skeleton /></div> : !dayStarted ? null : (
-            /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
-               고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
-            /* C1 D-2 — items-end 면 엔트리 보조줄이 붙은 칸만 높아져 옆 칸 라벨이 53px 내려갔다(390). 라벨 윗줄을 맞추고 엔트리는 값 밑 보조줄로. */
-            <span className="mt-2 grid grid-cols-2 items-start gap-x-5 gap-y-3 lg:grid-cols-4">
-              <span className="block">
+          {/* 2026-10-03 (C1 후속 R-dash · D1 재검토 D-b) — 확인 중·미시작·진행 중 **세 상태가 같은 높이**다.
+              종전엔 확인 중 = 스켈레톤(카드 107px) → 미시작 = 숫자 칸 없음(48px)으로 접혀 아래 카드 격자가 약 60px 올라갔다
+              (첫 진입·매장 전환 모두, CLS 1440 0.017 · 390 0.029). 이제 격자를 늘 그린다.
+              · 확인 중: 값은 visibility 로 가리고(자리 유지·지난 매장 숫자 차단) 그 위에 같은 크기 스켈레톤 막대를 겹친다.
+                ⚠ 지난 매장 숫자가 안 비치는 것은 매장 전환 때 판이 다시 마운트되는 덕도 있다(VenueManageTab shellBusy) —
+                CountUp 은 이제 로딩 동안 언마운트되지 않으므로, 그 재마운트를 없애면 B 확정 순간 A→B 카운트가 보일 수 있다.
+              · 미시작: 0 이 사실이다(장부가 없으면 매출·바인·미수·이용권은 0). 흐린 색으로 '자리'임을 보이고 시선은 아래 할 일 CTA 로.
+              · 모바일도 한 줄 4칸(text-lg) — 2×2 는 칸이 184px 라 360 에서 '순위 입력' 카드가 첫 화면 밖으로 밀렸다. */}
+          {(
+            /* C1 D-2 — items-start: 엔트리 보조줄이 붙은 칸만 높아져도 옆 칸 라벨 윗줄은 맞는다. */
+            <span ref={kpiGridRef} data-testid="dash-kpi-grid" aria-busy={loading || undefined} className="mt-2 grid grid-cols-4 items-start gap-x-3 gap-y-3 lg:gap-x-6">
+              <span className="block min-w-0">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
-                <span className="mt-1 block whitespace-nowrap text-2xl font-extrabold leading-none tabular-nums text-gold-300">
-                  {wonToMan(day.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
-                </span>
+                {kv('text-gold-300', <>{wonToMan(day.paid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}
               </span>
-              <span className="block">
+              <span className="block min-w-0">
                 <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
-                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
-                  <CountUp value={day.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
+                {kv('stat-indigo', <>
+                  <CountUp value={day.totalBuyins} /><span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
                   <span className="mt-1 block text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-                </span>
+                </>)}
               </span>
-              <span className="block">
+              <span className="block min-w-0">
                 <span className="block text-2xs text-ink-muted">미수금</span>
-                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${day.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
-                  {wonToMan(day.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
-                </span>
+                {kv(day.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary', <>{wonToMan(day.unpaid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}
               </span>
-              <span className="block">
+              <span className="block min-w-0">
                 <span data-testid="dash-kpi-ticket" className="block text-2xs text-ink-muted">사용 이용권</span>
                 {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
-                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
-                  {fmtT(day.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
-                </span>
+                {kv('stat-fuchsia', <>{fmtT(day.ticket)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">T</span></>)}
               </span>
             </span>
           )}
@@ -1275,7 +1313,26 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {(() => {
         // ⚠ 이 카드의 모든 분기가 session/started 를 근거로 삼는다. 못 불러왔으면 침묵한다 —
         //   '장부 시작하기'는 되돌릴 수 없는 조작이고, 위의 LoadErrorCard 가 이미 이유와 재시도를 준다.
-        if (loading || loadErr) return null;
+        if (loadErr) return null;
+        // 2026-10-03 D1 재검토 D-a — 확인 중(그리고 지난 회차 응답 대기)엔 카드와 같은 틀의 스켈레톤으로 자리를 잡는다.
+        //   종전엔 null 이라 정착 순간 카드가 생기며 아래 격자를 PC 72px·390 104~125px 밀었다(실제 영업 매장은 거의 늘 할 일이 있다).
+        //   정착 뒤 할 일이 없는 드문 경우(이력 없는 새 매장·정오 전)에만 접힌다.
+        //   자리표시 문구는 실제 카드 중 가장 흔한 높이에 맞춘다(PC 한 줄 · 390 은 설명이 두 줄 — 실측 카드 91~93px).
+        if (loading || !lastRoundReady) {
+          if (!caps.ledger) return null;
+          return (
+            <div aria-hidden data-testid="todo-reserve" className="skeleton flex items-center gap-3 rounded-card border border-transparent p-3">
+              <span style={{ visibility: 'hidden' }} className="flex min-w-0 flex-1 items-center gap-3">
+                <Icon name="refresh" size={22} className="shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">지난 게임 그대로 열기 · 00/00</span>
+                  <span className="mt-1 block t-desc break-keep">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
+                </span>
+                <span className="btn-primary shrink-0 px-4 py-2 text-xs">그대로 열기</span>
+              </span>
+            </div>
+          );
+        }
         const todayPoster = schedules.some((s) => s.venueId === venueId && s.date === d && s.approved);
         const hour = new Date().getHours();
         let todo: { icon: IconName; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok' } | null = null;
@@ -1308,7 +1365,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = {
             icon: 'refresh',
             title: `지난 게임 그대로 열기 · ${lr.sessionDate.slice(5).replace('-', '/')} ${lr.title || '제목 없음'}`,
-            desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요. 날짜·담당 직원만 확인하면 끝.`,
+            desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요`,
             cta: '그대로 열기', onClick: gotoLedgerWithLastRound, tone: 'gold',
           };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
@@ -1363,7 +1420,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink-primary">순위 미입력 · {labelOf(p)}</p>
-                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 순위표·아카이브에 반영됩니다.</p>
+                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요</p>
               </div>
               <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
             </button>
@@ -1375,7 +1432,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {pendingRanks.length}개
             </p>
-            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 순위표·아카이브에 반영됩니다.</p>
+            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요</p>
             <ul className="mt-2 space-y-1">
               {shown.map((p) => (
                 <li key={`${p.date}#${p.gameSeq}`}>
@@ -1906,7 +1963,7 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
               )}
             </div>
           ) : (
-            <p className="py-2 text-center text-sm leading-relaxed text-ink-muted">문의 연락처를 준비하고 있습니다.<br />곧 이 자리에서 바로 연락하실 수 있어요.</p>
+            <p className="py-2 text-center text-sm leading-relaxed text-ink-muted">문의 연락처를 준비하고 있습니다</p>
           )}
           <p className="text-xs text-ink-muted">문의 주시면 기간·비용 안내 후, 확인되는 대로 포스터를 상단에 올려드립니다.</p>
         </div>
@@ -1950,7 +2007,7 @@ export function MyStaffCard({ venueId, preview = false }: {
         <p className="text-sm font-bold text-ink-primary">내 근무 정보</p>
 
         {preview && (
-          <p className="t-desc break-keep text-ink-muted">직원 본인에게는 업주가 연결한 시급 · 급여일 · 휴무가 여기에 표시됩니다.</p>
+          <p className="t-desc break-keep text-ink-muted">업주가 연결한 시급·급여일·휴무가 표시됩니다</p>
         )}
 
         {!preview && state === 'loading' && <p aria-busy="true" className="t-desc text-ink-muted">불러오는 중…</p>}

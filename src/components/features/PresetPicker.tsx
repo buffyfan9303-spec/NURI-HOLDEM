@@ -110,7 +110,7 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
               </button>
             ))}
           </div>
-          <p className="text-2xs text-ink-muted">{note ?? `프리셋 1개로 ${SCOPE_LABEL[scope]} 폼이 채워집니다(수정 가능). 비어 있는 항목은 건드리지 않습니다.`}</p>
+          <p className="text-2xs text-ink-muted">{note ?? `프리셋으로 ${SCOPE_LABEL[scope]} 폼을 채웁니다 · 빈 항목은 그대로`}</p>
         </div>
       </Fold>
     </div>

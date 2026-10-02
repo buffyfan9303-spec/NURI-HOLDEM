@@ -10,6 +10,7 @@ import {
   createMatchPost, closeMatchPost, deleteMatchPost, respondMatchPost, decideMatchResponse, withdrawMatchResponse,
   type MatchPost, type MatchResponse, type MyMatchResponse, type MatchResponseStatus,
 } from '../../api/venueMatch';
+import { msgOf } from '../../lib/dbError';
 
 const RESP_BADGE: Record<MatchResponseStatus, { label: string; cls: string }> = {
   pending:  { label: '대기', cls: 'bg-amber-500/15 text-amber-400' },
@@ -31,7 +32,6 @@ const MATCH_FIELDS = [
 ] as const;
 type CondKey = (typeof MATCH_FIELDS)[number]['key'];
 const EMPTY_COND: Record<CondKey, string> = { buyIn: '', seats: '', format: '', region: '' };
-const msgOf = (e: unknown, fb: string) => (e instanceof Error ? e.message : fb);
 
 function VenueChip({ name, region }: { name: string; region?: string }) {
   return <span className="min-w-0 truncate text-sm font-bold text-ink-primary">{name}{region && <span className="ml-1 text-2xs font-semibold text-ink-muted">{region}</span>}</span>;

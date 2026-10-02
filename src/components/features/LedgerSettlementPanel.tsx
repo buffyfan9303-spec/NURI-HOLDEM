@@ -21,6 +21,7 @@ import {
 } from '../../api/ledger';
 import { businessDateOf } from '../../lib/businessDate';
 import { settlementReport, settlementReceipt, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
+import { msgOf } from '../../lib/dbError';
 
 const man = (won: number) => `${wonToMan(won)}만`;
 /** 엔트리 표시 — 금액 기준이라 소수가 나온다(5만 할인 = 0.5). 정수면 정수로 보인다. */
@@ -63,7 +64,7 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
         setData({ key, sessions, buyins, players: rosters.flat() });
       })
       // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 실패를 빈 화면으로 위장하지 않는다.
-      .catch((e) => { if (reqKey.current === key) setErr(e instanceof Error ? e.message : '정산 자료를 불러오지 못했습니다'); });
+      .catch((e) => { if (reqKey.current === key) setErr(msgOf(e, '정산 자료를 불러오지 못했습니다')); });
   }, [venueId, day, key]);
   useEffect(() => { if (active) load(); }, [active, load]);
 
@@ -106,7 +107,7 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
       {!err && r && r.games.length === 0 && (
         <div className="rounded-aura border card-aura">
           <EmptyState icon={<Icon name="book-open" />} title="이 날짜에 연 장부가 없습니다."
-            desc="장부 단계에서 그날 장부를 열면 여기 정산이 만들어집니다." />
+            desc="그날 장부를 열면 정산이 만들어집니다" />
         </div>
       )}
 
@@ -147,7 +148,7 @@ function Report({ r }: { r: SettlementReport }) {
           숫자가 갈리는 것보다, 갈리는 이유를 모르는 것이 더 위험하다. */}
       {/* 감사 S-3(2026-10-02) — 3줄 → 한 문장. 뜻(장부 화면의 정산 제외는 여기 안 들어가 정산바와 다를 수 있다)은 그대로. */}
       <p className="text-2xs leading-relaxed text-ink-muted">
-        <b className="text-ink-secondary">그날 장부 바인 전부</b> 기준 · 장부의 ‘정산 제외’ 필터는 반영되지 않아 정산바와 다를 수 있어요.
+        <b className="text-ink-secondary">그날 장부 바인 전부</b> 기준 · ‘정산 제외’ 미반영이라 정산바와 다를 수 있어요
       </p>
 
       {/* ── ② 기준 엔트리 대비 ── */}
@@ -165,13 +166,13 @@ function Report({ r }: { r: SettlementReport }) {
               tone={gapWon >= 0 ? 'emerald' : 'danger'} />
           </div>
         ) : (
-          <p className="text-2xs text-ink-muted">이 날짜의 장부에 <b className="text-ink-secondary">기준 엔트리</b>가 설정되어 있지 않아 대비를 계산하지 않았습니다. 장부 세션 정보에서 설정할 수 있어요.</p>
+          <p className="text-2xs text-ink-muted"><b className="text-ink-secondary">기준 엔트리</b>가 없어 대비를 계산하지 않았어요 · 장부 세션 정보에서 설정</p>
         )}
       </Card>
 
       {/* ── ③ 수단 분해(대차표) ── */}
       <Card title="받은 방법" icon="wallet"
-        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원(애드온 포함). 행마다 성립하므로 합계도 성립합니다.">
+        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원(애드온 포함)">
         {/* 2026-09-11: 매장지원·미수를 수납과 **같은 줄에 두지 않는다** — 지원은 매장이 부담한 것이고
             미수는 아직 못 받은 돈이라, 현금·카드·이체·이용권과 같은 위계로 서면 수납액처럼 읽힌다. */}
         <p className="mb-1.5 text-2xs font-semibold text-ink-secondary">수납 완료</p>
@@ -221,7 +222,7 @@ function Report({ r }: { r: SettlementReport }) {
       </Card>
 
       {/* ── ④ 손님 구성 ── */}
-      <Card title="손님 구성" icon="users" note="유형은 장부 명단에 적힌 값입니다. 유형을 안 적은 손님은 '미분류'로 모입니다.">
+      <Card title="손님 구성" icon="users" note="유형을 안 적은 손님은 '미분류'로 모입니다">
         <ul className="flex flex-wrap gap-2">
           {r.visitors.map((v) => (
             <li key={v.key || '_'} className="rounded-input border card-aura-sub px-3 py-2">
@@ -250,7 +251,7 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ⑥ 게임별 내역 ── */}
       {r.games.length > 1 && (
-        <Card title="게임별 내역" icon="layers" note="'바인'은 앉은 횟수, '엔트리'는 금액 기준입니다. 합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
+        <Card title="게임별 내역" icon="layers" note="'바인'은 앉은 횟수, '엔트리'는 금액 기준">
           <div className="overflow-x-auto">
             <table className="w-full min-w-xl text-left text-xs">
               <thead>
