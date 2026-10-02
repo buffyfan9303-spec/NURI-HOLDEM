@@ -49,7 +49,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
         <div className="p-6 text-center">
           <p className="text-sm font-bold text-ink-primary">로그인하면 문의를 접수할 수 있습니다</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-            답변을 받아 보려면 계정이 필요합니다. 접수한 문의와 답변은 이 화면에서 확인할 수 있습니다.
+            답변도 이 화면에서 확인할 수 있습니다
           </p>
           <button type="button" onClick={() => promptLogin()}
             className="btn-primary mx-auto mt-4 w-full max-w-[220px] py-2.5 text-sm">
@@ -65,7 +65,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
       <div className="space-y-4 p-4">
         {/* 접수 폼 */}
         <section className="space-y-2 rounded-aura border card-aura p-3">
-          <p className="text-2xs text-ink-muted">관리자가 확인 후 답변드립니다. (운영시간 내 순차 처리)</p>
+          <p className="text-2xs text-ink-muted">운영시간 내 순차적으로 답변드립니다</p>
           <div className="flex flex-wrap gap-1.5">
             {INQUIRY_CATEGORIES.map((c) => (
               <button key={c} type="button" onClick={() => setCat(c)}

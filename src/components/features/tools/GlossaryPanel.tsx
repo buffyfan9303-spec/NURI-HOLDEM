@@ -87,7 +87,7 @@ export default function GlossaryPanel() {
         )}
       </div>
 
-      <p className="text-2xs text-ink-muted">총 {TERMS.length}개 용어 — 현장·방송에서 통용되는 한글 표기 기준입니다.</p>
+      <p className="text-2xs text-ink-muted">총 {TERMS.length}개 용어 · 현장 통용 한글 표기</p>
     </div>
   );
 }

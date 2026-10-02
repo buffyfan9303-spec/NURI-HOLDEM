@@ -58,6 +58,8 @@ test.describe('B2 알림 창', () => {
 
   test('카드 머리줄(쪽지/알림 탭 줄)을 끌어도 뒤 화면이 안 굴러간다 390', async ({ page }) => {
     await bootNotif(page, 390, 3);
+    // 뒤 문서 길이는 운영 데이터·문구 길이에 따라 바뀐다(10-03 설명 축약으로 400 밑으로 내려감) — 측정 전제(뒤가 굴러갈 수 있음)는 내용과 무관하게 고정한다.
+    await page.evaluate(() => { const s = document.createElement('div'); s.setAttribute('data-testid', 'b2-test-spacer'); s.style.height = '1600px'; document.body.appendChild(s); });
     const doc = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
     expect(doc, '뒤 문서가 스크롤될 만큼 길지 않다 — 측정이 공허하다').toBeGreaterThan(400);
     const hdr = (await page.getByRole('dialog', { name: '알림' }).locator('header').boundingBox())!;

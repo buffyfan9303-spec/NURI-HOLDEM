@@ -80,7 +80,7 @@ export default function PostflopTrainer() {
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
     <CalcCard>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-2xs text-ink-muted">{SCENARIOS.length}문항 · 카테고리별 출제 — 오답은 다음 사이클에서 먼저 다시 나옵니다.</p>
+        <p className="text-2xs text-ink-muted">{SCENARIOS.length}문항 · 오답은 다음에 먼저 다시 나옵니다</p>
         <div className="shrink-0 text-right text-2xs tabular-nums">
           <p className="font-bold text-accent-300">{acc}% <span className="font-normal text-ink-muted">({stats.correct}/{stats.total})</span></p>
           <p className="text-ink-muted">연속 {stats.streak} · 최고 {stats.best}</p>

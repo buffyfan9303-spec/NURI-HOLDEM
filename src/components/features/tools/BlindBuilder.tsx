@@ -23,7 +23,7 @@ export default function BlindBuilder() {
   let no = 0;
 
   return (
-    <CalcCard title="블라인드 구조 생성기" desc="레지 마감·최대 레벨·레벨 길이로 구조 자동 생성">
+    <CalcCard title="블라인드 구조 생성기" desc="레지 마감에 맞춘 레벨표 자동 생성">
       <div className="grid grid-cols-2 gap-2">
         <Field label="레지 마감 레벨"><NumIn value={regClose} onChange={setRegClose} suffix="LV" /></Field>
         <Field label="최대 레벨"><NumIn value={maxLevel} onChange={setMaxLevel} suffix="LV" /></Field>

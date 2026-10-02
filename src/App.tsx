@@ -562,7 +562,7 @@ const AppHeader = memo(function AppHeader({
                   <button type="button" onClick={() => leaveMenuTo(onOpenMe)}
                     className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                     <Icon name="circle-user" size={14} />
-                    내 정보 <span className="text-ink-muted">(대시보드·프로필·설정)</span>
+                    내 정보
                   </button>
 
                   {/* 모바일 전용 — 헤더에서 빠진 알림/도구/테마를 메뉴로 제공 */}
@@ -581,7 +581,7 @@ const AppHeader = memo(function AppHeader({
                       <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('my-store'))}
                         className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                         <Icon name="store" size={14} />
-                        내 매장 <span className="text-ink-muted">(직원 관리·장부·클락)</span>
+                        내 매장
                       </button>
                     )}
                     {user.role === 'admin' && (
@@ -4396,7 +4396,7 @@ export default function App() {
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
-                    <p data-testid="schedules-empty" className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없습니다. 아래에서 지난 대회 결과를 볼 수 있습니다.</p>
+                    <p data-testid="schedules-empty" className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없습니다 · 지난 대회는 아래에</p>
                     {liveClocks.length > 0 && (
                       <button type="button" onClick={() => changeTab('live')}
                         className="flex w-full items-center gap-2.5 rounded-aura bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
@@ -4784,7 +4784,7 @@ export default function App() {
           <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
             <div className="w-full max-w-xs rounded-card border border-border-default bg-surface-high p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
               <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 · 게임 선택</p>
-              <p className="text-2xs text-ink-muted">참가할 게임을 고르면 매장에 요청이 전송됩니다.</p>
+              <p className="text-2xs text-ink-muted">고르는 즉시 매장에 요청이 갑니다</p>
               <div className="space-y-1.5 pt-1">
                 {buyinPick.games.map((g) => (
                   <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}

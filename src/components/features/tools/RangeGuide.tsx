@@ -86,7 +86,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc={`포지션·상황별 표준 프리플랍 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 핸드별 빈도`}>
+    <CalcCard desc={`상황별 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 빈도`}>
       {/* ① 상황 그룹 */}
       {/* ⚠ 줄바꿈(flex-wrap)이 아니라 **가로 스크롤**이다(오너 2026-09-18: "아직도 아래에는 왜 한개가 또 떨어져 있어").
           5개가 한 줄에 안 들어가면 wrap 은 마지막 하나만 아래로 떨어뜨려 **4+1 고아**를 만들고,

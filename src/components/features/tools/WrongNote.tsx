@@ -93,7 +93,7 @@ export default function WrongNote() {
   const backBtn = <button type="button" onClick={back} className="btn-primary w-full py-3 text-sm font-bold">목록으로 →</button>;
 
   return (
-    <CalcCard desc="틀린 문제를 모아 차트에서 확인하고 다시 풉니다. 맞히면 노트에서 빠집니다.">
+    <CalcCard desc="맞히면 노트에서 빠집니다">
       <div data-testid="wrong-note" className="space-y-3">
         <WeaknessReport key={ver} />
 

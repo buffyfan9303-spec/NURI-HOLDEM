@@ -129,7 +129,7 @@ function BoostContactCard() {
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3 space-y-2">
       <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="zap" size={15} className="shrink-0" />부스트 문의 연락처</p>
-      <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
+      <p className="text-xs text-ink-muted">비워두면 업주 화면에 "준비 중"으로 표시됩니다</p>
       {loadErr != null && (
         <LoadErrorCard error={loadErr} what="문의 연락처" onRetry={load} compact
           hint="지금 저장하면 이미 등록된 값이 빈 값으로 덮입니다 — 다시 불러온 뒤 수정해 주세요." />

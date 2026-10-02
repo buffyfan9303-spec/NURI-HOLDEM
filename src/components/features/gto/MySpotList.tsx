@@ -187,7 +187,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
   if (!user) {
     return (
       <Empty icon="lock" title="로그인하면 스팟을 저장할 수 있습니다"
-        desc="저장한 스팟은 나만 볼 수 있습니다. '게시판에 공유'를 누르기 전까지 올라가지 않습니다." />
+        desc="공유를 누르기 전까지 나만 볼 수 있습니다" />
     );
   }
   // 스켈레톤 높이를 실제 카드와 맞춘다 — 값이 들어올 때 목록이 내려앉지 않게.
@@ -213,7 +213,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
     // (그 전의 `dvh` 되먹임 고리 문제(2026-09-15)는 단위가 없어졌으니 같이 사라진다.)
     return (
       <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
-        desc="'스팟 작성' 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
+        desc="‘내 스팟에 저장’을 누르면 여기에 쌓입니다"
         action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">스팟 작성 탭에서 새로 만들기</button>} />
     );
   }

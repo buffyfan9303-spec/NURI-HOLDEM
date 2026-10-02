@@ -40,7 +40,7 @@ export function PayoutCalc() {
   const capped = entries >= PAYOUT_MAX_ENTRIES || placesIn >= PAYOUT_MAX_ENTRIES;
 
   return (
-    <CalcCard title="상금 분배 계산기" desc="총 상금·참가 인원 → 시상 인원과 분배표(참고용)">
+    <CalcCard title="상금 분배 계산기" desc="참가 인원별 시상 인원·분배표(참고용)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="총 상금"><NumIn value={pool} onChange={setPool} /></Field>
         <Field label="참가 인원"><NumIn value={entries} max={PAYOUT_MAX_ENTRIES} onChange={(v) => { setEntries(v); setPresetId(null); }} suffix="명" /></Field>
@@ -192,7 +192,7 @@ export function ComboCalc() {
   const dedup = parsed.reduce((sum, x) => sum + (x.r?.n ?? 0), 0) - total;
 
   return (
-    <CalcCard title="콤보 계산기" desc="핸드 표기로 콤보 수 계산 (AA·AKs·AKo / 쉼표로 레인지)">
+    <CalcCard title="콤보 계산기" desc="AA·AKs·AKo 표기 · 쉼표로 레인지">
       <Field label="핸드 / 레인지">
         <input
           type="text"

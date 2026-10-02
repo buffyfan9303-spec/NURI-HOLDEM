@@ -278,7 +278,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           </span>
           <p className="text-sm font-bold text-ink-primary">로그인하면 내 캘린더가 열립니다</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-            예약한 대회와 찜한 대회가 날짜별로 모이고,<br />뱅크롤과 일정을 직접 적어 둘 수 있습니다.
+            예약·찜한 대회와 내 기록을 날짜별로 모아요
           </p>
           {/* 막다른 길 금지 — 비로그인 모바일에서 이 화면이 5번째 칸이라 여기서 로그인으로 갈 수 있어야 한다 */}
           {onLogin && (

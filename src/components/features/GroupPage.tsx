@@ -458,7 +458,7 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
             <div className="px-page-x py-12 text-center">
               <Icon name="lock" size={34} className="mx-auto mb-2 text-ink-muted" />
               <p className="text-sm font-semibold text-ink-primary">멤버 전용 공간</p>
-              <p className="text-2xs text-ink-muted mt-1">가입 후 실시간 채팅 · 게시판 · 활동 순위를 이용할 수 있습니다</p>
+              <p className="text-2xs text-ink-muted mt-1">가입하면 채팅·게시판·활동 순위가 열립니다</p>
             </div>
           ) : (
             <>
