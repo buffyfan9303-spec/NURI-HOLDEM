@@ -6,6 +6,7 @@ import { useToast } from '../atoms/Toast';
 import SlidingPill from '../atoms/SlidingPill';
 import Icon from '../atoms/Icon';
 import { goSubTab } from '../../lib/subTabTransition';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 type Range = 'all' | '7' | '30' | '90';
 /** 기간 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
@@ -30,8 +31,12 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const [mq, setMq] = useState('');
   const [mcands, setMcands] = useState<TransferTarget[]>([]);
   const [busy, setBusy] = useState(false);
-  const reloadAliases = () => { getCustomerAliases(venueId).then((a) => setAliases(Object.fromEntries(a.map((x) => [x.alias.trim().toLowerCase(), { userId: x.userId, display: x.display }])))).catch(() => {}); };
-  useEffect(reloadAliases, [venueId]);
+  // review-store-link-1002 2a — 늦게 온 A 매장 '장부명 ↔ 회원 연결'이 B 고객 행에 '연결됨'으로 붙지 않게(run + 매장 전환 시 비움).
+  const run = useVenueScope(venueId);
+  const [aliasVenue, setAliasVenue] = useState(venueId);
+  if (aliasVenue !== venueId) { setAliasVenue(venueId); setAliases({}); }
+  const reloadAliases = () => { run('aliases', getCustomerAliases, (a) => setAliases(Object.fromEntries(a.map((x) => [x.alias.trim().toLowerCase(), { userId: x.userId, display: x.display }])))); };
+  useEffect(reloadAliases, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const q = mq.trim();
     if (!linking || q.length < 2) { setMcands([]); return; }

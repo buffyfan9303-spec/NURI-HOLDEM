@@ -27,6 +27,7 @@ const HOME = readFileSync(join(root, 'src', 'components', 'features', 'HomeTab.t
 const CSS = readFileSync(join(root, 'src', 'index.css'), 'utf8');
 const VMT = readFileSync(join(root, 'src', 'components', 'features', 'VenueManageTab.tsx'), 'utf8');
 const EVL = readFileSync(join(root, 'src', 'components', 'features', 'EventListPage.tsx'), 'utf8');
+const TCK = readFileSync(join(root, 'src', 'components', 'features', 'clock', 'TournamentClock.tsx'), 'utf8');
 
 describe('① 지연 로딩 폴백이 화면 높이를 예약한다', () => {
   it('LazyFallback 이 뷰포트 기준 높이를 갖는다 — 푸터가 첫 화면 위로 못 올라온다', () => {
@@ -127,5 +128,30 @@ describe('⑤ 이벤트 목록 — 스켈레톤이 카드 한 장과 같은 상�
     expect(EVL, '목록 초기값이 캐시가 아니다').toMatch(/useState<EventListItem\[\] \| null>\(peekEventList\)/);
     expect(EVL, '캐시가 있어도 loading 으로 시작한다').toMatch(/useState\(\(\) => peekEventList\(\) === null\)/);
     expect(APP, '홈 idle 예열이 목록 데이터를 채우지 않는다').toMatch(/prefetchEventList\(\)/);
+  });
+});
+
+describe('⑥ 클락 게임 슬롯 바 — 첫 조회 전에도 자리를 잡는다 (audit-motion-1002 F-3 · 2026-10-02)', () => {
+  // 실측(PC 1440·1024 · 목 응답 150/400ms): 설정 폼이 먼저 그려진 뒤 +438~907ms 에 슬롯 바가 맨 위에 끼어들어
+  // 폼 전체가 103px 밀렸다(CLS 0.046~0.064, 입력 500ms 창 밖). 원인은 `if (seqs.length < 1) return null` — 조회 전엔 0칸이라 null.
+  const ov = TCK.match(/function MultiClockOverview\([\s\S]*?\r?\n}\r?\n/);
+
+  it('MultiClockOverview 가 남아 있다', () => {
+    expect(ov, 'MultiClockOverview 가 사라졌다 — 계약을 같이 고쳐라').not.toBeNull();
+  });
+
+  it('첫 조회가 끝났는지 따로 안다 — 조회 전 0칸과 진짜 0칸을 가른다', () => {
+    expect(ov![0]).toMatch(/const \[loaded, setLoaded\] = useState\(false\)/);
+    expect(ov![0], '두 조회가 다 끝난 뒤에 loaded 를 세운다').toMatch(/Promise\.allSettled\([\s\S]{0,400}setLoaded\(true\)/);
+  });
+
+  it('조회 전에는 null 이 아니라 aria-busy 자리표시를 그린다(칸 수는 부모가 미리 아는 값)', () => {
+    const early = ov![0].indexOf('if (!loaded');
+    const nul = ov![0].indexOf('if (seqs.length < 1) return null');
+    expect(early, '조회 전 분기가 없다').toBeGreaterThan(-1);
+    expect(early, '조회 전 분기가 null 반환보다 뒤에 있다 — 자리를 못 잡는다').toBeLessThan(nul);
+    expect(ov![0].slice(early, nul), '자리표시가 로딩 표시(aria-busy)를 안 단다 — 판 높이 예약(VenueManageTab)도 그걸 보고 기다린다')
+      .toMatch(/aria-busy="true"/);
+    expect(TCK, '부모가 칸 수(expect)를 넘기지 않는다').toMatch(/<MultiClockOverview[^>]*expect=\{slotHint\(/);
   });
 });

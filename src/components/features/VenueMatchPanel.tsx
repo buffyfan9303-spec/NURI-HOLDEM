@@ -1,6 +1,7 @@
 // 연합 대회 파트너 매장 — 게시 → 신청 → 수락/거절 → 서로 연락처. 점수·상금·정산·순위 없음(§10 계층1 #3).
 // 카드 문법은 DealerCommunity(구인·지원)를 본떴다. 버튼 라벨은 4~6자 + nowrap(375·320 한 줄).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useVenueScope } from '../../lib/useVenueScope';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -56,15 +57,20 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
   const [applyId, setApplyId] = useState<string | null>(null);
   const [applyMsg, setApplyMsg] = useState('');
 
-  const reload = useCallback(async () => {
-    try {
-      const [open, mine, sent] = await Promise.all([getOpenMatchPosts(), getMyMatchPosts(venueId), getMyMatchResponses(venueId)]);
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — 판은 매장 전환에 다시 마운트되지 않는다(keep-alive).
+  //   A 의 '내 매칭 글·보낸 응답'이 B 로 바꾼 뒤 늦게 와 B 화면에 그려지면 B 로 A 글을 마감·응답하게 된다.
+  const vrun = useVenueScope(venueId);
+  // Promise 를 돌려준다 — run() 의 `await reload()` 가 재조회가 끝날 때까지 '처리 중' 잠금을 유지한다(review-store-link-1002 D-1).
+  const reload = useCallback(() => (
+    vrun('reload', async (v) => {
+      const [open, mine, sent] = await Promise.all([getOpenMatchPosts(), getMyMatchPosts(v), getMyMatchResponses(v)]);
       const recv = await Promise.all(mine.map((p) => getMatchResponses(p.id).then((r) => [p.id, r] as const)));
-      setOpenPosts(open); setMyPosts(mine); setMyResponses(sent); setReceived(Object.fromEntries(recv)); setErr(false);
-    } catch { setErr(true); }
-    finally { setLoading(false); }
-  }, [venueId]);
-  useEffect(() => { setLoading(true); reload(); }, [reload]);
+      return { open, mine, sent, recv };
+    }, ({ open, mine, sent, recv }) => {
+      setOpenPosts(open); setMyPosts(mine); setMyResponses(sent); setReceived(Object.fromEntries(recv)); setErr(false); setLoading(false);
+    }, () => { setErr(true); setLoading(false); })
+  ), [vrun]);
+  useEffect(() => { setLoading(true); reload(); }, [reload, venueId]);
 
   const run = async (fn: () => Promise<void>, ok: string, fb: string) => {
     setBusy(true);

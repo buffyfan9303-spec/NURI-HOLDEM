@@ -12,6 +12,7 @@ import {
   type GamePreset, type GamePresetData,
 } from '../../api/presets';
 import { presetPrizeWon } from '../../lib/units';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 export type PresetScope = 'poster' | 'ledger' | 'clock';
 
@@ -52,8 +53,21 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
   const [presets, setPresets] = useState<GamePreset[] | null>(null);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
-  useEffect(() => { listGamePresets(venueId).then(setPresets).catch(() => setPresets([])); }, [venueId]);
+  const [err, setErr] = useState(false);
+  // L-05·L-06(audit-link-1002) — 매장 A→B 전환에 다시 마운트되지 않는다. A 목록이 늦게 와서 B 폼에 A 구조를 적용하던 길을 막는다.
+  const run = useVenueScope(venueId);
+  const [shownVenue, setShownVenue] = useState(venueId);
+  if (shownVenue !== venueId) { setShownVenue(venueId); setPresets(null); setErr(false); setOpen(false); setQ(''); }
+  const load = () => run('list', listGamePresets, (ps) => { setPresets(ps); setErr(false); }, () => { setPresets(null); setErr(true); });
+  useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // L-14 — 못 읽음을 '프리셋 없음'(숨김)으로 위장하지 않는다.
+  if (err) return (
+    <p data-testid={`preset-picker-${scope}-error`} role="alert" className="flex items-center justify-between gap-2 rounded-input border border-border-subtle px-3 py-2 text-2xs text-ink-muted">
+      게임 프리셋을 불러오지 못했습니다
+      <button type="button" onClick={() => { setErr(false); load(); }} className="btn-ghost btn-sm shrink-0 px-2">다시 시도</button>
+    </p>
+  );
   // 프리셋 0개면 렌더하지 않음 — 기존 UI들(개수 조건부)과 동일한 노출 규칙
   if (!presets || presets.length === 0) return null;
 

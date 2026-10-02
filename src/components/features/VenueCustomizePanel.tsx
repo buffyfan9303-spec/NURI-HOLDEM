@@ -8,6 +8,7 @@ import { DEFAULT_RANK_METRICS,
   type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
+import { useVenueScope } from '../../lib/useVenueScope';
 import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updateVenueContact, updateVenueKakao, type VenueContact } from '../../api/community';
 import ContactListEditor from './VenueContactFields';
 import CheckinLocationSection from './CheckinLocationSection';
@@ -572,6 +573,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   const [suggestOpen, setSuggestOpen] = useState(false);
 
   // E(2026-09-28) — 매장 전환 가드: 앞 매장 점수 기록이 늦게 와서 지금 매장 목록을 덮지 않게.
+  const run = useVenueScope(venueId);
   const rowsOwner = useRef(venueId);
   rowsOwner.current = venueId;
   const reload = () => { const v = venueId; getScoreEntries(v).then((r) => { if (rowsOwner.current === v) setRows(r); }).catch(() => {}); };
@@ -580,12 +582,13 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   // 입력 디바운스 검색(300ms) — 실명·닉네임·이 매장 방문횟수
   useEffect(() => {
     const q = name.trim();
-    if (!suggestOpen || q.length < 1) { setSuggest([]); return; }
+    if (!suggestOpen || q.length < 1) { run.cancel('search'); setSuggest([]); return; }
     const t = setTimeout(() => {
-      searchRegisteredPlayers(venueId, q).then((r) => setSuggest(r.slice(0, 6))).catch(() => setSuggest([]));
+      // review-store-link-1002 2a — 이미 나간 요청은 타이머 정리로 못 막는다. 늦게 온 A 매장(또는 옛 검색어) 제안이 B 에 뜨지 않게.
+      run('search', (v) => searchRegisteredPlayers(v, q), (r) => setSuggest(r.slice(0, 6)), () => setSuggest([]));
     }, 300);
     return () => clearTimeout(t);
-  }, [name, venueId, suggestOpen]);
+  }, [name, venueId, suggestOpen, run]);
 
   const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
 

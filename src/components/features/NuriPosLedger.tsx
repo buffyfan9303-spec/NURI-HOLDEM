@@ -49,6 +49,8 @@ import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useVenueScope } from '../../lib/useVenueScope';
+import { fillEmptyFromPrefill } from '../../lib/ledgerPrefill';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -137,8 +139,29 @@ function revealPastSticky(sc: HTMLElement, el: HTMLElement) {
   });
 }
 
-// venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
-export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
+/**
+ * F-1(2026-10-02 audit-motion-1002) — PC(lg+) 장부 표 상자는 **헤더 밑 ~ 정산 바 위** 칸 안에서만 굴린다.
+ * 예전엔 70vh 상자의 절반(1440: 630 중 413px)이 화면 밖·정산 바 밑인데 휠을 그 상자가 먼저 먹어서,
+ * 사용자는 보이지 않는 아래쪽으로 행이 흘러가는 표를 굴렸다(표 2567px 를 다 내린 뒤에야 페이지가 움직였다).
+ * → 상자 높이는 그 칸에 맞추고(CSS), 상자가 칸에 다 들어오기 전에는 **페이지가 먼저** 그 차이만큼 움직인다.
+ * 상자 위/아래 경계가 칸 안이면 아무것도 안 한다(브라우저 기본: 표가 먼저, 끝나면 페이지로 이어짐).
+ * 반환값 = 페이지를 움직여야 하는 양(px, 0 이면 그대로). dy 의 부호가 방향이다.
+ */
+function pageFirstDelta(box: HTMLElement, bar: HTMLElement | null, dy: number): number {
+  const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-top')) || 97;
+  const r = box.getBoundingClientRect();
+  const barTop = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().top : window.innerHeight;
+  let need = 0;
+  if (dy > 0 && r.bottom > barTop + 1) need = Math.min(dy, r.bottom - barTop);
+  else if (dy < 0 && r.top < head - 1) need = Math.max(dy, r.top - head);
+  if (need > 0 && window.scrollY >= document.documentElement.scrollHeight - window.innerHeight - 1) return 0; // 문서 끝 — 표에 넘긴다
+  if (need < 0 && window.scrollY <= 0) return 0;
+  return need;
+}
+const isLgUp = () => window.matchMedia('(min-width: 1024px)').matches;
+
+// venueName — 장부 삭제 확인에 '어느 매장의' 장부인지 보인다(review-store-link-1002 2a: 날짜·메인만으로는 매장을 구별할 수 없었다).
+export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   /** 세션 요약의 '대회 …' → 손님이 보는 대회 상세. 없으면 글자로만 남는다(AdminTab 등). */
@@ -189,6 +212,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   }, [followGame?.n]);
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
+  // 지금 session·games 가 어느 (매장|날짜|회차) 의 것인가 — 첫 로드가 끝나야 채워진다.
+  //   `loading` 만으로는 날짜가 바뀐 **첫 커밋**을 못 막는다(setLoading(true) 는 같은 커밋의 앞선 형제 이펙트가 큐에 넣을 뿐이라
+  //   그 커밋의 다른 이펙트는 아직 loading=false 와 **앞 날짜 session** 을 본다 — review-store-link-1002b A2).
+  const [sessionFor, setSessionFor] = useState<string | null>(null);
   // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
   const [loadError, setLoadError] = useState<unknown>(null);
   // D8(2026-09-29) — 바인·명단 재조회(reload) 실패. loadError 와 따로 둔다: 둘은 realtime·재접속에서 동시에 돌아,
@@ -212,6 +239,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
   const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
   const [copyMain, setCopyMain]   = useState<LedgerSession | null>(null); // 사이드 생성 시 '메인 설정 복사'용
+  // 🔴 L-06(audit-link-1002) — 이 판은 (관리자의) 매장 A→B 전환에 다시 마운트되지 않는다. A 매장 '직전 게임 설정' 응답이
+  //   늦게 오면 B 의 새 게임 폼에 '직전 게임 설정을 불러왔습니다'(A 의 참가비·할인·게임명)로 붙었다. 매장 몫 조회는 run 으로 —
+  //   요청 매장이 지금 매장과 다르면 응답을 버린다(공용 지점 lib/useVenueScope).
+  const run = useVenueScope(venueId);
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
@@ -318,16 +349,19 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   }, [user, staff]);
   const operFull = (id?: string | null) => (id ? (staffNameById.get(id) ?? '직원') : '미지정');
 
+  // 🔴 review-store-link-1002 2a — 늦게 온 A 매장 장부 목록이 B 화면에 그려지면 그 행의 🗑 가 **B 매장의 같은 날짜·회차 장부를
+  //   하드 삭제**했다(deleteLedgerSession 은 지금 venueId 를 쓴다). 목록은 run 으로 받고, 매장이 바뀌는 렌더에서 목록·삭제 대상을 비운다.
   const loadList = useCallback(() => {
     setListLoading(true);
     setListError(null);
-    getLedgerSessionList(venueId).then((list) => {
+    run('list', getLedgerSessionList, (list) => {
       setSessionList(list);
       const ds = [...new Set(list.map((s) => s.sessionDate))]; // 최신순(날짜 desc)
       setCollapsedDates(new Set(ds.slice(1))); // 최신 날짜만 펼침, 과거 날짜는 접어 목록 단축
-    }).catch((e) => setListError(e)).finally(() => setListLoading(false));
-  }, [venueId]);
-  useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
+      setListLoading(false);
+    }, (e) => { setListError(e); setListLoading(false); });
+  }, [run]);
+  useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList, venueId]);
 
   const openBoard = (d: string, g = MAIN_GAME_SEQ) => { setDate(d); setGameSeq(g); setSelected(null); setMode('board'); };
   // 사이드 게임 추가 — 그 날짜의 다음 game_seq로 전환(새 게임이면 설정 폼이 뜸)
@@ -355,29 +389,36 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.
   // 그런데 정작 '되돌릴 수 있는' 정산 마감은 꾹-누르기로 막혀 있어 위험도와 확인 강도가 역전돼 있었다.
   // → confirm 1회를 없애고, 무엇을 잃는지(바인·인원·매출·미수)를 실수치로 먼저 보여준 뒤 마감과 같은 꾹-누르기로 통일한다.
-  const [delTarget, setDelTarget] = useState<{ date: string; gameSeq: number; label: string } | null>(null);
+  // venueId — 누른 그 순간의 매장. 지울 때 이 값을 쓴다(지금 매장과 다르면 지우지 않는다).
+  const [delTarget, setDelTarget] = useState<{ venueId: string; date: string; gameSeq: number; label: string } | null>(null);
   const [delLoss, setDelLoss] = useState<LedgerLossSummary | null>(null);
   const [delLossErr, setDelLossErr] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
+  const [listVenue, setListVenue] = useState(venueId);
+  if (listVenue !== venueId) {
+    setListVenue(venueId);
+    setSessionList([]); setListLoading(true); setListError(null); setDelTarget(null);
+  }
   const [delPw, setDelPw] = useState('');   // 20260925g N19 — 비밀번호 설정 매장에서 바인 있는 장부를 지울 때 서버가 취소 비밀번호를 본다
   const delSeq = useRef(0); // (reload 와 같은 관행) 다른 장부의 늦은 응답이 현재 수치를 덮지 않게
   // 목록 API는 단가·담당만 들고 있어 '잃는 양'을 모른다. 목록 로드를 무겁게 만들지 않으려고
   // 삭제를 누른 그 장부 하나만 이 시점에 조회한다(보드의 buyins/players 는 다른 날짜 것이라 못 씀).
   const askDeleteSession = useCallback((d: string, g = MAIN_GAME_SEQ) => {
     const my = ++delSeq.current;
-    setDelTarget({ date: d, gameSeq: g, label: `${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
+    setDelTarget({ venueId, date: d, gameSeq: g, label: `${venueName ? `${venueName} · ` : ''}${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
     setDelLoss(null); setDelLossErr(false); setDelPw('');
     // 목록 화면은 보드를 안 거쳐 hasPw 가 옛 값일 수 있다 — 비밀번호 칸을 낼지 지금 다시 묻는다(실패하면 직전 값 유지).
-    posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ });
+    run('pw', posHasPassword, setHasPw); // 실패하면 직전 값 유지
     Promise.all([getLedgerSession(venueId, d, g), getLedgerBuyins(venueId, d, g), getLedgerPlayers(venueId, d, g)])
       .then(([s, bs, ps]) => { if (my === delSeq.current) setDelLoss(ledgerLossSummary(bs, ps, s)); })
       .catch(() => { if (my === delSeq.current) setDelLossErr(true); });
-  }, [venueId]);
+  }, [venueId, venueName, run]);
   const doDeleteSession = useCallback(async () => {
     if (!delTarget || delBusy) return; // 홀드 재진입/연타로 두 번 실행되지 않게
+    if (delTarget.venueId !== venueId) { setDelTarget(null); return; } // 누른 뒤 매장이 바뀌었다 — 다른 매장 장부를 지우지 않는다
     setDelBusy(true);
     try {
-      await deleteLedgerSession(venueId, delTarget.date, delTarget.gameSeq, hasPw ? delPw : null);
+      await deleteLedgerSession(delTarget.venueId, delTarget.date, delTarget.gameSeq, hasPw ? delPw : null);
       toast.show(`${delTarget.label} 장부를 삭제했습니다`, 'info'); // 어느 장부였는지 남긴다(오삭제 사후 추적)
       setDelTarget(null); setDelPw(''); loadList();
     }
@@ -406,7 +447,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 🔴 D3(2026-09-25) — hasPw 는 보드를 열 때 **한 번** 읽은 값이었다(그것도 조회 실패를 '없음'으로 삼킨 값).
   //   그 사이 다른 기기에서 비밀번호를 설정하면 업주 화면은 '비밀번호 없이 취소' 버튼만 내밀고 서버는 매번 거절 →
   //   입력칸이 끝내 안 나왔다. ① 다시 보일 때 재조회 ② 서버가 비밀번호 문구로 거절하면 그 사실로 바로 고친다.
-  const refreshPw = useCallback(() => { posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ }); }, [venueId]);
+  const refreshPw = useCallback(() => { run('pw', posHasPassword, setHasPw); }, [run]); // 실패하면 직전 값 유지 · 늦은 A 매장 응답은 버린다(L-06)
   const notePwFromError = (e: unknown) => {
     const st = cancelPwStateFromError(ledgerErrorText(e, ''));   // msgOf 는 42501 문구를 뭉개 '비밀번호가 올바르지 않습니다' 를 못 본다(20260925g)
     if (st !== null) setHasPw(st);
@@ -467,7 +508,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     ++reloadSeq.current;
     // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
-      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); })
+      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); setSessionFor(`${venueId}|${date}|${gameSeq}`); })
       // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
       //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
       .catch((e) => { if (alive) setLoadError(e); })
@@ -585,9 +626,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // S-15 — 이용권 승인 뒤 같은 손님 이용권 요청이 남았으면 알린다(다음 승인에 바인 1회로 묶이는 것을 막을 기회).
   const warnVoucherLeftover = (r: BuyinRequest) => {
     if (!r.voucherId) return;
-    getPendingBuyinRequests(venueId, date)
-      .then((rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); })
-      .catch(() => {});
+    // key 에 요청 id — 같은 key 는 마지막 요청만 반영하므로, 연달아 두 손님을 승인하면 앞 손님 안내가 사라졌다(review 1002b A1 관찰).
+    run(`leftover:${r.id}`, (v) => getPendingBuyinRequests(v, date),
+      (rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
@@ -878,10 +919,21 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return () => { on = false; };
   }, [closed, venueId, date, gameSeq, session.title]);
 
+  // 매장·날짜·회차가 바뀌면 앞 칸의 직전 설정을 렌더 중에 비운다 — 새 폼의 첫 렌더가 앞 칸 값으로 시작하지 않게.
+  //   새 값은 아래 이펙트가 받아 오고, 폼은 도착한 값을 **빈 칸에만** 채운다(SessionForm · lib/ledgerPrefill).
+  const prefillKey = `${venueId}|${date}|${gameSeq}`;
+  const [prefillFor, setPrefillFor] = useState(prefillKey);
+  if (prefillFor !== prefillKey) { setPrefillFor(prefillKey); setPrefill(null); }
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
   // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
   useEffect(() => {
-    if (loading) return; // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지
+    // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지 — loading 은 날짜가 바뀐 첫 커밋에서 아직 false 라
+    //   '지금 session 이 이 칸의 것인가'(sessionFor)를 함께 본다. 안 보면 '이 포스터로 새 장부'가 다른 날짜로 들어올 때
+    //   **앞 날짜의 열린 장부**를 보고 "이미 다른 장부가 있어 사이드로 엽니다" 로 옮겼다(review-store-link-1002b A2).
+    // 취소는 가드보다 **앞** — 날짜·회차가 바뀐 첫 커밋은 아래 가드가 일찍 돌려보내므로, 가드 뒤에 두면 새 장부 로드가 끝날 때까지
+    //   앞 날짜의 늦은 직전 설정이 setPrefill 로 들어와 빈 칸을 낡은 값으로 채운다(review-store-link-1002 O-1).
+    run.cancel('prefill'); // 앞 날짜·회차의 늦은 직전 설정이 아래 어느 갈래의 결과도 덮지 않게(review 1b)
+    if (loading || sessionFor !== prefillKey) return;
     const sf = seedFillRef.current;
     if (!showSetup) {
       setPrefill(null);
@@ -906,9 +958,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       seedFillRef.current = null;
       return;
     }
-    getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
+    run('prefill', (v) => getLastLedgerSettings(v, date), setPrefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, showSetup, venueId, date, gameSeq]);
+  }, [loading, sessionFor, showSetup, venueId, date, gameSeq]);
 
   // PL3: 마지막 '마감된' 회차 — '지난 게임 그대로 열기' 1탭 재료(세션 전체 + 마감 때 캡처한 클락 설정)
   const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
@@ -939,11 +991,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 사이드 시작 설정일 때 — 그날 메인 게임 설정을 '복사' 버튼으로 제공(반복 입력 제거)
   useEffect(() => {
     if (showSetup && gameSeq !== MAIN_GAME_SEQ) {
-      getLedgerSession(venueId, date, MAIN_GAME_SEQ)
-        .then((s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null))
-        .catch(() => setCopyMain(null));
-    } else setCopyMain(null);
-  }, [showSetup, gameSeq, venueId, date]);
+      run('copyMain', (v) => getLedgerSession(v, date, MAIN_GAME_SEQ),
+        (s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null),
+        () => setCopyMain(null));
+    } else { run.cancel('copyMain'); setCopyMain(null); }
+  }, [showSetup, gameSeq, venueId, date, run]);
 
   // 정산바(하단 고정)가 --tabbar-safe(탭바 예약)보다 커지면(실측 ~166px, SettleFilter 펼침·
   // 좁은 폭 2×2 그리드 포함) 전 화면 상시 노출 푸터(BusinessFooter)의 법정 고지(19세 미만·1336·
@@ -977,6 +1029,38 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     window.addEventListener('resize', measureFooterReserve);
     return () => window.removeEventListener('resize', measureFooterReserve);
   }, [measureFooterReserve]);
+  // F-1 — 표 상자 휠은 '페이지 먼저'(pageFirstDelta). React onWheel 은 passive 라 preventDefault 가 안 먹어 직접 붙인다.
+  //   상자는 행이 0 이면 사라지므로(빈 목록 분기) 콜백 ref 로 붙였다 뗀다.
+  const boardWheelOff = useRef<(() => void) | null>(null);
+  const boardRef = useCallback((el: HTMLDivElement | null) => {
+    boardWheelOff.current?.();
+    boardWheelOff.current = null;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // 전체화면(LedgerWorkspace)은 페이지가 아니라 그 안의 칸이 스크롤 상자다 — 뒤에 깔린 페이지를 굴리면 안 된다.
+      if (e.ctrlKey || e.deltaY === 0 || !isLgUp() || el.closest('[data-ledger-fullscreen]')) return;
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+      const need = pageFirstDelta(el, settleBarElRef.current, dy);
+      if (!need) return;
+      e.preventDefault();
+      window.scrollBy({ top: need, behavior: 'instant' as ScrollBehavior });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    boardWheelOff.current = () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  // F-1 키보드 — Tab 으로 정산 바 밑(또는 헤더 밑) 행에 들어가면 상자를 칸 안으로 올린다/내린다(브라우저는 고정 바를 모른다).
+  const revealBoardRow = useCallback((box: HTMLElement, el: HTMLElement) => {
+    if (!isLgUp() || !el.matches(':focus-visible') || box.closest('[data-ledger-fullscreen]')) return;
+    requestAnimationFrame(() => {
+      const bar = settleBarElRef.current;
+      const r = el.getBoundingClientRect();
+      const barTop = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().top : window.innerHeight;
+      const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack-top')) || 97;
+      // 칸이 가렸으면 상자 전체를 칸 안으로(상자 높이가 칸에 맞으므로 그 안의 칸도 보인다)
+      const need = r.bottom > barTop ? pageFirstDelta(box, bar, Infinity) : r.top < head ? pageFirstDelta(box, bar, -Infinity) : 0;
+      if (need) window.scrollBy({ top: need, behavior: 'instant' as ScrollBehavior });
+    });
+  }, []);
 
   // 셀/행 조회는 표에서 행×열×바인(예: 50명×10칸×200바인 ≈ 10만회/렌더)으로 폭증하던 곳 —
   // buyins 1회 순회로 맵을 만들어 O(1) 조회로 전환(필터/find/reduce per-cell 제거).
@@ -1249,12 +1333,12 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   //   종전엔 여기에 search_members_for_ranking 을 병합했는데, 그건 매장과 무관한 전 회원 실명을
   //   부분 일치로 긁어오는 경로라 걷어냈다. 회원이 아니면 아래 '입력값 그대로 등록'이 받는다.
   useEffect(() => {
-    if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
+    if (!addOpen || newName.trim().length < 1) { run.cancel('search'); setSuggest([]); return; }
     const t = window.setTimeout(() => {
-      searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([]));
+      run('search', (v) => searchRegisteredPlayers(v, newName), setSuggest, () => setSuggest([]));
     }, 250);
     return () => window.clearTimeout(t);
-  }, [newName, addOpen, venueId]);
+  }, [newName, addOpen, venueId, run]);
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
   const pickRegistered = async (rp: RegisteredPlayer) => {
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
@@ -1866,8 +1950,12 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           //   실측(격리 유무 대조, elementFromPoint): 없음 → TH 가 위 / isolate → 정산바가 위.
           // D7(2026-09-29 design-reviewer) — 고정 열(No 38px + 플레이어 ≤153px, 모바일 ≤119px) 폭만큼 scroll-padding 을 줘
           //   키보드 포커스(Shift+Tab)로 끌려온 바인 칸이 고정 열 밑에 가려지지 않게 한다. sm 이상은 오른쪽 총바인·미수도 고정이다.
-          onFocusCapture={(e) => revealPastSticky(e.currentTarget, e.target as HTMLElement)}
-          className="isolate overflow-auto max-h-[70vh] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // F-1(2026-10-02) — PC(lg+)는 상자 높이를 '헤더(--stack-top) 밑 ~ 정산 바(--footer-reserve, 바 높이+12) 위' 칸에 맞춘다.
+          //   70vh 는 상자가 화면 아래쪽(1440: top 576)에서 시작해도 630px 라 절반이 화면 밖·바 밑이었다. 모바일은 종전 70vh.
+          //   휠·키보드는 상자가 그 칸에 다 들어온 뒤에만 표를 굴린다(boardRef·revealBoardRow → pageFirstDelta).
+          ref={boardRef}
+          onFocusCapture={(e) => { revealPastSticky(e.currentTarget, e.target as HTMLElement); revealBoardRow(e.currentTarget, e.target as HTMLElement); }}
+          className="isolate overflow-auto max-h-[70vh] lg:max-h-[calc(100svh-var(--stack-top,6.0625rem)-var(--footer-reserve,0px))] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
@@ -2624,6 +2712,22 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
   const [startISO, setStartISO] = useState<string | null>(base.tournamentStart ?? null);
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
+  // F-1(store-link-1002) — 직전 게임 설정은 폼이 그려진 뒤 도착한다. 도착하면 **빈 칸만** 채운다(업주가 이미 친 칸은 덮지 않는다).
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (mode !== 'open' || !prefilled) { prefillDone.current = false; return; }
+    if (prefillDone.current) return;
+    prefillDone.current = true;
+    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base);
+    if (f.title !== undefined) setTitle(f.title);
+    if (f.cash !== undefined) setCash(f.cash);
+    if (f.card !== undefined) setCard(f.card);
+    if (f.target !== undefined) setTarget(f.target);
+    if (f.dealers !== undefined) setDealers(f.dealers);
+    if (f.event !== undefined) setEvent(f.event);
+    if (f.discs !== undefined) setDiscs(f.discs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, prefilled]);
   const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
 
   // PL1a: 포스터 상속을 3필드(제목·바인·유형) → 전체(스택·애드온, 제출 시 클락 구조·레지레벨·상금)로 확대.

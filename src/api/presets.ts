@@ -106,19 +106,23 @@ export async function listGamePresets(venueId: string): Promise<GamePreset[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('game_presets')
     .select('*').eq('venue_id', venueId).order('updated_at', { ascending: false });
-  if (error) return [];
+  // L-14(audit-link-1002) — 예전엔 오류를 [] 로 삼켜 '프리셋 없음'으로 보였다(못 읽음 ≠ 없음). 소비처가 오류 상태를 그린다.
+  if (error) throw error;
   return (data ?? []).map(rowToPreset);
 }
 
 /** 프리셋 저장(id 있으면 수정, 없으면 생성). 반환: 프리셋 id */
 export async function saveGamePreset(venueId: string, name: string, data: GamePresetData, id?: string): Promise<string> {
   if (IS_MOCK) throw new Error('Mock');
-  const row = { venue_id: venueId, name: name.trim() || '무제 프리셋', data: data as unknown as object, updated_at: new Date().toISOString() };
+  const body = { name: name.trim() || '무제 프리셋', data: data as unknown as object, updated_at: new Date().toISOString() };
   if (id) {
-    await mustAffect(supabase.from('game_presets').update(row).eq('id', id));
+    // L-05(audit-link-1002) — 수정은 매장을 옮기지 않는다. venue_id 를 싣지 않고 (id, 매장)이 함께 맞는 행만 고친다.
+    //   예전엔 update 에 venue_id 를 실어, 매장 B 화면에 남은 A 프리셋 편집을 저장하면 그 행이 B 로 이사했다
+    //   (RLS 는 두 매장을 다 관리하는 사람에게 USING·WITH CHECK 모두 통과). 안 맞으면 0행 → mustAffect 가 오류로 올린다.
+    await mustAffect(supabase.from('game_presets').update(body).eq('id', id).eq('venue_id', venueId));
     return id;
   }
-  const { data: ins, error } = await supabase.from('game_presets').insert(row).select('id').single();
+  const { data: ins, error } = await supabase.from('game_presets').insert({ venue_id: venueId, ...body }).select('id').single();
   if (error) throw new Error(error.message);
   return ins.id as string;
 }
