@@ -197,6 +197,85 @@ test.describe('포스터 승인 개편 20261002h', () => {
     await expect(d.getByTestId('poster-feed-request'), '매장 포스터에 그룹용 공개 요청 체크가 보인다').toHaveCount(0);
   });
 
+  // ── F·G. 오너 결정 10-02 2차 — A 반려 유지 · B 이미지 교체 재심사 ────────────────
+  /** 내 매장 1440 + 포스터 1장. 서버 판정(20261002h prevent_self_approve_poster)을 흉내 내는 상태 있는 schedules. */
+  async function bootOwnerWithPoster(page: Page, o: { premium: boolean; poster: Record<string, unknown> }) {
+    const patches: Record<string, unknown>[] = [];
+    let row: Record<string, unknown> = { ...o.poster };
+    await bootOwner(page, { viewport: { width: 1440, height: 900 }, goto: false });
+    const venueRow = {
+      id: MOCK_VENUE, name: MOCK_VENUE_NAME, region: '서울', address: '서울 강남구 1', owner_id: MOCK_UID,
+      approved: true, status: 'active', verification_status: 'verified', kind: 'venue',
+      is_paid_ad: o.premium, premium_until: null, display_order: 1, follower_count: 3, page_config: null,
+    };
+    await page.route(/\/rest\/v1\/venues\?/, (r: Route) => {
+      if (r.request().method() !== 'GET') return r.fallback();
+      const single = (r.request().headers()['accept'] ?? '').includes('pgrst.object');
+      return r.fulfill(json(single ? venueRow : [venueRow]));
+    });
+    await page.route(/\/rest\/v1\/schedules(\?|$)/, (r: Route) => {
+      const m = r.request().method();
+      if (m === 'HEAD') return r.fulfill({ status: 200, headers: { 'content-range': '*/1', 'access-control-expose-headers': 'content-range' }, body: '' });
+      if (m === 'GET') return r.fulfill(json([row]));
+      if (m === 'PATCH') {
+        const b = JSON.parse(r.request().postData() ?? '{}') as Record<string, unknown>;
+        patches.push(b);
+        // 서버 판정: 반려된 프리미엄 포스터는 반려 유지(A) — 저장 본문이 무엇이든 approved=false·반려 사유 그대로
+        row = { ...row, ...b, approved: row.rejected_at ? false : row.approved, rejected_at: row.rejected_at, reject_reason: row.reject_reason };
+        return r.fulfill(json([row]));
+      }
+      return r.fallback();
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await openMyStore(page);
+    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('tab', { name: /포스터/ }).first().click();
+    const list = page.getByTestId('my-posters');
+    await expect(list.getByText(String(o.poster.title)).first()).toBeVisible({ timeout: 20_000 });
+    return { patches, list };
+  }
+  const myPoster = (extra: Record<string, unknown>) => sched('mp-1', {
+    venue_id: MOCK_VENUE, pub_name: MOCK_VENUE_NAME, owner_id: MOCK_UID, reg_close_time: '10LV', ...extra,
+  });
+
+  test('F 내 매장 1440 — 관리자가 반려한 프리미엄 포스터는 다시 저장해도 반려로 남는다(오너 결정 A)', async ({ page }) => {
+    test.setTimeout(150_000);
+    const { patches, list } = await bootOwnerWithPoster(page, { premium: true,
+      poster: myPoster({ title: '반려된토너', approved: false, rejected_at: '2026-10-02T01:00:00Z', reject_reason: '이미지 확인 필요' }) });
+    const card = list.locator('div').filter({ hasText: '반려된토너' }).filter({ has: page.getByRole('button', { name: '수정', exact: true }) }).last();
+    await expect(card.getByText('반려', { exact: true }).first()).toBeVisible();
+    await card.getByRole('button', { name: '수정', exact: true }).first().click();
+    const d = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '포스터 수정' }) }).last();
+    await expect(d).toBeVisible({ timeout: 20_000 });
+    await expect(d.getByTestId('poster-rejected-premium-notice'), '반려된 프리미엄 포스터인데 재승인 안내가 없다').toContainText('관리자가 다시 승인해야 공개');
+    await expect(d.getByTestId('poster-premium-notice'), '반려된 포스터에 바로 공개 안내가 뜬다').toHaveCount(0);
+    await d.getByRole('button', { name: '수정 완료' }).click();
+    await expect.poll(() => patches.length, { timeout: 15_000 }).toBe(1);
+    expect(patches[0].approved, '화면이 승인 값을 실어 보냈다(판정은 서버)').toBeUndefined();
+    await expect(d).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByText('반려된 포스터라 관리자가 다시 승인해야 공개됩니다').first(), '저장 토스트가 바로 공개로 안내했다').toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText('반려', { exact: true }).first(), '다시 저장한 뒤 반려 표시가 사라졌다').toBeVisible({ timeout: 15_000 });
+    await expect(card.getByText(/반려 사유: 이미지 확인 필요/)).toBeVisible();
+  });
+
+  test('G 내 매장 1440 — 승인된 포스터의 이미지를 바꾸면 다시 승인받아야 공개된다고 안내한다(오너 결정 B)', async ({ page }) => {
+    test.setTimeout(150_000);
+    const { list } = await bootOwnerWithPoster(page, { premium: false,
+      poster: myPoster({ title: '승인된토너', approved: true, poster_url: 'https://example.invalid/old.webp' }) });
+    const card = list.locator('div').filter({ hasText: '승인된토너' }).filter({ has: page.getByRole('button', { name: '수정', exact: true }) }).last();
+    await card.getByRole('button', { name: '수정', exact: true }).first().click();
+    const d = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '포스터 수정' }) }).last();
+    await expect(d).toBeVisible({ timeout: 20_000 });
+    await expect(d.getByTestId('poster-rereview-notice'), '아무것도 안 바꿨는데 재심사 안내가 뜬다').toHaveCount(0);
+    // 1×1 PNG — 이미지 교체(업로드는 저장 때만 일어난다 · 여기서는 저장하지 않는다)
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    await d.locator('input[type="file"]').setInputFiles({ name: 'new.png', mimeType: 'image/png', buffer: png });
+    const notice = d.getByTestId('poster-rereview-notice');
+    await expect(notice, '이미지를 바꿨는데 재심사 안내가 없다').toContainText('포스터 이미지를 바꿨습니다', { timeout: 10_000 });
+    await expect(notice).toContainText('다시 승인받아야 공개');
+  });
+
   // ── D·E. 오너 결정 10-02 ②③ — 운영진 등록 · 비로그인 방문자 열람 ────────────────
   test('D 그룹 390 — 운영진(개설자 아님)도 [+ 포스터]로 그룹 포스터를 올린다', async ({ page }) => {
     test.setTimeout(150_000);

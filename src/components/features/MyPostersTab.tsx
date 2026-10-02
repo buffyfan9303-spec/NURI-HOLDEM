@@ -307,7 +307,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
           {schedule.rejectedAt && (
             <p className="mt-1 rounded-input border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-2xs leading-relaxed text-rose-400">
               반려 사유: {schedule.rejectReason?.trim() || '사유가 기록되지 않았습니다'}
-              <br /><span className="text-ink-secondary">수정 후 저장하면 다시 승인 대기열로 올라갑니다.</span>
+              <br /><span className="text-ink-secondary">수정 후 저장하면 다시 승인 대기열로 올라갑니다. 프리미엄 매장은 반려가 유지되어 관리자가 다시 승인해야 공개됩니다.</span>
             </p>
           )}
           {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
