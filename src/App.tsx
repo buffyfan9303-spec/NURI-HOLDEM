@@ -2087,7 +2087,7 @@ export default function App() {
         // 2026-10-02: 안내만 하고 홈에 두면 '그래서 어디로?' 가 남는다 — 글이 있던 커뮤니티로 보낸다.
         //   (응답을 기다리는 사이 유저가 직접 다른 탭을 골랐다면 그 선택이 이긴다 — fromTab 이 그대로일 때만 옮긴다)
         else {
-          toast.show('삭제되었거나 볼 수 없는 글입니다', 'info');
+          toast.show('삭제되었거나 찾을 수 없는 글입니다', 'info');
           if (activeTabRef.current === fromTab) changeTab('community');
         }
       }).catch(() => {
@@ -3256,7 +3256,7 @@ export default function App() {
         // 최근 50건 밖의 글(오래된 글에 달린 좋아요·댓글 알림)은 단건 조회로 연다
         else getPostById(pm[1]).then((fetched) => {
           if (fetched) setOpenPost(fetched);
-          else toast.show('삭제되었거나 볼 수 없는 글입니다', 'info');   // ?post= 딥링크(위)와 같은 문구
+          else toast.show('삭제되었거나 찾을 수 없는 글입니다', 'info');   // ?post= 딥링크(위)와 같은 문구
         }).catch(() => toast.show('글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error')); // 조용히 삼키면 알림이 '무반응' 이 된다(SWEEP-A ⑥)
         return prev;
       });

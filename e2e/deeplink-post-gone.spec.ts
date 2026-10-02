@@ -14,7 +14,7 @@ const visibleTabs = (page: Page) =>
 test('🔴 ?post=<없는 글> — 안내 토스트가 뜨고 커뮤니티 탭이 열리며 파라미터가 지워진다', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?post=${ZERO}`);
-  await expect(page.getByText('삭제되었거나 볼 수 없는 글입니다'), '없는 글 링크인데 안내가 없다').toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('삭제되었거나 찾을 수 없는 글입니다'), '없는 글 링크인데 안내가 없다').toBeVisible({ timeout: 20_000 });
   await expect.poll(() => visibleTabs(page), { message: '안내만 뜨고 홈에 남았다 — 글이 있던 커뮤니티로 가야 한다', timeout: 5_000 }).toContain('community');
   expect(new URL(page.url()).searchParams.has('post'), '?post= 가 남아 새로고침마다 반복된다').toBe(false);
 });
