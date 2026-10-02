@@ -950,9 +950,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const navItems = (isAdmin || navAll || !staffOk) ? available
     : available.filter((a) => (a.id === 'stats' ? matured.insights : true));
   const navHiddenCount = available.length - navItems.length;
-  const curItem = available.find((a) => a.id === section);
-  /** 모바일 아코디언 라벨 — 단계 바가 현재 위치를 말하는 섹션인가(아래 GameStepBar 렌더 조건과 같은 집합). */
-  const railNav = (section === 'game' || section === 'dashboard' || section === 'voucher') && !curItem?.locked;
   // ⚠ 2026-09-15 — deferred 를 걷어냈다. 이유는 위 renderSettingsTab 주석과 같다:
   //   내 매장은 이제 goSubTab(VT) 을 타는데, deferred 값은 flushSync 커밋 안에서 갱신되지 않아
   //   전환이 **옛 판을 찍고** 진짜 교체가 전환 밖에서 드러났다. 지금은 VT 스냅샷이 렌더 비용을 가린다.
@@ -1106,10 +1103,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           <StaffPunchBar venueId={venueId} active={tabActive} onFix={() => startTransition(() => gotoSection('attendance'))} />
         )}
         {venueId && (
-          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} />
+          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} busy={shellBusy} />
         )}
         {/* B1 — 매장 전환 중(shellBusy)엔 셸이 앞 매장 권한으로 그려져 있다. 보이기만 하고 누를 수 없게(inert) — 메뉴·단계는 B 권한이 온 뒤에 연다. */}
-        <div className="lg:flex lg:gap-5" inert={shellBusy || undefined} aria-busy={shellBusy || undefined}>
+        {/* C1 c(2026-10-02) — 잠긴 셸은 흐리게(0.55) + 대기 커서로 '지금은 못 누른다'를 보인다. 150ms 늦게 흐려져 빠른 전환에선 깜빡이지 않고,
+            풀릴 때는 바로 돌아온다. 인라인 style — 전역 CSS 예산(35KB)에 0 바이트. */}
+        <div className="lg:flex lg:gap-5" inert={shellBusy || undefined} aria-busy={shellBusy || undefined}
+          style={shellBusy ? { opacity: 0.55, cursor: 'progress', transition: 'opacity 200ms ease 150ms' } : { transition: 'opacity 120ms ease' }}>
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
               {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처 "머리글이 3~4겹"): 단계 바가 뜨는 섹션(대시보드·게임 진행·이용권)에서는
@@ -1120,9 +1120,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <div data-main-enter className="lg:hidden">
                 <button type="button" data-testid="mystore-menu-toggle" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
                   className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
-                  <span className="shrink-0 text-accent-300" aria-hidden>{railNav ? <Icon name="menu" size={16} /> : SECTION_ICON[section as Section]}</span>
-                  <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">{railNav ? '전체 메뉴' : (curItem?.label ?? '메뉴')}</span>
-                  {(navOpen || !railNav) && <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>}
+                  {/* C1 H-3(2026-10-02) — 단계 바가 없는 섹션도 바로 아래 판 제목이 '지금 어디'를 말한다('직원 관리' 토글 밑 '직원 관리' 제목 두 겹).
+                      토글은 어느 섹션에서나 '전체 메뉴'(다른 섹션으로 가는 길)로 둔다. 현재 항목은 펼친 목록의 강조가 그대로 보인다. */}
+                  <span className="shrink-0 text-accent-300" aria-hidden><Icon name="menu" size={16} /></span>
+                  <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">전체 메뉴</span>
+                  {navOpen && <span className="text-2xs text-ink-muted">닫기</span>}
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 <Fold open={navOpen}>
@@ -1373,14 +1375,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               );
             })()}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
+            {/* C1 a(2026-10-02) — 하위탭 줄·머리도 아래 폼 판과 같은 READ_W 상자에 둔다. 1920 에서 '위험 구역' 탭(ml-auto)이 카드 끝(1220)에서
+                676px 떨어진 판 끝에 홀로 섰다. ≤1366 은 판이 READ_W 보다 좁아 바뀌는 것 없다. */}
             {renderSection === 'settings' && !dItem?.locked && (
-              <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
+              <div style={{ maxWidth: READ_W }}>
+                <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
+              </div>
             )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환).
                 레일 섹션(요약·게임 단계·이용권)의 헤더는 위 머리 칸(data-step-chrome)이 그린다.
                 🔴 오너 2026-10-01 — 게임 단계 헤더 높이가 설명 줄 수(1~3줄)로 갈려 판이 오르내린 원인과 겹침 격자 처방은 위 주석 참고. */}
             {!dItem?.locked && renderSection !== 'game' && renderSection !== 'dashboard' && renderSection !== 'voucher' && (
-              <div>
+              <div style={renderSection === 'settings' ? { maxWidth: READ_W } : undefined}>
               <SectionHeader
                 title={renderSection === 'settings'
                   ? (SETTINGS_TABS.find((t) => t.id === renderSettingsTab)?.label ?? '매장 설정')
@@ -1491,7 +1497,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     <VenueEventRequestPanelM venueId={venueId} />
                   </Suspense>)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
-                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} canIssue={caps.issueVoucher} active={tabActive && renderSection === 'voucher'} />)}
+                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} canIssue={caps.issueVoucher} active={tabActive && renderSection === 'voucher'} wide={isWideVm} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
                 {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
@@ -1563,8 +1569,10 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
 // ── ST1: 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다(§13-C).
 // 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
 // (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
-const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
+const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, busy = false }: {
   venueId: string; active: boolean;
+  /** C1 b — 매장 전환 대기(셸 잠김) 중이면 앞 매장 바 자리를 계속 붙잡는다(본문이 B 로 바뀌는 순간에 한 번에 바뀌게). */
+  busy?: boolean;
   /** 🔴 2026-09-20 — 종전에는 `(s: Section | GameStep)` 이라 **문맥을 실을 수 없었다**.
    *  '바인 대기 N건' 이 그 N 건이 있는 날짜로 가야 해서 대시보드가 이미 쓰는 `StoreGoto` 로 넓힌다. */
   onGoto: StoreGoto;
@@ -1578,17 +1586,30 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   //   고 읽는다. 게다가 매장 A→B 로 옮기면 A 로 나간 응답이 늦게 도착해 **B 바에 A 의 클락**이 그려졌다.
   //   같은 파일의 이용권 레일과 **같은 계약**(staleResponse seq+owner)을 쓴다 — 새 방식을 만들지 않는다.
   const stampRef = useRef<RequestStamp<string>>({ seq: 0, owner: venueId });
+  // C1 b(2026-10-02, review-mystore-b1-1002 §3-1) — 매장 A→B 전환 순간 A 의 바(바인 대기 등)가 비워지며 사라져 아래 셸 전체가
+  //   47px(390: 63px) 위로 튀었다. 비우는 것은 그대로(A 데이터를 B 에 남기지 않는다) 하되, 바가 있던 자리 높이를 B 의 첫 응답이 올 때까지
+  //   빈 자리로 붙잡는다. B 응답 뒤 B 에 바가 없으면 그때 한 번 접힌다(내용이 바뀐 것이라 정상).
+  const barRef = useRef<HTMLDivElement>(null);
+  const [hold, setHold] = useState<{ venueId: string; h: number } | null>(null);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
-    getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
-      .catch(() => { if (!stale()) setClocks([]); });
-    getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
-      .catch(() => { if (!stale()) setPending(0); });
+    void Promise.allSettled([
+      getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
+        .catch(() => { if (!stale()) setClocks([]); }),
+      getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+        .catch(() => { if (!stale()) setPending(0); }),
+    ]).then(() => { if (!stale()) setLoadedFor(venueId); });
   }, [venueId, biz]);
   // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
-  useEffect(() => {
+  const prevVenue = useRef(venueId);
+  useLayoutEffect(() => {
+    if (prevVenue.current === venueId) return;
+    prevVenue.current = venueId;
+    const h = barRef.current?.offsetHeight ?? 0;
+    setHold(h > 0 ? { venueId, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
     setClocks([]); setPending(0);
   }, [venueId]);
@@ -1601,7 +1622,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   // 남은 시간 초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나).
   //   K9 — 공용 틱(lib/clockTick): TV·보드와 같은 순간에 초가 넘어간다(자체 1초 인터벌은 마운트 시점마다 위상이 달랐다).
   useClockSecond(main, active && mainRunning);
-  if (!main && pending === 0) return null;
+  if (!main && pending === 0) return hold?.venueId === venueId && (busy || loadedFor !== venueId) ? <div aria-hidden data-livebar-hold="" style={{ height: hold.h }} /> : null;
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
   const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;
@@ -1615,6 +1636,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
        StoreDashboard 의 기존 라이브 KPI 글로우와는 같은 화면에 뜰 수 없다 —
        이 바는 renderSection !== 'dashboard' 게이트 안에만 있다(위 597행). */
     <div
+      ref={barRef}
       data-main-enter
       data-aura=""
       data-aura-level="hero"
@@ -2869,9 +2891,14 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
     </Suspense>
   );
   if (scheduleOnly) return sched;
+  const schedIn = (
+    <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+      <StaffScheduleL venueId={venueId} active={active} bare />
+    </Suspense>
+  );
   const items: { id: string; label: string; node: ReactNode }[] = [
     { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
-    { id: 'schedule', label: '딜러 출근 스케줄',            node: sched },
+    { id: 'schedule', label: '딜러 출근 스케줄',            node: schedIn },
     { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <LazyBox><StaffWageManagerL venueId={venueId} /></LazyBox> },
     { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <LazyBox><StaffSettlementL venueId={venueId} active={active} /></LazyBox> },
     { id: 'log',      label: '직원 출근일지',                node: <LazyBox><StaffWorkLogL venueId={venueId} active={active} /></LazyBox> },

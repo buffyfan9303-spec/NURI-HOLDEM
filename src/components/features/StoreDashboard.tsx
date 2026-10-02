@@ -5,6 +5,7 @@ import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
 import { Fold, useReveal } from '../atoms/Fold';
+import { useIsMdUp } from '../../lib/responsive';
 import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
@@ -524,6 +525,14 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       return { sx, c, value, unpaid, paid, entry, ticket, ck, ckLive };
     });
   }, [range, d, venueClocks]);
+  // C1 D-7(2026-10-02) — 모바일(<768)에서 데일리 펍 15게임이면 표가 1,320px 였다. 진행 중 게임만 먼저 보이고 마감 게임은 '더 보기'로 편다.
+  //   진행 중이 하나도 없거나 마감이 2개 이하면 접지 않는다(표가 비거나 접어 봐야 짧다). PC 는 종전대로 전부.
+  const cardGridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => fitLastCard(cardGridRef.current));
+  const isMdUp = useIsMdUp();
+  const [allGames, setAllGames] = useState(false);
+  const closedGames = todayGames.filter((g) => g.sx.closed).length;
+  const foldGames = !isMdUp && !allGames && closedGames >= 3 && closedGames < todayGames.length;
   // B4(2026-09-28) — '오늘 장부' KPI 는 **그날 전 게임 합산**이다(정산 하루 합계·주간 리포트와 같은 범위).
   //   예전엔 메인 한 판(getLedgerBuyins 기본 game 1)만 세서 사이드가 있는 날 매출·바인·미수가 정산보다 작게 나왔고,
   //   그렇다는 표시도 없었다. 합산 재료는 이미 받은 14일 range(todayGames)라 새 조회 0건.
@@ -967,7 +976,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           {loading ? <div className="mt-2"><Skeleton /></div> : !dayStarted ? null : (
             /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
                고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
-            <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
+            /* C1 D-2 — items-end 면 엔트리 보조줄이 붙은 칸만 높아져 옆 칸 라벨이 53px 내려갔다(390). 라벨 윗줄을 맞추고 엔트리는 값 밑 보조줄로. */
+            <span className="mt-2 grid grid-cols-2 items-start gap-x-5 gap-y-3 lg:grid-cols-4">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 <span className="mt-1 block whitespace-nowrap text-2xl font-extrabold leading-none tabular-nums text-gold-300">
@@ -979,7 +989,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
                   <CountUp value={day.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
-                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                  <span className="mt-1 block text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                 </span>
               </span>
               <span className="block">
@@ -1285,7 +1295,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           //   '읽기전용 잠금(해제는 업주만)' 같은 세부는 마감 화면이 그 자리에서 다시 말해 준다.
           desc: `${list} · 마감하면 장부가 잠기고 순위 입력으로 이어집니다.`, cta:'마감하기', onClick: () => onGoto({ section: 'ledger', date: first.sessionDate, gameSeq: first.gameSeq, settle: true }), tone: 'warn' };
         } else if (caps.ledger && session?.closed && hasRankToday === false) {
-          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
+          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부 명단으로 바로 채워요.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
             ? { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
@@ -1406,7 +1416,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           블록 사이만 12.75, 카드 사이는 8.5 로 갈려 있었다(1440 실측) — 한 값으로 맞춘다. */}
       {/* 2026-09-11 PC 개편: xl(1360px)에서 3열. 2열로 두면 카드 하나가 660px 까지 늘어나
           '한 카드 = 한 질문' 인 내용(숫자 2~3개)에 비해 빈 폭이 남고 세로만 길어진다. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {/* C1 D-3·D-4(2026-10-02) — ① 등높이 격자라 빈 상태 카드(다가오는 예약·오늘 출근·인건비·생일 단골)가 옆 카드 높이까지 83~146px 비었다 → items-start.
+          ② 3열 마지막 줄에 카드 1장만 남으면(1440: '손님 유형') 오른쪽 두 칸 ~630px 가 빈다 → 그 카드만 한 줄 전체(fitLastCard). */}
+      <div ref={cardGridRef} className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
         <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
@@ -1672,7 +1684,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           {!!rangeErr && <div className="mb-2"><LoadFailRow what="오늘 게임" onRetry={reloadRange} /></div>}
           {todayGames.length > 0 && (
           <div className="overflow-x-auto scrollbar-none">
-            <table className="w-full min-w-136 text-left text-xs">
+            {/* C1 e(2026-10-02, W-3) — ≥1440 은 판이 넓어져(1920: 1636px) 게임 이름과 [장부] 버튼이 1500px 넘게 떨어졌다. 표는 1366 판 폭(960)에서 멈춘다. */}
+            <table className="w-full min-w-136 text-left text-xs" style={{ maxWidth: 960 }}>
               <thead>
                 <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                   <th scope="col" className="py-1.5 pr-2 font-semibold">게임</th>
@@ -1687,7 +1700,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 </tr>
               </thead>
               <tbody className="tabular-nums">
-                {todayGames.map(({ sx, c, value, unpaid, ck, ckLive }) => {
+                {(foldGames ? todayGames.filter((g) => !g.sx.closed) : todayGames).map(({ sx, c, value, unpaid, ck, ckLive }) => {
                   const label = sx.gameSeq === MAIN_GAME_SEQ ? (sx.title || '메인') : (sx.title || `사이드 ${sx.gameSeq - 1}`);
                   // 상태는 색만으로 구분하지 않는다 — 라벨을 항상 함께 쓴다(§6 접근성).
                   // 2026-09-25 #7 — 라이트에서 emerald-600 은 틴트 위 3.0:1, amber-500 도 미달이었다. 라이트는 텍스트용 딥 단(700/800), 다크는 그대로.
@@ -1724,6 +1737,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             </table>
           </div>
           )}
+          {!isMdUp && closedGames >= 3 && closedGames < todayGames.length && (
+            <button type="button" onClick={() => setAllGames((v) => !v)} aria-expanded={!foldGames} data-testid="dash-games-fold"
+              className="mt-1 flex min-h-[44px] w-full items-center justify-center gap-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+              {foldGames ? `마감 ${closedGames}개 더 보기` : '마감 게임 접기'}
+            </button>
+          )}
         </section>
       )}
 
@@ -1747,6 +1766,22 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       )}
     </div>
   );
+}
+
+/** C1 D-3 — 격자 마지막 줄에 카드가 1장만 남으면 그 카드를 한 줄 전체로 편다(열 수는 실제 계산값으로 — sm 2열·xl 3열 모두).
+ *  카드 수가 권한·'더 보기'로 바뀌므로 CSS 선택자 대신 그리고 나서 센다(전역 CSS 예산 0 바이트). 폭이 바뀌면 다시 센다. */
+function fitLastCard(g: HTMLDivElement | null) {
+  if (!g) return;
+  const fit = () => {
+    const kids = [...g.children] as HTMLElement[];
+    kids.forEach((k) => { k.style.gridColumn = ''; });
+    const cols = getComputedStyle(g).gridTemplateColumns.split(' ').length;
+    if (cols > 1 && kids.length % cols === 1) kids[kids.length - 1].style.gridColumn = '1 / -1';
+  };
+  fit();
+  const ro = new ResizeObserver(fit);
+  ro.observe(g);
+  return () => ro.disconnect();
 }
 
 function DashCard({ title, badge, onClick, children, show = true, more, center = false }: {

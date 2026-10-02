@@ -72,7 +72,17 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       wasOpen.current = true;
       // [이용권 확인] 이 검색칸에 준 포커스는 지킨다 — 그쪽 rAF 가 먼저 돌므로 판정도 rAF 안에서 한다.
       requestAnimationFrame(() => { if (box && !box.contains(document.activeElement)) box.querySelector<HTMLElement>('[data-voucher-collapse]')?.focus({ preventScroll: true }); });
-      const onDown = (e: PointerEvent) => { if (box && !box.contains(e.target as Node)) setRailOpen(false); };
+      // C1 d(2026-10-02, review-mystore-b1-1002 §3-3) — 레일을 펼친 채 표의 빈 + 칸을 누르면 레일이 닫히면서 **결제창까지** 열렸다(클릭 관통).
+      //   표 안을 누른 첫 클릭은 '레일 닫기'로만 쓴다(이어지는 click 한 번을 삼킨다). 표 위 도구 줄·사이드 메뉴 등 표 밖은 종전대로 바로 동작한다.
+      const onDown = (e: PointerEvent) => {
+        const t = e.target as Element;
+        if (!box || box.contains(t)) return;
+        setRailOpen(false);
+        if (!t.closest?.('table') || !colRef.current?.contains(t)) return;
+        const eat = (c: MouseEvent) => { c.preventDefault(); c.stopPropagation(); };
+        document.addEventListener('click', eat, { capture: true, once: true });
+        setTimeout(() => document.removeEventListener('click', eat, true), 800);
+      };
       document.addEventListener('pointerdown', onDown, true);
       return () => document.removeEventListener('pointerdown', onDown, true);
     }

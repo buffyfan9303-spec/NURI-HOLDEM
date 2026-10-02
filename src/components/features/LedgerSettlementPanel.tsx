@@ -334,7 +334,8 @@ function Kpi({ label, value, hint, tone = 'muted', testId }: { label: string; va
     <div className="rounded-aura border card-aura px-3 py-2.5">
       <p data-testid={testId} className="text-2xs font-semibold text-ink-muted">{label}</p>
       <p className={`mt-0.5 text-xl font-extrabold tabular-nums ${TONE[tone] ?? TONE.muted}`}>{value}</p>
-      {hint && <p className="mt-0.5 truncate text-2xs text-ink-muted" title={hint}>{hint}</p>}
+      {/* C1 S-2(2026-10-02) — 390 에서 '첫 바인 270 · 리바인 811 · 엔…' 이 잘렸다(196/146px). 보조줄은 줄바꿈을 허용한다. */}
+      {hint && <p className="mt-0.5 break-keep text-2xs text-ink-muted">{hint}</p>}
     </div>
   );
 }

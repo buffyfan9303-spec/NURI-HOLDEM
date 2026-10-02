@@ -384,11 +384,18 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
           ))}
         </div>
       )}
-      <p className="text-2xs text-ink-muted">
-        급여 = 근무시간 × 시급(「인건비 관리」 설정). 시간은 출퇴근이 모두 기록된 날만 분 단위로 합산하고, 금액은 사람별 합계에서 한 번만 반올림합니다.
-        딜러 로테이션은 시프트에 적은 시급으로 따로 계산해 <b className="text-ink-secondary">총 인건비에 함께</b> 넣습니다.
-        「인건비 관리」의 급여 계산 설정에서 켠 항목만 더해 계산합니다.
-      </p>
+      {/* C1 T-2(2026-10-02) — 5줄(167자) 안내를 한 줄 요지 + 자세히(접힘)로. 문장은 그대로 펼친 칸에 남는다. */}
+      <details className="group/rkhelp text-2xs text-ink-muted">
+        <summary className="cursor-pointer list-none">
+          급여 = 근무시간 × 시급(「인건비 관리」 설정)
+          <span className="ml-1 underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
+        </summary>
+        <p className="mt-1">
+          시간은 출퇴근이 모두 기록된 날만 분 단위로 합산하고, 금액은 사람별 합계에서 한 번만 반올림합니다.
+          딜러 로테이션은 시프트에 적은 시급으로 따로 계산해 <b className="text-ink-secondary">총 인건비에 함께</b> 넣습니다.
+          「인건비 관리」의 급여 계산 설정에서 켠 항목만 더해 계산합니다.
+        </p>
+      </details>
       <p data-testid="pay-disclaimer" className="text-2xs text-ink-muted">
         참고용 계산입니다. 실제 지급액과 법정 수당은 매장이 확인하세요(고용노동부 상담 1350).
       </p>
@@ -508,7 +515,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
             className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
         </div>
       ) : sorted.length === 0 ? (
-        <p className="text-2xs text-ink-muted text-center py-4">배정된 출근 일정이 없습니다 (내 이름: {myNames.join(' / ') || '-'}).<br />업주가 스케줄에 본인 이름으로 배정하면 여기서 출퇴근을 기록할 수 있습니다.</p>
+        <p className="text-2xs text-ink-muted text-center py-4">배정된 출근 일정이 없습니다 (내 이름: {myNames.join(' / ') || '-'}).<br />스케줄에 내 이름이 배정되면 여기서 출퇴근을 기록해요.</p>
       ) : (
         <div className="space-y-1.5">
           {sorted.map((s) => {
