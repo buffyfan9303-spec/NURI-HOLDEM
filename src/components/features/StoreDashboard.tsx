@@ -1215,7 +1215,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
         <section className="rounded-aura border card-aura p-3">
-          <div className="flex items-baseline justify-between gap-2">
+          {/* 감사 D-1(오너 지적) — items-baseline 이면 제목 h3 가 아이콘 든 flex 라 기준선이 아이콘 바닥이 되어 '통계 →' 가 3.1px 아래로 처졌다 */}
+          <div className="flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
             <button type="button" onClick={() => onGoto('stats')} className="hit shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
           </div>
@@ -1255,7 +1256,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           ponytail: 둘 다 비면(할 일 없음 + 위험 없음) 부모 space-y 의 간격 한 칸이 남는다.
             '오늘 운영이 전부 끝난' 드문 상태라 그대로 둔다 — 없애려면 두 IIFE 의 null 조건을
             바깥으로 끌어내야 하고, 그 리팩터가 이 12.75px 보다 위험하다. */}
-      {/* ⚠ 2026-09-16: 예전엔 `xl:grid-cols-12` + `col-span-8/4` 였다. 그런데 `empty:hidden` 으로 오른쪽이 사라져도
+      {/* ⚠ 2026-09-16: 예전엔 xl 에서 12열 격자 + `col-span-8/4` 였다. 그런데 `empty:hidden` 으로 오른쪽이 사라져도
           `grid-column: span 8` 은 여전히 12열 중 8열이라 **좌측이 626px 에 갇히고 321.7px 이 빈 채 남았다**
           (실측: 패널 948px · 우측 empty 시 좌 626.3 / 공백 321.7). flex 로 바꾸면 이웃이 사라질 때 남은 쪽이 948 을 다 쓴다. */}
       <div className="space-y-3 xl:flex xl:items-start xl:gap-4 xl:space-y-0">
@@ -1436,7 +1437,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
 
         {/* 최근 7일 추세 + 객단가 */}
         <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
-          badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석 →</span>}>
+          badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석</span>}>
           {/* 순서가 중요하다 — 실패를 '데이터 없음'보다 **먼저** 판정한다(F14). 조회가 죽으면 range 가
               빈 값이라 weekEntry 가 0 이고, 예전엔 그게 "7일간 손님이 없었다"로 읽혔다. */}
           {loading ? <Skeleton /> : rangeErr ? (
@@ -1512,7 +1513,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                '유저' 같은 모호한 이름을 새로 만들지 않는다 — 직원은 '직원 관리', 고객은 '고객·단골',
                이용권 대상은 이용권 화면의 '받는 손님' 으로 역할이 갈린다. */}
         <DashCard show={caps.ledger} title="고객·단골" onClick={() => setRegOpen(true)}
-          badge={<span className="text-2xs font-bold text-ink-muted">전체 보기 →</span>}>
+          badge={<span className="text-2xs font-bold text-ink-muted">전체 보기</span>}>
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
           ) : (

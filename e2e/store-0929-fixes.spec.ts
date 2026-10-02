@@ -164,6 +164,8 @@ async function openBoard(page: Page, o: Opts) {
   const armed = await boot(page, o);
   const store = page.locator('[data-tab="my-store"]');
   await store.locator('button:visible').filter({ hasText: /^장부$/ }).first().click({ timeout: 20_000 });
+  // 1d(오너 2026-10-02) — 모바일(<768) 장부는 요약이 기본이다. 표(체크 화면)를 재는 이 스펙은 '편집' 으로 들어간다.
+  if (o.vp.width < 768) await store.getByTestId('ledger-edit-mode').click({ timeout: 25_000 });
   await expect(store.locator('tbody td button[title="+1 바인 · 결제수단 선택"]:visible').first()).toBeVisible({ timeout: 25_000 });
   return armed;
 }

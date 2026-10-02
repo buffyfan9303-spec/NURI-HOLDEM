@@ -330,8 +330,14 @@ for (const from of ['요약', '이용권'] as const) {
     // 장부 판 자체가 그 게임 보드로 열렸다 — 목록 모드(스위처 없음)로 열리면 실패한다(goStep 만 쓴 첫 구현이 실제로 그랬다).
     //   ⚠ eq.1 조회는 대시보드·클락 등 다른 소비자도 내므로 '마지막 요청' 으로 판정하지 않는다.
     await expect.poll(() => seqs.slice(before).includes('2'), { message: '장부가 고른 게임(game_seq=2)을 조회하지 않았다', timeout: 10_000 }).toBe(true);
-    await expect(page.locator('[data-pane="ledger"] button.bg-accent-300'), '장부 보드의 게임 스위처에서 사이드1 이 선택되지 않았다(목록 모드로 열림)')
-      .toHaveText([/사이드1/], { timeout: 10_000 });
+    // 🔴 2026-10-02 오너 「게임 선택 줄은 하나로」 — 장부의 게임 스위처가 셸 칩 줄 자리로 portal 된다(판 안의 두 번째 줄 없음).
+    //   그래서 '보드로 열렸다' 는 판 안 날짜 입력(목록 모드엔 없다)으로, '하나뿐' 은 보이는 게임 선택 줄 수로 잰다.
+    await expect(page.locator('[data-pane="ledger"] [data-testid="ledger-date"]'), '장부가 보드가 아니라 목록 모드로 열렸다').toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('group', { name: /게임 선택$/ }), '게임 선택 줄이 두 벌이다(셸 칩 줄 + 장부 스위처)').toHaveCount(1);
+    // 4c(2026-10-02 검토) — 예전 'button.bg-accent-300 = 사이드1' 단언의 등가 교체. 하나뿐인 게임 선택 줄에서 눌린 칩이 정확히 하나이고 사이드1 이다
+    //   (조회 poll 만으로는 화면이 다른 게임에 서 있어도 통과했다).
+    await expect(page.getByRole('group', { name: /게임 선택$/ }).getByRole('button', { pressed: true }),
+      '장부 게임 스위처에서 사이드1 이 선택되지 않았다').toHaveText(/사이드1/, { timeout: 10_000 });
   });
 }
 

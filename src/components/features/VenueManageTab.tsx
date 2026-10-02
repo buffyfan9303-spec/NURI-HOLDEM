@@ -55,6 +55,8 @@ import { useClockSecond } from '../../lib/clockTick';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
 import LedgerWorkspace from './LedgerWorkspace';
+import { useUncapAncestors } from '../../lib/uncapAncestors';
+import { useIsWide } from '../../lib/responsive';
 import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
@@ -336,6 +338,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 클락은 seedGameSeq 배선으로 즉시 따라오고, 순위(이벤트명 기반)엔 아래 픽 신호만 얹는다.
   const [gameSel, setGameSel] = useState<GameSel | null>(null);
   const [ledgerFollow, setLedgerFollow] = useState<{ seq: number; n: number } | null>(null); // 칩 픽 → 장부 보드 추종
+  // 2026-10-02 오너(데일리 펍) — 이번 세션에 게임을 한 번이라도 골랐는가(칩·클락·장부). 안 골랐으면 단계 바 '장부' 진입이
+  //   그날 진행 중인 마지막 게임에 착지한다(storeDestination.autoLand). 마감된 메인 보드에 서던 것(감사 1-3).
+  const gameChosen = useRef(false);
   // '정산' 이동 신호(논스). 스크롤이 아니라 신호다 — 장부의 정산바는 position:fixed 라 이미 화면에 있고,
   // 필요한 건 "그 바의 마감 버튼을 지목해 주는 것"이다. 판이 붙은 뒤 장부가 알아서 포커스·강조한다.
   const [settleSignal, setSettleSignal] = useState(0);
@@ -541,6 +546,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 순위는 gameSel 신호로, 장부 보드는 followGame 신호(NuriPosLedger 제어 prop)로
   // 오늘·해당 게임에 함께 착지한다 — 칩 하나로 장부·클락·순위 3면이 같은 게임을 본다.
   const onPickGame = useCallback((seq: number, title?: string) => {
+    gameChosen.current = true;
     setClockSeed(null);
     setClockSeedGame(seq);
     const n = ++gameSelN.current;
@@ -555,8 +561,24 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     onGotoStore({ section: 'ledger', date: businessDateOf(venueId), gameSeq: seq });
   }, [onPickGame, onGotoStore, venueId]);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
+    gameChosen.current = true;
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
+  // 2026-10-02 — 게임 줄이 장부 스위처 하나가 된 뒤, 장부가 영업일에 보는 게임을 셸에 알린다(문맥 줄·클락 시드·순위 칩 픽).
+  //   onPickGame 과 달리 장부 추종 신호(ledgerFollow)는 내지 않는다 — 장부가 이미 그 게임이다(되먹임 0). 같은 게임이면 아무것도 안 바꾼다.
+  const lastLedgerGame = useRef(0);
+  const onLedgerGame = useCallback((seq: number, title?: string, byUser?: boolean) => {
+    // 3b — 장부가 '사용자가 직접 골랐다' 고 할 때만 고름으로 센다. 기본 메인·자동 착지는 세지 않는다(그래야 다음 진입도 착지한다).
+    if (byUser) gameChosen.current = true;
+    if (lastLedgerGame.current === seq) return;
+    lastLedgerGame.current = seq;
+    setClockSeed(null);
+    setClockSeedGame(seq);
+    const n = ++gameSelN.current;
+    setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
+  }, []);
+  // F-3 — '고른 게임'·'장부가 마지막으로 본 게임' 은 매장마다다. 매장을 바꾸면 비운다(A 의 사이드 번호로 B 장부를 열지 않게).
+  useEffect(() => { gameChosen.current = false; lastLedgerGame.current = 0; }, [venueId]);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
   const onGotoRankingFromPosters = useCallback((date: string, event?: string) => {
     setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
@@ -954,6 +976,15 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약 머리 칸의 '오늘 장부 요약' 제목 줄 오른쪽 자리.
   //   StoreDashboard 가 자기 새로고침(갱신 시각·라이브·버튼)을 이 자리로 portal 한다(상태·동작은 대시보드에 그대로).
   const [dashRefreshSlot, setDashRefreshSlot] = useState<HTMLElement | null>(null);
+  // 🔴 2026-10-02 오너(데일리 펍) 「게임 선택 줄은 하나로」 — 장부 단계에서는 이 칩 줄 자리를 장부가 쓴다.
+  //   장부(NuriPosLedger)가 자기 게임 스위처(날짜 따라감·작성 중 사이드·+ 사이드)를 이 자리로 portal 한다 — 같은 자리·같은 모양이라
+  //   단계를 옮겨도 시작선이 그대로고, 장부 판 안의 두 번째 게임 줄(감사 L-3 중복)이 사라진다. 선택 상태의 정본은 장부다.
+  const [ledgerGameSlot, setLedgerGameSlot] = useState<HTMLElement | null>(null);
+  // F-2(design-reviewer 2026-10-02, 리드 결정 a) — ≥1440 에서는 내 매장 탭 **전체(모든 단계)** 의 폭 상한을 푼다.
+  //   장부 판만 풀던 때는 단계·매장 전환마다 헤더·사이드바·단계 바가 가로로 105~345px 튀었다. 탭을 떠나면(tabActive=false) 원래대로.
+  const [uncapRoot, setUncapRoot] = useState<HTMLDivElement | null>(null);
+  const isWideVm = useIsWide();
+  useUncapAncestors(uncapRoot, tabActive && isWideVm, { includeSelf: true });
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -980,7 +1011,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   ⚠ 이 요소 자체는 진입 대상이 **아니다.** 안쪽 `data-mystore-secpanel` 자손에 실재하는
     //     `position:fixed`(`NuriPosLedger.tsx`·`LedgerWorkspace.tsx`)가 있어 여기에 transform 이 걸리면
     //     그 고정 요소가 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 위험 자리 3곳 중 하나).
-    <div data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
+    <div ref={setUncapRoot} data-uncap-root="" data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
       {/* 관리자만 보는 매장 고르개(`isAdmin` 게이트는 그대로 — 기능은 손대지 않는다).
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
@@ -1005,7 +1036,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       )}
 
       {/* S-06 — 인증 등급은 대표 업주만, 숨김 안내는 이 매장을 다루는 모두에게(지금 고른 매장 기준). */}
-      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner} />}
+      {/* 2026-10-02 감사 H-2 — 인증 등급 배너(62px)가 모든 메뉴 맨 위에 상시라 장부 첫 화면에 표가 0행이었다. 등급 배너는 대시보드 판 **안**으로
+          옮겼다(여기 두고 대시보드에서만 그리면 단계 바가 요약↔포스터 사이에서 62px 오르내린다). '숨김 상태' 경고(S-06)는 포스터·장부
+          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다. 레일 밖 메뉴(설정·직원 등)는 단계 바가 없어 종전대로 등급 배너도 맨 위
+          (그 메뉴들의 판 이동 계약 e2e/subpanel-scroll-tear 가 판 줄 위 블록을 표지로 쓴다). */}
+      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner}
+        part={renderSection === 'dashboard' || renderSection === 'game' || renderSection === 'voucher' ? 'hidden' : 'all'} />}
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
@@ -1207,12 +1243,26 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                      effect 는 `if (!seed) return` 이라 아무것도 안 한다 → keep-alive 로 **직전에 보던
                      다른 날짜 보드가 그대로** 남는다. StoreDashboard 쪽에서 날짜를 항상 싣도록 고쳤지만,
                      여기도 같이 막는다 — 한쪽만 고치면 다른 호출부가 생길 때 또 샌다. */
+                  const biz = businessDateOf(venueId);
                   if (fromDash && !(st === 'ledger' && !(typeof fromDash === 'object' && fromDash.date))) {
+                    // 데일리 펍(2026-10-02) — 대시보드 목적지의 게임은 '오늘 메인'이다. 게임을 고른 적 없으면 장부가 진행 중 마지막 게임에 착지한다.
+                    //   F-3 — 직접 고른 게임이 있으면(오늘) 그 게임을 지킨다. 대시보드를 다녀왔다고 메인(마감)으로 되돌리지 않는다.
+                    if (st === 'ledger' && typeof fromDash === 'object') {
+                      if (!gameChosen.current) return onGotoStore({ ...fromDash, autoLand: true });
+                      if (fromDash.date === biz) return onGotoStore({ ...fromDash, gameSeq: clockSeedGame });
+                    }
                     return onGotoStore(fromDash);
                   }
-                  return st === 'ledger'
-                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
-                    : gotoSection(st);
+                  if (st !== 'ledger') return gotoSection(st);
+                  // F-3(design-reviewer 2026-10-02) — 단계 바 재진입. 예전엔 첫 진입이 남긴 ledgerSeed(메인)가 늘 이겨
+                  //   클락·순위를 다녀오면 마감된 메인에 섰다(직접 고른 사이드12 도). 오늘 장부는:
+                  //   · 직접 고른 게임이 있으면 그 게임(clockSeedGame — 장부·칩·클락이 함께 쓰는 '지금 게임' 정본)
+                  //   · 없으면 장부가 마지막으로 본 게임(자동 착지 결과)부터 + autoLand(그새 마감됐으면 진행 중 게임으로)
+                  //   지난 날짜 장부를 보던 중이면 그 시드 그대로.
+                  const d = ledgerSeed?.date ?? biz;
+                  if (d !== biz) return onGotoStore({ section: 'ledger', date: d, gameSeq: ledgerSeed?.gameSeq ?? MAIN_GAME_SEQ });
+                  const chosen = gameChosen.current;
+                  return onGotoStore({ section: 'ledger', date: d, gameSeq: chosen ? clockSeedGame : (lastLedgerGame.current || MAIN_GAME_SEQ), autoLand: !chosen });
                 }} />
               </div>
             )}
@@ -1258,7 +1308,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <div className={isGame ? undefined : 'lg:hidden'}>
                     <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
                       canPosters={canPosters} onPick={isGame ? onPickGame : onPickGameToLedger} onNewGame={createPosterHere}
-                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame} />
+                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame}
+                      slotRef={isGame && renderGameStep === 'ledger' && ledgerOk ? setLedgerGameSlot : undefined} />
                   </div>
                   {/* grid-cols-1 = minmax(0,1fr): auto 트랙은 가장 긴 설명 폭(390 에서 564px)까지 늘어나 말줄임이 화면 밖에서 일어났다 */}
                   <div className="grid grid-cols-1 max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
@@ -1336,6 +1387,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
+                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" /></div>}
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
@@ -1369,6 +1421,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <LedgerWorkspaceM venueId={venueId} canViewVouchers={caps.voucher} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
                     <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                       followGame={ledgerFollow}
+                      gameSlot={ledgerGameSlot}
+                      onTodayGame={onLedgerGame}
                       settleSignal={settleSignal}
                       onMakeRankingDraft={onMakeRankingDraft}
                       onOpenClock={onOpenClockFromLedger}
@@ -1609,8 +1663,10 @@ function warmGameChips(venueId: string) {
   if (chipCache.has(key)) return;
   getLedgerGames(venueId, businessDateOf(venueId)).then((g) => { chipCache.set(key, g); }).catch(() => {});
 }
-const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false }: {
+const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false, slotRef }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
+  /** 장부 단계 — 칩 줄 대신 빈 자리를 그리고 장부가 자기 게임 스위처를 portal 한다(오너 10-02 '게임 줄 하나로'). */
+  slotRef?: (el: HTMLDivElement | null) => void;
   /** 🔴 오너 2026-10-01 — 요약·이용권(모바일)의 머리 칸 빈 띠를 '매장 › 날짜(요일) › 오늘 게임' 요약 줄로 채운다.
    *  문맥 줄 자리·높이를 그대로 쓰고(시작선·구분선 불변), 칩 줄은 게임 단계와 같이 보인다(오너 10-02 결정).
    *  날짜는 항상 영업일(오늘), 게임 칸은 오늘 게임 수(2개 이상) 또는 그 게임 이름(1개). 조회 전·실패는 같은 높이 자리표시. */
@@ -1666,7 +1722,8 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
     : games.length === 1 ? (games[0].title ? `${label(games[0].gameSeq)} · ${games[0].title}` : label(games[0].gameSeq))
     : `오늘 게임 ${games.length}개`;
   return (
-    <div className="space-y-2">
+    // flex gap — 장부 단계의 빈 자리(empty:hidden)가 줄 간격을 남기지 않게(space-y 는 숨은 형제에도 여백을 준다).
+    <div className="flex flex-col gap-2">
       {/* 스텝 4개(포스터·장부·클락·순위) 공통 위치·공통 문법 — "지금 어느 대회를 만지는 중인가"를
           스텝을 옮겨도 같은 자리에서 계속 읽는다. 각 스텝의 날짜·게임 입력칸은 그대로 정본으로 남는다. */}
       <p data-summary-line={summary ? '' : undefined} className="flex min-w-0 items-center gap-1 whitespace-nowrap text-2xs">
@@ -1680,20 +1737,21 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변).
             P-05(2026-10-01) — PC(lg+)는 flex-initial(내용 폭): flex-1 이 매장명 뒤에 179px 빈 칸을 만들었다. 상한은 max-w-56 그대로. */}
         {venueName && (<>
-          <span className="min-w-0 max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
+          {/* 감사 H-1(2026-10-02) — 긴 매장명이 28px('누…')까지 짜부라졌다. 하한 4.5rem(≈4글자) — 게임명은 max-w-[50%] 그대로라 둘 다 남는다. */}
+          <span style={{ minWidth: '4.5rem' }} className="max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
         {sep}
-        {!summary ? <span className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{gLabel}</span>
-          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{sumLabel}</span>
+        {!summary ? <span className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{gLabel}</span>
+          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{sumLabel}</span>
           : <span data-summary-game="" role="img" aria-label={sumState === 'fail' ? '오늘 게임 정보 없음' : '오늘 게임 불러오는 중'}
               className={['inline-block h-[1em] w-16 shrink-0 rounded-badge bg-surface-high', sumState === 'loading' ? 'animate-pulse' : ''].join(' ')} />}
       </p>
       {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지).
           🔴 오너 2026-10-02 결정 「요약에도 오늘 게임 칩 표시」 — 요약 줄 모드(요약·이용권)에서도 같은 자리·같은 모양으로 보인다
           (종전엔 invisible 로 높이만 예약해 빈 띠였다). 누르면 부모가 준 onPick 이 그 게임을 고른 채 장부로 데려간다. */}
-      {games.length > 1 && (
+      {slotRef ? <div ref={slotRef} data-ledger-game-slot="" className="min-w-0 empty:hidden" /> : games.length > 1 && (
         <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
           <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
           {games.map((g) => {
@@ -1828,7 +1886,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
         /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
-           `px-2!`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
+           `px-2 !`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
            정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
            43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px-3!`
            그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
@@ -1839,7 +1897,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
         const on = active === st.id;
         return (
           // 🔴 2026-09-22 — lg 에서도 **다른 칸과 완전히 같은 계약**을 쓴다(요약·이용권 포함).
-          //   옛 `lg:max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
+          //   옛 `lg 에서 max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
           //   요약·이용권은 계속 늘어 **폭이 어긋난다**(음성 대조 실측: [163.88,153,153,153,153,153]).
           //   '한 칸이 바 전체로 늘어난다' 던 옛 위험은 모든 칸이 같은 flex 계약을 쓰면 생기지 않는다.
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
@@ -1889,7 +1947,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       )}
       </div>
       {/* 🔴 2026-09-22 오너 결정 — 여기 있던 **PC 전용 이용권 버튼을 삭제**했다.
-          폐기 사유(역사): 2026-09-20 에 이용권을 tablist 밖 우측(`lg:ml-auto`) 지름길로 두고
+          폐기 사유(역사): 2026-09-20 에 이용권을 tablist 밖 우측(`lg 에서 ml-auto`) 지름길로 두고
           모바일만 tablist 안의 탭으로 뒀다. 같은 기능이 breakpoint 별로 두 벌이 되면서
           ⓐ PC 에서는 `role`·`aria-selected`·`data-pill-active` 가 없어 SlidingPill 의 대상이 아니었고,
           ⓑ 7칸이 `요약(내용폭) / 5단계(max 9rem) / 이용권(우측 고정)` 세 종류 폭 계약으로 갈렸다.
