@@ -331,7 +331,7 @@ export default function ScheduleDetailModal({
             {schedule.address && (
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
                 target="_blank" rel="noopener noreferrer"
-                /* ml-5 제거(2026-09-12) — 매장명이 한 줄을 혼자 쓰게 되면서 들여쓰기 기준선이 사라졌다.
+                /* ml‑5 제거(2026-09-12) — 매장명이 한 줄을 혼자 쓰게 되면서 들여쓰기 기준선이 사라졌다.
                    §5-1: 좌측 제목 시작선에 맞춘다. 주소는 길면 줄바꿈(잘라 숨기지 않는다). */
                 /* ⚠ 히트영역 — 글자만 두면 **17px** 이라 손가락으로 못 누른다(2026-09-17 실측).
                    그런데 바로 위 매장명 버튼(25.5px)과 간격이 **2px** 뿐이라, 위아래로 그냥 넓히면

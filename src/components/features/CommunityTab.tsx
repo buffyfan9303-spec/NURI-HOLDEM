@@ -531,7 +531,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
       aria-pressed={active}
       onClick={onClick}
       className={[
-        // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤
+        // flex‑[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤
         // §T1: 서브탭 라벨 = t-tab(12.75/600). 활성은 아래 font-bold 가 덮는다.
         // 오너 승인(2026-09-03): px-3 → px-2 — 360px 실측 바 326px 에 6탭(px-2.5 는 344px 로 딜러가 잘렸다 → px-2 ≈ 318px).
         // 44px 탭 타깃(#15): overflow-x-auto 레일이라 .hit/.tap-y-44 의 확장은 세로 오버플로가 된다 →
@@ -544,7 +544,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
         //   트레이 자체(pt-2 → pt-1)를 줄여서 푼다 — 알약을 키워서 푸는 것이 아니다.
         // 버튼에 relative 를 두지 않는다 — span 의 offsetParent 가 레일이어야 offsetLeft/Top 이 맞는다.
         // flex-none + min-w: 칸 폭이 **탭 개수에 흔들리지 않는다**.
-        //   예전 flex-[1_0_auto] 는 남는 공간이 있을 때만 늘어나, 업주에게 매장이 붙어 내용이 넘치는
+        //   예전 flex‑[1_0_auto] 는 남는 공간이 있을 때만 늘어나, 업주에게 매장이 붙어 내용이 넘치는
         //   순간 전부 내용 폭으로 되돌아갔다(실측 375: 59 → 55). 업주만 다른 레이아웃을 보게 된다.
         //   min-w 를 --tab-cols(= 일반 유저 탭 수)로 나눈 몫으로 박으면 일반 유저는 정확히 꽉 차고,
         //   업주는 앞 칸이 그대로인 채 매장만 오른쪽 밖으로 온전히 밀려난다.
@@ -1289,7 +1289,7 @@ function VenuesSection({
               접히는 편이 사라지는 편보다 낫다 — 접을 수 있게 풀어 준다. */}
           <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
             <span>정렬:</span>
-            {/* 🔴 2026-09-20 — 화살표에 `text-border-strong`(테두리용 토큰)을 글자색으로 쓰고 있었다.
+            {/* 🔴 2026-09-20 — 화살표에 `text‑border‑strong`(테두리용 토큰)을 글자색으로 쓰고 있었다.
                 실측(390, 실제 지면 위): 다크 3.2:1 · 라이트 3.16:1 로 **AA(4.5) 미달**.
                 바로 옆 '인증'·'유료광고'는 이미 대비를 맞춰 뒀는데(accent-200 주석 참고) 화살표만 남아 있었다.
                 `text-ink-muted` 로 바꾼다 — 다크 6.41 · 라이트 4.99 로 둘 다 통과하고 레이아웃 변화는 0이다.

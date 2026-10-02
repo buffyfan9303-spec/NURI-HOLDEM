@@ -236,7 +236,7 @@ const ClockRemote    = lazyWithReload(() => import('./components/features/clock/
 
 /** 지연 로딩 폴백 — 청크를 받아오는 동안의 자리.
  *
- *  🔴 **스피너 높이가 아니라 화면 높이를 예약한다.** 예전엔 `py-24`(≈228px)뿐이라,
+ *  🔴 **스피너 높이가 아니라 화면 높이를 예약한다.** 예전엔 `py‑24`(≈228px)뿐이라,
  *  `?tab=` 딥링크·새로고침·PWA 바로가기로 들어오면 **첫 페인트에 사업자 푸터가 헤더 바로 아래**
  *  (y≈316)에 떴다가 실제 pane 이 오면서 통째로 밀렸다. 유저가 탭을 열자마자 보는 것이
  *  법적 고지이고, 읽으려는 순간 화면이 내려간다.
@@ -642,7 +642,7 @@ const AppHeader = memo(function AppHeader({
 // ── 탭 바 ─────────────────────────────────────────────────────────────────────
 
 /* [UI/UX 점검 및 자가 진단] GNB 밑줄 정렬 (요구사항 4-GNB)
- *  - 버그 원인: 기존엔 'border-b-2'(버튼 하단 테두리)를 버튼 셀 전체 폭에 깔았는데,
+ *  - 버그 원인: 기존엔 'border‑b‑2'(버튼 하단 테두리)를 버튼 셀 전체 폭에 깔았는데,
  *    버튼이 'px-5'(좌우 비대칭 X지만)로 셀 폭이 라벨보다 넓어, 첫 탭(일정탐색)은
  *    좌패딩0 → 우측으로, 마지막 탭(중고장터)은 우패딩0 → 좌측으로 쏠려 보였음.
  *  - 수정: border 제거. 라벨을 inline-flex 래퍼로 감싸고, 밑줄을 '라벨 글자 폭'에
@@ -721,7 +721,7 @@ const TabBar = memo(function TabBar({
               className={[
                 'relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1',
                 // 밑줄: 활성 캡슐 자신의 ::after — 위치 계산 0, 어긋남 불가.
-                // inset-x-2 로 라벨 좌우 8px 안쪽(구 underline 모드와 같은 인셋).
+                // inset‑x‑2 로 라벨 좌우 8px 안쪽(구 underline 모드와 같은 인셋).
                 isActive
                   ? "after:absolute after:inset-x-2 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-accent-300 after:content-['']"
                   : '',
@@ -4439,7 +4439,7 @@ export default function App() {
                     viewMode === 'grid'
                       // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
                       ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                      // 리스트 뷰(DAI-4 rounded 도배 탈피): 행마다 박스 대신
+                      // 리스트 뷰(DAI-4 둥근 모서리 도배 탈피): 행마다 박스 대신
                       // 한 컨테이너 + 헤어라인 구분 행 — APIS·FotMob 목록 문법
                       // 2026-09-24 HOME-LAYOUT-STRETCH(리드 결정) — PC(lg~)는 **2열**(카드 1024 에서 빈 오른쪽 539~560px 실측).
                       //   읽는 순서는 행 우선(grid 기본 흐름) · 날짜 머리말은 두 칸 전체(아래 p 의 lg:col-span-2).

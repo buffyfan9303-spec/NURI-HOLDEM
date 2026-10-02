@@ -265,7 +265,7 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
         const on = step === n, done = step > n;
         return (
           <div key={t} className="flex flex-1 items-center gap-1.5">
-            {/* ⚠ 2026-09-15 라이트 실측: 끝난 단계의 ✓ 가 `bg-danger/30` 위에 서면 2.39,
+            {/* ⚠ 2026-09-15 라이트 실측: 끝난 단계의 ✓ 가 `bg‑danger/30` 위에 서면 2.39,
                 라이트 딥 레드(#B82640)로 바꿔도 4.19 로 AA(4.5) 미달이다 — 틴트를 한 단계 낮춰
                 같은 색으로 5.12 를 만든다(다크도 3.20 → 3.96 — 오르긴 하나 다크는 여전히 4.5 미달이라 별건이다). ✓ 는 '끝났다'를 말하는 유일한 신호다. */}
             <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-bold',

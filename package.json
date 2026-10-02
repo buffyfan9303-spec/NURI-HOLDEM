@@ -58,6 +58,7 @@
     "@projectwallace/css-analyzer": "^9.9.3",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
     "@sentry/vite-plugin": "^5.4.0",
+    "@tailwindcss/oxide": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.2.0",
     "@types/qrcode": "^1.5.6",

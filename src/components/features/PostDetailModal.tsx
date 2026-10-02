@@ -158,8 +158,8 @@ function reactionPill(active: boolean): string {
 function trayCell(active: boolean): string {
   return [
     // ≥360 한 줄(POST-DETAIL-TRIM 전에는 ≥380): 4등분 grid 는 '좋아요 1234' 처럼 긴 칸이 넘쳤다(design-reviewer 2026-09-24, 390 ±5.1px).
-    //   flex-auto 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄인다.
-    // 🔴 CI 2026-09-24 — 칸을 min-w-fit 로 두면 **글꼴 폭이 곧 트레이 폭**이다. 리눅스/안드로이드 래스터는 윈도우보다
+    //   flex‑auto 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄인다.
+    // 🔴 CI 2026-09-24 — 칸을 min‑w‑fit 로 두면 **글꼴 폭이 곧 트레이 폭**이다. 리눅스/안드로이드 래스터는 윈도우보다
     //   글자가 넓어(380 에서 합계 ~7px) 트레이가 1px 넘쳤다. → 칸은 min-w-0 로 줄어들 수 있게 두고, 줄어드는 몫은
     //   `trayLabel` 의 라벨 낱말(말줄임)이 받는다. 숫자·아이콘은 줄지 않는다. 아이콘↔글자 간격을 gap-0.5 로 좁혀
     //   실제 글꼴에서는 말줄임이 나오지 않을 여유를 만든다(e2e post-detail-read '큰 숫자' · '넓은 글꼴').
@@ -601,7 +601,7 @@ export default function PostDetailModal({
             제목→본문 84.8px 는 실측 과다 — pb-3→pb-2(본문 mt-4→mt-3 과 합쳐 −13px). line-height 는 안 건드린다. */}
         {!hidden && (
         <header className="mt-2 flex items-center gap-2.5 pb-2">
-          {/* 2026-08-30: 여기 있던 `object-contain!` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
+          {/* 2026-08-30: 여기 있던 `object‑contain!` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
                원 안에 글자 토막만 보였다. 정사각 사진에서는 cover 와 결과가 동일해 회귀가 없다.)
               꽉 채우는 크롭이 필요해지면 `fit="cover"` 로 명시할 것 — ! 유틸을 다시 붙이지 말 것. */}

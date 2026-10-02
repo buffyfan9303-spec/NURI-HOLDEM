@@ -221,7 +221,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 (커뮤니티 서브탭·필터칩은 44px 가 투명 히트박스이고 보이는 알약은 32px — 오탐이었다).
                 원인: `text-xs` 로 글자만 줄이고 `.btn` 의 바닥값 `min-h-[2.4rem]`(40.8px)은 그대로 둬서
                   글자(12.75px) 대비 위아래 여백이 과했다. 크기 사다리에 `text-xs` 짝인 `.btn-sm`
-                  (`min-h-8`=34px · `leading-4.25`)이 이미 있는데 안 쓰고 있었다.
+                  (`min-h-8`=34px · `leading‑4.25`)이 이미 있는데 안 쓰고 있었다.
                   → `btn-sm` 을 쓴다. `text-xs` 는 `btn-sm` 이 이미 포함하므로 뺀다(두 벌 방지).
                   `px-3` 은 유틸이라 `btn-sm` 의 `px-2.5` 를 이기고 기존 가로 폭이 유지된다.
                 🔴 `.hit` 을 같이 붙인다 — 이건 **줄이는 김에 얹는 것이 아니라 고치는 것**이다.
