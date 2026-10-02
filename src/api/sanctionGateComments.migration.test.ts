@@ -21,7 +21,8 @@ const SQL = lf(readFileSync(
   join(__dirname, '..', '..', 'supabase', 'migrations', '20260911n_sanction_gate_comments.sql'),
   'utf-8',
 ));
-const API = lf(readFileSync(join(__dirname, 'community.ts'), 'utf-8'));
+// addComment 는 2026-10-02 첫 화면 예산 분할로 communityCore.ts 로 옮겨 갔다(community.ts 가 재수출).
+const API = lf(readFileSync(join(__dirname, 'communityCore.ts'), 'utf-8'));
 
 /** 머리말 주석이 통과시켜 주는 착시를 막는다 — 첫 DDL 이후만 본다(20260911i 테스트와 같은 관행). */
 const DDL = SQL.slice(SQL.indexOf('drop trigger if exists trg_require_active_comment '));
