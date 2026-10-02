@@ -3,6 +3,7 @@
 // VoucherManagePanel(인라인, 매장관리 메뉴) + VoucherManageModal(대시보드 카드용 모달).
 import { Fold } from '../atoms/Fold';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useVenueScope } from '../../lib/useVenueScope';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -1054,13 +1055,15 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
   const [mine, setMine] = useState<VoucherCreditRequest[]>([]);
   const [pending, setPending] = useState(false);
 
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — A 의 '대기 중 요청'이 B 의 요청 버튼을 막지 않게
+  const run = useVenueScope(venueId);
   const load = useCallback(() => {
-    myVoucherCreditRequests(venueId).then((rs) => {
+    run('mine', myVoucherCreditRequests, (rs) => {
       setMine(rs);
       setPending(rs.some((r) => r.status === 'pending'));
-    }).catch(() => { /* 조회 실패는 목록만 비운다 — 요청 자체를 막지 않는다 */ });
-  }, [venueId]);
-  useEffect(() => { if (open) load(); }, [open, load]);
+    }); // 조회 실패는 목록만 비운다 — 요청 자체를 막지 않는다
+  }, [run]);
+  useEffect(() => { if (open) load(); }, [open, load, venueId]);
 
   const submit = async () => {
     setBusy(true);

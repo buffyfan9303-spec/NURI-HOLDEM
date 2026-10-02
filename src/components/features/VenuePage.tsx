@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
+import { useVenueScope } from '../../lib/useVenueScope';
 import { goSubTab } from '../../lib/subTabTransition';
 import { onColorInkClass } from '../../lib/color';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
@@ -1982,8 +1983,10 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { getVenueNotices(venueId).then(setNotices).catch(() => {}); }, [venueId]);
-  const reload = () => getVenueNotices(venueId).then(setNotices).catch(() => {});
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — 늦게 온 앞 매장 공지가 지금 매장 페이지에 그려지지 않게
+  const run = useVenueScope(venueId);
+  const reload = () => run('notices', getVenueNotices, setNotices);
+  useEffect(() => { reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!draft.trim()) return;

@@ -1,3 +1,4 @@
+-- ✅ 적용 완료 2026-10-02 (리드, Management API) — 합성 직원 리허설 ⓪~⑫ 통과(음성 대조: 마이그레이션 없이 ① 실패 확인) · 정책 4개 select/insert/update/delete {authenticated} · _game_presets_venue_fixed md5 5e5924f1… ACL postgres/service_role · advisors ERROR 0
 -- 20261002d — 게임 프리셋: 장부 권한 직원은 읽기(=고르기·적용)만, 만들기·수정·삭제는 업주 (오너 결정 L-14, 2026-10-02)
 --
 -- ⛔ 미적용 초안. 적용 판단·실행은 nuri-lead 몫이다(store-team 은 파일만 작성). 적용하면 이 머리에

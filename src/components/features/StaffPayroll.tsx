@@ -13,6 +13,7 @@ import { belowMinWage, laborSummary, weekStartOf, type LaborRow, type PayRules }
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const thisMonth = () => ymOf(new Date());
@@ -36,23 +37,27 @@ function avgHm(list: (string | null | undefined)[]): string {
 }
 
 function useRoster(venueId: string) {
+  const run = useVenueScope(venueId);
   const [names, setNames] = useState<string[]>([]);
+  // 판은 매장 전환에 다시 마운트되지 않는다(StaffHub keep-alive) — A 명부가 B 화면에 남아 B 로 저장되지 않게 비운다.
+  const [shownVenue, setShownVenue] = useState(venueId);
+  if (shownVenue !== venueId) { setShownVenue(venueId); setNames([]); }
   useEffect(() => {
     // getMyVenueStaff 에 venueId 를 넘겨야 한다 — 생략하면 서버가 '내가 소유한 첫 매장'으로
     // 폴백해서 운영자(admin)나 매장을 2개 이상 가진 업주에겐 명부가 통째로 비었다.
     // staff_wage 도 명부 소스다('출근 스케줄'의 이름만 등록이 여기에 쌓인다).
-    Promise.all([
-      getMyVenueStaff(venueId).catch(() => []),
-      getStaffWages(venueId).catch(() => [] as StaffWage[]),
-      getStaffSchedule(venueId, '2000-01-01', '2999-12-31').catch(() => [] as StaffShift[]),
-    ]).then(([staff, wages, shifts]) => {
+    run('roster', (v) => Promise.all([
+      getMyVenueStaff(v).catch(() => []),
+      getStaffWages(v).catch(() => [] as StaffWage[]),
+      getStaffSchedule(v, '2000-01-01', '2999-12-31').catch(() => [] as StaffShift[]),
+    ]), ([staff, wages, shifts]) => {
       const set = new Set<string>();
       staff.forEach((s) => set.add(s.name));
       wages.forEach((w) => set.add(w.name));
       shifts.forEach((s) => set.add(s.name));
       setNames([...set]);
-    }).catch(() => {});
-  }, [venueId]);
+    });
+  }, [venueId, run]);
   return names;
 }
 
@@ -125,16 +130,28 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
   //   폼은 빈칸으로 그려진다. 여기서 「저장」을 누르면 saveStaffWage 가 **실제 시급을 0으로 덮어쓴다**.
   //   읽지 못한 값을 읽기-수정-쓰기 하면 안 된다 — 실패 중에는 저장을 막는다(2026-09-11 감사).
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  // review-store-link-1002b A4(2026-10-02) — 같은 부류가 매장 경합으로 다시 열렸다: 판은 매장 A→B 전환에 다시 마운트되지 않아
+  //   늦게 온 A 시급이 B 화면에 들어오거나(무가드 .then) 아직 못 읽은 B 를 0원 폴백으로 그린 채 저장하면 **B 직원 시급이 덮였다**.
+  //   그래서 ① 응답은 useVenueScope 로 요청 매장 = 지금 매장일 때만 ② 매장이 바뀌는 렌더에서 폼을 비우고
+  //   ③ 저장은 '지금 매장의 시급을 실제로 읽어 온 뒤'(loadedVenue === venueId)에만 연다.
+  const run = useVenueScope(venueId);
+  const [loadedVenue, setLoadedVenue] = useState<string | null>(null);
+  const [shownVenue, setShownVenue] = useState(venueId);
+  if (shownVenue !== venueId) { setShownVenue(venueId); setWages({}); setLoadedVenue(null); setLoadErr(null); }
   useEffect(() => {
     setLoadErr(null);
-    getStaffWages(venueId)
-      .then((ws) => { const m: Record<string, StaffWage> = {}; ws.forEach((w) => (m[w.name] = w)); setWages(m); })
-      .catch((e) => { setWages({}); setLoadErr(msgOf(e, '시급 설정을 불러오지 못했습니다')); });
-  }, [venueId]);
+    run('wages', (v) => getStaffWages(v).then((ws) => ({ v, ws })),
+      ({ v, ws }) => { const m: Record<string, StaffWage> = {}; ws.forEach((w) => (m[w.name] = w)); setWages(m); setLoadedVenue(v); },
+      (e) => { setWages({}); setLoadedVenue(null); setLoadErr(msgOf(e, '시급 설정을 불러오지 못했습니다')); });
+  }, [venueId, run]);
+  const canSave = loadedVenue === venueId && !loadErr;
 
   const get = (n: string): StaffWage => wages[n] ?? { name: n, hourlyWage: 0, payday: 0, weeklyOff: '', memo: '' };
   const set = (n: string, patch: Partial<StaffWage>) => setWages((w) => ({ ...w, [n]: { ...get(n), ...patch } }));
-  const save = async (n: string) => { try { await saveStaffWage(venueId, get(n)); toast.show(`${n} 인건비 설정을 저장했습니다`, 'success'); } catch (e) { toast.show(msgOf(e, '인건비 설정 저장 실패'), 'error'); } };
+  const save = async (n: string) => {
+    if (!canSave) return; // 읽지 못한(또는 다른 매장의) 값으로 읽기-수정-쓰기 하지 않는다
+    try { await saveStaffWage(venueId, get(n)); toast.show(`${n} 인건비 설정을 저장했습니다`, 'success'); } catch (e) { toast.show(msgOf(e, '인건비 설정 저장 실패'), 'error'); }
+  };
   const toggleOff = (n: string, d: string) => { const cur = get(n).weeklyOff.split(',').filter(Boolean); const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]; set(n, { weeklyOff: next.join(',') }); };
 
   return (
@@ -152,7 +169,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
           <div key={n} className="rounded-input border border-border-subtle bg-surface-base p-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-ink-primary">{n}</span>
-              <button type="button" onClick={() => save(n)} disabled={!!loadErr}
+              <button type="button" onClick={() => save(n)} disabled={!canSave}
                 className="btn-ghost px-3 py-1.5 text-2xs disabled:opacity-40">저장</button>
             </div>
             <div className="grid grid-cols-2 gap-2">

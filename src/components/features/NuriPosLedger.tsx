@@ -212,6 +212,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   }, [followGame?.n]);
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
+  // 지금 session·games 가 어느 (매장|날짜|회차) 의 것인가 — 첫 로드가 끝나야 채워진다.
+  //   `loading` 만으로는 날짜가 바뀐 **첫 커밋**을 못 막는다(setLoading(true) 는 같은 커밋의 앞선 형제 이펙트가 큐에 넣을 뿐이라
+  //   그 커밋의 다른 이펙트는 아직 loading=false 와 **앞 날짜 session** 을 본다 — review-store-link-1002b A2).
+  const [sessionFor, setSessionFor] = useState<string | null>(null);
   // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
   const [loadError, setLoadError] = useState<unknown>(null);
   // D8(2026-09-29) — 바인·명단 재조회(reload) 실패. loadError 와 따로 둔다: 둘은 realtime·재접속에서 동시에 돌아,
@@ -504,7 +508,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     ++reloadSeq.current;
     // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
-      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); })
+      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); setSessionFor(`${venueId}|${date}|${gameSeq}`); })
       // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
       //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
       .catch((e) => { if (alive) setLoadError(e); })
@@ -622,7 +626,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // S-15 — 이용권 승인 뒤 같은 손님 이용권 요청이 남았으면 알린다(다음 승인에 바인 1회로 묶이는 것을 막을 기회).
   const warnVoucherLeftover = (r: BuyinRequest) => {
     if (!r.voucherId) return;
-    run('leftover', (v) => getPendingBuyinRequests(v, date),
+    // key 에 요청 id — 같은 key 는 마지막 요청만 반영하므로, 연달아 두 손님을 승인하면 앞 손님 안내가 사라졌다(review 1002b A1 관찰).
+    run(`leftover:${r.id}`, (v) => getPendingBuyinRequests(v, date),
       (rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -922,7 +927,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
   // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
   useEffect(() => {
-    if (loading) return; // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지
+    // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지 — loading 은 날짜가 바뀐 첫 커밋에서 아직 false 라
+    //   '지금 session 이 이 칸의 것인가'(sessionFor)를 함께 본다. 안 보면 '이 포스터로 새 장부'가 다른 날짜로 들어올 때
+    //   **앞 날짜의 열린 장부**를 보고 "이미 다른 장부가 있어 사이드로 엽니다" 로 옮겼다(review-store-link-1002b A2).
+    if (loading || sessionFor !== prefillKey) return;
     run.cancel('prefill'); // 앞 날짜·회차의 늦은 직전 설정이 아래 어느 갈래의 결과도 덮지 않게(review 1b)
     const sf = seedFillRef.current;
     if (!showSetup) {
@@ -950,7 +958,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     }
     run('prefill', (v) => getLastLedgerSettings(v, date), setPrefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, showSetup, venueId, date, gameSeq]);
+  }, [loading, sessionFor, showSetup, venueId, date, gameSeq]);
 
   // PL3: 마지막 '마감된' 회차 — '지난 게임 그대로 열기' 1탭 재료(세션 전체 + 마감 때 캡처한 클락 설정)
   const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);

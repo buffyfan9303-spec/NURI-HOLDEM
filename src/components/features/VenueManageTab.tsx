@@ -12,6 +12,7 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, setInviteGrants } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
+import { useVenueScope } from '../../lib/useVenueScope';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
@@ -1895,6 +1896,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   gameSel?: GameSel | null;
 }) {
   const toast = useToast();
+  const vrun = useVenueScope(venueId);
   // B1(2026-09-28) — '오늘'은 매장 영업일(서버 ledger_business_date). 게임 칩이 고른 게임(영업일 장부)과 같은 날짜여야
   //   자정 넘긴 토너의 순위가 달력 오늘(빈 날)로 저장되지 않는다. 예전엔 기기 로컬 날짜였다(해외·시계 오설정 기기에서 하루 어긋남).
   const today = businessDateOf(venueId);
@@ -2122,9 +2124,10 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   const [ledgerPanelOpen, setLedgerPanelOpen] = useState(false);
   // 마감정산에서 넘어온 참가자 명단은 이제 행을 채우지 않는다 — 자동완성 후보로만 합류시킨다.
   const draftNames = draft && draft.date === date ? draft.names : null;
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — A 장부 명단이 B 순위 입력의 자동완성·'장부 보기'에 붙지 않게
   useEffect(() => {
-    getLedgerBuyins(venueId, date, currentGameSeq)
-      .then((bs) => {
+    vrun('ledgerNames', (v) => getLedgerBuyins(v, date, currentGameSeq),
+      (bs) => {
         setLedgerNames([...new Set([...bs.map((b) => b.playerName), ...(draftNames ?? [])].filter(Boolean))]);
         const counts = new Map<string, number>();
         for (const b of bs) { const n = (b.playerName ?? '').trim(); if (n) counts.set(n, (counts.get(n) ?? 0) + 1); }
@@ -2133,8 +2136,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         // 자동 채움을 없앴으니 명단은 '펼쳐 두고 골라 넣는' 것이 기본 동선이 된다.
         // 채워 넣지는 않는다 — 보여 주기만 한다(오너 지시: 미리 넣지 말 것).
         if (players.length > 0) setLedgerPanelOpen(true);
-      })
-      .catch(() => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
+      },
+      () => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, date, currentGameSeq, draftNames?.length]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
