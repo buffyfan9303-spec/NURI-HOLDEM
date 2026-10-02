@@ -1738,7 +1738,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             P-05(2026-10-01) — PC(lg+)는 flex-initial(내용 폭): flex-1 이 매장명 뒤에 179px 빈 칸을 만들었다. 상한은 max-w-56 그대로. */}
         {venueName && (<>
           {/* 감사 H-1(2026-10-02) — 긴 매장명이 28px('누…')까지 짜부라졌다. 하한 4.5rem(≈4글자) — 게임명은 max-w-[50%] 그대로라 둘 다 남는다. */}
-          <span className="min-w-[4.5rem] max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
+          <span style={{ minWidth: '4.5rem' }} className="max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
@@ -1886,7 +1886,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
         /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
-           `px-2!`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
+           `px-2 !`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
            정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
            43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px-3!`
            그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
@@ -1897,7 +1897,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
         const on = active === st.id;
         return (
           // 🔴 2026-09-22 — lg 에서도 **다른 칸과 완전히 같은 계약**을 쓴다(요약·이용권 포함).
-          //   옛 `lg:max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
+          //   옛 `lg 에서 max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
           //   요약·이용권은 계속 늘어 **폭이 어긋난다**(음성 대조 실측: [163.88,153,153,153,153,153]).
           //   '한 칸이 바 전체로 늘어난다' 던 옛 위험은 모든 칸이 같은 flex 계약을 쓰면 생기지 않는다.
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
@@ -1947,7 +1947,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       )}
       </div>
       {/* 🔴 2026-09-22 오너 결정 — 여기 있던 **PC 전용 이용권 버튼을 삭제**했다.
-          폐기 사유(역사): 2026-09-20 에 이용권을 tablist 밖 우측(`lg:ml-auto`) 지름길로 두고
+          폐기 사유(역사): 2026-09-20 에 이용권을 tablist 밖 우측(`lg 에서 ml-auto`) 지름길로 두고
           모바일만 tablist 안의 탭으로 뒀다. 같은 기능이 breakpoint 별로 두 벌이 되면서
           ⓐ PC 에서는 `role`·`aria-selected`·`data-pill-active` 가 없어 SlidingPill 의 대상이 아니었고,
           ⓑ 7칸이 `요약(내용폭) / 5단계(max 9rem) / 이용권(우측 고정)` 세 종류 폭 계약으로 갈렸다.

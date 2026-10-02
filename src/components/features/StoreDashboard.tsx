@@ -1256,7 +1256,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           ponytail: 둘 다 비면(할 일 없음 + 위험 없음) 부모 space-y 의 간격 한 칸이 남는다.
             '오늘 운영이 전부 끝난' 드문 상태라 그대로 둔다 — 없애려면 두 IIFE 의 null 조건을
             바깥으로 끌어내야 하고, 그 리팩터가 이 12.75px 보다 위험하다. */}
-      {/* ⚠ 2026-09-16: 예전엔 `xl:grid-cols-12` + `col-span-8/4` 였다. 그런데 `empty:hidden` 으로 오른쪽이 사라져도
+      {/* ⚠ 2026-09-16: 예전엔 xl 에서 12열 격자 + `col-span-8/4` 였다. 그런데 `empty:hidden` 으로 오른쪽이 사라져도
           `grid-column: span 8` 은 여전히 12열 중 8열이라 **좌측이 626px 에 갇히고 321.7px 이 빈 채 남았다**
           (실측: 패널 948px · 우측 empty 시 좌 626.3 / 공백 321.7). flex 로 바꾸면 이웃이 사라질 때 남은 쪽이 948 을 다 쓴다. */}
       <div className="space-y-3 xl:flex xl:items-start xl:gap-4 xl:space-y-0">

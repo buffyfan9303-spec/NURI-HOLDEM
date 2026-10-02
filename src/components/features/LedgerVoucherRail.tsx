@@ -128,10 +128,10 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
         <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-fuchsia">
           <Icon name="ticket" size={14} />
         </span>
-        <span aria-hidden className="text-2xs font-bold [writing-mode:vertical-rl]">이용권 실시간</span>
+        <span aria-hidden style={{ writingMode: 'vertical-rl' }} className="text-2xs font-bold">이용권 실시간</span>
         {fresh > 0 && (
-          <span aria-hidden data-voucher-fresh={fresh}
-            className="min-w-6 rounded-full bg-accent-300 px-1.5 py-0.5 text-center text-2xs font-extrabold tabular-nums text-white">
+          <span aria-hidden data-voucher-fresh={fresh} style={{ minWidth: '1.5rem' }}
+            className="rounded-full bg-accent-300 px-1.5 py-0.5 text-center text-2xs font-extrabold tabular-nums text-white">
             {fresh > 99 ? '99+' : fresh}
           </span>
         )}

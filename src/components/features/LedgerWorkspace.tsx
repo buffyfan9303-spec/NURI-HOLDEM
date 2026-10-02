@@ -22,6 +22,10 @@ import { LedgerToolsContext, LedgerFullscreenContext } from './ledgerTools';
 import { useIsDesktop, useIsMdUp, useIsWide } from '../../lib/responsive';
 
 import { useUncapAncestors } from '../../lib/uncapAncestors';
+import './ledgerLazy.css';
+
+// 펼친 띠(표 위로 덮음) — 쌓임 35 는 레일(30)·복제본(tabCover) 사이. 그림자는 종전 큰 그림자 유틸(25px·50px·-12px·25% 검정)과 같다.
+const RAIL_POP_STYLE = { zIndex: 35, boxShadow: '0 25px 50px -12px #00000040' };
 
 export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
@@ -208,7 +212,15 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 
   // 레일 칸 높이 — 앱 헤더(--stack-top) 밑에서 하단 고정 바(--footer-reserve = 정산바+여유, 정산바 없는 화면은 0) 위까지.
   //   lg 미만(768~1023)은 하단 탭바가 있다 — 정산바가 없는 목록 모드에서도 탭바 밑으로 들어가지 않게 둘 중 큰 쪽을 뺀다.
-  const railBox = 'sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] h-[calc(100svh-var(--stack-top,6.0625rem)-max(var(--footer-reserve,0px),var(--tabbar-safe,0px))-1.5rem)] lg:h-[calc(100svh-var(--stack-top,6.0625rem)-var(--footer-reserve,0px)-1.5rem)] min-h-80 shrink-0';
+  const railBox = 'sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] shrink-0';
+  // 높이·폭은 인라인 — 2026-10-02 번들 예산(전역 CSS 임의값 클래스 → 첫 화면 267.2/267). 값은 종전 유틸과 같다.
+  const railBoxStyle = {
+    height: isLg
+      ? 'calc(100svh - var(--stack-top,6.0625rem) - var(--footer-reserve,0px) - 1.5rem)'
+      : 'calc(100svh - var(--stack-top,6.0625rem) - max(var(--footer-reserve,0px), var(--tabbar-safe,0px)) - 1.5rem)',
+    minHeight: '20rem',
+    width: strip ? '48px' : '18rem',
+  };
   return (
     <div ref={setHostEl} data-ledger-workspace={side ? (strip ? 'strip' : 'rail') : 'below'} style={barVars}
       className={side ? 'flex items-start gap-3' : undefined}>
@@ -217,8 +229,8 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       </div>
       {/* 표 옆(≥768) — 펼친 띠는 표 위로 덮는다(표 칸 폭은 그대로라 바인 칸이 다시 접히지 않는다). */}
       {canViewVouchers && side && (
-        <div ref={stripBoxRef} className={[railBox, strip ? 'relative w-[48px]' : 'w-[18rem]'].join(' ')}>
-          <div className={strip && railOpen ? 'absolute inset-y-0 right-0 z-35 w-[20rem] rounded-aura shadow-2xl' : 'h-full'}>
+        <div ref={stripBoxRef} style={railBoxStyle} className={[railBox, strip ? 'relative' : ''].join(' ')}>
+          <div style={strip && railOpen ? RAIL_POP_STYLE : undefined} className={strip && railOpen ? 'absolute inset-y-0 right-0 w-[20rem] rounded-aura' : 'h-full'}>
             <LedgerVoucherRail venueId={venueId} active={active} searchRef={searchRef}
               collapsed={strip && !railOpen} onToggle={strip ? () => setRailOpen((v) => !v) : undefined} />
           </div>

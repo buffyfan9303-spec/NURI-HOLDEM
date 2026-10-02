@@ -62,6 +62,7 @@ import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
 import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../lib/serverTime';   // D1 — 장부 클락 바도 서버 기준 시각
 import { useResyncOnWake } from '../../lib/realtimeResync';
 import { createBackoff } from '../../lib/retryBackoff';
+import './ledgerLazy.css';
 
 // 🔴 2026-09-20 (E2-C/F5) — 여기만 **기기 로컬 날짜**를 썼다. 서버 RPC(request_buyin·check_in)와
 //   앱의 나머지(kstToday)는 전부 **KST** 기준이라, 해외·시계 오설정 기기에서 새 장부의 기본 날짜와
@@ -1463,7 +1464,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     // flex-wrap — 좁은 PC(1024)에서는 게임 칩 칸이 0 으로 짜부라지지 않고 다음 줄로 내려간다(칸 하한 16rem).
     <div data-ledger-head="" className="flex min-w-0 flex-wrap items-center gap-2">
       <div className="shrink-0">{dateBar(false)}</div>
-      <div className="order-last min-w-0 basis-full empty:hidden xl:order-none xl:basis-0 xl:flex-1 xl:min-w-[16rem]">{switcher}</div>
+      <div data-ledger-switcher="" className="order-last min-w-0 basis-full empty:hidden">{switcher}</div>
       {wsTools && <div className="ml-auto flex shrink-0 items-center gap-1.5">{wsTools}</div>}
     </div>
   ) : (switcher ?? (loading ? <div aria-hidden className="h-9 animate-pulse rounded-badge bg-surface-high" /> : null)), gameSlot) : null;
@@ -1576,10 +1577,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                                 : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                             </button>
                             {fullAccess && (
-                              <button type="button" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
+                              <button type="button" data-ledger-trash="" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
                                 // 행마다 늘어선 휴지통이 목록을 어지럽혔다(감사 L-9) — PC 는 행에 마우스·포커스가 올 때만 보인다(누를 수 있는 자리·크기는 그대로).
                                 // 3c(2026-10-02 검토) — 숨김은 마우스(hover+fine) 기기에만. 1024+ 터치 태블릿은 hover 가 없어 영영 안 보였다.
-                                className="shrink-0 -my-1.5 ml-1 mr-1 h-11 w-11 flex items-center justify-center rounded-input text-ink-muted/70 hover:text-danger-light hover:bg-danger/10 transition-colors lg:[@media(hover:hover)_and_(pointer:fine)]:opacity-0 lg:group-hover/row:opacity-100 lg:focus-visible:opacity-100">
+                                className="shrink-0 -my-1.5 ml-1 mr-1 h-11 w-11 flex items-center justify-center rounded-input text-ink-muted/70 hover:text-danger-light hover:bg-danger/10 transition-colors">
                                 <Icon name="trash" size={15} />
                               </button>
                             )}
@@ -1997,11 +1998,11 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             {session.discounts.some((d) => d.amount > 0) && (() => {
               const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
               return (
-                <div data-ledger-disc="" className="flex shrink-0 items-center gap-1 max-sm:order-last max-sm:basis-full">
+                <div data-ledger-disc="" className="flex shrink-0 items-center gap-1 max-sm:basis-full">
                   <label htmlFor="ledger-disc-pick" className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</label>
                   <select id="ledger-disc-pick" value={discPick === null ? 'auto' : String(discPick)}
                     onChange={(e) => setDiscPick(e.target.value === 'auto' ? null : Number(e.target.value))}
-                    className={['input h-10 min-w-0 py-0 text-xs font-bold max-sm:flex-1 sm:max-w-48', discPick === null ? '' : 'text-accent-300'].join(' ')}>
+                    data-ledger-discsel="" className={['input h-10 min-w-0 py-0 text-xs font-bold', discPick === null ? '' : 'text-accent-300'].join(' ')}>
                     <option value="auto">자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}</option>
                     <option value="0">할인 없음</option>
                     {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
@@ -2123,7 +2124,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-16 min-[1440px]:min-w-[94px] max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th data-ledger-note="" className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
                 <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 whitespace-nowrap px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
@@ -2205,7 +2206,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-16 min-[1440px]:min-w-[94px] max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
+                      <td data-ledger-note="" className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
                         {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
@@ -2801,10 +2802,10 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
       {/* 이름표는 스크롤 밖 — 고른 칩을 가운데로 끌어와도 '어느 날의 게임인가' 가 화면에 남는다 */}
       <span aria-hidden className="shrink-0 text-2xs font-bold text-ink-muted">{today ? '오늘 게임' : `${md} 게임`}</span>
       <div ref={scRef} role="group" aria-label={today ? '오늘 게임 선택' : `${md} 게임 선택`}
-        className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:thin]">
+        className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
         {games.map((g) => (
           <button key={g.gameSeq} type="button" aria-pressed={g.gameSeq === gameSeq} onClick={() => onSelect(g.gameSeq)} className={chip(g.gameSeq === gameSeq)}>
-            <span className="max-w-48 truncate max-sm:max-w-28">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
+            <span data-ledger-chip48="" className="truncate max-sm:max-w-28">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
             {/* '마감' 은 그 게임에 더 못 넣는다는 운영 상태 — 흐리지 않고 의미 토큰으로(셸 칩과 같은 규칙) */}
             {g.closed ? <span className="text-2xs font-semibold text-ink-secondary">마감</span> : <span className="sr-only">진행 중</span>}
           </button>
@@ -2821,7 +2822,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
         // ③ 많으면 한 번에 — 네이티브 select(키보드·낭독기·모바일 휠 피커 그대로). 진행 중이 위.
         <select aria-label={`게임으로 이동 — 진행 ${live} · 마감 ${games.length - live}`} value={showPending ? '' : String(gameSeq)}
           onChange={(e) => { const v = Number(e.target.value); if (v) onSelect(v); }}
-          className="input h-9 w-auto max-w-44 shrink-0 py-0 text-xs font-bold max-sm:max-w-28">
+          data-ledger-chip44="" className="input h-9 w-auto shrink-0 py-0 text-xs font-bold max-sm:max-w-28">
           {showPending && <option value="">{label(gameSeq)} (작성중)</option>}
           <optgroup label={`진행 ${live}`}>
             {games.filter((g) => !g.closed).map((g) => <option key={g.gameSeq} value={g.gameSeq}>{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</option>)}
