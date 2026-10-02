@@ -795,7 +795,8 @@ export async function createGroupPost(groupId: string, input: { authorName: stri
 }
 export async function deleteGroupPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  await mustAffect(supabase.from('group_posts').update({ deleted: true }).eq('id', id));
+  // group_posts 에는 UPDATE 정책이 없다(작성자·운영진에게 DELETE 만 열려 있다) — soft delete 는 항상 0행이었다(2026-10-02 리허설 D08).
+  await mustAffect(supabase.from('group_posts').delete().eq('id', id));
 }
 
 // ── 그룹 프로필(팀 소개 · 전화 · 카카오톡) ────────────────────────────────────
@@ -888,13 +889,14 @@ export async function getMyOwnedCommunities(): Promise<Venue[]> {
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
-/** 내가 가입한 그룹(매니저 제외) — 그룹 정보 + 멤버십 id(탈퇴용) */
+/** 내가 가입한 그룹(내가 개설한 그룹 제외 — 그건 '내가 운영'에 있다) — 그룹 정보 + 멤버십 id(탈퇴용).
+ *  role 로 거르면 개설자가 운영진으로 지정한 멤버의 그룹이 두 목록 어디에도 안 보인다(2026-10-02). */
 export interface JoinedGroup { membershipId: string; status: MemberStatus; group: Venue }
 export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   if (IS_MOCK) return [];
   const user = await currentUser();
   if (!user) return [];
-  const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id).neq('role', 'manager');
+  const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id);
   if (!mems || mems.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids = (mems as any[]).map((m) => m.group_id);
@@ -902,7 +904,8 @@ export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byId = new Map<string, Venue>((vs ?? []).map((v: any) => [v.id as string, rowToVenue(v)]));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (mems as any[]).filter((m) => byId.has(m.group_id)).map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
+  return (mems as any[]).filter((m) => byId.has(m.group_id) && byId.get(m.group_id)!.ownerId !== user.id)
+    .map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
 }
 
 // 업주: 본인 홀덤펍(매장) 직접 생성 — 이름 필수, 주소·전화는 폼에서 필수 검증. 반환: 새 매장 id.
