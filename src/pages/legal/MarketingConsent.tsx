@@ -5,7 +5,7 @@
 
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE } from '../../lib/legalVersion';
-import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -55,7 +55,7 @@ export default function MarketingConsent() {
         </p>
       </div>
 
-      <PendingRevisionNotice />
+      <RevisionNotice firstEdition />
 
       <Article n={1} title="동의의 성격">
         <Items items={[

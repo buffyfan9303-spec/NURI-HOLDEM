@@ -22,7 +22,7 @@ import Icon, { type IconName } from '../../components/atoms/Icon';
 
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
-import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Section({ icon, title, children }: {
   icon: IconName; title: string; children: React.ReactNode;
@@ -98,7 +98,7 @@ export default function LegalNotice() {
         </p>
       </div>
 
-      <PendingRevisionNotice />
+      <RevisionNotice />
 
       {/* 서비스 성격 명시 */}
       <div className="mb-5 p-3 rounded-input bg-accent-300/10 border border-accent-400/30">
@@ -297,7 +297,7 @@ export default function LegalNotice() {
       <RevisionHistory doc="anti-gambling" />
 
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 공지는 {LEGAL_EFFECTIVE_DATE}부터 적용됩니다. 시행일 전까지는 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행된 직전판이 적용됩니다.
+        본 공지는 {LEGAL_EFFECTIVE_DATE}부터 적용됩니다. 직전판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행일 전까지 적용되었습니다.
       </p>
     </div>
   );

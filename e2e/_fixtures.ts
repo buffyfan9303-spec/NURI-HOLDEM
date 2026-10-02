@@ -41,6 +41,8 @@ export const READ_ONLY_RPCS = new Set([
   'my_career_standing',
   // 2026-09-30 직원 출근·퇴근 버튼(20260930b) — 오늘·어제 내 근무 읽기. STABLE select 만(쓰기는 punch_my_shift, 여기 없음).
   'my_punch_state',
+  // 2026-10-02 그룹 페이지 포스터 목록(20261002h) — STABLE select 만. 그룹 페이지를 여는 e2e 가 막히지 않게.
+  'get_group_schedules',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;
