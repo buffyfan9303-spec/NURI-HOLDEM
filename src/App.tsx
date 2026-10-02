@@ -2083,10 +2083,16 @@ export default function App() {
     // 링크가 최근 50건 밖(오래된 글)이면 조용히 실패하던 구간 — 단건 조회로 살린다
     else {
       const missingId = pendingPostId;
+      const fromTab = activeTabRef.current;
       getPostById(missingId).then((fetched) => {
         if (fetched) setOpenPost(fetched);
         // 없는 글과 못 불러온 글은 다른 사건이다 — 같은 문구로 뭉뚱그리면 유저가 새로고침할지 포기할지 모른다.
-        else toast.show('삭제되었거나 찾을 수 없는 게시글입니다', 'info');
+        // 2026-10-02: 안내만 하고 홈에 두면 '그래서 어디로?' 가 남는다 — 글이 있던 커뮤니티로 보낸다.
+        //   (응답을 기다리는 사이 유저가 직접 다른 탭을 골랐다면 그 선택이 이긴다 — fromTab 이 그대로일 때만 옮긴다)
+        else {
+          toast.show('삭제되었거나 찾을 수 없는 글입니다', 'info');
+          if (activeTabRef.current === fromTab) changeTab('community');
+        }
       }).catch(() => {
         toast.show('게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error');
       });
@@ -3253,7 +3259,7 @@ export default function App() {
         // 최근 50건 밖의 글(오래된 글에 달린 좋아요·댓글 알림)은 단건 조회로 연다
         else getPostById(pm[1]).then((fetched) => {
           if (fetched) setOpenPost(fetched);
-          else toast.show('삭제되었거나 찾을 수 없는 게시글입니다', 'info');
+          else toast.show('삭제되었거나 찾을 수 없는 글입니다', 'info');   // ?post= 딥링크(위)와 같은 문구
         }).catch(() => toast.show('글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error')); // 조용히 삼키면 알림이 '무반응' 이 된다(SWEEP-A ⑥)
         return prev;
       });

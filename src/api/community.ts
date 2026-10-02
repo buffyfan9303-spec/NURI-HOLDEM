@@ -699,8 +699,28 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
 export async function joinGroup(groupId: string): Promise<MemberStatus> {
   if (IS_MOCK) return 'pending';
   const { data, error } = await supabase.rpc('join_group', { p_group: groupId });
-  if (error) throw error;
+  // 서버 거절 사유(강퇴 차단 20261002g · 그룹 없음 · 로그인)는 plpgsql raise(P0001) 문장을 그대로 올린다.
+  // supabase-js 의 error 는 Error 가 아닌 평범한 객체라 그대로 던지면 화면이 '가입 실패'로 뭉갰다. 그 밖의 오류는 기본 문구.
+  if (error) throw new Error(error.code === 'P0001' ? error.message : '가입에 실패했습니다');
   return (data as MemberStatus) ?? 'pending';
+}
+
+// ── 그룹 차단(강퇴 = 개설자가 풀 때까지 재가입 불가, 20261002g) ─────────────────
+export interface GroupBan { userId: string; name: string; bannedAt: string }
+/** 차단 목록 — RLS 가 개설자·운영진·관리자에게만 보인다. 표가 없는 환경(마이그레이션 전)이면 오류를 던진다 → 화면은 숨긴다. */
+export async function getGroupBans(groupId: string): Promise<GroupBan[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('group_bans').select('user_id, member_name, created_at')
+    .eq('group_id', groupId).order('created_at', { ascending: false });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ userId: r.user_id, name: r.member_name ?? '회원', bannedAt: r.created_at }));
+}
+/** 차단 해제 — 서버가 개설자·관리자만 받는다(unban_group_member). */
+export async function unbanGroupMember(groupId: string, userId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('unban_group_member', { p_group: groupId, p_user: userId });
+  if (error) throw new Error(error.code === 'P0001' ? error.message : '차단 해제에 실패했습니다');
 }
 /** 가입 승인(매니저) */
 export async function approveMember(memberId: string): Promise<void> {
@@ -798,7 +818,8 @@ export async function createGroupPost(groupId: string, input: { authorName: stri
 }
 export async function deleteGroupPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  await mustAffect(supabase.from('group_posts').update({ deleted: true }).eq('id', id));
+  // group_posts 에는 UPDATE 정책이 없다(작성자·운영진에게 DELETE 만 열려 있다) — soft delete 는 항상 0행이었다(2026-10-02 리허설 D08).
+  await mustAffect(supabase.from('group_posts').delete().eq('id', id));
 }
 
 // ── 그룹 프로필(팀 소개 · 전화 · 카카오톡) ────────────────────────────────────
@@ -891,13 +912,14 @@ export async function getMyOwnedCommunities(): Promise<Venue[]> {
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
-/** 내가 가입한 그룹(매니저 제외) — 그룹 정보 + 멤버십 id(탈퇴용) */
+/** 내가 가입한 그룹(내가 개설한 그룹 제외 — 그건 '내가 운영'에 있다) — 그룹 정보 + 멤버십 id(탈퇴용).
+ *  role 로 거르면 개설자가 운영진으로 지정한 멤버의 그룹이 두 목록 어디에도 안 보인다(2026-10-02). */
 export interface JoinedGroup { membershipId: string; status: MemberStatus; group: Venue }
 export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   if (IS_MOCK) return [];
   const user = await currentUser();
   if (!user) return [];
-  const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id).neq('role', 'manager');
+  const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id);
   if (!mems || mems.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids = (mems as any[]).map((m) => m.group_id);
@@ -905,7 +927,8 @@ export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byId = new Map<string, Venue>((vs ?? []).map((v: any) => [v.id as string, rowToVenue(v)]));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (mems as any[]).filter((m) => byId.has(m.group_id)).map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
+  return (mems as any[]).filter((m) => byId.has(m.group_id) && byId.get(m.group_id)!.ownerId !== user.id)
+    .map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
 }
 
 // 업주: 본인 홀덤펍(매장) 직접 생성 — 이름 필수, 주소·전화는 폼에서 필수 검증. 반환: 새 매장 id.

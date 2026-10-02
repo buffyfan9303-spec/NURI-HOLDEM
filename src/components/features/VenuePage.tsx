@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
 import { onColorInkClass } from '../../lib/color';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
@@ -186,8 +187,9 @@ export default function VenuePage({
   useBackClose(!!open && !!venue, onClose, { escape: true });
 
   // 승인(approved)된 포스터만 매장 페이지에 노출 — 미승인은 「내 포스터」에서만 관리.
+  // 날짜·시작 시각 순 — 상위 배열은 부스트→display_order 순이라 그대로 쓰면 시간순이 아니다(2026-10-02).
   const venueSchedules = useMemo(
-    () => (venue ? schedules.filter((s) => s.venueId === venue.id && s.approved) : []),
+    () => (venue ? venueScheduleList(schedules, venue.id) : []),
     [venue, schedules],
   );
 
@@ -1860,7 +1862,7 @@ function PostersPanel({
   // 오늘이 아닌 예정 포스터 (날짜 오름차순)
   const upcoming = allPosters
     .filter((s) => !todayPosters.some((t) => t.id === s.id))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort(compareByStartThenBoost);
 
   return (
     <div className="space-y-4">
