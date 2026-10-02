@@ -42,6 +42,7 @@ import { BOARD_FILTER_CATEGORIES } from '../../lib/postCategory';
 import { relativeTime } from '../../lib/relativeTime';
 import { markProgrammaticScroll, notifyScrollNow } from '../../lib/useScrollY';
 import { restoreScrollTop } from '../../lib/headerShrink';
+import { msgOf } from '../../lib/dbError';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -1116,13 +1117,13 @@ function MyCommunitiesAction({ onSelectVenue, onCreated, version = 0 }: {
       setCreateOpen(false); setName(''); setRegion(''); setAddress('');
       await refreshProfile().catch(() => {});
       onCreated?.(); reload(); onSelectVenue(id);
-    } catch (e) { toast.show(e instanceof Error ? e.message : '생성 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '생성 실패'), 'error'); }
     finally { setBusy(false); }
   };
   const leave = async (j: JoinedGroup) => {
     if (!confirm(`'${j.group.name}' 커뮤니티에서 탈퇴하시겠습니까?`)) return;
     try { await removeMember(j.membershipId); toast.show('탈퇴했습니다', 'info'); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   return (
@@ -1411,7 +1412,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
       await createGroup({ name, kind, region, description, joinApproval, purpose });
       toast.show('그룹 개설을 신청했습니다. 관리자 승인 후 공개됩니다.', 'success');
       onCreated();
-    } catch (err) { toast.show(err instanceof Error ? err.message : '개설 실패', 'error'); }
+    } catch (err) { toast.show(msgOf(err, '개설 실패'), 'error'); }
     finally { setSending(false); }
   };
 
@@ -1542,7 +1543,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
   const canDelete = (m: LiveMessage) => !!user && (user.id === m.userId || user.role === 'admin');
   const remove = async (m: LiveMessage) => {
     try { await deleteLiveMessage(m.id); setMessages((prev) => prev.filter((x) => x.id !== m.id)); }
-    catch (err) { toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'); }
+    catch (err) { toast.show(msgOf(err, '삭제에 실패했습니다'), 'error'); }
   };
 
   const send = async (e: React.FormEvent) => {
@@ -1566,7 +1567,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
       setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev]));
       setDraft('');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
+      toast.show(msgOf(err, '전송에 실패했습니다'), 'error');
     } finally {
       setSending(false);
     }

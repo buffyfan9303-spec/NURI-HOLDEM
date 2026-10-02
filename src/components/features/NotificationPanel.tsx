@@ -17,6 +17,7 @@ import { notifGlyph } from '../../lib/notifLink';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 import { relativeTime } from '../../lib/relativeTime';
+import { msgOf } from '../../lib/dbError';
 
 /** 쪽지 → 알림 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const NOTIF_MODE_ORDER = ['messages', 'notifs'] as const;
@@ -227,13 +228,13 @@ export default function NotificationPanel({
     } catch (e) {
       // RLS 거부(미인증 발신·차단 관계)는 raw Postgres 문구("new row violates row-level security…")로
       // 내려온다 — 영어 DB 내부 문구를 그대로 토스트하면 유저는 원인을 알 수 없다(2026-08-28 스윕).
-      // api(messages.ts)는 소유 밖이라 표시 계층에서 번역한다. 그 외 서버 메시지는 그대로 노출.
+      // api(messages.ts)는 소유 밖이라 표시 계층에서 번역한다. 그 외는 msgOf 가 한국어 서버 문장만 통과시킨다.
       const raw = e instanceof Error ? e.message : '';
       toast.show(
         /row-level security/i.test(raw)
           // 서버 _can_message 는 본인인증을 보지 않는다(오너 2026-09-29 · 8241385d) — 실제 거절 사유만 말한다
           ? '쪽지를 보낼 수 없습니다. 상대가 탈퇴·정지 상태이거나 서로 차단한 관계일 수 있습니다'
-          : raw || '쪽지를 보내지 못했습니다',
+          : msgOf(e, '쪽지를 보내지 못했습니다'),
         'error',
       );
     } finally {
@@ -266,7 +267,7 @@ export default function NotificationPanel({
       setActiveOther(null);
       reloadThreads();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '차단하지 못했습니다', 'error');
+      toast.show(msgOf(e, '차단하지 못했습니다'), 'error');
     }
   }, [activeOther, toast, reloadThreads]);
 

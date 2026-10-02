@@ -222,8 +222,8 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
           )}
         </div>
         <p className="text-2xs text-ink-muted">
-          최대 1920px·WebP 로 자동 변환하고, <span className="font-semibold text-ink-secondary">글자가 묻히지 않도록 밝기를 자동으로 낮춥니다</span>
-          (밝은 사진일수록 더 어둡게). 배경을 넣지 않으면 위 테마 색만 나갑니다.
+          {/* C1 C-1(2026-10-02) — 3줄(93자) → 2줄. */}
+          <span className="font-semibold text-ink-secondary">글자가 묻히지 않게 밝기를 자동으로 낮춰요</span>(WebP 자동 변환). 배경이 없으면 테마 색만 나가요.
         </p>
       </div>
 

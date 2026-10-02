@@ -24,6 +24,7 @@ import { spotFromEmbed, type EmbeddedSpot } from './spotShare/embeddedSpot';
 import { fitPollOptions, shareView, voteChoices } from './spotShare/shareView';
 import { RevealBlock } from './spotShare/ShareParts';
 import { SpotTableDetail } from './spotShare/SpotTable';
+import { msgOf } from '../../../lib/dbError';
 
 type State = 'loading' | 'none' | 'error' | 'ok';
 type OnVote = (pollId: string, optionId: string) => Promise<PollOption[]>;
@@ -114,7 +115,7 @@ export default function SpotPostCard({ postId, isAuthor, expectSpot = false, ini
       // 상대 카드·결과는 서버만 알고 있다 — 다시 받아야 화면에 들어온다.
       fetchPostSpot(postId).then((r) => { if (r) setPs(r); }).catch(() => { /* 표시는 이미 갱신됨 */ });
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '공개에 실패했습니다', 'error');
+      toast.show(msgOf(e, '공개에 실패했습니다'), 'error');
     } finally { setRevealing(false); }
   };
 

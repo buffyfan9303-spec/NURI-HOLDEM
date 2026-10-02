@@ -9,6 +9,7 @@ import { getVenueVisitorStats } from '../../api/crm';
 import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useCheckinGeoEnabled } from '../../lib/checkinGeo';
+import { msgOf } from '../../lib/dbError';
 
 /**
  * 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을 보낼 때
@@ -130,7 +131,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     } catch (e) {
       // 서버 거절 문구를 그대로 보여 준다 — '승인 전 매장'·'한도 부족'·'본인인증 안 된 손님' 이
       //   각각 다른 조치를 요구하는데 '실패' 로 뭉개면 업주가 무엇을 해야 할지 알 수 없다.
-      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(e instanceof Error ? e.message : '보내지 못했습니다', 'error');
+      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(msgOf(e, '보내지 못했습니다'), 'error');
     } finally {
       if (!isStaleResponse(gen, mountGenRef.current)) setSendBusy(false);
     }

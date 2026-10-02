@@ -22,6 +22,7 @@ import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SectionHead as Head } from '../atoms/SectionHeader';
 import { useToast } from '../atoms/Toast';
+import { msgOf } from '../../lib/dbError';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib/voucherLabel'; // "어느 매장이 준 것인가" 표기 규칙(오너 지시 #19)
@@ -395,7 +396,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     setBusy(true);
     try { await redeemMyVoucherByQr(vid, stack.venueId); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
     catch (e) {
-      toast.show(e instanceof Error ? e.message : '사용 실패', 'error');
+      toast.show(msgOf(e, '사용 실패'), 'error');
       setBusy(false); confirmDoneRef.current = false; setMode('menu');
     }
   };
@@ -420,7 +421,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   const doPhone = async () => {
     setBusy(true);
     try { await redeemMyVoucherByPhone(vid, phone); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
+    catch (e) { toast.show(msgOf(e, '사용 실패'), 'error'); setBusy(false); }
   };
 
   return (

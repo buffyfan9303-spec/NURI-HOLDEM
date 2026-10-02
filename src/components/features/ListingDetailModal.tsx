@@ -15,6 +15,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
 import { promptLogin } from '../../lib/requireLogin';
 import { DETAIL_CARD_AURA, DETAIL_CARD_AURA_CLASS } from '../../lib/detailCardAura';
+import { msgOf } from '../../lib/dbError';
 
 interface ListingDetailModalProps {
   /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
@@ -70,7 +71,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       setLike(await toggleListingLike(listing.id));
     } catch (e) {
       setLike(prev); // 되돌리기 — '찜했다고 믿었는데 저장 안 됨'을 다시 만들지 않는다
-      toast.show(e instanceof Error ? e.message : '찜 처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '찜 처리에 실패했습니다'), 'error');
     } finally {
       setLikeBusy(false);
     }
@@ -89,7 +90,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       await updateListingStatus(listing.id, next);
       onStatusChanged?.(listing.id, next);
       toast.show(next === 'sold' ? '거래완료로 변경했습니다. 목록에서 판매중 표시가 사라집니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '상태 변경 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '상태 변경 실패'), 'error'); }
     finally { setStatusBusy(false); }
   };
 
@@ -167,7 +168,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
                   onClick={async () => {
                     if (!confirm(`'${listing.sellerName}' 님을 차단하시겠습니까?\n이 판매자의 매물·글이 보이지 않게 됩니다.`)) return;
                     try { await block(listing.sellerId, listing.sellerName); toast.show('차단했습니다. 이 판매자의 매물이 숨겨집니다', 'info'); onClose(); }
-                    catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
+                    catch (e) { toast.show(msgOf(e, '차단 실패'), 'error'); }
                   }}
                   className="inline-flex h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap px-2 text-xs text-ink-muted hover:text-danger-light transition-colors">차단</button>
                 {/* 관리자 삭제 — 판매자 본인은 아래 '내 매물' 줄에 삭제가 따로 있다(mine 분기). */}

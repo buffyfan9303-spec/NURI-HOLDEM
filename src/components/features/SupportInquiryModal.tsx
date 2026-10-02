@@ -6,6 +6,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { submitInquiry, getMyInquiries, deleteMyInquiry, INQUIRY_CATEGORIES, type SupportInquiry } from '../../api/support';
 import { promptLogin } from '../../lib/requireLogin';
+import { msgOf } from '../../lib/dbError';
 
 export default function SupportInquiryModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
   const load = () => getMyInquiries().then(setList).catch((e) => {
     // '문의 없음'과 '못 불러옴'은 다르다 — 조용히 빈 목록으로 두면 회원이 같은 문의를 다시 접수한다.
     setList([]);
-    toast.show(e instanceof Error ? `문의 내역을 불러오지 못했습니다: ${e.message}` : '문의 내역을 불러오지 못했습니다', 'error');
+    toast.show(`문의 내역을 불러오지 못했습니다: ${msgOf(e, '잠시 후 다시 시도해 주세요')}`, 'error');
   });
   useEffect(() => { if (open) load(); }, [open]);
 
@@ -30,12 +31,12 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
       await submitInquiry({ category: cat, title, content, userName: user?.nickname ?? user?.name });
       toast.show('문의를 접수했습니다. 관리자가 확인 후 답변드립니다.', 'success');
       setTitle(''); setContent(''); setCat(INQUIRY_CATEGORIES[0]); load();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '접수 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '접수 실패'), 'error'); }
     finally { setBusy(false); }
   };
   const remove = async (id: string) => {
     if (!window.confirm('이 문의를 삭제하시겠습니까?')) return;
-    try { await deleteMyInquiry(id); load(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    try { await deleteMyInquiry(id); load(); } catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
   };
 
   // 이 모달은 **푸터에서 열리고 푸터는 비로그인에게도 보인다.** 예전엔 비로그인도 폼이 전부 보여서

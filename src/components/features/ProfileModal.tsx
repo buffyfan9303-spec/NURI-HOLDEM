@@ -14,6 +14,7 @@ import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassw
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
 import { msgOf } from '../../lib/dbError';
+import { authMsgOf } from '../../lib/authError';
 import { nextChangeAt, kstMonthDay, cooldownNotice } from '../../lib/nicknameCooldown';
 import {
   getMyRankingDisplaySettings, setMyRankingNamePref,
@@ -129,7 +130,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       toast.show(pref === 'real_name' ? '순위표에 실명이 표시됩니다' : '순위표에 닉네임이 표시됩니다', 'success');
     } catch (e) {
       setRankDisp(prev);
-      toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
+      toast.show(msgOf(e, '설정 저장 실패'), 'error');
     } finally { setRankDispBusy(false); }
   };
   // 실명 공개는 **본인인증 실명**을 보여 준다(서버 20260930c) — 인증 전에는 보여 줄 실명이 없어 고를 수 없게 한다.
@@ -169,7 +170,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       toast.show(on ? '순위 부가 정보 공개에 동의했습니다' : '순위 부가 정보를 공개하지 않습니다', 'success');
     } catch (e) {
       setRankDisp(prev);
-      toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
+      toast.show(msgOf(e, '설정 저장 실패'), 'error');
     } finally { setRankDispBusy(false); }
   };
 
@@ -240,7 +241,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       sessionStorage.setItem('nh_pw_otp', String(Date.now()));
       toast.show('이메일로 인증번호를 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '인증번호 발송 실패', 'error');
+      toast.show(authMsgOf(err, '인증번호 발송 실패'), 'error');
     } finally {
       setSendingCode(false);
     }
@@ -260,7 +261,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       sessionStorage.removeItem('nh_pw_otp');
       setNewPw(''); setConfirmPw(''); setCode(''); setCodeSent(false);
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '비밀번호 변경 실패', 'error');
+      toast.show(authMsgOf(err, '비밀번호 변경 실패'), 'error');
     } finally {
       setChangingPw(false);
     }
@@ -1000,7 +1001,7 @@ function PushNotificationSetting() {
       if (on) { await disablePush(); setOn(false); toast.show('푸시 알림을 껐습니다', 'info'); }
       else { await enablePush(); setOn(true); toast.show('푸시 알림을 켰습니다', 'info'); }
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -1052,7 +1053,7 @@ function BlockListSection() {
   const doUnblock = async (id: string, name: string) => {
     setBusy(id);
     try { await unblock(id); toast.show(`'${name}' 차단을 해제했습니다`, 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '해제 실패'), 'error'); }
     finally { setBusy(null); }
   };
 
@@ -1090,7 +1091,7 @@ function LogoutSection({ onDone }: { onDone: () => void }) {
       await logout();
       onDone();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '로그아웃에 실패했습니다', 'error');
+      toast.show(authMsgOf(e, '로그아웃에 실패했습니다'), 'error');
     } finally {
       setBusy(false);
     }
@@ -1170,7 +1171,7 @@ function WithdrawAccountSection() {
       try { await logout(); } catch { /* ignore */ }
       setTimeout(() => window.location.reload(), 900);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '탈퇴에 실패했습니다', 'error');
+      toast.show(authMsgOf(e, '탈퇴에 실패했습니다'), 'error');
       setBusy(false);
     }
   };

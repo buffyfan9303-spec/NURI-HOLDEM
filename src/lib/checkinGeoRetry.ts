@@ -6,6 +6,7 @@
 //     권한 창이 안 뜨는 브라우저가 있다 — 시트의 버튼을 누르는 순간이 그 제스처다.
 //   · 서버 거부(평범한 Error — 거리 초과·매장 좌표 없음 등) → 종전 그대로 토스트.
 import { CHECKIN_GEO_MESSAGE, CheckinGeoError, type CheckinGeoErrorCode } from './checkinGeo';
+import { msgOf } from './dbError';
 
 export type CheckinFailureAction =
   | { kind: 'sheet'; code: CheckinGeoErrorCode }
@@ -13,7 +14,7 @@ export type CheckinFailureAction =
 
 export function checkinFailureAction(e: unknown): CheckinFailureAction {
   if (e instanceof CheckinGeoError) return { kind: 'sheet', code: e.code };
-  return { kind: 'toast', message: e instanceof Error ? e.message : '출석 실패' };
+  return { kind: 'toast', message: msgOf(e, '출석 실패') };
 }
 
 export const isKakaoInApp = (ua: string) => /KAKAOTALK/i.test(ua);

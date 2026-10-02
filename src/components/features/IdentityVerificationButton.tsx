@@ -7,6 +7,7 @@ import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useToast } from '../atoms/Toast';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { logClientError } from '../../lib/errorLog';
+import { msgOf } from '../../lib/dbError';
 
 const STORE_ID = import.meta.env.VITE_PORTONE_STORE_ID as string | undefined;
 const CHANNEL_KEY = import.meta.env.VITE_PORTONE_CHANNEL_KEY as string | undefined;
@@ -81,8 +82,8 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
       //   그래서 2026-09-16 에 팝업 경로에만 로깅을 넣고도 client_errors 가 **0건**이었고,
       //   오너가 "인증완료하면 조회 실패"를 보는 동안 서버에는 502 가 5번 찍혔는데
       //   클라이언트 기록은 한 줄도 없었다. 두 경로가 **모두** 지나는 이 자리에서 한 번만 남긴다.
-      const msg = e instanceof Error ? e.message : '본인인증에 실패했습니다.';
-      logClientError(`[idv:verify] ${msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
+      const msg = msgOf(e, '본인인증에 실패했습니다.');
+      logClientError(`[idv:verify] ${(e instanceof Error ? e.message : '') || msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
       toast.show(msg, 'error');
     },
   ).finally(() => setBusy(false));
@@ -114,7 +115,7 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
       if (res.code !== undefined) {
         // 🔴 code 를 버리지 않는다 — 사용자에게는 '취소'로 보여도 실제로는 PG 거절일 수 있다.
         logClientError(`[idv] code=${res.code} ${res.message ?? ''}`.slice(0, 480), null);
-        toast.show(res.message || '본인인증이 취소되었습니다.', 'error'); setBusy(false); return;
+        toast.show(msgOf({ message: res.message }, '본인인증이 취소되었습니다.'), 'error'); setBusy(false); return;
       }
       // 서버 교차검증(PortOne REST + CI 중복검사 + 저장)
       await settle(verifyIdentity(res.identityVerificationId));
@@ -124,8 +125,8 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
       //   Sentry 는 DSN 이 없어 비활성이라 **아무도 모르는 채로 5명 중 4명이 막혀 있었다.**
       //   PortOne 이 주는 code 는 원인 분류의 핵심이다(예: PORTONE_ERROR = PG 준비 단계 실패).
       const code = (e as { code?: string } | null)?.code ?? 'thrown';
-      const msg = e instanceof Error ? e.message : '본인인증에 실패했습니다.';
-      logClientError(`[idv] code=${code} ${msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
+      const msg = msgOf(e, '본인인증에 실패했습니다.');
+      logClientError(`[idv] code=${code} ${(e instanceof Error ? e.message : '') || msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
       toast.show(msg, 'error');
       setBusy(false);
     }

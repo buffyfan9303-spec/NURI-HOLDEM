@@ -15,6 +15,7 @@ import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, updateSpotPlayedOn, type SavedSpot } from '../../../api/spots';
 import { listSpotAiReviews } from '../../../api/spotReview';
 import SpotDetails from './SpotDetails';
+import { msgOf } from '../../../lib/dbError';
 
 /** 저장 시각(UTC ISO) → KST 날짜 — playedOn 이 없는 옛 행의 표시용(CalendarPanel 과 같은 한 줄, 2026-09-25). */
 const kstDateOf = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
@@ -79,7 +80,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
       await updateSpotPlayedOn(id, date);
       setRows((r) => (r ?? []).map((x) => (x.id === id ? { ...x, playedOn: date } : x)));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '날짜를 바꾸지 못했습니다', 'error');
+      toast.show(msgOf(e, '날짜를 바꾸지 못했습니다'), 'error');
     }
   }, [toast]);
 
@@ -90,7 +91,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
       setRows((r) => (r ?? []).filter((x) => x.id !== id));
       toast.show('삭제했습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+      toast.show(msgOf(e, '삭제에 실패했습니다'), 'error');
     } finally { setConfirmId(null); }
   }, [toast]);
 

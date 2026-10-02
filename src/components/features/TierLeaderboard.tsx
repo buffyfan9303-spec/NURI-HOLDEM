@@ -44,6 +44,7 @@ import {
   BADGES, getMyBadgeStats, type BadgeStats,
   getMyEquippedMark, setEquippedMark as saveEquippedMark,
 } from '../../lib/loyalty';
+import { msgOf } from '../../lib/dbError';
 
 // 시상대 색 — 👑🥈🥉 이모지는 OS 마다 금·은·동 색조가 달라 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 1·2·3위 서열을 앱이 통제한다(AdminTab 명예의 전당과 같은 규약).
@@ -534,7 +535,7 @@ export default function TierLeaderboard() {
       toast.show('인증 요청을 접수했습니다. 관리자 확인 후 국내 순위에 합산됩니다', 'success');
     } catch (e) {
       // 실패 시 입력은 유지 — 던지는 쪽(rankverify·storage)이 한국어 메시지를 주므로 그대로 보여 준다
-      toast.show(e instanceof Error && e.message ? e.message : '인증 요청에 실패했습니다. 다시 시도해 주세요', 'error');
+      toast.show(msgOf(e, '인증 요청에 실패했습니다. 다시 시도해 주세요'), 'error');
     }
     finally { setVBusy(false); }
   };
@@ -552,7 +553,7 @@ export default function TierLeaderboard() {
       await refreshProfile?.();
       toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용. 이제 계속 쓸 수 있습니다`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+      toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
     } finally { setBuying(null); }
   };
 
@@ -591,7 +592,7 @@ export default function TierLeaderboard() {
       refreshDisplay();                     // 순위표 내 행의 닉네임 색까지 바꿔 준다(오너 #8)
       toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용. 바로 적용됐습니다`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+      toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
     } finally { setBuying(null); }
   };
 
@@ -604,7 +605,7 @@ export default function TierLeaderboard() {
         o.kind === c.kind ? { ...o, equipped: key !== null && o.itemKey === key } : o));
       refreshDisplay();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '적용에 실패했습니다', 'error');
+      toast.show(msgOf(e, '적용에 실패했습니다'), 'error');
     } finally { setEquipBusy(null); }
   };
 
@@ -618,7 +619,7 @@ export default function TierLeaderboard() {
       reloadBalance();
       toast.show(`${r.venueName} ${r.seasonName} 배지를 받았습니다. ${seasonSku.price.toLocaleString()}점 사용`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+      toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
     } finally { setBuying(null); }
   };
 
@@ -633,7 +634,7 @@ export default function TierLeaderboard() {
       await refreshProfile?.();
       toast.show('이제 설정 탭에서 닉네임을 바로 바꿀 수 있습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+      toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
     } finally { setNickResetBusy(false); }
   };
 
@@ -745,7 +746,7 @@ export default function TierLeaderboard() {
       setMissions((prev) => prev ? prev.map((m) => (m.key === key ? { ...m, claimed: true } : m)) : prev);
       await refreshProfile?.();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '보상 받기 실패', 'error');
+      toast.show(msgOf(e, '보상 받기 실패'), 'error');
     } finally {
       setClaiming(null);
     }

@@ -493,6 +493,22 @@ export async function getGlobalRankingTotals(period: CareerPeriod = 'all'): Prom
   })).sort(careerCompare);
 }
 
+/** 내 '전국 상위 N%' 재료 — 서버(20261003c my_career_standing)가 **내 계정의 행 전부**(옛 닉네임 포함)로 센 (내 등수, 모집단).
+ *  보드를 받아 지금 닉네임으로 찾던 옛 방식은 닉네임을 바꾼 사람의 옛 입상을 못 셌다. 로그인만 · 입상 행이 없으면 null. */
+export interface CareerStanding { rank: number; population: number }
+export async function getMyCareerStanding(period: CareerPeriod = 'all'): Promise<CareerStanding | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('my_career_standing', { p_since: careerSince(period) });
+  if (error) throw error; // 실패를 null 로 위장하지 않는다 — 호출부가 '실패 = 백분위 숨김' 을 정한다
+  const row = (Array.isArray(data) ? data[0] : data) as { my_rank?: unknown; population?: unknown } | null | undefined;
+  const rank = Number(row?.my_rank), population = Number(row?.population);
+  return rank > 0 && population > 0 ? { rank, population } : null; // NaN 은 비교가 false 라 여기서 걸러진다
+}
+/** 등수/모집단 → '상위 N%'(1~100, 반올림 · 최소 1). 값이 없거나 0 이하면 null = 표시 안 함(0%·100% 같은 거짓 숫자를 만들지 않는다). */
+export function careerPercentile(s: CareerStanding | null | undefined): number | null {
+  return s && s.rank > 0 && s.population > 0 ? Math.min(100, Math.max(1, Math.round((s.rank / s.population) * 100))) : null;
+}
+
 
 /** PostgREST like/ilike 값에 사용자 입력을 **글자 그대로** 넣을 때 — `%`·`_` 는 와일드카드, `\` 는 이스케이프 문자다.
  *  D7(2026-09-17): 소셜 가입 기본 닉네임 `이름_1a2b`(20260903c) 의 `_` 가 한 글자 와일드카드로 먹혀 '내 입상 기록'과

@@ -1632,10 +1632,12 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="더블얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
           <Field label="1얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlySingleLevel || ''} onChange={(e) => set({ earlySingleLevel: +e.target.value || 0 })} placeholder="예) 4" className={numInput} /></Field>
         </div>
+        {/* C1 C-1(2026-10-02) — 예시 문장 + 환산값이 3줄(98자)이었다. 값을 정했으면 환산값만, 비어 있을 때만 예시를 보인다. */}
         <p className="text-2xs text-ink-muted">
-          예) 더블얼리 1레벨·1얼리 4레벨 → 레벨1 도착=더블얼리, 레벨2~4 도착=1얼리. 전체 {totalLevels}레벨.
-          {cfg.earlyDoubleLevel > 0 && <> · 더블얼리 ≈ <b className="text-accent-300">{cfg.earlyDoubleMin}분</b></>}
-          {cfg.earlySingleLevel > 0 && <> · 1얼리 ≈ <b className="text-accent-300">{cfg.earlySingleMin}분</b></>} · 라이브 수기 보정 가능.
+          {cfg.earlyDoubleLevel > 0 || cfg.earlySingleLevel > 0 ? <>
+            {cfg.earlyDoubleLevel > 0 && <>더블얼리 ≈ <b className="text-accent-300">{cfg.earlyDoubleMin}분</b> · </>}
+            {cfg.earlySingleLevel > 0 && <>1얼리 ≈ <b className="text-accent-300">{cfg.earlySingleMin}분</b> · </>}
+          </> : <>예) 1·4 → 레벨1 도착=더블얼리, 2~4=1얼리 · </>}전체 {totalLevels}레벨 · 라이브 수기 보정 가능.
         </p>
       </section>
 

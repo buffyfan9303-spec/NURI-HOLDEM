@@ -27,6 +27,7 @@ import { cachedEventBoard,getEventBoard, lastEventCardCount, openEventCard, odds
    ⚠ `adminEvents` 가 아니라 `lib/eventState` 를 직접 import 한다(손님 화면이 관리자 RPC 를 끌고 오지 않게).
    ⚠ 이 화면은 lazy 청크라 첫 화면 임계 경로가 늘지 않는다(홈은 같은 모듈을 동적 import 해 청크를 공유한다). */
 import { evaluateEvent, eventNow, type EventAvailability } from '../../lib/eventState';
+import { msgOf } from '../../lib/dbError';
 
 type Phase = 'idle' | 'confirm' | 'tearing' | 'result';
 
@@ -119,7 +120,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
       tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
       load(); // 참여권·남은 경품·다른 사람 개봉을 뒤에서 갱신
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '카드를 열지 못했습니다', 'error');
+      toast.show(msgOf(e, '카드를 열지 못했습니다'), 'error');
       closeSheet();
       load(); // '이미 열린 카드' 였다면 내 보드가 낡은 것이다
     } finally { setBusy(false); }

@@ -200,17 +200,21 @@ export default function PresetManager({ venueId, active = true }: { venueId: str
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center justify-end gap-2">
-        {/* ⚠ 여기 있던 `py-1 text-2xs` 는 **효과가 없었다** — 패딩을 줄여도 `.btn` 의 min-h(2.4rem=40.8px)가
-            이겨서 박스가 안 줄었다(실측: padding 상하 4.25px 인데 최종 높이 40.8px). 패딩으로 높이를 줄이려는
-            시도가 무효한 코드로 남아 있던 자리다. 크기 사다리 .btn-sm(34px) 로 바꾼다 — 그건 min-h 도 같이 내린다. */}
-        <button type="button" onClick={startNew} className="btn-ghost btn-sm shrink-0 px-3">빈 폼으로 만들기</button>
-      </div>
+      {/* C1 P-1(2026-10-02) — '빈 폼으로 만들기'가 혼자 한 줄(34px, 오른쪽)이었다. '지난 게임에서' 상자가 있으면 그 머리줄 오른쪽으로 들인다.
+          상자가 없을 때(지난 게임 0)는 종전처럼 혼자 둔다 — 만들기 경로는 어느 경우에도 남는다. */}
+      {!(rounds.length > 0 || recent.length > 0) && (
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={startNew} className="btn-ghost btn-sm shrink-0 px-3">빈 폼으로 만들기</button>
+        </div>
+      )}
       {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝).
           마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
       {(rounds.length > 0 || recent.length > 0) && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-2.5">
-          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기</p>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기</p>
+            <button type="button" onClick={startNew} className="btn-ghost btn-sm shrink-0 px-3">빈 폼으로 만들기</button>
+          </div>
           {rounds.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {rounds.map((r) => (

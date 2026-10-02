@@ -19,6 +19,7 @@ import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
+import { authMsgOf } from '../../lib/authError';
 import { SkeletonList } from '../atoms/Skeleton';
 import { readSeenCount, writeSeenCount } from '../../lib/seenCount'; // 지난 방문 실제 행 수를 기억해 스켈레톤 CLS 를 줄인다(홈과 같은 조리법)
 import { goSubTab } from '../../lib/subTabTransition';
@@ -29,7 +30,7 @@ import { wonToMan } from '../../api/ledger';
 import { getMyReservations, getMyVisitStats, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { useBackClose } from '../../lib/backstack';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
-import { getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { getMyCareerStanding, careerPercentile, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, claimPendingReferralTickets, inviteUrl,
@@ -218,7 +219,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
       //   지급과 대기 수 조회가 같은 RPC 라, 화면에 쓰는 값과 실제로 지급된 값이 갈릴 수 없다.
       user ? claimPendingReferralTickets() : Promise.resolve(null),
       user?.nickname ? getMyChampionships(user.nickname) : Promise.resolve(0),
-      user?.nickname ? getGlobalRankingTotals('all') : Promise.resolve([]),
+      user?.nickname ? getMyCareerStanding('all') : Promise.resolve(null), // 서버가 내 계정 행 전부(옛 닉네임 포함)로 센 등수 — 20261003c
     ])
       .then(([vi, pl, rv, vs, rk, rs, rt, ch, gt]) => {
         if (seq !== reloadSeq.current) return; // 늦게 온 이전 세대(다른 계정·이전 호출) 응답 — 버린다
@@ -235,12 +236,9 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
         if (rs.status === 'fulfilled') setRefStats(rs.value);
         if (rt.status === 'fulfilled') setRefTickets(rt.value);
         if (ch.status === 'fulfilled') setChampionships(ch.value);
-        // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
-        // 실패하면 백분위 자체를 숨긴다(null) — 0%·100% 같은 그럴듯한 거짓 숫자를 만들지 않는다.
-        const totals = gt.status === 'fulfilled' ? gt.value : [];
-        const nick = user?.nickname?.trim().toLowerCase();
-        const idx = nick ? totals.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
-        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / totals.length) * 100)) : null);
+        // 전국 상위 N% — 대회 입상 횟수 기준(상금 무관). 등수·모집단은 서버가 센다(my_career_standing) — 보드에서 닉네임으로 찾지 않는다.
+        // 실패·행 없음이면 백분위 자체를 숨긴다(null) — 0%·100% 같은 그럴듯한 거짓 숫자를 만들지 않는다.
+        setPercentile(gt.status === 'fulfilled' ? careerPercentile(gt.value) : null);
       })
       .finally(() => { if (seq === reloadSeq.current) { setLoading(false); shownOnce.current = true; } });
   };
@@ -854,7 +852,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
                 setBusy('google');
                 signInWithGoogle(keepSignedIn).catch((e) => {
                   clearViewIntent();
-                  toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error');
+                  toast.show(authMsgOf(e, '구글 로그인 실패'), 'error');
                   setBusy(null);
                 });
               }}

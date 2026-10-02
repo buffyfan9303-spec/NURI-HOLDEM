@@ -19,6 +19,7 @@ import {
   adminListVenueEventRequests, adminDecideVenueEvent,
   type AdminVenueEventRequest,
 } from '../../api/venueEvents';
+import { msgOf } from '../../lib/dbError';
 
 export default function VenueEventAdminCard({ onChanged }: { onChanged?: () => void } = {}) {
   const toast = useToast();
@@ -49,7 +50,7 @@ export default function VenueEventAdminCard({ onChanged }: { onChanged?: () => v
       load(); onChanged?.();
     } catch (e) {
       // 한도 부족은 '실패' 가 아니라 **다음에 할 일이 있는 상태**다. 서버 문구를 그대로 보여 준다.
-      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+      toast.show(msgOf(e, '처리 실패'), 'error');
     } finally { setBusy(null); }
   };
 

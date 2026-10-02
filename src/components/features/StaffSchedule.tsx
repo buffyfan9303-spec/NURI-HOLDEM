@@ -33,7 +33,9 @@ function hoursBetween(inHm?: string | null, outHm?: string | null): number {
   return mins / 60;
 }
 
-export default function StaffSchedule({ venueId, active = true }: { venueId: string; active?: boolean }) {
+/** bare — C1 T-1(2026-10-02): 직원 관리 아코디언 안에서는 아코디언이 이미 상자이자 제목('딜러 출근 스케줄')이다.
+ *  안쪽 카드 테두리와 같은 제목을 한 번 더 그리지 않는다(박스 안 박스·제목 두 겹). 스케줄만 보는 직원 화면은 종전 카드 그대로. */
+export default function StaffSchedule({ venueId, active = true, bare = false }: { venueId: string; active?: boolean; bare?: boolean }) {
   const toast = useToast();
   const { user } = useAuth();
   const [month, setMonth] = useState(thisMonth);
@@ -177,9 +179,9 @@ export default function StaffSchedule({ venueId, active = true }: { venueId: str
   const totalHours = summary.reduce((s, r) => s + r.hours, 0);
 
   return (
-    <section className="rounded-aura border card-aura p-3 space-y-3">
+    <section className={bare ? 'space-y-3' : 'rounded-aura border card-aura p-3 space-y-3'}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>
+        {!bare && <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>}
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
           <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-18 text-center">{month}</span>

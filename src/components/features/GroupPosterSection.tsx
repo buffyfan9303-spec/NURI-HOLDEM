@@ -10,6 +10,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { deleteSchedule, getGroupSchedules, type Schedule } from '../../api/schedules';
 import type { Venue } from '../../api/community';
 import type { PosterFormData, PosterSubmitResult } from './PosterFormModal';
+import { msgOf } from '../../lib/dbError';
 
 const PosterFormModal = lazy(() => import('./PosterFormModal'));
 
@@ -48,7 +49,7 @@ export default function GroupPosterSection({ group, canPost, onSubmitPoster }: {
   const remove = async (s: Schedule) => {
     if (!window.confirm(`'${s.title}' 포스터를 삭제할까요?`)) return;
     try { await deleteSchedule(s.id); toast.show('포스터를 삭제했습니다', 'info'); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제에 실패했습니다'), 'error'); }
   };
 
   const submit: SubmitPoster = async (d) => {
