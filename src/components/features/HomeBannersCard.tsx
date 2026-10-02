@@ -27,6 +27,12 @@ import { homeCarouselPreview, eventStateOf, BRAND_SLIDE_TITLES, type HomeCarouse
 
 const KIND_LABEL = { banner: '등록 배너', event: '이벤트', brand: '브랜드' } as const;
 
+// 마지막으로 받은 값 — 관리자 섹션은 들어갈 때마다 다시 마운트된다(AdminTab `section === 'exposure' &&`). 예전엔 다시 들어올 때마다
+//   목록·스위치·미리보기가 스켈레톤·'불러오는 중…'으로 돌아갔다가 단계별로 자라 아래가 세 번 밀렸다(audit-motion-1002 M-5 · 1440 문서
+//   1020→1502→1576→1889, 스켈레톤 20프레임). 이제 첫 그림은 지난 값이고, 새 값은 뒤에서 받아 바뀐 것만 바꾼다(stale-while-revalidate).
+//   셋 다 계정과 무관한 운영 설정(배너 표·app_settings·진행 중 이벤트)이라 계정 경계가 없다. 실패한 응답은 담지 않는다.
+const last: { rows: HomeBanner[] | null; ev: HomeCarouselInput['event'] | null; settings: Map<string, string | null> } = { rows: null, ev: null, settings: new Map() };
+
 const EMPTY: Omit<HomeBanner, 'id'> = {
   title: '', subtitle: '', imageUrl: '', linkUrl: '', sortOrder: 999,
   startsAt: null, endsAt: null, active: true,
@@ -40,7 +46,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   //   supabase 클라이언트에는 타임아웃이 없어(src/lib/supabase.ts) 요청이 매달리면 catch 도 안 돌고
   //   그 거짓 문구가 재시도 버튼도 없이 계속 서 있는다. 형제 카드(ShoutsAdminCard, AdminTab.tsx:605)와
   //   같이 '아직 못 받음 / 실패 / 없음 / 있음' 네 갈래로 가른다.
-  const [rows, setRows] = useState<HomeBanner[] | null>(null);
+  const [rows, setRows] = useState<HomeBanner[] | null>(last.rows);
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<HomeBanner, 'id'> & { id?: string }>({ ...EMPTY });
   const [uploading, setUploading] = useState(false);
@@ -51,7 +57,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   const [loadErr, setLoadErr] = useState<unknown>(null);
   const reload = useCallback(() => {
     setLoadErr(null);
-    getAllHomeBanners().then(setRows).catch(setLoadErr);   // 재조회 중에는 이전 목록을 유지한다(깜빡임 방지)
+    getAllHomeBanners().then((r) => { last.rows = r; setRows(r); }).catch(setLoadErr);   // 재조회 중에는 이전 목록을 유지한다(깜빡임 방지)
   }, []);
   useEffect(() => { reload(); }, [reload]);
   /** 등록·수정·삭제·순서변경이 끝나면 홈 캐러셀도 같이 갱신한다(공지 패널과 같은 배선).
@@ -66,11 +72,11 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   const menuSw = useSlideSetting(EVENT_MENU_KEY, '이벤트 메뉴', onChanged);
   // 홈이 여는 이벤트 — 중복 제거(같은 캠페인 배너)와 live 자리를 홈과 같은 판정(eventStateOf)으로 정한다.
   //   조회 실패는 홈과 같게 '안내 슬라이드(비live)·slug 모름' 으로 본다.
-  const [ev, setEv] = useState<HomeCarouselInput['event']>({ slug: undefined, pending: true, live: false });
+  const [ev, setEv] = useState<HomeCarouselInput['event']>(() => last.ev ?? { slug: undefined, pending: true, live: false });
   useEffect(() => {
     let alive = true;
     getEventBoard()
-      .then((b) => { if (alive) setEv({ slug: b?.slug, pending: false, live: !!b && eventStateOf(eventStateMod, b) === 'live' }); })
+      .then((b) => { last.ev = { slug: b?.slug, pending: false, live: !!b && eventStateOf(eventStateMod, b) === 'live' }; if (alive) setEv(last.ev); })
       .catch(() => { if (alive) setEv({ slug: undefined, pending: false, live: false }); });
     return () => { alive = false; };
   }, []);
@@ -391,14 +397,13 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
 // 2026-09-29: 상태·저장은 useSlideSetting 이 들고, 스위치 모양(SlideSwitch)과 미리보기 목록의 켜기/끄기가 **같은 상태**를 쓴다.
 function useSlideSetting(settingKey: string, label: string, onChanged?: () => void) {
   const toast = useToast();
-  const [server, setServer] = useState<string | null | undefined>(undefined);
+  const [server, setServer] = useState<string | null | undefined>(() => last.settings.get(settingKey)); // 없으면 undefined = 아직 모름
   const [loadErr, setLoadErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoadErr(null);
-    setServer(undefined);
-    getAppSetting(settingKey).then(setServer).catch(setLoadErr);
+    getAppSetting(settingKey).then((v) => { last.settings.set(settingKey, v); setServer(v); }).catch(setLoadErr);
   }, [settingKey]);
   useEffect(() => { load(); }, [load]);
 
@@ -410,11 +415,14 @@ function useSlideSetting(settingKey: string, label: string, onChanged?: () => vo
     setBusy(true);
     try {
       await setAppSetting(settingKey, next ? 'on' : 'off');
-      setServer(await getAppSetting(settingKey));
+      const v = await getAppSetting(settingKey);
+      last.settings.set(settingKey, v);
+      setServer(v);
       onChanged?.();   // 홈 배너 피드를 다시 불러 화면이 바로 따라오게 한다
       toast.show(next ? `${label} 노출을 켰습니다` : `${label} 노출을 껐습니다`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '변경하지 못했습니다', 'error');
+      setServer(undefined); // 다시 읽는 동안 스위치를 막는다(종전 load 의 리셋을 이 경로로 옮겼다 — 첫 그림은 지난 값이어야 해서)
       load();
     } finally { setBusy(false); }
   };

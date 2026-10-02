@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { getMyLocationConsent, getMyLocationUseLog, type LocationConsentState, type LocationUseRow } from '../../api/locationPrivacy';
 import { saveLocationConsent, isConsentCurrent, consentSummary, LOCATION_CONSENT_EVENT, LOCATION_TERMS_VERSION } from '../../lib/locationConsent';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { useAuth } from '../../contexts/AuthContext';
+import { takeWarm } from '../../lib/warmFetch';
 import type { LegalDoc } from './LegalDocsModal';
 
 const PURPOSE_LABEL: Record<string, string> = { checkin_radius: '출석 위치 확인', self_view: '이용 내역 열람' };
@@ -13,7 +15,10 @@ const VIA_LABEL: Record<string, string> = { device_gps: '휴대폰 위치(GPS)',
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ko-KR') : '');
 
 export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (doc: LegalDoc) => void }) {
-  const [s, setS] = useState<LocationConsentState | null>(null);
+  // '내 정보'를 열 때 미리 받아 둔 상태(ProfilePanels warm) — 다 왔으면 첫 그림부터 내용이다(보안 탭 첫 진입 밀림 M-4).
+  const uid = useAuth().user?.id;
+  const [pre] = useState(() => (uid ? takeWarm<LocationConsentState>(`location-consent:${uid}`) : null));
+  const [s, setS] = useState<LocationConsentState | null>(() => (pre?.done ? pre.v! : null));
   const [err, setErr] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -24,11 +29,11 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
   useEffect(() => {
     let alive = true;
     setErr(null);
-    getMyLocationConsent().then((v) => { if (alive) setS(v); }).catch((e: unknown) => { if (alive) setErr(e); });
+    (tick === 0 && pre ? pre.p : getMyLocationConsent()).then((v) => { if (alive) setS(v); }).catch((e: unknown) => { if (alive) setErr(e); });
     const h = () => setTick((t) => t + 1);
     window.addEventListener(LOCATION_CONSENT_EVENT, h);
     return () => { alive = false; window.removeEventListener(LOCATION_CONSENT_EVENT, h); };
-  }, [tick]);
+  }, [tick, pre]); // pre 는 마운트 때 한 번 꺼낸 값이라 바뀌지 않는다
 
   const change = async (granted: boolean) => {
     setBusy(true); setMsg(null);

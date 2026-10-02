@@ -307,8 +307,23 @@ export default function NotificationPanel({
     return () => { clearTimeout(t); document.removeEventListener('mousedown', onClick); };
   }, [open, handleClose]);
 
-  // 뒤로가기 → 패널 닫기(읽음 처리 포함)
-  useBackClose(open, handleClose);
+  // 뒤로가기·Escape → 패널 닫기(읽음 처리 포함). Escape 는 전역 backstack 이 최상단 한 겹만 닫는다(Modal 과 같은 규칙 — 개별 keydown 금지).
+  //   예전엔 escape 등록이 없어 키보드로는 벨을 다시 눌러야만 닫혔다(review-motion-revisit-1002 '남은 것' 3).
+  useBackClose(open, handleClose, { escape: true });
+
+  // 카드 머리줄(쪽지/알림 탭 줄)·패널 아래 어두운 막을 끌거나 휠을 굴리면 **뒤 화면**이 굴러갔다 — 둘 다 스크롤 상자가 아니라
+  //   입력이 문서 스크롤로 넘어간다(실측 390: 머리줄 끌기 172px · 스크림 휠 +384px, B2 2026-10-02). 목록·대화는 자기 상자가
+  //   overscroll-contain 으로 막는다. 끌기는 CSS(touch-none — 합성 스레드에서 끊겨 목록 스크롤에 지연이 없다), 휠은 CSS 로 못 막아
+  //   이 두 요소에만 비수동 리스너를 단다(React onWheel 은 passive 라 preventDefault 가 안 먹는다). 탭 누름·클릭은 그대로다.
+  const headerRef = useRef<HTMLElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const els = [headerRef.current, scrimRef.current].filter((e): e is HTMLElement => !!e);
+    const stop = (e: WheelEvent) => e.preventDefault();
+    for (const el of els) el.addEventListener('wheel', stop, { passive: false });
+    return () => { for (const el of els) el.removeEventListener('wheel', stop); };
+  }, [open, render]); // render: 여는 첫 커밋은 render=false(아래 return null)라 ref 가 비어 있다 — 그려진 커밋에서 다시 단다
 
   // ── 부팅 딥링크형 링크('?v=' '?s=' '?tab=' '#tool=' '#gto=' …) 직접 처리 ──
   // 왜: App 의 SPA 핸들러(onNavigate)는 '/경로' 형태만 안다 — 쿼리·해시형을 넘기면
@@ -349,7 +364,8 @@ export default function NotificationPanel({
           (closing/render)에 기대지 않고 `open` 그 자체로 pointer-events 를 끈다. 시각적 퇴장(느림)과
           입력 차단 해제(즉시)는 다른 시점이어야 한다는 것이 이 부류의 핵심이다. */}
       <div
-        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
+        ref={scrimRef}
+        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-fade-in', 'touch-none'].join(' ')}
         onClick={handleClose}
         aria-hidden
       />
@@ -380,7 +396,7 @@ export default function NotificationPanel({
         {/* 헤더 — 좌: [쪽지|알림] 세그먼트(서브 화면에선 뒤로+제목) / 우: 모드별 액션 */}
         {/* pt-3.5 pb-2.5(합은 종전 py-3 과 같다, 2026-09-28): 세그먼트 탭의 위로만 넓힌 누름면(tap-44, 18.5px)이
             패널 overflow-hidden 에 2.6px 잘려 42px 였다 — 내용을 2px 내려 44px 가 패널 안에 들어오게 했다. */}
-        <header className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5 border-b border-border-subtle">
+        <header ref={headerRef} className="flex touch-none items-center justify-between gap-2 px-4 pt-3.5 pb-2.5 border-b border-border-subtle">
           {inSubView ? (
             <div className="flex min-w-0 items-center gap-1.5">
               <button
