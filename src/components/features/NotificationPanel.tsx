@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
@@ -52,6 +52,11 @@ function bubbleTime(iso: string): string {
 }
 
 const AVATAR_FALLBACK = '#5A6175';
+/** 목록 한 행 높이(rem, 루트 17px) — 행 문법이 고정이라 모든 행이 같다(실측 2026-10-02 390·1440: 쪽지 64.9px · 알림 80.8px).
+ *  살짝 올려 잡는다 — 모자라면 다 들어가는 짧은 목록이 몇 px 스크롤된다. */
+const NOTIF_ROW_REM = { thread: 3.83, notif: 4.76 } as const;
+/** 본문 상한 — 약 10행(쪽지 11.5행 · 알림 9.2행). 화면이 낮으면 카드 max-h(가용 높이)가 먼저 자른다. */
+const NOTIF_BODY_MAX = '44rem';
 
 // ── 메인 ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +111,10 @@ export default function NotificationPanel({
   const [results, setResults] = useState<TransferTarget[]>([]);
   const [searching, setSearching] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // 목록 스크롤 자리 — 탭(쪽지 · 알림 전체 · 알림 안 읽음)마다 기억해 돌아오면 그 자리(오너 2026-10-02 "스크롤해서 내려 보게").
+  //   목록은 탭마다 다시 마운트되므로 자리를 여기 들고 있다가 커밋 직후(페인트 전) 되돌린다. 패널을 닫으면 비운다(다음 열림은 맨 위).
+  const listRef = useRef<HTMLUListElement>(null);
+  const listMem = useRef<Record<string, number>>({});
 
   const reportUnread = useCallback((ts: MessageThread[]) => {
     onUnreadMessagesChange?.(ts.reduce((s, t) => s + t.unread, 0));
@@ -150,8 +159,14 @@ export default function NotificationPanel({
 
   // 패널이 닫히면 탭은 알림으로, 내부 화면은 목록으로 되돌린다(다음 열림이 항상 같은 곳에서 시작)
   useEffect(() => {
-    if (!open) { setMode('notifs'); setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); }
+    if (!open) { setMode('notifs'); setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); listMem.current = {}; }
   }, [open]);
+  const listKey = mode === 'messages' ? 'messages' : `notifs:${filter}`;
+  // 탭을 옮기면(쪽지 대화에서 목록으로 돌아올 때 포함) 그 탭의 기억한 자리로 — 페인트 전에 맞춰 맨 위가 한 프레임 비치지 않게.
+  useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listMem.current[listKey] ?? 0;
+  }, [listKey, msgView]);
+  const rememberScroll = (e: UIEvent<HTMLUListElement>) => { listMem.current[listKey] = e.currentTarget.scrollTop; };
 
   // 대화 본문 조회 정본 — 처음 열 때와 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
   const loadThread = useCallback((otherId: string) => {
@@ -429,14 +444,16 @@ export default function NotificationPanel({
           </div>
         </header>
 
-        {/* ── 쪽지: 스레드 목록 ──
-            min-h-[160px]: 빈 상태(py-12 안내문, 실측 159.5px)와 같은 높이로 바닥을 잡는다.
-            쪽지 1~2건은 그 자체 높이(행 1개 63.75px)가 빈 상태보다 **작아서**, 실제로 대화가
-            있는 사람이 오히려 빈 상태보다 작은 박스를 보는 역전이 있었다(design 실측 2026-09-14:
-            빈 159.5 vs 2건 128.5). 그 역전만 없앤다 — 빈 상태 높이는 그대로라 첫 화면은 안 커진다.
-            3건 이상(192px+)처럼 실제로 더 긴 목록은 이 바닥보다 커지는 것이 자연스러워 그대로 둔다. */}
+        {/* ── 본문 그릇 — 쪽지·알림 두 탭(그리고 전체·안 읽음)이 **같은 높이**를 쓴다(오너 2026-10-02 "목록을 길게 남기지 말고
+            줄여라. 스크롤해서 내려 보게 하고 한 번에 10개 정도"). 예전엔 탭마다 목록 길이만큼 카드가 커졌다 줄었다(390 실측 679↔254px).
+            높이 = 두 목록 중 긴 쪽(쪽지 행 NOTIF_ROW_REM.thread · 알림 행 NOTIF_ROW_REM.notif — 행 문법이 고정이라 행 높이가 같다)이고,
+            바닥 160px(빈 상태 안내문 실측 159.5 — 빈 화면은 종전보다 커지지 않는다) · 상한 NOTIF_BODY_MAX(약 10행) · 카드 max-h(화면 가용 높이)가
+            차례로 자른다. 탭을 옮겨도 같은 식이라 높이가 바뀌지 않는다. 넘치는 목록은 이 안에서 스크롤 — overscroll-contain 으로 끝에서 뒤 화면이
+            같이 굴러가지 않는다. 쪽지 대화·새 쪽지(하위 화면)는 탭이 아니라 화면 이동이라 상한 높이를 다 쓴다. */}
+        <div data-notif-body="" className="flex min-h-0 flex-col" style={{ height: inSubView ? NOTIF_BODY_MAX : `max(160px, ${Math.max(threads.length * NOTIF_ROW_REM.thread, notifications.length * NOTIF_ROW_REM.notif)}rem)`, maxHeight: NOTIF_BODY_MAX }}>
+        {/* ── 쪽지: 스레드 목록 ── */}
         {mode === 'messages' && msgView === 'list' && (
-          <ul data-notif-panel="" className="flex-1 min-h-[160px] overflow-y-auto">
+          <ul ref={listRef} onScroll={rememberScroll} data-notif-panel="" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {threadsErr != null && threads.length === 0 ? (
               // 실패가 빈 상태보다 먼저다 — 목록이 이미 있으면(재조회 실패) 보던 목록은 그대로 둔다.
               <li className="p-3"><LoadErrorCard error={threadsErr} what="쪽지 목록" onRetry={reloadThreads} compact /></li>
@@ -495,7 +512,7 @@ export default function NotificationPanel({
         {/* ── 쪽지: 스레드 뷰(말풍선 + 입력) ── */}
         {mode === 'messages' && msgView === 'thread' && (
           <>
-            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+            <div ref={scrollRef} className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain px-4 py-3">
               {msgsErr != null && msgs.length === 0 ? (
                 // ⚠ 실패를 '첫 쪽지를 보내 보세요'로 보여주면 사용자가 이미 한 말을 처음부터 다시 쓴다.
                 <LoadErrorCard error={msgsErr} what="대화 내용" onRetry={() => { if (activeOther) loadThread(activeOther.id); }} compact />
@@ -556,7 +573,7 @@ export default function NotificationPanel({
 
         {/* ── 쪽지: 새 쪽지(닉네임 검색 → 수신자 선택) ── */}
         {mode === 'messages' && msgView === 'compose' && (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="border-b border-border-subtle px-4 py-3">
               <div className="relative">
                 <Icon name="search" size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
@@ -602,11 +619,9 @@ export default function NotificationPanel({
           </div>
         )}
 
-        {/* ── 알림 목록(기존 UI 전량 유지) ──
-            min-h-[160px]: 위 쪽지 목록과 같은 바닥(빈 상태 159.5px) — 두 탭이 같은 최소 높이를
-            쓰지 않으면 탭 전환마다 그 차이만큼 다시 튄다. 이유는 위 쪽지 목록 주석 참고. */}
+        {/* ── 알림 목록(기존 UI 전량 유지) — 높이는 위 본문 그릇이 정한다 ── */}
         {mode === 'notifs' && (
-        <ul data-notif-panel="" className="flex-1 min-h-[160px] overflow-y-auto">
+        <ul ref={listRef} onScroll={rememberScroll} data-notif-panel="" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
               <Icon name="bell" size={32} strokeWidth={1.5} />
@@ -700,6 +715,7 @@ export default function NotificationPanel({
           )}
         </ul>
         )}
+        </div>
 
         {/* (푸터 '모두 읽음으로 표시'는 헤더 '모두 읽음'으로 이관 — 같은 기능 2곳 중복 방지) */}
       </div>
