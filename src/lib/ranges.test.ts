@@ -145,13 +145,13 @@ describe('nash.data 정합', () => {
       }
     }
     expect(broken, `뒤 인원이 많은데 레인지가 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
-    // 건너뛴 열 = 노앤티 2~4bb 의 k≥3(NASH_NOANTE_QUARANTINE) + 빅앤티 2~10bb 의 k≥3(NASH_ANTE_QUARANTINE). k=1·2 는 어디서도 안 빠진다.
+    // 건너뛴 열 = 노앤티 2~4bb 의 k≥3(NASH_NOANTE_QUARANTINE) + 빅앤티 6~10bb 의 k≥3(NASH_ANTE_QUARANTINE — 2~5bb 는 2026-10-02 다인 균형으로 살았다). k=1·2 는 어디서도 안 빠진다.
     expect(skipped).toEqual([
       ...NASH_NOANTE_QUARANTINE.flatMap((s) => [5, 8].map((k) => `${s}bb ante=false k${k}`)),
-      ...[2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((s) => [5, 8].map((k) => `${s}bb ante=true k${k}`)),
+      ...[6, 7, 8, 9, 10].flatMap((s) => [5, 8].map((k) => `${s}bb ante=true k${k}`)),
     ]);
-    // 격리 깊이(노앤티 3 + 빅앤티 9 = 12)는 k1↔k2 한 쌍씩, 나머지 12 깊이는 세 쌍씩 — 정확 k=1·k=2 열은 모든 깊이에서 실제로 비교된다.
-    expect(compared, '비교한 쌍 수가 달라졌다 — 격리 범위가 움직였다').toBe(12 * 1 + 12 * 3);
+    // 격리 깊이(노앤티 3 + 빅앤티 5 = 8)는 k1↔k2 한 쌍씩, 나머지 16 깊이는 세 쌍씩 — 정확 k=1·k=2 열은 모든 깊이에서 실제로 비교된다.
+    expect(compared, '비교한 쌍 수가 달라졌다 — 격리 범위가 움직였다').toBe(8 * 1 + 16 * 3);
   });
 
   it('🔴 노앤티 2~4BB — k=2 는 정확 3인 균형으로 교체됐고(셔브 42.8/42.1/42.3%), k≥3 은 격리다 (오너 결정 2026-09-25)', () => {
@@ -201,13 +201,14 @@ describe('nash.data 정합', () => {
     expect(broken, `스택이 줄었는데 레인지가 좁아진다 — 옛 표와 새 표가 한 열 안에서 이어 붙었을 때 나오는 서명이다:\n${broken.join('\n')}`).toEqual([]);
   });
 
-  it('🔴 빅 앤티 2~10BB 의 k≥3 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다 · k=2 는 정확 3인 균형이라 산다', () => {
+  it('🔴 빅 앤티 6~10BB 의 k≥3 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다 · k=2 는 정확 3인 균형이라 산다 · 2~5BB 는 다인 균형으로 산다(2026-10-02)', () => {
     // 이 계약이 없으면 `NASH_ANTE_QUARANTINE` 을 비우는 한 줄로 거짓 조언이 조용히 돌아온다.
     // 막는 것: 빅앤티 2~10BB 의 **k≥3 열 · 모든 kind**. 단일 콜러 근사가 깨지는 구간이고(P(2명+ 콜) k8: 7bb 47.7% ·
     //   10bb 17.9% · 12bb 11.8%), 오차가 '실제보다 넓게' 쏠려 해로운 쪽이다. **오너 승인 2026-09-19**
     //   (화면에서 63칸이 내려가 CLAUDE.md 3번 기능·데이터 보존에 걸리는 결정이라 오너 확인을 받았다).
     // 2026-09-25 오너 결정: k=2 는 근사 없는 3인 균형(solve3.mjs)이고 독립 교차검증(critical-reviewer)까지 CONFIRMED 라 격리에서 뺐다.
-    for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+    // 2026-10-02 N7 2단계: 2~5bb 는 solve-deal.mjs(실제 딜 표본 위 다인 균형, 오버콜 포함)로 다시 만들어 격리에서 뺐다 — 아래 N7 계약.
+    for (const s of [6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
       expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 빅앤티가 격리에서 풀렸다`).toBe(false);
       expect(isNashQuarantined(s, true, k, kind)).toBe(true);
     }
@@ -229,14 +230,32 @@ describe('nash.data 정합', () => {
     // 🔴 경계 — 눈금 하나 차이(10bb ↔ 12bb)로 갈린다. 화면이 그 선을 그대로 보여 준다(k≥3 기준 — k=2 는 전 깊이 산다).
     expect(hasNashRange('shove', 3, 10, true), '10bb 빅앤티 k≥3 가 살아 있다 — 격리 하한이 밀렸다').toBe(false);
     expect(hasNashRange('shove', 3, 12, true), '12bb 빅앤티 k≥3 가 막혔다 — 격리 상한이 밀렸다').toBe(true);
-    // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'
-    expect(isNashQuarantined(3, true)).toBe(true);
+    // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'. 2~5bb 는 2026-10-02 부터 모든 k 에 표가 있어 k 를 몰라도 격리가 아니다.
+    expect(isNashQuarantined(6, true)).toBe(true);
+    expect(isNashQuarantined(3, true)).toBe(false);
   });
 
-  it('🔴 추정 구간(빅앤티 2~10BB k≥3) — 차트만 allowApprox 로 읽고, 기본 경로(드릴·스팟)는 여전히 격리다 (2026-09-21 · k=2 제외 2026-09-25)', () => {
+  it('🔴 N7(2026-10-01 숨김 → 2026-10-02 다인 균형으로 재생성) — 빅앤티 2~5BB · 뒤 3명+ 는 정식 등급으로 모든 경로에 나온다', () => {
+    // 2026-10-01 "일단 숨기고 재생성" → 2026-10-02 solve-deal.mjs(실제 딜 표본 · 오버콜까지 든 다인 게임)로 다시 만들었다.
+    // 숨김 해제는 **별도 커밋**이다 — 리드가 독립 검산(critical-reviewer) 결과에 따라 그 커밋만 되돌리면 이 계약도 함께 돌아간다.
+    for (const s of [2, 3, 4, 5]) for (const k of [3, 4, 5, 6, 7, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+      expect(isNashApprox(s, true, k), `${s}bb k=${k} 가 '추정' 으로 표시된다 — 다인 콜 근사가 아니다`).toBe(false);
+      expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 기본 경로(드릴·스팟)에 표가 없다`).toBe(true);
+      expect(isNashQuarantined(s, true, k, kind), `${kind} ${s}bb k=${k} 가 아직 격리다`).toBe(false);
+      expect(Array.from(nashRange(kind, k, s, true)).some((f) => f > 0), `${kind} ${s}bb k=${k} 표가 전부 0(=전부 폴드)이다`).toBe(true);
+    }
+    // 옛 추정값(2026-09-21 solve-multi)이 되돌아오면 걸린다 — UTG(k=8) 2bb 셔브는 옛 27.6% 였고 새 다인 균형은 30% 를 넘는다.
+    const utg2 = rangeComboPct(freqFromArray(nashRange('shove', 8, 2, true), HAND_ORDER));
+    expect(utg2, `UTG 2bb 셔브 ${utg2.toFixed(1)}% — 옛 추정값(27.6%)으로 돌아갔다`).toBeGreaterThan(30);
+    // 양성 대조 — 같은 깊이라도 SB·BTN(정확 게임)은 그대로, 같은 자리라도 6bb 는 추정으로 그대로 보인다
+    for (const s of [2, 3, 4, 5]) for (const k of [1, 2]) expect(hasNashRange('shove', k, s, true, true), `${s}bb k=${k} 정확 열까지 숨겼다`).toBe(true);
+    for (const k of [3, 8]) expect(hasNashRange('shove', k, 6, true, true), `6bb k=${k} 추정까지 숨겼다`).toBe(true);
+  });
+
+  it('🔴 추정 구간(빅앤티 6~10BB k≥3) — 차트만 allowApprox 로 읽고, 기본 경로(드릴·스팟)는 여전히 격리다 (2026-09-21 · k=2 제외 2026-09-25 · 2~5bb 제외 2026-10-01)', () => {
     // 오너 결정 2026-09-21 "근사 계산 — 오늘 안에": 격리 구간을 다인 콜 근사 값으로 채우되 등급은 '추정' 이다.
     // 이 계약이 없으면 ① 추정값이 드릴 채점에 새거나 ② 추정 표가 전부 0(=전부 폴드)인 채로 차트에 나갈 수 있다.
-    for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+    for (const s of [6, 7, 8, 9, 10]) for (const k of [3, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
       expect(isNashApprox(s, true, k)).toBe(true);
       expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 기본 경로가 추정값을 내보낸다 — 드릴·스팟에 샌다`).toBe(false);
       expect(hasNashRange(kind, k, s, true, true), `${kind} ${s}bb k=${k} 추정값이 없다`).toBe(true);
@@ -252,8 +271,8 @@ describe('nash.data 정합', () => {
     const pct = (kind: NashKind, k: number, s: number) => rangeComboPct(freqFromArray(nashRange(kind, k, s, true, true), HAND_ORDER));
     const broken: string[] = [];
     for (const kind of ['shove', 'callBB', 'callSB'] as const) {
-      for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const [a, b] of [[2, 5], [5, 8]]) if (pct(kind, a, s) < pct(kind, b, s) - 1.0) broken.push(`${kind} ${s}bb k${a}(${pct(kind, a, s).toFixed(1)}) < k${b}(${pct(kind, b, s).toFixed(1)})`);
-      for (const k of [2, 5, 8]) for (const [sh, dp] of [[2, 3], [3, 5], [5, 7], [7, 10]]) if (pct(kind, k, sh) < pct(kind, k, dp) - 1.0) broken.push(`${kind} k${k} ${sh}bb(${pct(kind, k, sh).toFixed(1)}) < ${dp}bb(${pct(kind, k, dp).toFixed(1)})`);
+      for (const s of [6, 7, 8, 9, 10]) for (const [a, b] of [[2, 5], [5, 8]]) if (pct(kind, a, s) < pct(kind, b, s) - 1.0) broken.push(`${kind} ${s}bb k${a}(${pct(kind, a, s).toFixed(1)}) < k${b}(${pct(kind, b, s).toFixed(1)})`);
+      for (const [k, pairs] of [[2, [[2, 3], [3, 5], [5, 7], [7, 10]]], [5, [[6, 7], [7, 10]]], [8, [[6, 7], [7, 10]]]] as [number, number[][]][]) for (const [sh, dp] of pairs) if (pct(kind, k, sh) < pct(kind, k, dp) - 1.0) broken.push(`${kind} k${k} ${sh}bb(${pct(kind, k, sh).toFixed(1)}) < ${dp}bb(${pct(kind, k, dp).toFixed(1)})`);
     }
     expect(broken, `추정 표 단조성 위반: ${broken.join(' · ')}`).toEqual([]);
   });

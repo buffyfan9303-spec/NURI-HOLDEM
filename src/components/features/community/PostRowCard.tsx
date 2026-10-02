@@ -21,6 +21,9 @@ import { relativeTime } from '../../../lib/relativeTime';
 import { thumbUrl, thumbSrcSet } from '../../../lib/imageUrl';
 import { BOARD_FILTER_CATEGORIES, categoryPillClass } from '../../../lib/postCategory';
 import { isBumped, type CommunityPost } from '../../../api/community';
+import { spotFromEmbed } from './spotShare/embeddedSpot';
+import { shareView } from './spotShare/shareView';
+import { SpotTableFeed } from './spotShare/SpotTable';
 
 const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
 
@@ -33,6 +36,8 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
   // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
+  // 스팟 글(목록에 끼워 받은 post_spots)도 핸드 첨부와 같은 ♠ 아이콘 하나로만 알린다 — 한 줄 행은 높이가 곧 밀도다.
+  const isSpot = !!post.spotEmbed;
   // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → image 아이콘 배지로만 알린다.
   const imgCount = post.images?.length ?? 0;
   return (
@@ -91,8 +96,8 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
             ⚠ ScheduleDetailModal 의 대회 Q&A 안읽음 점은 생김새가 같지만 **다른 기능**이다 — 같이 지우지 마라. */}
         <MarqueeText text={post.title || post.content.slice(0, 40)}
           className="min-w-0 flex-1 text-sm font-bold leading-tight text-ink-primary" />
-        {(replay || hand) && (
-          <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
+        {(replay || hand || isSpot) && (
+          <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : isSpot && !hand ? 'NURI SPOT' : '핸드 첨부'}>
             <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
           </span>
         )}
@@ -112,6 +117,11 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
   );
 }, samePostProps);
 
+/** 스팟 카드의 콘텐츠 박스 추정 높이(px) — 390px 실측으로 맞춘다.
+ *  2026-10-02 검토 보완(타원 둘레 배치 · 피드 테이블 높이 150~175 시작): 390 카드 325(대부분) − 패딩·보더 23 ≈ 303 · 320·360 은 311~353.
+ *  (구현 1차는 정사각 테이블이라 457 − 23 = 434 였다.) */
+const SPOT_CARD_CIS = 303;
+
 export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, promoted = false, adSlot }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 카드 높이·레이아웃은 일반 글과 같다 */ promoted?: boolean; adSlot?: number }) {
   // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
   // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
@@ -121,6 +131,10 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
   let att: ReturnType<typeof parseAttachments>;
   try { att = parseAttachments(post.content); }
   catch { att = { text: post.content, hand: null, replay: null }; }
+  // 🔴 2026-10-01 오너 "공유해서 서로서로 보기 좋아야" → 시안 A: 스팟 글은 본문 발췌(=요약 한 줄) 대신 테이블 그림을 보인다.
+  //   데이터는 목록 쿼리에 끼워 받은 것(api/community.ts POST_LIST_SELECT) — 글마다 따로 부르지 않는다.
+  const embedded = spotFromEmbed(post.spotEmbed);
+  const spotV = embedded ? shareView(embedded.spot, embedded.revealVillain && embedded.revealResult) : null;
   return (
     <li
       onClick={onClick}
@@ -143,6 +157,8 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
       //   card-elev(정적 수직 광원+상단 하이라이트) + border-border-default + shadow-card(헤어라인 링) + bg-surface-low.
       // 실측(다크, surface-base 대비): border-subtle 1.29:1 → border-default 2.06:1, hover strong 3.37:1.
       // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
+      // 스팟 카드는 일반 글(124px)보다 훨씬 크다 — 화면 밖 추정 높이를 실측값으로 바꿔야 스크롤바가 안 튄다(index.css cv-row-lg 주석).
+      style={spotV ? { containIntrinsicSize: `auto ${SPOT_CARD_CIS}px` } : undefined}
       className={[
         // v2 아우라 카드(2026-09-02): card-elev+단색 → card-aura(반투명 면·6% 헤어라인·상단 하이라이트). 선택 상태는 바이올렛 틴트가 덮는다.
         'cv-row-lg min-h-(--row-h-lg) card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300/60',
@@ -202,9 +218,10 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
           {post.title && (
             <MarqueeText text={post.title} className="mt-1 text-sm font-bold leading-tight text-ink-primary" />
           )}
+          {spotV && <SpotTableFeed v={spotV} />}
           {/* 본문 발췌 — 2줄 클램프 */}
           {/* §T1: 13px 은 사다리 밖 — 본문 미리보기 = t-desc(12.75/19.13). */}
-          <p className="t-desc text-ink-secondary line-clamp-2 mt-1 wrap-break-word">
+          {!spotV && <p className="t-desc text-ink-secondary line-clamp-2 mt-1 wrap-break-word">
             {(att.hand || att.replay) && (
               <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
                 <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
@@ -212,7 +229,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
               </span>
             )}
             {att.text || (att.replay ? '핸드 리플레이를 공유했습니다' : att.hand ? '핸드를 공유했습니다' : '')}
-          </p>
+          </p>}
           {/* 컴팩트 핸드 프리뷰(검증 #12) — 히어로 카드 최대 2장(+리플레이 보드 소형) 절제된 1행.
               기존 MiniCard 아톰 + parseAttachments 재사용, 새 파서/스키마 없음. 카드가 없으면 렌더 생략(=기존 표시). */}
           {(() => {

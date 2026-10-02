@@ -25,7 +25,7 @@
 import { RANGE_SCENARIOS, type TablePos, type RangeScenario, type RangeAction } from './ranges.data';
 import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
-import { nashRange, NASH_STACKS, HAND_ORDER, isNashQuarantined } from './nash.data';
+import { nashRange, NASH_STACKS, HAND_ORDER, isNashQuarantined, isMultiwayUncapped, MULTIWAY_NOTICE_FULL } from './nash.data';
 import {
   potBb, heroComboId, validateSpot, hasBlocker, positionsFor, actorPos, hasStackPair,
   type SpotReview, type SpotAction, type SpotActionType, type SpotIssue, type SpotPosition,
@@ -319,6 +319,8 @@ interface ChartHit {
   differences: string[];
   /** 이 표를 그대로 연습할 수 있는 트레이너 문제. 대응 문제가 없으면 없음 */
   drill?: DrillLink;
+  /** 판정은 그대로 두고 notes 에만 붙는 안내(예: 2~5bb 다인 균형 — 차이 문구가 아니라 exact 를 깨지 않는다) */
+  notice?: string;
 }
 
 /**
@@ -581,6 +583,7 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },
     absent: [],
     differences: diffs,
+    ...(isMultiwayUncapped(stack, k, s.anteBb > 0) ? { notice: MULTIWAY_NOTICE_FULL } : {}),
     // ⚠ 트레이너 푸시 문제는 PUSH_POS 자리만 낸다(k=7 = 9인 UTG+1 은 없다).
     //   없는 자리로 키를 만들면 makeQuiz 가 **조용히 무관한 문제**를 낸다 — 그게 CTA 를
     //   거짓말로 만드는 가장 현실적인 경로다. 있는 자리에만 링크를 싣는다.
@@ -731,6 +734,7 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
       notes.push(`이 표는 '${s.heroAction}' 갈래를 담지 않습니다 — 나머지가 콜인지 폴드인지 표가 말하지 않아 판정하지 않았습니다.`);
     }
     if (!exact) notes.push(...hit.differences);
+    if (hit.notice) notes.push(hit.notice);
     if (heroFreq !== null && heroFreq > 0 && heroFreq < 0.5) {
       notes.push('이 핸드는 표에서도 갈리는 자리입니다 — 한쪽만 정답이 아닙니다.');
     }

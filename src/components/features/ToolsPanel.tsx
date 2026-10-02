@@ -550,10 +550,13 @@ export default function ToolsPanel() {
         </div>
       )}
 
-      {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구 */}
+      {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구
+          ⚠ 레인 머리줄 3곳은 items-center 다(2026-10-02 정렬 전수). 제목 h2 가 아이콘으로 시작하는 inline-flex 라
+            items-baseline 이면 h2 의 기준선이 글자가 아니라 **아이콘 바닥**으로 잡혀, 옆 'N개'·설명이 제목 글자보다
+            2.13px 아래 앉았다(390 실측). 기준선 정렬로 되돌리려면 제목에서 아이콘을 flex 밖으로 빼야 한다. */}
       {!hits && favTools.length > 0 && (
         <section data-main-enter className="space-y-2">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="star-fill" size={13} className="text-accent-300" aria-hidden /> 즐겨찾기
             </h2>
@@ -566,7 +569,7 @@ export default function ToolsPanel() {
       {/* 자주 쓰는 도구 — 즐겨찾기 아래, 카탈로그 위(오너 지시 2026-09-14). '전체' 보기에서만; 갈래·검색 중에는 제 자리로 돌아간다. */}
       {!hits && lane === 'all' && (
         <section data-main-enter data-testid="tools-featured" className="space-y-2">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="trophy" size={13} className="text-accent-300" aria-hidden /> 자주 쓰는 도구
             </h2>
@@ -595,7 +598,7 @@ export default function ToolsPanel() {
               {/* §7 P0-A: 레인 설명이 `truncate` 라 320px·100% 에서도 172/178,
                   200% 에서는 170/357 로 잘렸다("지난 판 되짚기 — 에퀴티·아웃…").
                   소제목 줄을 wrap 시켜 설명이 필요하면 아랫줄로 흐르게 한다. */}
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
                 <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
                   <Icon name={l.icon} size={13} className="text-accent-300" aria-hidden /> {l.label}
                 </h2>

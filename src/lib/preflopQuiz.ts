@@ -15,7 +15,7 @@
 import { labelToCards, type Card } from './preflop';
 import { buildFreq, gridName, freqFromArray, type FreqMap } from './ranges';
 import { RANGE_SCENARIOS, type RangeScenario } from './ranges.data';
-import { HAND_ORDER, NASH_BIG_ANTE, nashRange, isNashQuarantined, type NashKind } from './nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, nashRange, isNashQuarantined, isMultiwayUncapped, type NashKind } from './nash.data';
 
 export type Mode = 'rfi' | 'threebet' | 'defend' | 'vs3bet' | 'push' | 'call';
 export const MODES: { id: Mode; label: string }[] = [
@@ -64,6 +64,8 @@ export interface Quiz {
    *  예전엔 잔여를 '폴드' 로 채점해 SB vs BTN A9s 폴드가 3벳 모드에선 정답·수비 모드(콜 0.5)에선 오답이었다.
    *  표가 실제로 말하는 것은 '3벳을 안 하는 빈도' 뿐이라 그 이름으로 묻고 채점한다 — 폴드 자체는 채점하지 않는다. */
   pass?: string;
+  /** 2~5bb 뒤 3명+ 다인 균형 칸 — 카드가 '콜 인원 제한 없이 계산' 안내를 붙인다(nash.data MULTIWAY_NOTICE) */
+  multiway?: true;
 }
 /** 폴드 자리 선택지 라벨(채점 토큰) — `Quiz.pass` 참조 */
 export const passOf = (q: Quiz): string => q.pass ?? FOLD;
@@ -129,6 +131,7 @@ function pushQuiz(k: number, stack: number, hand: string): Quiz | null {
   return {
     mode: 'push', key: `push|${k}-${stack}|${hand}`, posLabel: p.label, situ: `${stack}bb · 첫 진입 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, acts: [{ label: '올인', freq: nashFreq('shove', k, stack).get(hand) ?? 0 }],
+    ...(isMultiwayUncapped(stack, k, true) ? { multiway: true as const } : {}),
   };
 }
 function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz | null {
@@ -143,6 +146,7 @@ function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz 
     mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인${sbFolded} · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, vs: { label: shover.label, bb: stack },
     acts: [{ label: '콜', freq: nashFreq(seat.kind, k, stack).get(hand) ?? 0 }],
+    ...(isMultiwayUncapped(stack, k, true) ? { multiway: true as const } : {}),
   };
 }
 
