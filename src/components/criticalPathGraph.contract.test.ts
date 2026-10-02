@@ -104,6 +104,11 @@ const BANNED: { mod: string; why: string; instead: string; at?: string }[] = [
   { mod: 'src/api/rankings.ts',     why: "호출부는 '지난 대회' 아카이브 이펙트 1곳뿐이다(12.5:1)",    instead: "const rankingsMod = () => import('../../api/rankings');", at: 'src/components/features/PastTournaments.tsx' },
   { mod: 'src/api/reservations.ts', why: '호출부는 browse 게이트·오늘예약 이펙트 2곳뿐이다(10.2:1)',  instead: "const reservationsMod = () => import('./api/reservations');" },
   { mod: 'src/api/reviews.ts',      why: '호출부는 loadDeferred(유휴) 1곳뿐이다(4.5:1)',              instead: "const reviewsMod = () => import('./api/reviews');" },
+  // 2026-10-02 — community.ts 는 통째로 첫 화면에 실려 있었다(34.6KB raw / 8.5KB gz). App.tsx 가 부르는 14개만
+  //   communityCore.ts 로 옮기고 App.tsx 는 그쪽만 문다. 실측(실 env 빌드) 첫 화면 266.9 → 260.5KB gz, JS 전체 +1.7KB.
+  //   community.ts 는 communityCore 를 재수출한다(무거운 쪽→가벼운 쪽이라 안전). 반대로 첫 화면 파일이 community.ts 를
+  //   정적으로 물면 파일 전체가 되돌아온다 — 함수가 더 필요하면 communityCore 로 옮기거나 지연 import 로 받는다.
+  { mod: 'src/api/community.ts',    why: '첫 화면은 communityCore 의 14개만 부른다 — 나머지(그룹·딜러·외치기·상점·관리자)는 지연 청크 몫', instead: "deleteComment, logActivity, } from './api/communityCore';" },
 ];
 
 describe('첫 화면 임계 경로 계약 — 떼어낸 모듈이 되돌아오지 않는다', () => {
@@ -114,7 +119,7 @@ describe('첫 화면 임계 경로 계약 — 떼어낸 모듈이 되돌아오�
     expect(graph.size, 'App.tsx 정적 그래프가 비정상적으로 작다 — 파서가 깨졌다').toBeGreaterThan(50);
     // 첫 화면에 **반드시 있어야 하는** 것들이 실제로 잡히는가
     // ScheduleTable 이 여기 있는 것은 **의도한 상태**다 — 위 머리말의 1.3:1 참고(되돌린 것이다).
-    for (const must of ['src/components/features/HomeTab.tsx', 'src/api/community.ts',
+    for (const must of ['src/components/features/HomeTab.tsx', 'src/api/communityCore.ts',
       'src/components/features/ScheduleCard.tsx', 'src/components/features/ScheduleTable.tsx']) {
       expect(graph.has(resolve(ROOT, must)), `${must} 가 정적 그래프에 없다 — 파서가 무언가를 놓치고 있다`).toBe(true);
     }

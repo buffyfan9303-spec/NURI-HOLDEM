@@ -959,12 +959,11 @@ ${rpt.actions.length
   };
   return (
     <div className="rounded-card border border-violet-500/40 bg-linear-to-br/srgb from-violet-500/12 to-indigo-500/4 p-3 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
-          {/* '인사이트' 라고 부르지 않는다 — 이건 장부 집계이고, 근거 없는 추천을 만들지 않는 것이 이 리포트의 계약이다. */}
-          <p className="text-2xs text-ink-secondary mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
-        </div>
+      {/* 정렬 전수 S2(2026-10-02) — 제목과 설명을 한 칸에 쌓고 items-start 로 두면 버튼 가운데가 제목 글자 가운데보다 아래였다.
+          제목 줄과 버튼을 한 행(items-center)으로, 설명은 그 아래 전폭으로. */}
+      <div>
+      <div className="flex items-center justify-between gap-2">
+          <h4 className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
         <div className="flex shrink-0 items-center gap-1.5">
           {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors"><Icon name="printer" size={12} className="shrink-0" />저장</button>}
           <button type="button" onClick={onRefresh}
@@ -972,6 +971,9 @@ ${rpt.actions.length
             <Icon name="refresh" size={12} className="shrink-0" />새로고침
           </button>
         </div>
+      </div>
+      {/* '인사이트' 라고 부르지 않는다 — 이건 장부 집계이고, 근거 없는 추천을 만들지 않는 것이 이 리포트의 계약이다. */}
+      <p className="text-2xs text-ink-secondary mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
       </div>
       {/* ── 데이터 신뢰도 — 무엇을 근거로 말하는지 먼저 밝힌다. 표본이 모자라면 여기서 그렇다고 말한다. ── */}
       <p className="rounded-input border border-border-subtle bg-surface-low/60 px-2.5 py-1.5 text-2xs text-ink-muted break-keep">

@@ -97,11 +97,12 @@ describe('20260911a — 광고 노출 조건은 서버가 판정한다', () => {
 //   조용히 통과하고 **광고 카드만 값이 빈다**. 실제로 badbeat_count·goodrun_count 가 빠져
 //   승격된 글의 추천·비추천이 항상 0 이었고, PostRowCard 는 둘 다 0 이면 그 줄을 통째로 감춰
 //   일반 목록에서 보이던 '▲12 ▼3' 이 광고 자리에서 사라졌다(2026-09-11).
-const COMMUNITY = readFileSync(join(__dirname, 'community.ts'), 'utf-8');
+// rowToPost 는 2026-10-02 첫 화면 예산 분할로 communityCore.ts 로 옮겨 갔다(community.ts 가 재수출).
+const COMMUNITY = readFileSync(join(__dirname, 'communityCore.ts'), 'utf-8');
 /** rowToPost 본문만 — 다른 매핑(댓글 등)이 읽는 컬럼까지 끌어오지 않는다. */
 const MAPPING = COMMUNITY.slice(
   COMMUNITY.indexOf('export const rowToPost'),
-  COMMUNITY.indexOf('export async function getPostsByUser'),
+  COMMUNITY.indexOf('export async function getPostById'),
 );
 /** returns table(...) 선언부에서 SQL 주석을 걷어 낸 것 — 주석에 적힌 이름이 통과시키면 안 된다. */
 const DECLARED = body

@@ -35,7 +35,7 @@ describe('장부 점검 2026-09-27', () => {
   it('#5 늦게 누른 기기는 LEDGER_ALREADY_OPEN 을 알리고 다시 읽는다', () => {
     expect(L).toMatch(/e\.message === LEDGER_ALREADY_OPEN[\s\S]{0,300}await reloadSession\(\)/);
   });
-  it('#6 이용권 레일은 모든 폭에서 표 아래(옆 2열 그리드 없음)', () => {
+  it('#6 이용권 레일은 표 폭을 깎는 2열 그리드가 아니다(2026-10-02 오너 1b: ≥768 표 옆 띠·레일, <768 표 아래)', () => {
     expect(W).not.toMatch(/grid-cols-\[minmax\(0,1fr\)_19rem\]/);
     expect(W).toMatch(/className="mt-4 h-104/);
   });

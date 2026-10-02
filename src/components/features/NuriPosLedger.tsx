@@ -1,13 +1,15 @@
 // src/components/features/NuriPosLedger.tsx
 import { Fold } from '../atoms/Fold';
 import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
-import { useIsDesktop } from '../../lib/responsive';
+import { useIsDesktop, useIsMdUp } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
 // (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { LedgerToolsContext, LedgerFullscreenContext } from './ledgerTools';
+import { createPortal } from 'react-dom';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,8 +19,8 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   setBuyinAddon, addonFinance, addonEntryOf, addonTotals, type AddonMethod, type AddonFinance,
-  splitMismatch,
-  
+  splitMismatch, summaryRowsOf,
+
   discountAmountOf, autoDiscountIndex, discountAllowed, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -60,6 +62,7 @@ import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
 import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../lib/serverTime';   // D1 — 장부 클락 바도 서버 기준 시각
 import { useResyncOnWake } from '../../lib/realtimeResync';
 import { createBackoff } from '../../lib/retryBackoff';
+import './ledgerLazy.css';
 
 // 🔴 2026-09-20 (E2-C/F5) — 여기만 **기기 로컬 날짜**를 썼다. 서버 RPC(request_buyin·check_in)와
 //   앱의 나머지(kstToday)는 전부 **KST** 기준이라, 해외·시계 오설정 기기에서 새 장부의 기본 날짜와
@@ -113,6 +116,8 @@ export interface LedgerSeed {
   title?: string;
   buyinAmount?: number;
   gtd?: boolean;
+  /** 2026-10-02 오너(데일리 펍) — 게임을 고르지 않은 진입(단계 바 '장부'). 그날 진행 중인 마지막 게임에 착지한다(storeDestination.autoLand). */
+  autoLand?: boolean;
 }
 
 /**
@@ -161,8 +166,12 @@ function pageFirstDelta(box: HTMLElement, bar: HTMLElement | null, dy: number): 
 const isLgUp = () => window.matchMedia('(min-width: 1024px)').matches;
 
 // venueName — 장부 삭제 확인에 '어느 매장의' 장부인지 보인다(review-store-link-1002 2a: 날짜·메인만으로는 매장을 구별할 수 없었다).
-export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
+export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true, gameSlot = null, onTodayGame }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
+  /** 셸(VenueManageTab)의 '오늘 게임' 칩 줄 자리. 있으면 게임 스위처를 거기로 portal 한다 — 게임 선택 줄이 판 안팎 두 벌이던 것을 하나로(감사 L-3). */
+  gameSlot?: HTMLElement | null;
+  /** 영업일(오늘) 장부에서 보는 게임이 바뀌면 셸에 알린다 — 문맥 줄·클락·순위가 같은 게임을 본다(칩 하나로 3면, IA2). */
+  onTodayGame?: (seq: number, title?: string, byUser?: boolean) => void;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   /** 세션 요약의 '대회 …' → 손님이 보는 대회 상세. 없으면 글자로만 남는다(AdminTab 등). */
   onOpenSchedule?: (s: Schedule) => void;
@@ -182,6 +191,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   settleSignal?: number;
 }) {
   const toast = useToast();
+  const inFullscreen = useContext(LedgerFullscreenContext);
+  const wsTools = useContext(LedgerToolsContext); // 작업대 도구([이용권 확인]·[전체화면]) — 날짜 줄·목록 검색 줄 끝에 그린다
   const { user, isAdmin } = useAuth();
   const operatorOk = isAdmin || !!user?.approved; // 담당직원: 승인된 계정만 운영
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
@@ -207,6 +218,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     if (!followGame) return;
     setDate(businessDateOf(venueId));   // B1 — 칩 바는 영업일의 게임을 보여 준다(GameChipBar 와 같은 날짜)
     setGameSeq(followGame.seq);
+    autoLandRef.current = null;         // 고른 게임이 착지 자동 선택보다 우선
     setSelected(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followGame?.n]);
@@ -229,6 +241,18 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // 보드 상단 '바인 할인' 고정 선택. null = 자동(클락 레벨) — **기본값이라 기존 운영이 그대로다**.
   // 0 = 할인 없음 고정, 1~5 = 그 프리셋 고정. 결제창·QR 승인이 모두 이 값을 기본으로 받는다.
   const [discPick, setDiscPick] = useState<number | null>(null);
+  const [discHelp, setDiscHelp] = useState(false); // 할인 안내 ⓘ 펼침
+  // 1d(오너 2026-10-02) — 모바일(<768) 장부는 진입하면 **요약**이 기본이다: 게임 합계 + 손님별 한 줄. '편집' 을 누르면 지금의 체크 화면.
+  //   숫자는 새로 계산하지 않는다 — 합계는 정산바와 같은 stats, 손님 줄은 표의 '총바인·미수' 열과 같은 playerTotals·countOf 다.
+  //   판에 다시 들어올 때마다(active 상승) 요약으로 돌아간다. PC(≥768)는 종전 그대로(이 상태를 보지 않는다).
+  const isMdUpLedger = useIsMdUp();
+  const [mobileEdit, setMobileEdit] = useState(false);
+  const wasActiveForSummary = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveForSummary.current) { setMobileEdit(false); setQuery(''); }
+    wasActiveForSummary.current = active;
+  }, [active]);
+  const [exOpen, setExOpen] = useState(false);     // 정산 제외 펼침(PC 는 접힘 줄·내용이 갈라져 있어 위로 올렸다)
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -246,6 +270,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
+  // 데일리 펍(2026-10-02 감사 L-9) — 진행 중 게임이 있는 날은 마감 회차(4개 이상)를 접어 둔다. 펼친 날짜 집합.
+  const [shownClosed, setShownClosed] = useState<Set<string>>(new Set());
   const [listLoading, setListLoading] = useState(true);
   // 목록도 보드와 같은 세 갈래(로딩/실패/빈값) — 실패를 '없음'으로 두면 업주가 안내대로
   // "+ 장부 추가"를 눌러 서버에 이미 있는 그 날짜에 중복 장부를 만든다.
@@ -363,16 +389,30 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   }, [run]);
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList, venueId]);
 
-  const openBoard = (d: string, g = MAIN_GAME_SEQ) => { setDate(d); setGameSeq(g); setSelected(null); setMode('board'); };
+  const openBoard = (d: string, g = MAIN_GAME_SEQ) => {
+    autoLandRef.current = null; userPickRef.current = true; setDate(d); setGameSeq(g); setSelected(null); setMode('board');
+    if (d === biz) onTodayGame?.(g, undefined, true);   // F-3 — 고른 순간 알린다(아래 pickGame 주석)
+  };
   // 사이드 게임 추가 — 그 날짜의 다음 game_seq로 전환(새 게임이면 설정 폼이 뜸)
-  const addSide = () => { const maxSeq = games.reduce((m, g) => Math.max(m, g.gameSeq), 0); setGameSeq(Math.max(MAIN_GAME_SEQ + 1, maxSeq + 1)); setSelected(null); };
+  const addSide = () => {
+    autoLandRef.current = null; userPickRef.current = true; const maxSeq = games.reduce((m, g) => Math.max(m, g.gameSeq), 0);
+    const next = Math.max(MAIN_GAME_SEQ + 1, maxSeq + 1);
+    setGameSeq(next); setSelected(null);
+    if (date === biz) onTodayGame?.(next, undefined, true);
+  };
 
   // 게임관리 '장부' 바로가기: 연결 장부로 즉시 이동, 없으면 포스터 정보를 시작 설정에 프리필
   // (ref에 대상 날짜를 묶어 — 세션 fetch 타이밍에 이전 날짜 화면이 잠깐 보여도 오적용/유실 없음)
   // movedTo: 그 날짜 메인 칸이 남의 장부로 차 있어 빈 게임으로 한 번 옮겼다는 표시(무한 이동 방지)
   const seedFillRef = useRef<{ date: string; fill: Partial<LedgerSession>; movedTo?: number } | null>(null);
+  // 데일리 펍 착지 — 이 (매장|날짜) 첫 조회가 오면 '진행 중 마지막 게임' 으로 한 번 옮긴다. 사용자가 게임을 고르면(스위처·목록) 지운다.
+  const autoLandRef = useRef<string | null>(null);
+  // 3b(2026-10-02 검토) — 사용자가 **직접** 고른 게임인가(스위처·목록·사이드 추가·게임을 지정한 시드). 셸은 이것만 '게임 고름'으로
+  //   기록한다. 기본 메인·자동 착지까지 고름으로 세면 단계 바 '장부' 의 자동 착지가 세션당 첫 진입 한 번뿐이었다.
+  const userPickRef = useRef(false);
   useEffect(() => {
     if (!seed) return;
+    if (!seed.autoLand) userPickRef.current = true;
     if (seed.isNew) {
       seedFillRef.current = {
         date: seed.date,
@@ -384,8 +424,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     }
     setDate(seed.date);
     setGameSeq(seed.gameSeq ?? MAIN_GAME_SEQ); // 연결 장부 목록에서 고른 게임 그대로(새 장부는 메인)
+    autoLandRef.current = seed.autoLand ? `${venueId}|${seed.date}|${seed.gameSeq ?? MAIN_GAME_SEQ}` : null;
     setMode('board');
-  }, [seed]);
+  }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps -- venueId 는 착지 표식의 주인 표시일 뿐(시드 신호로만 돈다)
   // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.
   // 그런데 정작 '되돌릴 수 있는' 정산 마감은 꾹-누르기로 막혀 있어 위험도와 확인 강도가 역전돼 있었다.
   // → confirm 1회를 없애고, 무엇을 잃는지(바인·인원·매출·미수)를 실수치로 먼저 보여준 뒤 마감과 같은 꾹-누르기로 통일한다.
@@ -508,13 +549,39 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     ++reloadSeq.current;
     // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
-      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); setSessionFor(`${venueId}|${date}|${gameSeq}`); })
+      .then(([s, b, p, pw, gs]) => {
+        if (!alive) return;
+        setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); setSessionFor(`${venueId}|${date}|${gameSeq}`);
+      })
       // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
       //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
       .catch((e) => { if (alive) setLoadError(e); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [venueId, date, gameSeq]); // eslint-disable-line react-hooks/exhaustive-deps -- bumpSessionReq 는 같은 세 값에서 파생
+
+  // 데일리 펍(하루 장부 10건+) — 게임을 고르지 않고 들어왔는데 지금 보드(기본 메인)가 **마감**이면 그날 진행 중(마감 전)인 가장 나중 회차로 한 번 옮긴다.
+  //   메인이 진행 중이면 그대로 둔다(메인+사이드 동시 운영 매장이 사이드에 서지 않게). 진행 중이 없으면 그대로.
+  //   판이 이미 열려 있던(keep-alive) 재진입은 조회가 다시 안 나가므로 '이 장부를 다 받았는가'(sessionFor)와 시드로 판단한다.
+  useEffect(() => {
+    // F-3 — 표식에 **시드가 가리킨 게임**까지 묶는다. 예전 표식(매장|날짜)은 시드 effect 와 같은 커밋에서 아직 바뀌기 전 게임
+    //   (keep-alive 판이 서 있던 사이드14, 이미 조회 끝)을 보고 '마감 아님' 으로 표식을 소비했고, 그다음 시드의 메인(마감)에 섰다(e2e ⑥ 390 실측 3/10).
+    if (autoLandRef.current !== `${venueId}|${date}|${gameSeq}` || sessionFor !== `${venueId}|${date}|${gameSeq}`) return;
+    autoLandRef.current = null;
+    const live = games.filter((g) => !g.closed);
+    const target = live.length > 0 ? live[live.length - 1].gameSeq : null;
+    const curClosed = games.find((g) => g.gameSeq === gameSeq)?.closed ?? false;
+    if (curClosed && target != null && target !== gameSeq) setGameSeq(target);
+  }, [seed, venueId, date, gameSeq, sessionFor, games]);
+
+  // 영업일(오늘) 장부에서 보는 게임 → 셸에 알린다(문맥 줄 '매장 › 날짜 › 게임'·클락 시드·순위가 같은 게임). 게임 줄이 하나가 된 뒤(2026-10-02)
+  //   게임을 바꾸는 손은 이 판의 스위처뿐이라, 셸 칩이 하던 '칩 하나로 3면' 을 여기서 이어 준다. 지난 날짜·목록 모드는 알리지 않는다.
+  useEffect(() => {
+    if (!active || mode !== 'board' || date !== biz || sessionFor !== `${venueId}|${date}|${gameSeq}`) return;
+    const byUser = userPickRef.current;
+    userPickRef.current = false;
+    onTodayGame?.(gameSeq, games.find((g) => g.gameSeq === gameSeq)?.title ?? undefined, byUser);
+  }, [active, mode, date, biz, gameSeq, sessionFor]); // eslint-disable-line react-hooks/exhaustive-deps -- games·콜백 정체성은 알릴 이유가 아니다
 
   // C05: reloadSession() 이 빠져 있었다 — 다른 접수대의 마감·단가·할인 변경이 realtime 으로 와도
   // 현재 화면의 session state 가 안 바뀌었다(loadGames 만으로는 games 목록만 갱신됨).
@@ -1201,6 +1268,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     return m;
   }, [buyins, session, isExcluded]);
   const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0 };
+  // 1d 요약 손님 줄 — 머리(stats)와 같은 '정산 제외' 규칙. 표의 미수 열·미수자 명단(playerTotals)은 그대로 전체 기준이다.
+  const summaryRows = useMemo(() => summaryRowsOf(buyins, session, isExcluded), [buyins, session, isExcluded]);
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
@@ -1376,6 +1445,31 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     } catch (e) { notePwFromError(e); toast.show(ledgerErrorText(e, '삭제 실패(비밀번호 확인)'), 'error', { durationMs: 7000 }); }
   };
 
+  // ── 머리줄(날짜·게임) — 2026-10-02 오너 「게임 선택 줄은 하나로」(감사 L-1·L-3) ─────────────────
+  //   셸의 '오늘 게임' 칩 줄 자리(gameSlot)가 있으면 게임 스위처를 거기로 portal 한다. PC(lg+)는 날짜·도구도 같은 한 줄로 올려
+  //   판 안의 날짜 줄(42)·게임 줄(34)을 없앤다(첫 화면 표 행 확보). 모바일은 날짜 줄이 판 안에 남고 게임 줄만 올라간다.
+  //   자리가 없으면(관리자 탭 등) 종전처럼 판 안에 날짜 줄 + 게임 줄.
+  // F-3 — 고른 순간 셸에 '직접 고름' 을 알린다. 보드 조회가 끝나야 도는 아래 알림(onTodayGame effect)만 믿으면,
+  //   고르자마자 클락으로 가 판이 비활성이 될 때 알림이 안 나가 재진입이 고른 게임을 잃었다(e2e ⑥ 실측).
+  const pickGame = (g: number) => {
+    autoLandRef.current = null; userPickRef.current = true; setGameSeq(g); setSelected(null);
+    if (date === biz) onTodayGame?.(g, games.find((x) => x.gameSeq === g)?.title ?? undefined, true);
+  };
+  const switcher = (games.length > 0 || gameSeq > MAIN_GAME_SEQ)
+    ? <GameSwitcher games={games} gameSeq={gameSeq} onSelect={pickGame} onAddSide={addSide} canAdd={operatorOk} date={date} today={date === biz} />
+    : null;
+  const dateBar = (withTools: boolean) => <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} tools={withTools ? wsTools : null} />;
+  const slotted = !!gameSlot && mode === 'board' && !inFullscreen;
+  const headPortal = slotted && gameSlot ? createPortal(isDesktopLedger ? (
+    // flex-wrap — 좁은 PC(1024)에서는 게임 칩 칸이 0 으로 짜부라지지 않고 다음 줄로 내려간다(칸 하한 16rem).
+    <div data-ledger-head="" className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="shrink-0">{dateBar(false)}</div>
+      <div data-ledger-switcher="" className="order-last min-w-0 basis-full empty:hidden">{switcher}</div>
+      {wsTools && <div className="ml-auto flex shrink-0 items-center gap-1.5">{wsTools}</div>}
+    </div>
+  ) : (switcher ?? (loading ? <div aria-hidden className="h-9 animate-pulse rounded-badge bg-surface-high" /> : null)), gameSlot) : null;
+  const headInline = slotted ? (isDesktopLedger ? null : dateBar(true)) : <>{dateBar(true)}{switcher}</>;
+
   // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
   if (mode === 'list') {
     const todayStr = today();
@@ -1396,6 +1490,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
         </div>
         <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
+        {wsTools}
         </div>
 
         {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터)
@@ -1436,10 +1531,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 if (g) g.items.push(s); else groups.push({ date: s.sessionDate, items: [s] });
               }
               const gl = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
-              return groups.map(({ date, items }) => {
+              return groups.map(({ date, items: raw }) => {
                 const open = !collapsedDates.has(date);
-                const liveN = items.filter((x) => !x.closed && !x.regClosed).length;
-                const closedN = items.filter((x) => x.closed).length;
+                const liveN = raw.filter((x) => !x.closed && !x.regClosed).length;
+                const closedN = raw.filter((x) => x.closed).length;
+                // 진행 중(마감 전)이 위 — 하루 15게임이면 지금 받는 게임이 맨 아래에 묻혔다(감사 1-3). 같은 상태 안에서는 회차순 그대로.
+                const foldClosed = closedN > 3 && raw.some((x) => !x.closed) && !shownClosed.has(date);
+                const items = [...raw].sort((a, b) => Number(a.closed) - Number(b.closed)).filter((x) => !(foldClosed && x.closed));
                 return (
                   <div key={date} className="rounded-aura border card-aura overflow-hidden">
                     {/* 날짜 헤더 — 접기/펼치기(그날 게임 묶음) */}
@@ -1447,7 +1545,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                       onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); if (n.has(date)) n.delete(date); else n.add(date); return n; })}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-high transition-colors">
                       <span className="text-sm font-bold text-ink-primary">{date}{date === todayStr ? ' (오늘)' : ''}</span>
-                      <span className="text-2xs font-semibold text-accent-200">게임 {items.length}</span>
+                      <span className="text-2xs font-semibold text-accent-200">게임 {raw.length}</span>
                       {liveN > 0 && <span className="text-2xs font-bold text-emerald-400">진행 {liveN}</span>}
                       {closedN > 0 && <span className="text-2xs text-ink-muted">마감 {closedN}</span>}
                       <span className="flex-1" />
@@ -1462,7 +1560,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                           // '안 되는데 반응은 한다'가 한 행에서 충돌했다(2026-09-04 조사).
                           return (
                           <li key={`${s.sessionDate}#${s.gameSeq}`}
-                              className={['flex items-center transition-colors', canOpen ? 'hover:bg-surface-high/40' : ''].join(' ')}>
+                              className={['group/row flex items-center transition-colors', canOpen ? 'hover:bg-surface-high/40' : ''].join(' ')}>
                             <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
                               className={['flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
                               <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-secondary border-border-default' : 'bg-accent-300/15 text-accent-300 border-accent-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
@@ -1479,17 +1577,27 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                                 : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                             </button>
                             {fullAccess && (
-                              <button type="button" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
-                                className="shrink-0 -my-1.5 ml-1 mr-1 h-11 w-11 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
+                              <button type="button" data-ledger-trash="" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
+                                // 행마다 늘어선 휴지통이 목록을 어지럽혔다(감사 L-9) — PC 는 행에 마우스·포커스가 올 때만 보인다(누를 수 있는 자리·크기는 그대로).
+                                // 3c(2026-10-02 검토) — 숨김은 마우스(hover+fine) 기기에만. 1024+ 터치 태블릿은 hover 가 없어 영영 안 보였다.
+                                className="shrink-0 -my-1.5 ml-1 mr-1 h-11 w-11 flex items-center justify-center rounded-input text-ink-muted/70 hover:text-danger-light hover:bg-danger/10 transition-colors">
                                 <Icon name="trash" size={15} />
                               </button>
                             )}
                           </li>
                         );})}
+                        {foldClosed && (
+                          <li>
+                            <button type="button" onClick={() => setShownClosed((prev) => new Set(prev).add(date))}
+                              className="flex min-h-11 w-full items-center justify-center gap-1 px-3 text-2xs font-bold text-ink-secondary hover:bg-surface-high/40">
+                              마감 {closedN}개 보기 <Icon name="chevron-down" size={12} className="shrink-0" />
+                            </button>
+                          </li>
+                        )}
                       </ul>
                     </Fold>
                     <Fold open={!open}>
-                      <div className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted truncate">{items.map((x) => gl(x.gameSeq)).join(' · ')}</div>
+                      <div className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted truncate">{raw.map((x) => gl(x.gameSeq)).join(' · ')}</div>
                     </Fold>
                   </div>
                 );
@@ -1517,7 +1625,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // 클래스를 그대로 쓴 1행 rect.height=51px, h-10=42.5px). 같은 h-12 클래스를 그대로 재사용해 맞춘다.
   if (loading) return (
     <div className="space-y-3">
-      <div data-ledger-daterow className="h-9 animate-pulse rounded-input bg-surface-high lg:w-[276px]" />
+      {headPortal}
+      {!(slotted && isDesktopLedger) && <div data-ledger-daterow className="h-9 animate-pulse rounded-input bg-surface-high lg:w-[276px]" />}
       <SkeletonList rows={6} rowClassName="h-12" />
     </div>
   );
@@ -1528,7 +1637,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   if (loadError && !hasBoardData) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
+        {headPortal}{headInline}
         <LoadErrorCard error={loadError} what="장부" onRetry={() => { setLoadError(null); reloadSession(); reload(); }} />
       </div>
     );
@@ -1538,10 +1647,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   if (showSetup) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
-        {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
-          <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
-        )}
+        {headPortal}{headInline}
         {!operatorOk ? (
           <div className="rounded-card border border-danger/40 bg-danger/10 p-4 text-center">
             <p className="text-sm font-bold text-danger-light">승인된 계정만 장부를 운영할 수 있습니다.</p>
@@ -1574,8 +1680,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
 
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 pb-48 lg:pb-28">
-      <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
+    <div className="space-y-2 pb-48 lg:pb-28">
+      {headPortal}
+      {slotted ? headInline : dateBar(true)}
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
       {!!(loadError || rowsErr) && hasBoardData && (
@@ -1585,13 +1692,14 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
         </div>
       )}
-      {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
-        <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
-      )}
+      {!slotted && switcher}
 
       {/* 세션 요약 */}
-      <div className="rounded-aura border card-aura p-2.5 flex items-center gap-2 flex-wrap">
-        <span className="text-pretty text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
+      {/* 2026-10-02 감사 L-1·L-8 — 한 줄로 조였다: 왼쪽(제목·단가·담당·대회)은 줄바꿈해도 오른쪽 버튼 둘은 같은 줄 오른쪽에 남는다
+          (종전: 긴 대회명이면 [클락]·[세션 정보 수정] 이 다음 줄 왼쪽으로 흩어졌다). 버튼은 .btn-sm(34px)+tap-y-44 — 누름영역 44 유지. */}
+      <div className="rounded-aura border card-aura px-2.5 py-1.5 flex items-center gap-2">
+        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="min-w-0 max-w-full truncate text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
@@ -1603,9 +1711,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
               aria-label={`대회 ${scheduleTitle(session.scheduleId)} — 손님이 보는 대회 상세 열기`}
               className="max-w-full truncate py-1 text-left text-2xs text-accent-300 font-semibold hover:underline underline-offset-2">· 대회 {scheduleTitle(session.scheduleId)}</button>
           : <span className="inline-block max-w-full truncate align-bottom text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>)}
-        <span className="flex-1" />
-        {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost inline-flex items-center gap-1.5 text-sm px-3.5 py-2 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
-        {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
+        </div>
+        {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost btn-sm tap-y-44 inline-flex shrink-0 items-center gap-1.5 px-3 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
+        {!closed && <button type="button" onClick={() => setEditOpen(true)} aria-label="세션 정보 수정" className="btn-ghost btn-sm tap-y-44 shrink-0 px-3 font-semibold"><span className="max-sm:hidden">세션 정보 </span>수정</button>}
       </div>
 
       {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용).
@@ -1614,18 +1722,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           띠에만 있던 '생존' 은 정산 바 칸으로 옮겼다(aliveMetric). 모바일(<1024)은 그대로.
           F4(2026-09-29): PC(lg+)는 헤더 밑에 상단 메뉴줄(GNB)이 하나 더 있어 --header-now 에 붙으면 띠가 통째로 가려졌다
           (1280·1440 실측 y60~107, 5점 모두 GNB). 내 매장 사이드바·대시보드 바와 같은 --stack-top(헤더+GNB 실측)에 붙인다. */}
-      {!closed && (
-        <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
-          onClick={pointAtSettle}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-(--header-now) lg:top-[var(--stack-top,6.0625rem)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4 lg:hidden">
-          <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-          <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
-          {aliveMetric}
-          <Metric label="미수" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone={stats.unpaid + stats.addon.unpaid > 0 ? 'danger' : undefined} />
-        </div>
-      )}
-
+      {/* 2026-10-02 감사 L-6 — 모바일 상단 고정 요약 띠(엔트리·완납·생존·미수)를 걷었다. 아래 고정 정산바가 같은 숫자를 이미 보여 줘
+          표로 내려가면 두 고정 크롬(88+166px)이 표 가용 높이를 844 중 450 으로 깎았다. 띠에만 있던 '생존' 은 정산바 '총 바인' 칸 보조 줄로 옮겼다
+          (PC 는 P-02 대로 정산바 칸). '탭하면 정산 마감 지목' 은 정산바가 늘 화면에 있어 필요 없다(settleSignal 지목은 그대로). */}
       {/* 손님 자가 바인 요청(QR) — 운영자 원탭 승인 → 현재 게임 명단 추가 */}
       {!closed && pendingReqs.length > 0 && (
         <div className="rounded-card border border-sky-500/40 bg-sky-500/6 p-2.5 space-y-2">
@@ -1783,7 +1882,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           <p className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">
             {roundPresetState === 'done'
               ? <>프리셋으로 저장됐어요. 다음엔<b className="text-ink-primary">1탭</b>으로 그대로 열 수 있어요.</>
-              : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b>할까요? 다음엔 포스터·장부·클락을 한 번에 채워요.</>}
+              : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b> — 다음엔 한 번에 채워요</>}
           </p>
           {roundPresetState === 'done'
             ? <span className="shrink-0 text-2xs font-bold text-emerald-400">저장됨 ✓</span>
@@ -1818,42 +1917,68 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
         </div>
       )}
 
-      {/* 바인 할인 빠른 선택 — 새로 찍는 바인의 기본 할인. 상시 크롬이라 진입 애니 없음(§20.4-7).
-          프리셋이 하나도 없으면 줄 자체를 그리지 않는다(빈 크롬 금지). */}
-      {!closed && session.discounts.some((d) => d.amount > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low px-2 py-1.5">
-          <span className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</span>
-          {(() => {
-            const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
-            const chip = (on: boolean) => ['min-h-11 rounded-badge border px-3 text-xs font-bold transition-colors',
-              on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
-            return (
-              <>
-                <button type="button" onClick={() => setDiscPick(null)} className={chip(discPick === null)}>
-                  자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}
-                </button>
-                <button type="button" onClick={() => setDiscPick(0)} className={chip(discPick === 0)}>할인 없음</button>
-                {/* 비운 자리(0원)는 감추되 자리번호는 그대로 — 바인 계산의 기준이라 재배열 불가 */}
-                {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
-                  <button key={i} type="button" onClick={() => setDiscPick(i + 1)} className={chip(discPick === i + 1)}>
-                    <span className="tabular-nums">{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</span>
-                  </button>
-                )))}
-                {/* ⚠ 2026-09-14 실측: 할인 프리셋이 3개면 이 안내문이 flex-wrap 에서 남은 ~20px 를 받아
-                    **한 글자씩 세로로** 내려와 박스가 490px 가 됐다. break-keep 이 있어도 전역
-                    overflow-wrap:break-word(index.css)가 한 글자 단위로 쪼갠다.
-                    basis-full 로 **줄 전체**를 차지하게 해 칩과 같은 줄을 다투지 않게 한다. */}
-                <p className="basis-full break-keep text-2xs leading-tight text-ink-muted">
-                  {discPick === null
-                    ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
-                    : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
-                </p>
-              </>
-            );
-          })()}
-        </div>
+      {/* 1d 모바일 요약 — 게임 합계 + 손님별 한 줄. 손님 줄을 누르면 그 손님만 걸러 편집 화면으로. */}
+      {!isMdUpLedger && !mobileEdit && (
+        <section data-ledger-summary="" aria-label="이 게임 장부 요약" className="space-y-2">
+          {/* 2b — 요약은 **지금 게임 하나**다. 정산 판(마감 정산)은 그날 전 게임을 합친다(데일리 펍이면 늘 다르다). */}
+          <p data-sum="scope" className="text-2xs text-ink-muted">
+            이 게임 · {gLabel(gameSeq)}
+            {stats.removed.count > 0 && <span className="text-danger-light"> · 제외 적용</span>}
+          </p>
+          <div className="flex items-center gap-2 rounded-aura border card-aura px-3 py-2">
+            <dl className="grid min-w-0 flex-1 grid-cols-3 gap-2 text-center">
+              <div><dt className="text-2xs text-ink-muted">{exKeys.size > 0 ? '바인(제외 적용)' : '바인'}</dt><dd data-sum="buyins" className="text-sm font-bold tabular-nums text-ink-primary">{stats.totalBuyins.toLocaleString()}회</dd></div>
+              <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>
+              <div><dt className="text-2xs text-ink-muted">미수</dt><dd data-sum="unpaid" className={['text-sm font-bold tabular-nums', stats.unpaid + stats.addon.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{wonToMan(stats.unpaid + stats.addon.unpaid)}만</dd></div>
+            </dl>
+            {/* 3d — 마감 장부도 표(엔트리별 결제수단·얼리·할인·방문 유형·비고)를 볼 수 있어야 한다. 같은 표를 띄우되
+                closed 라 표 쪽이 이미 읽기 전용이다(상태 변경 없음). 마감 해제를 우회로로 쓰게 하지 않는다. */}
+            {closed ? (
+              <button type="button" data-testid="ledger-table-view" onClick={() => setMobileEdit(true)}
+                className="btn-ghost btn-sm tap-y-44 shrink-0 px-3">표 보기</button>
+            ) : (
+              <button type="button" data-testid="ledger-edit-mode" onClick={() => setMobileEdit(true)}
+                className="btn-primary btn-sm tap-y-44 shrink-0 px-3">편집</button>
+            )}
+          </div>
+          {rows.length === 0 ? (
+            <p className="py-6 text-center text-xs text-ink-muted">아직 손님이 없습니다{closed ? '' : ' — 편집에서 추가하세요'}.</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle rounded-card border border-border-default bg-surface-low">
+              {rows.map((r) => {
+                const tot = summaryRows.get(r.name) ?? { count: 0, unpaid: 0, value: 0 };
+                return (
+                  <li key={r.name}>
+                    <button type="button" data-sum-row={r.name} onClick={() => { setQuery(r.name); setMobileEdit(true); }}
+                      className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left">
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary" title={r.name}>{r.name}</span>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-secondary">바인 {tot.count}회</span>
+                      <span className="w-14 shrink-0 text-right text-xs font-bold tabular-nums text-ink-primary">{wonToMan(tot.value)}만</span>
+                      <span className={['w-14 shrink-0 text-right text-2xs tabular-nums', tot.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>
+                        {tot.unpaid > 0 ? `미수 ${wonToMan(tot.unpaid)}만` : '—'}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       )}
-
+      {!isMdUpLedger && mobileEdit && (
+        <button type="button" data-testid="ledger-summary-mode" onClick={() => { setMobileEdit(false); setQuery(''); }}
+          className="btn-ghost btn-sm tap-y-44 inline-flex items-center gap-1 px-3 text-xs font-bold">
+          <Icon name="chevron-left" size={13} className="shrink-0" />요약 보기
+        </button>
+      )}
+      {/* 마감 장부엔 검색칸이 없다 — 손님 줄로 걸렀으면 무엇을 걸렀는지와 푸는 길을 밝힌다. */}
+      {!isMdUpLedger && mobileEdit && closed && query && (
+        <p data-testid="ledger-readonly-filter" className="flex items-center gap-2 text-xs text-ink-secondary">
+          <span className="min-w-0 truncate">‘{query}’ 만 보는 중 · 읽기 전용</span>
+          <button type="button" onClick={() => setQuery('')} className="btn-ghost btn-sm tap-y-44 shrink-0 px-2 text-xs">전체</button>
+        </p>
+      )}
+      {(isMdUpLedger || mobileEdit) && (<>
       {/* 검색 + 유저 추가 */}
       {!closed && (
         <div className="space-y-1.5">
@@ -1867,6 +1992,31 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 <circle cx="9" cy="9" r="6" /><line x1="14" y1="14" x2="18" y2="18" strokeLinecap="round" />
               </svg>
             </div>
+            {/* 바인 할인 기본값 — 2026-10-02 감사 L-5: 칩 6개 상자(모바일 203px·PC 82px)를 선택 하나로 접어 검색 줄에 올렸다.
+                값·의미는 그대로다(null=자동(클락 레벨) · 0=할인 없음 · 1~5=그 프리셋 고정, 비운 자리는 자리번호 유지). 결제창·QR 승인이 이 값을 기본으로 받는다.
+                긴 안내는 ⓘ 로 펼친다(지우지 않는다). 프리셋이 하나도 없으면 그리지 않는다(빈 크롬 금지). */}
+            {session.discounts.some((d) => d.amount > 0) && (() => {
+              const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
+              return (
+                <div data-ledger-disc="" className="flex shrink-0 items-center gap-1 max-sm:basis-full">
+                  <label htmlFor="ledger-disc-pick" className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</label>
+                  <select id="ledger-disc-pick" value={discPick === null ? 'auto' : String(discPick)}
+                    onChange={(e) => setDiscPick(e.target.value === 'auto' ? null : Number(e.target.value))}
+                    data-ledger-discsel="" className={['input h-10 min-w-0 py-0 text-xs font-bold', discPick === null ? '' : 'text-accent-300'].join(' ')}>
+                    <option value="auto">자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}</option>
+                    <option value="0">할인 없음</option>
+                    {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
+                      <option key={i} value={String(i + 1)}>{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</option>
+                    )))}
+                  </select>
+                  <button type="button" onClick={() => setDiscHelp((v) => !v)} aria-expanded={discHelp} aria-controls="ledger-disc-help"
+                    aria-label={discHelp ? '할인 안내 접기' : '할인 안내 펼치기'}
+                    className="flex h-10 w-8 shrink-0 items-center justify-center text-ink-muted hover:text-ink-secondary">
+                    <Icon name="info" size={15} />
+                  </button>
+                </div>
+              );
+            })()}
             {/* 정렬 — 100명+ 명단 빨리 찾기: 등록순/이름순/바인순 */}
             <SegmentedTabs className="shrink-0"
               items={[{ key: 'recent', label: '등록순' }, { key: 'name', label: '가나다' }, { key: 'bins', label: '바인순' }]}
@@ -1876,6 +2026,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
               : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0 max-sm:ml-auto">+ 유저 추가</button>}
           </div>
 
+          {discHelp && session.discounts.some((d) => d.amount > 0) && (
+            <p id="ledger-disc-help" className="break-keep text-2xs leading-tight text-ink-muted">
+              {discPick === null
+                ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
+                : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
+            </p>
+          )}
           <Fold open={addOpen && !regClosed}>
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
@@ -1967,7 +2124,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th data-ledger-note="" className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
                 <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 whitespace-nowrap px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
@@ -2049,7 +2206,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
+                      <td data-ledger-note="" className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
                         {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
@@ -2093,6 +2250,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           </table>
         </div>
       )}
+      </>)}
 
       {/* 정산 바 (고정) */}
       {/* 정산바 오프셋 = --tabbar-safe − 0.75rem (탭바에 딱 붙이는 의도적 파생값, TB1a) */}
@@ -2102,14 +2260,24 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
       {/* S-04(2026-10-01) — `lg:pr-16`: PC 폭에서 바가 화면 오른쪽 끝 가까이 닿으면(1024·1280) '맨 위로' FAB(App.tsx `.scroll-top-fab`,
           lg:bottom-5 right-4 z-40, 42.5px)가 맨 아래 스크롤 때 '정산 마감' 버튼을 덮었다(버튼 면 21점 중 1024 11점 · 1280 4점이 FAB — '정' 한 글자만 보임).
           FAB 자리(right 17 + 폭 42.5 ≈ 59.5px)+여백만큼 오른쪽을 비운다. 아래 실행 버튼 바(`pr-12`)와 같은 처방 — FAB 는 App.tsx(공용)라 손대지 않는다. */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
+      <div ref={settleBarRef} data-ledger-settlebar="" className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
-        <SettleFilter
+        {/* 2026-10-02 감사 L-1 — PC(lg+)는 [정산 제외] 접힘 줄(33px)을 숫자 줄 왼쪽 칸으로 올리고, 펼친 내용만 숫자 위에 둔다(바 높이 회수).
+            모바일은 종전 그대로(한 상자). 펼침 상태는 하나라 폭이 바뀌어도 이어진다. */}
+        <SettleFilter part={isDesktopLedger ? 'panel' : 'all'} open={exOpen} setOpen={setExOpen}
           exKeys={exKeys} setExKeys={setExKeys} counts={exCounts}
           removed={stats.removed} players={players}
         />
         <div className="flex items-center gap-2">
+          {isDesktopLedger && (
+            <div className="w-40 shrink-0">
+              <SettleFilter part="toggle" open={exOpen} setOpen={setExOpen}
+                exKeys={exKeys} setExKeys={setExKeys} counts={exCounts}
+                removed={stats.removed} players={players}
+              />
+            </div>
+          )}
           {/* ⚠ 2026-09-14 실측(375): 4열이면 칸이 좁아 값이 숫자 중간에서 끊겼다("7,194 / .44만").
               가장 좁은 폭만 2×2 로 내린다 — sm 이상은 종전 4열 그대로(PC 렌더 불변). */}
           <div className={['grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4', !closed ? 'lg:grid-cols-5' : ''].join(' ')}>
@@ -2118,7 +2286,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
             <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
-              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
+              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · 생존${aliveLive != null ? ` ${aliveLive}` : `≈${aliveEst}`}` : ''}`} />
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
@@ -2584,9 +2752,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 // ── 날짜 바 ───────────────────────────────────────────────────────────────────
-function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void }) {
+// tools — 장부 작업대(LedgerWorkspace)의 [이용권 확인]·[전체화면]. 2026-10-02(감사 L-4) 혼자 한 줄을 차지하던 도구 줄을 이 줄 끝으로 흡수했다.
+function DateBar({ date, setDate, biz, onBack, tools }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void; tools?: ReactNode }) {
   return (
-    <div data-ledger-daterow className="flex items-center gap-2">
+    <div data-ledger-daterow className="flex min-w-0 items-center gap-2">
       {/* 크기 사다리 .btn-sm(34px) 을 쓴다 — text-xs(12.75px) 라벨인데 .btn 기본 하한(min-h 2.4rem=40.8px)을
           그대로 받아 필요보다 6.8px 컸다(오너: "글씨에 비해 버튼이 쓸데없이 커져"). 실측 55.8×40.8 → 34px.
           ⚠ 색 변형 뒤에 크기 변형이 와야 한다(index.css §B1 선언 순서).
@@ -2596,34 +2765,72 @@ function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: st
         <button type="button" onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0" aria-label="목록으로">← 목록</button>
       )}
       {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
-      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm lg:w-52 lg:flex-none" />
+      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input min-w-0 flex-1 text-sm lg:w-52 lg:flex-none" />
       {date !== biz && <button type="button" onClick={() => setDate(biz)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
+      {tools && <div className="ml-auto flex shrink-0 items-center gap-1.5">{tools}</div>}
     </div>
   );
 }
 
 // ── 게임 스위처 — 그 날짜의 메인/사이드 전환 + 사이드 추가 ─────────────────────
-function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd }: {
+// 🔴 2026-10-02 오너(데일리 펍: 하루 장부 10건+) — ① 셸 '오늘 게임' 칩 줄 자리로 portal 돼 게임 줄이 하나다(같은 자리·같은 칩 모양, h-9).
+//   ② 고른 칩을 가로로 화면 가운데에 둔다(종전엔 15번째를 골라도 scrollLeft 0 그대로 — 고른 게임이 화면 밖).
+//   ③ 게임이 6개 이상이면 [게임 이동 ▾] 하나로 바로 간다(가로 1,600px 를 밀지 않게). 진행·마감 수도 같이 보인다.
+//   칩 글자 '사이드1 · 제목' 은 한 덩어리 그대로(셀렉터·낭독 계약). 영업일이면 '오늘 게임', 지난 날짜면 'M/D 게임'.
+function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today }: {
   games: LedgerGame[]; gameSeq: number; onSelect: (s: number) => void; onAddSide: () => void; canAdd: boolean;
+  /** 이 장부의 날짜(en-CA) · 영업일인가 */
+  date: string; today: boolean;
 }) {
   const label = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
   const showPending = !games.some((g) => g.gameSeq === gameSeq); // 작성중인 새 사이드
+  const scRef = useRef<HTMLDivElement>(null);
+  // ② 고른 칩을 가운데로 — rect 차이로 잰다(offsetLeft 는 :active scale 조상에서 끊긴다, CLAUDE.md 참고 메모). 세로 스크롤은 건드리지 않는다.
+  useLayoutEffect(() => {
+    const sc = scRef.current;
+    const on = sc?.querySelector<HTMLElement>('[aria-pressed="true"], [data-pending]');
+    if (!sc || !on || sc.scrollWidth <= sc.clientWidth) return;
+    const a = sc.getBoundingClientRect(); const b = on.getBoundingClientRect();
+    sc.scrollLeft += (b.left + b.width / 2) - (a.left + a.width / 2);
+  }, [gameSeq, games.length]);
+  const md = date.slice(5).replace('-', '/').replace(/^0/, '').replace('/0', '/');
+  const live = games.filter((g) => !g.closed).length;
+  const chip = (on: boolean) => ['inline-flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
+    on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ');
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:h-1.5">
-      <span className="shrink-0 text-2xs font-bold text-ink-muted pr-0.5">게임</span>
-      {games.map((g) => (
-        <button key={g.gameSeq} type="button" onClick={() => onSelect(g.gameSeq)}
-          className={['shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors whitespace-nowrap',
-            g.gameSeq === gameSeq ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
-          {label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}{g.closed ? ' ·마감' : ''}
-        </button>
-      ))}
-      {showPending && (
-        <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border bg-accent-300 text-white border-accent-300 whitespace-nowrap">{label(gameSeq)} (작성중)</span>
-      )}
-      {canAdd && !showPending && (
-        <button type="button" onClick={onAddSide}
-          className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border border-dashed border-accent-400/50 text-accent-300 hover:bg-accent-300/10 transition-colors whitespace-nowrap">+ 사이드</button>
+    <div data-ledger-games="" className="flex min-w-0 items-center gap-2">
+      {/* 이름표는 스크롤 밖 — 고른 칩을 가운데로 끌어와도 '어느 날의 게임인가' 가 화면에 남는다 */}
+      <span aria-hidden className="shrink-0 text-2xs font-bold text-ink-muted">{today ? '오늘 게임' : `${md} 게임`}</span>
+      <div ref={scRef} role="group" aria-label={today ? '오늘 게임 선택' : `${md} 게임 선택`}
+        className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
+        {games.map((g) => (
+          <button key={g.gameSeq} type="button" aria-pressed={g.gameSeq === gameSeq} onClick={() => onSelect(g.gameSeq)} className={chip(g.gameSeq === gameSeq)}>
+            <span data-ledger-chip48="" className="truncate max-sm:max-w-28">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
+            {/* '마감' 은 그 게임에 더 못 넣는다는 운영 상태 — 흐리지 않고 의미 토큰으로(셸 칩과 같은 규칙) */}
+            {g.closed ? <span className="text-2xs font-semibold text-ink-secondary">마감</span> : <span className="sr-only">진행 중</span>}
+          </button>
+        ))}
+        {showPending && (
+          <span data-pending="" className={chip(true)}>{label(gameSeq)} (작성중)</span>
+        )}
+        {canAdd && !showPending && (
+          <button type="button" onClick={onAddSide}
+            className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">+ 사이드</button>
+        )}
+      </div>
+      {games.length >= 6 && (
+        // ③ 많으면 한 번에 — 네이티브 select(키보드·낭독기·모바일 휠 피커 그대로). 진행 중이 위.
+        <select aria-label={`게임으로 이동 — 진행 ${live} · 마감 ${games.length - live}`} value={showPending ? '' : String(gameSeq)}
+          onChange={(e) => { const v = Number(e.target.value); if (v) onSelect(v); }}
+          data-ledger-chip44="" className="input h-9 w-auto shrink-0 py-0 text-xs font-bold max-sm:max-w-28">
+          {showPending && <option value="">{label(gameSeq)} (작성중)</option>}
+          <optgroup label={`진행 ${live}`}>
+            {games.filter((g) => !g.closed).map((g) => <option key={g.gameSeq} value={g.gameSeq}>{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</option>)}
+          </optgroup>
+          <optgroup label={`마감 ${games.length - live}`}>
+            {games.filter((g) => g.closed).map((g) => <option key={g.gameSeq} value={g.gameSeq}>{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</option>)}
+          </optgroup>
+        </select>
       )}
     </div>
   );
@@ -4146,14 +4353,17 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
 //                       "티켓·현금·카드 등도 뺄 수 있게".
 // 축이 둘(방문자 유형 × 결제수단)뿐이라 별도 화면을 만들지 않고 정산바 바로 위에 접어 둔다 —
 // 지금 보는 숫자가 '무엇을 뺀 결과'인지 같은 시야에서 읽혀야 오정산이 안 난다.
-function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
+function SettleFilter({ exKeys, setExKeys, counts, removed, players, part = 'all', open, setOpen }: {
+  /** all = 접힘 줄 + 펼친 내용(모바일) · toggle = 접힘 줄만(PC 숫자 줄 왼쪽 칸) · panel = 펼친 내용만(PC 숫자 줄 위) */
+  part?: 'all' | 'toggle' | 'panel';
+  open: boolean;
+  setOpen: (f: (v: boolean) => boolean) => void;
   exKeys: Set<string>;
   setExKeys: (f: (prev: Set<string>) => Set<string>) => void;
   counts: Map<string, number>;
   removed: { count: number; entries: number; value: number; revenue: number };
   players: LedgerPlayer[];
 }) {
-  const [open, setOpen] = useState(false);
   const toggle = (k: string) => setExKeys((prev) => {
     const next = new Set(prev);
     if (next.has(k)) next.delete(k); else next.add(k);
@@ -4183,11 +4393,12 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
     );
   };
 
+  if (part === 'panel' && !open) return null;
   return (
-    <div className="pb-1">
+    <div className={part === 'toggle' ? undefined : 'pb-1'}>
       <div className="rounded-input border border-border-subtle bg-surface-low/70 px-2.5 py-1.5">
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-          className="flex min-h-[24px] w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary">
+        {part !== 'panel' && <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className={['flex min-h-[24px] w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary', part === 'toggle' ? 'flex-wrap' : ''].join(' ')}>
           <Icon name="filter" size={12} className={['shrink-0 transition-transform', open ? '' : '-rotate-90'].join(' ')} />
           정산 제외
           {exKeys.size === 0
@@ -4197,10 +4408,10 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
                 {exKeys.size}개 · 바인 {removed.count}건 · 엔트리 −{removed.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · −{wonToMan(removed.value)}만
               </span>
             )}
-        </button>
+        </button>}
 
-        <Fold open={open}>
-          <div className="mt-1.5 space-y-1.5 border-t border-border-subtle pt-1.5">
+        {part !== 'toggle' && <Fold open={open}>
+          <div className={['space-y-1.5', part === 'panel' ? '' : 'mt-1.5 border-t border-border-subtle pt-1.5'].join(' ')}>
             <div className="flex flex-wrap items-center gap-1">
               <span className="w-14 shrink-0 text-2xs text-ink-muted">방문 유형</span>
               {visitorKeys.map((v) => chip(`visitor:${v}`, visitorLabel(v)))}
@@ -4220,7 +4431,7 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
                 className="text-2xs font-semibold text-accent-300 hover:text-accent-200">전부 포함으로 되돌리기</button>
             )}
           </div>
-        </Fold>
+        </Fold>}
       </div>
     </div>
   );

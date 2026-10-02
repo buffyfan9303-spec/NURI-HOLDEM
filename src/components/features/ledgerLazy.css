@@ -1,0 +1,21 @@
+/* 장부(지연 청크) 전용 스타일 — 첫 화면이 받는 전역 CSS(index.css)에 안 싣는다.
+ * 2026-10-02: 장부 레일·데일리 펍·요약 변경이 Tailwind 임의값 클래스 23규칙을 전역 CSS 에 보태
+ *   첫 화면 임계 경로 267.2/267, CSS 35.1/35 KB 로 번들 예산이 깨졌다 → 값은 그대로, 자리만 옮겼다.
+ *   폭과 무관한 값(레일 칸 높이·폭·띠 그림자·세로 글자·배지 최소폭·스크롤바)은 인라인 style,
+ *   미디어쿼리가 필요한 값만 이 파일 — LedgerWorkspace·NuriPosLedger 가 import 하므로 장부 청크와 함께만 내려온다.
+ * 선택자는 data-ledger-* 표지 — 유틸 클래스와의 로드 순서에 기대지 않는다(층 밖 규칙이라 유틸을 이긴다). */
+
+/* 삭제 휴지통 — 마우스(hover+fine) PC 는 평소 숨기고 행에 마우스·포커스가 올 때만 보인다(터치 기기는 항상 보임). */
+@media (width>=1024px) and (hover:hover) and (pointer:fine) {
+  [data-ledger-trash] { opacity: 0 }
+  li:hover>[data-ledger-trash], [data-ledger-trash]:focus-visible { opacity: 1 }
+}
+
+/* 비고 열 ≥1440 94px · 게임 전환 줄 ≥1280 */
+@media (width>=1440px) { [data-ledger-note] { min-width: 94px } }
+@media (width>=1280px) { [data-ledger-switcher] { order: 0; flex: 1; min-width: 16rem } }
+@media (width<640px) { [data-ledger-disc] { order: 9999 } [data-ledger-discsel] { flex: 1 } }
+@media (width>=640px) {
+  [data-ledger-discsel], [data-ledger-chip48] { max-width: 12rem }
+  [data-ledger-chip44] { max-width: 11rem }
+}

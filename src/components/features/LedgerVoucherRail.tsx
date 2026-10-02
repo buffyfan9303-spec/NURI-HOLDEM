@@ -11,13 +11,17 @@
 //     (없는 시각을 지어내면 순서가 거짓말이 된다).
 //  ③ 실시간 구독 + 30초 폴링을 **둘 다** 건다. 구독은 조용히 끊길 수 있고(지하 매장·절전),
 //     끊긴 걸 알아채는 순간이 곧 손님과 다투는 순간이다. 폴링은 그 조용한 실패의 바닥이다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+//  ④ (2026-10-02 오너 1b) 1024~1439 에서는 표 폭을 지키려고 **접힌 띠(48px)** 로 둔다. 띠는 같은 인스턴스라
+//     구독·폴링이 그대로 돌고, 접힌 동안 새로 들어온 줄 수를 배지로 보인다(누르면 펼침). '새 줄' 의 기준은
+//     마지막으로 펼쳐 본(또는 첫 조회로 받은) 줄 키 묶음이다 — 시각 비교가 아니라 키 비교라 시계 오차가 없다.
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import Icon from '../atoms/Icon';
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { listVenueVouchers, subscribeVenueVouchers, type Voucher } from '../../api/vouchers';
 import { toFeedRows, summarizeFor } from '../../lib/voucherFeed';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useResyncOnWake } from '../../lib/realtimeResync';
 
 const POLL_MS = 30_000;
 
@@ -26,12 +30,18 @@ const hhmm = (iso: string) => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-export default function LedgerVoucherRail({ venueId, active = true, dense = false }: {
+export default function LedgerVoucherRail({ venueId, active = true, dense = false, collapsed = false, onToggle, searchRef }: {
   venueId: string;
   /** 이 판이 실제로 보이는가 — 안 보이면 구독·폴링을 걸지 않는다(무료 한도의 egress 를 아낀다) */
   active?: boolean;
   /** 전체화면처럼 세로가 긴 자리에서 줄 간격을 조인다 */
   dense?: boolean;
+  /** 접힌 띠로 그린다(구독·폴링은 그대로 — 새 줄 배지를 세야 한다) */
+  collapsed?: boolean;
+  /** 있으면 띠(펼치기)·머리줄(접기) 버튼을 그린다. 접고 펼칠 수 없는 자리(우측 상시·전체화면·모바일)는 주지 않는다. */
+  onToggle?: () => void;
+  /** 상단 [이용권 확인] 이 검색칸에 포커스를 주려고 잡는 손잡이 */
+  searchRef?: Ref<HTMLInputElement>;
 }) {
   const [vs, setVs] = useState<Voucher[] | null>(null);
   const [err, setErr] = useState<unknown>(null);
@@ -77,6 +87,9 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
     const un = subscribeVenueVouchers(venueId, () => load()); // 즉시 반영(구독이 살아 있을 때)
     return () => { window.clearInterval(t); un(); };
   }, [venueId, active, load]);
+  // 창 복귀·네트워크 복귀 — 절전·지하 매장에서 소켓이 조용히 끊겼다 붙는 동안 놓친 발급·사용을 30초 폴링 전에 메운다
+  //   (장부 본체 NuriPosLedger 와 같은 공용 장치). 소켓 재접속 자체는 subscribeVenueVouchers 의 SUBSCRIBED 재진입이 메운다.
+  useResyncOnWake(() => { void load(); }, active);
 
   // ⚠ 매 렌더 새 Date.now() 를 deps 에 넣으면 useMemo 가 절대 히트하지 않는다(항상 "다른 값"이라 매번 재계산).
   //   만료 판정은 밀리초 정밀도가 필요 없다 — 마지막으로 데이터를 받아온 시각(at, 30초 폴링/실시간 갱신마다 갱신)을
@@ -92,6 +105,42 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
   // 검색어가 있으면 '그 사람에게 보냈는지'를 한 줄로 먼저 답한다 — 그게 이 검색의 목적이다.
   const hit = useMemo(() => (vs ? summarizeFor(vs, q, now) : null), [vs, q, now]);
 
+  // ④ 새 줄 배지 — 펼쳐 본(또는 이 매장 첫 조회로 받은) 줄 키. null = 아직 이 매장 첫 응답 전(그때 받은 것은 '새 것'이 아니다).
+  const seenRef = useRef<Set<string> | null>(null);
+  const [seenTick, setSeenTick] = useState(0);
+  useEffect(() => { seenRef.current = null; setSeenTick((n) => n + 1); }, [venueId]);
+  useEffect(() => {
+    if (vs === null) return;
+    if (seenRef.current === null || !collapsed) { seenRef.current = new Set(rows.map((r) => r.key)); setSeenTick((n) => n + 1); }
+  }, [vs, rows, collapsed]);
+  const fresh = useMemo(() => {
+    const seen = seenRef.current;
+    return seen ? rows.filter((r) => !seen.has(r.key)).length : 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seenTick 이 seenRef 갱신 신호다
+  }, [rows, seenTick]);
+
+  if (collapsed) {
+    return (
+      <button type="button" data-voucher-strip="" onClick={onToggle}
+        aria-label={fresh > 0 ? `매장이용권 실시간 내역 펼치기 — 새 내역 ${fresh}건` : '매장이용권 실시간 내역 펼치기'}
+        aria-expanded={false}
+        className="relative flex h-full w-full flex-col items-center gap-2 rounded-aura border card-aura px-1 py-3 text-ink-secondary transition-colors hover:text-accent-300">
+        <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-fuchsia">
+          <Icon name="ticket" size={14} />
+        </span>
+        <span aria-hidden style={{ writingMode: 'vertical-rl' }} className="text-2xs font-bold">이용권 실시간</span>
+        {fresh > 0 && (
+          <span aria-hidden data-voucher-fresh={fresh} style={{ minWidth: '1.5rem' }}
+            className="rounded-full bg-accent-300 px-1.5 py-0.5 text-center text-2xs font-extrabold tabular-nums text-white">
+            {fresh > 99 ? '99+' : fresh}
+          </span>
+        )}
+        {/* 낭독기 — 접힌 동안 새 줄이 들어오면 한 번 알린다(배지는 그림이라 aria-hidden) */}
+        <span className="sr-only" aria-live="polite">{fresh > 0 ? `새 이용권 내역 ${fresh}건` : ''}</span>
+      </button>
+    );
+  }
+
   return (
     <aside className="flex h-full min-h-0 flex-col rounded-aura border card-aura" aria-label="매장이용권 실시간 내역">
       <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
@@ -103,13 +152,19 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
           className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary disabled:opacity-50">
           <Icon name="refresh" size={14} />
         </button>
+        {onToggle && (
+          <button type="button" data-voucher-collapse="" onClick={onToggle} aria-label="이용권 내역 접기" aria-expanded
+            className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary">
+            <Icon name="chevron-right" size={15} />
+          </button>
+        )}
       </div>
 
       {/* 이름·아이디로 '보냈는지' 확인 — 오너 지시. 맨 위에 둔다(찾으러 스크롤하지 않게). */}
       <div className="border-b border-border-subtle px-3 py-2">
         <div className="relative">
           <Icon name="search" size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="닉네임으로 확인"
+          <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="닉네임으로 확인"
             aria-label="닉네임으로 이용권 확인"
             className="input min-h-[38px] w-full pl-8 text-sm" />
           {q && (
