@@ -143,8 +143,13 @@ export const SUB_PANEL: Readonly<Record<string, string>> = {
   'venue-tab': '[data-venue-tabpanel]',
   'spot-tab': '[data-spot-pane]',
 };
-/** 자기 스크롤 정책(섹션별 복원 — CommunityTab · 탭별 기억 — NuriSpotPanel)이 있는 scope. 공용 스크롤 맞춤을 하지 않는다(이중 적용 금지). */
-export const OWN_SCROLL_SCOPES: ReadonlySet<string> = new Set(['community-sec', 'spot-tab']);
+/** 자기 스크롤 정책(섹션별 복원 — CommunityTab · 탭별 기억 — NuriSpotPanel · 알림 창 탭별 기억 — NotificationPanel)이 있는 scope.
+ *  공용 스크롤 맞춤을 하지 않는다(이중 적용 금지 — 공용 맞춤은 판 스크롤 상자를 맨 위로 되돌려 기억한 자리를 지운다). */
+export const OWN_SCROLL_SCOPES: ReadonlySet<string> = new Set(['community-sec', 'spot-tab', 'notif-tab', 'notif-filter']);
+/** 떠나는 판 복제본 없이 **한 프레임에** 바꾸는 scope — 알림 창(뜨는 카드 안 목록). 오너 2026-10-02 결정:
+ *  행 높이가 다른 두 목록(쪽지 65px · 알림 81px)이 240ms 겹쳐 걷히면 행이 계단처럼 내려가 보였다("드르륵").
+ *  이미 본 목록이고 카드 높이도 두 탭이 같다 — 겹칠 이유가 없다. 다른 하위 탭은 기존 퇴장 페이드 그대로. */
+export const INSTANT_SUB_SCOPES: ReadonlySet<string> = new Set(['notif-tab', 'notif-filter']);
 
 const scroller = (el: Element): HTMLElement | null => {
   for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
@@ -609,7 +614,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   const inEvent = !!(globalThis as { event?: Event }).event;
   const key0 = root ? shownPanes(root) : '';
   const keyed = key0 !== '';
-  const skip = !root || rapid || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const skip = !root || rapid || INSTANT_SUB_SCOPES.has(scope) || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
     || (document.documentElement.hasAttribute('data-overlay') && !!root.closest('.tab-pane'))
     || (!keyed && !inEvent);
   // 레일이 판 **안**에 있으면(내 매장 단계 바) 누른 탭바(tablist)를 레일로 본다 — 그 위·그 자신은 복제본에서 잘라 살아 있는 알약이 보이게.
