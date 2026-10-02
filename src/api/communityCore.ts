@@ -22,7 +22,11 @@ export interface Venue {
   description?: string; imageUrl?: string; themeColor?: string;
   kakaoUrl?: string; // 카카오톡 오픈채팅/단톡방 링크
   ownerId?: string; approved: boolean; contactPhone?: string;
-  businessHours?: string; followerCount?: number; isPaidAd?: boolean;
+  businessHours?: string; followerCount?: number;
+  /** 프리미엄 매장(관리자 지정) — **기간이 지나면 거짓**으로 읽는다. 기간 안 프리미엄 매장 포스터는 승인 없이 공개(20261002h). */
+  isPaidAd?: boolean;
+  /** 프리미엄 기간 끝(venues.premium_until) — null = 기한 없음. 포스터 부스트(schedules.premium_until)와 별개다. */
+  premiumUntil?: string | null;
   displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
   status?: VenueStatus;  // active/inactive/suspended/hidden
   verificationStatus?: VenueVerificationStatus; // 인증 등급
@@ -117,7 +121,10 @@ export const rowToVenue = (r: any): Venue => ({
   description: r.description, imageUrl: r.image_url, themeColor: r.theme_color,
   kakaoUrl: r.kakao_url ?? undefined,
   ownerId: r.owner_id, approved: r.approved, contactPhone: r.contact_phone,
-  businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
+  businessHours: r.business_hours, followerCount: r.follower_count,
+  // 서버 판정(_venue_premium_active)과 같은 식 — 기간이 지난 프리미엄은 배지·상단 정렬에서도 빠진다.
+  isPaidAd: !!r.is_paid_ad && (r.premium_until == null || new Date(r.premium_until) > new Date()),
+  premiumUntil: r.premium_until ?? null,
   displayOrder: r.display_order,
   status: r.status ?? 'active',
   lat: r.lat ?? null, lng: r.lng ?? null,

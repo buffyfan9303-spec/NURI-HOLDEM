@@ -125,12 +125,14 @@ async function uploadToStorage(
 }
 
 // ── 포스터 이미지 업로드 ─────────────────────────────────────────────────────
-export async function uploadPoster(ownerId: string, file: File): Promise<string> {
+/** @param groupId 그룹 포스터면 '<uid>/g/<그룹id>/' 폴더(서버 정책 posters_upload_group, 20261002h — 그 그룹 개설자만).
+ *  매장 포스터 경로('<uid>/')는 매장 운영자만 올릴 수 있어 그룹 개설자에게는 막혀 있다. */
+export async function uploadPoster(ownerId: string, file: File, groupId?: string): Promise<string> {
   // 오너 2026-09-30 "원본 말고 webp 로 압축 — 용량이 너무 크다": 목표 250KB(종전 500KB).
   //   실측: 715×1440 포스터 q0.80 ≈ 130~160KB 로 표·작은 글자까지 읽힌다. 품질은 0.5 아래로는 내리지 않는다(resizeImage).
   const blob = await resizeImage(file, 1200, 1600, 0.82, 250_000);
   const ext  = extOf(blob);
-  const path = `${ownerId}/${Date.now()}.${ext}`;
+  const path = groupId ? `${ownerId}/g/${groupId}/${Date.now()}.${ext}` : `${ownerId}/${Date.now()}.${ext}`;
   return uploadToStorage(BUCKET_POSTERS, path, blob);
 }
 

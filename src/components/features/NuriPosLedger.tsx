@@ -548,15 +548,27 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     //   (그 칸을 누르면 남의 장부 행을 id 로 고치거나 취소한다).
     ++reloadSeq.current;
     // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
+    let moved = false;
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
       .then(([s, b, p, pw, gs]) => {
         if (!alive) return;
+        // B1(2026-10-02, review-store-ledger-1002 M-5) — 착지 진입: 받아 보니 이 보드(기본 메인)가 마감이고 진행 중 게임이 있으면
+        //   이 보드를 **그리지 않고** 바로 그 게임으로 옮긴다. 종전엔 마감 메인을 한 번 그린 뒤 아래 착지 effect 가 옮겨
+        //   진입마다 마감 보드가 한 프레임 번쩍였다(1440 196~206ms 표본). 로딩 표시는 그대로 이어지고 대상 보드 조회가 바로 나간다.
+        //   판정 규칙은 아래 착지 effect 와 같다(진행 중 마지막 회차 · 지금 보드가 마감일 때만). keep-alive 재진입(조회 없음)은 그 effect 몫.
+        if (autoLandRef.current === `${venueId}|${date}|${gameSeq}`) {
+          const live = gs.filter((g) => !g.closed);
+          const target = live.length > 0 ? live[live.length - 1].gameSeq : null;
+          if ((gs.find((g) => g.gameSeq === gameSeq)?.closed ?? false) && target != null && target !== gameSeq) {
+            autoLandRef.current = null; moved = true; setGameSeq(target); return;
+          }
+        }
         setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); setSessionFor(`${venueId}|${date}|${gameSeq}`);
       })
       // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
       //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
       .catch((e) => { if (alive) setLoadError(e); })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive && !moved) setLoading(false); });
     return () => { alive = false; };
   }, [venueId, date, gameSeq]); // eslint-disable-line react-hooks/exhaustive-deps -- bumpSessionReq 는 같은 세 값에서 파생
 

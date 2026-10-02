@@ -26,9 +26,18 @@ const STATUS_LABEL: Record<VenueStatus, { label: string; cls: string }> = {
   hidden:    { label: '숨김',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
 };
 
+/** 프리미엄 기간 선택지(일). 0 = 기한 없음. */
+const PREMIUM_DAYS: [number, string][] = [[0, '기한 없음'], [7, '7일'], [30, '30일'], [90, '90일'], [180, '180일']];
+/** 프리미엄 끝 날짜 'MM.DD'(KST). */
+function premiumEnd(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 9 * 3_600_000);
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}.${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 interface RowHandlers {
   onStatus: (v: Venue, status: VenueStatus, label: string) => void;
-  onToggleAd: (v: Venue) => void;
+  /** days — 지정할 때 기간(일). 0 = 기한 없음. 해제에는 쓰지 않는다. */
+  onToggleAd: (v: Venue, days: number) => void;
   onVerify: (v: Venue, status: VenueVerificationStatus) => void;
   onRemove: (v: Venue) => void;
 }
@@ -75,12 +84,16 @@ export default function VenueManagement() {
     } catch { toast.show('변경에 실패했습니다', 'error'); }
   };
 
-  const toggleAd = async (v: Venue) => {
+  // 프리미엄 매장(20261002h): 지정하면 그 기간 동안 포스터가 관리자 승인 없이 바로 공개된다.
+  //   지정 때는 기간을 **항상** 함께 쓴다(기한 없음 = null) — 지난 기간이 남아 있으면 다시 지정해도 곧바로 만료로 읽히기 때문.
+  //   해제는 is_paid_ad 만 내린다(기간 칸은 건드리지 않음).
+  const toggleAd = async (v: Venue, days: number) => {
     const next = !v.isPaidAd;
+    const until = next ? (days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null) : undefined;
     try {
-      await setVenueAd(v.id, next);
-      setVenues((prev) => prev.map((x) => (x.id === v.id ? { ...x, isPaidAd: next } : x)));
-      toast.show(`${v.name} 프리미엄 ${next ? 'ON' : 'OFF'}`, 'info');
+      await setVenueAd(v.id, next, until);
+      setVenues((prev) => prev.map((x) => (x.id === v.id ? { ...x, isPaidAd: next, ...(until !== undefined && { premiumUntil: until }) } : x)));
+      toast.show(next ? `${v.name} 프리미엄 지정 — ${until ? `${premiumEnd(until)}까지 ` : ''}포스터가 승인 없이 바로 공개됩니다` : `${v.name} 프리미엄 해제 — 이제 포스터는 관리자 승인 후 공개됩니다`, 'info');
     } catch { toast.show('변경에 실패했습니다', 'error'); }
   };
 
@@ -227,6 +240,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
   venue: Venue; order: number; handlers: RowHandlers; dragHandle?: React.ReactNode;
 }) {
   const st = STATUS_LABEL[v.status ?? 'active'];
+  const [premiumDays, setPremiumDays] = useState(0);
   return (
     <>
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -234,7 +248,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         <span className="shrink-0 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
         <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
-        {v.isPaidAd && <span className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄</span>}
+        {v.isPaidAd && <span data-testid="venue-premium-badge" title="프리미엄 매장 — 포스터가 관리자 승인 없이 바로 공개됩니다" className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄{v.premiumUntil ? ` ~${premiumEnd(v.premiumUntil)}` : ''}</span>}
         {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40 font-bold">인증</span>}
         {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사 중</span>}
         {(v.kind ?? 'venue') !== 'venue' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high text-ink-secondary border border-border-default font-semibold">그룹</span>}
@@ -246,7 +260,14 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         {v.status !== 'hidden'    && <Btn onClick={() => handlers.onStatus(v, 'hidden', '숨김')}      variant="warn">숨김</Btn>}
         {v.status !== 'suspended' && <Btn onClick={() => handlers.onStatus(v, 'suspended', '정지')}   variant="warn">정지</Btn>}
         {v.status !== 'inactive'  && <Btn onClick={() => handlers.onStatus(v, 'inactive', '비활성')}  variant="muted">비활성</Btn>}
-        <Btn onClick={() => handlers.onToggleAd(v)} variant={v.isPaidAd ? 'muted' : 'gold'}>{v.isPaidAd ? '프리미엄 해제' : '프리미엄 지정'}</Btn>
+        {/* 프리미엄 기간. 포스터 즉시 공개는 매장(kind='venue')만이다 — 그룹은 상단 정렬·배지만(서버 _venue_premium_active). */}
+        {!v.isPaidAd && (
+          <select aria-label={`${v.name} 프리미엄 기간`} value={premiumDays} onChange={(e) => setPremiumDays(Number(e.target.value))}
+            className="h-7 rounded-input border border-border-default bg-surface-high px-1.5 text-2xs font-semibold text-ink-secondary">
+            {PREMIUM_DAYS.map(([d, label]) => <option key={d} value={d}>{label}</option>)}
+          </select>
+        )}
+        <Btn onClick={() => handlers.onToggleAd(v, premiumDays)} variant={v.isPaidAd ? 'muted' : 'gold'}>{v.isPaidAd ? '프리미엄 해제' : '프리미엄 지정'}</Btn>
         {v.verificationStatus !== 'verified'
           ? <Btn onClick={() => handlers.onVerify(v, 'verified')} variant="gold">인증 승인</Btn>
           : <Btn onClick={() => handlers.onVerify(v, 'unverified')} variant="muted">인증 해제</Btn>}

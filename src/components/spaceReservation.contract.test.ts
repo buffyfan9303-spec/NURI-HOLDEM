@@ -50,7 +50,10 @@ describe('① 지연 로딩 폴백이 화면 높이를 예약한다', () => {
     expect(APP, '역할 게이트가 false 인 동안 자리를 안 잡는다')
       .toMatch(/!\(isOwner \|\| isStaff \|\| isAdmin\)[\s\S]{0,400}pane-reserve/);
     expect(VMT, '권한 로딩 셸이 한 줄 높이로 돌아갔다(예전 py-16)')
-      .toMatch(/!permsLoaded \?[\s\S]{0,400}pane-reserve/);
+      .toMatch(/!permsReady && !keepShell \?[\s\S]{0,700}pane-reserve/);
+    // B1(2026-10-02) — 매장 전환은 셸을 남기고 본문만 기다린다. 그 본문 대기도 같은 자리를 잡는다.
+    expect(VMT, '매장 전환 본문 대기가 자리를 안 잡는다')
+      .toMatch(/shellBusy \? <p[^>]*pane-reserve/);
   });
 
   // ⚠ '동적 뷰포트 단위 금지'는 여기서 **다시 검사하지 않는다.**

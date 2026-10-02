@@ -95,6 +95,9 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
+/** B1(2026-10-02) 폼 읽기 폭 상한(px) — ≥1440 은 내 매장 판 상한이 풀려(F-2) 1920 에서 판이 1636px 다. 폼(설정·초대·팔로워 알림)은
+ *  1366 판 폭(≈946)으로 읽게 여기서 멈춘다. ≤1366 은 판이 이보다 좁아 아무것도 안 바뀐다. 루트 17px 이라 rem 이 아니라 px. */
+const READ_W = 960;
 
 /**
  * 매장 설정 하위탭 — 6개라 모바일(412px)에서 가로로 넘친다(스크롤 컨테이너).
@@ -325,6 +328,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const idOn = useIdentityEnabled();
   const voucherView = voucherViewRaw && idOn;
   const [permsLoaded, setPermsLoaded] = useState(false);
+  /** B1(2026-10-02) — 지금 들고 있는 권한(ledgerOk 등)이 **어느 매장의 것인가**. 매장 A→B 전환 동안 셸(사이드 메뉴·단계 바)은
+   *  A 권한 그대로 남기고 본문만 B 권한을 기다린다(종전: 셸까지 통째로 '불러오는 중…' 450~950ms). */
+  const [permsFor, setPermsFor] = useState<string | null>(null);
   // 권한 '조회 실패'는 '권한 없음'이 아니다(§5-4). 예전엔 catch 가 section=null 로만 떨어져
   // 네트워크 순단·401 이 "이 매장에서 사용 가능한 메뉴가 없습니다"로 보였다 — 사장님이
   // 업주에게 권한을 요청하러 가는 헛걸음. 실패는 실패로 말하고 재시도 수단을 준다.
@@ -348,6 +354,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [settleDate, setSettleDate] = useState<string | null>(null);
   // 오늘 5단계의 완료·목적지 — 대시보드가 계산해 올려 준다(숫자 스트립을 알약 바로 합치면서).
   const [stepInfo, setStepInfo] = useState<StoreStepMap | null>(null);
+  // B1 — 매장을 바꾸면 A 대시보드가 올린 단계 완료·목적지를 같은 렌더에서 버린다(셸이 남는 동안 B 단계 바에 A 의 ✓·날짜가 서지 않게).
+  const [stepVenue, setStepVenue] = useState(venueId);
+  if (stepVenue !== venueId) { setStepVenue(venueId); setStepInfo(null); }
   const gameSelN = useRef(0);
   const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝) — 마운트 유지(깜빡임 제거). 상한 없음: 아래 P1/P2 주석
 
@@ -827,6 +836,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     let alive = true;
     if (isAdmin) {
       setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true); setSchedOk(true);
+      setPermsFor(venueId);
       setSection((s) => s ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
@@ -849,6 +859,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       .then(([l, m, vv, st, sc, ro]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro);
+        setPermsFor(venueId);
         setSection((s) => s ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
@@ -985,6 +996,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [uncapRoot, setUncapRoot] = useState<HTMLDivElement | null>(null);
   const isWideVm = useIsWide();
   useUncapAncestors(uncapRoot, tabActive && isWideVm, { includeSelf: true });
+  // B1 — 권한이 지금 매장의 것인가. 전환 직후 첫 렌더는 효과가 permsLoaded 를 내리기 **전**이라 아직 A 권한이다 → permsFor 로 가른다.
+  //   운영자는 권한을 조회하지 않아(전권) 매장마다 같다 — 종전대로 판을 살려 둔다(store-link-1002 계약: 관리자 전환은 판이 산다).
+  const permsReady = permsLoaded && (isAdmin || permsFor === venueId);
+  // 앞 매장 권한이 있으면 셸은 그대로 두고 본문만 기다린다. 처음 여는 순간(앞 매장 없음)만 종전 전체 대기 화면.
+  const keepShell = !permsReady && !permsError && !isAdmin && permsFor !== null;
+  /** 셸은 남아 있지만 아직 이 매장 권한이 아니다 — 셸 조작을 막고(inert) 본문은 대기 표시. */
+  const shellBusy = !permsReady;
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -1026,7 +1044,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               ))}
             </select>
           ) : (
-            <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => setMemberVenueId(e.target.value || null)} className="input text-sm">
+            /* B1 — 바꾸는 순간 판 높이를 예약한다(S6-1 lockPane): 본문이 대기 표시로 바뀌어도 문서가 줄어 아래 푸터가 올라오지 않게. */
+            <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => { lockPane(); setMemberVenueId(e.target.value || null); }} className="input text-sm">
               {memberVenues.map((v) => (
                 <option key={v.id} value={v.id}>{v.name} · {v.relation === 'owner' ? '대표 업주' : v.relation === 'coowner' ? '공동운영' : '직원'}</option>
               ))}
@@ -1045,14 +1064,15 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
-      ) : !permsLoaded ? (
+      ) : permsError && permsLoaded ? (
+        // 조회 실패 — '메뉴 없음'(빈 상태)과 구분해서 보여주고, 재시도로 되살린다
+        <LoadErrorCard what="매장 권한" error={permsError} onRetry={() => setPermsNonce((n) => n + 1)} />
+      ) : !permsReady && !keepShell ? (
         // 🔴 자리 예약 (2026-09-18) — 예전엔 `py-16`(196px) 한 줄이라, 바로 앞의 LazyFallback(735px)
         //   에서 여기로 넘어오는 순간 판이 **줄어들며** 아래가 통째로 올라왔다(실측 이동 0.284).
         //   폴백·역할 게이트와 같은 `.pane-reserve` 를 써서 세 구간의 높이를 맞춘다.
+        //   B1 — 이 전체 대기는 **처음 여는 순간**에만 쓴다. 매장 전환은 아래 셸을 남기고 본문만 기다린다(shellBusy).
         <p className="pane-reserve pt-16 text-center text-sm text-ink-muted">불러오는 중…</p>
-      ) : permsError ? (
-        // 조회 실패 — '메뉴 없음'(빈 상태)과 구분해서 보여주고, 재시도로 되살린다
-        <LoadErrorCard what="매장 권한" error={permsError} onRetry={() => setPermsNonce((n) => n + 1)} />
       ) : section === null ? (
         // 문장 사이의 <br /> 를 문단 2개로 — 폭마다 줄바꿈 위치를 손으로 박지 않고,
         // break-keep 이 '사용 / 가능한' 처럼 어절 중간에서 끊기는 것을 막는다(§5-한글).
@@ -1088,7 +1108,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         {venueId && (
           <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} />
         )}
-        <div className="lg:flex lg:gap-5">
+        {/* B1 — 매장 전환 중(shellBusy)엔 셸이 앞 매장 권한으로 그려져 있다. 보이기만 하고 누를 수 없게(inert) — 메뉴·단계는 B 권한이 온 뒤에 연다. */}
+        <div className="lg:flex lg:gap-5" inert={shellBusy || undefined} aria-busy={shellBusy || undefined}>
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
               {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처 "머리글이 3~4겹"): 단계 바가 뜨는 섹션(대시보드·게임 진행·이용권)에서는
@@ -1184,7 +1205,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           <div data-mystore-secpanel ref={secPanelRef} className="min-h-[var(--pane-floor,calc(100svh-3.5rem-var(--tabbar-safe)))] mt-3 min-w-0 flex-1 lg:mt-0"
             style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
           <div ref={secInnerRef} className="space-y-3">
-            {dItem?.locked && (
+            {dItem?.locked && !shellBusy && (
               <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
@@ -1372,7 +1393,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               </div>
             )}
             {/* 방문한 판(섹션/스텝)은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred */}
-            {(() => {
+            {/* B1 — 매장 전환 중엔 본문만 대기한다. 판은 종전(전체 대기 화면)과 같이 내렸다가 B 권한으로 다시 올린다 —
+                A 권한으로 B 판을 그리거나, A 판의 늦은 응답이 B 화면에 남을 길을 만들지 않는다. */}
+            {shellBusy ? <p aria-busy="true" className="pane-reserve pt-16 text-center text-sm text-ink-muted">불러오는 중…</p> : (() => {
               const box = (s: PaneId, node: ReactNode) => {
                 const shown = isGameStep(s)
                   ? renderSection === 'game' && renderGameStep === s
@@ -1383,7 +1406,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                    확인할 방법이 없어, 지금까지 '단계 바의 활성 알약'만 보고 통과시켜 왔다.
                    알약만 보면 바는 옳은데 아래가 비어 있는 상태(오너 사진의 이용권이 정확히 그것)를
                    초록으로 넘긴다. 판 자체를 짚을 수 있어야 그 구멍이 막힌다. */
-                return <div key={s} data-pane={s} style={shown && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>;
+                // B1 W-2·W-3 — 폼 판(설정 하위탭)은 1366 판 폭 그대로 읽게 960px 에서 멈춘다(1920: 주소·영업시간 1608px · 라벨↔토글 1580px).
+                return <div key={s} data-pane={s} style={{ ...(shown && !dItem?.locked ? null : { display: 'none' }), ...(isSettingsTab(s) ? { maxWidth: READ_W } : null) }}>{node}</div>;
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
@@ -1393,7 +1417,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
                   <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
-                  {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
+                  {manageOk && <div className="mt-5" style={{ maxWidth: READ_W }}><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {/* S6-2(2026-09-19): 지역 Suspense 경계 — 이게 없으면 이 셋(캘린더·파트너 매장·이벤트 신청)은
                     첫 방문 시 lazy 청크를 기다리는 동안 **여기가 아니라 App.tsx 최상위 폴백**이 잡혀
@@ -3118,7 +3142,7 @@ function StaffManager({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-4">
       {/* 구성원 초대 — 아이디(닉네임) 검색 또는 이메일 */}
-      <form onSubmit={invite} className="space-y-1.5">
+      <form onSubmit={invite} className="space-y-1.5" style={{ maxWidth: READ_W }}>
         <label htmlFor="staff-invite-ident" className="block text-xs font-semibold text-ink-secondary">구성원 초대</label>
         <div className="flex gap-2">
           <input

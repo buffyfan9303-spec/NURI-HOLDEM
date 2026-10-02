@@ -102,6 +102,9 @@ export interface Schedule {
   viewCount?: number;
   /** 부스트 만료 시각 — 있고 미래면 isPremium과 동일하게 상단 고정 */
   premiumUntil?: string | null;
+  /** 일정 피드 공개 요청(20261002h). 매장 포스터는 늘 true. **그룹 포스터만** false(= 그룹 전용: 그룹 페이지에만,
+   *  관리자 대기열 밖)가 될 수 있다. 서버 트리거가 정본이다 — 마이그레이션 전 서버에는 칸이 없어 true 로 읽는다. */
+  feedRequest?: boolean;
 }
 
 export interface ReorderPayload { items: { id: string; displayOrder: number }[]; }
@@ -145,7 +148,22 @@ function rowToSchedule(r: any): Schedule {
     // 마이그레이션(20260911o) 전 서버에는 컬럼이 없다 → undefined → null = '반려된 적 없음'.
     rejectedAt: r.rejected_at ?? null,
     rejectReason: r.reject_reason ?? null,
+    feedRequest: r.feed_request ?? true,
   };
+}
+
+// ── 그룹 페이지: 그 그룹의 포스터 ─────────────────────────────────────────────
+// 읽기 RPC get_group_schedules(20261002h) — 승인된 것은 누구나, 미승인(그룹 전용·공개 대기·반려)은 승인 멤버·운영진·관리자만.
+// 일반 피드(getSchedules)는 이 범위를 넓히지 않는다 — 미승인 그룹 포스터는 서버가 피드에 안 준다.
+// 마이그레이션 전(PGRST202·42883)은 '아직 없음' 이라 빈 목록이다.
+export async function getGroupSchedules(groupId: string): Promise<Schedule[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_group_schedules', { p_group_id: groupId });
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') return [];
+    throw error;
+  }
+  return ((data ?? []) as unknown[]).map(rowToSchedule);
 }
 
 /** 주간 퍼널(최근 7일 KST): 포스터 조회 합→예약→매장 체크인 — 업주 성과 최소 지표 */
@@ -231,6 +249,8 @@ export async function createSchedule(
     poster_url: payload.posterUrl, poster_color: payload.posterColor,
     display_order: payload.displayOrder, is_premium: payload.isPremium,
     owner_id: payload.ownerId, approved: payload.approved ?? false,
+    // 그룹 포스터만 싣는다 — 매장 포스터는 키를 생략해 마이그레이션 전 서버에서도 그대로 저장된다(서버 기본 true).
+    ...(payload.feedRequest !== undefined && { feed_request: payload.feedRequest }),
   }).select().single();
   if (error) throw error;
   return rowToSchedule(data);
@@ -282,6 +302,7 @@ export async function updateSchedule(id: string, patch: SchedulePatch): Promise<
     ...(patch.isPremium     !== undefined && { is_premium:      patch.isPremium }),
     ...(patch.displayOrder  !== undefined && { display_order:   patch.displayOrder }),
     ...(patch.approved      !== undefined && { approved:        patch.approved }),
+    ...(patch.feedRequest   !== undefined && { feed_request:    patch.feedRequest }),
     updated_at: new Date().toISOString(),
   }).eq('id', id));
 }

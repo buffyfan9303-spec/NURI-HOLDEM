@@ -1,5 +1,5 @@
 import { Fold } from '../atoms/Fold';
-import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode, type CSSProperties } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
@@ -1297,7 +1297,9 @@ export default function AdminTab({
 
   // 반려된 포스터는 대기열에서 뺀다 — 반려는 삭제가 아니라 상태다(20260911o).
   // 마이그레이션 전 서버에서는 rejectedAt 이 전부 null 이라 종전(미승인=대기)과 똑같이 동작한다.
-  const pending = schedules.filter((s) => !s.approved && !s.rejectedAt);
+  // 20261002h — 그룹 전용 포스터(feedRequest=false)는 일정 공개를 요청하지 않았으니 대기열이 아니다(그룹 페이지에만 보인다).
+  const pending = schedules.filter((s) => !s.approved && !s.rejectedAt && s.feedRequest !== false);
+  const groupIds = useMemo(() => new Set(venues.filter((v) => (v.kind ?? 'venue') !== 'venue').map((v) => v.id)), [venues]);
   // 승인 대기 합계(점검 A-09) — 포스터 + 입점·그룹 + 공동 업주 + 이용권 한도 + 이벤트 신청 + 순위 인증.
   //   섹션을 옮길 때마다 다시 센다. 조회 실패한 대기열은 0 이 아니라 '—'(모름)다.
   const { counts: pendingCounts, reload: reloadPendingCounts } = usePendingCounts(section);
@@ -1337,7 +1339,7 @@ export default function AdminTab({
             <div className="space-y-3" data-testid="admin-pending-section">
               <PendingSummary posters={pending.length} counts={pendingCounts} />
               <PendingGroupsPanel users={users} onChanged={() => { onReloadVenues?.(); reloadPendingCounts(); }} />
-              <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+              <PendingApprovalSection pending={pending} groupIds={groupIds} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
               <VenueOwnerRequestsCard onChanged={reloadPendingCounts} />
               <VoucherQuotaAdminCard onChanged={reloadPendingCounts} />
               {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
@@ -1963,9 +1965,11 @@ function StatsPanel() {
 // ── 포스터 승인 대기 목록 ─────────────────────────────────────────────────────
 
 function PendingApprovalSection({
-  pending, onApprove, onReject,
+  pending, groupIds, onApprove, onReject,
 }: {
   pending: Schedule[];
+  /** 그룹(kind≠venue) id — 그 포스터는 '그룹 · 일정 공개 요청' 으로 표시한다(그룹 페이지에는 이미 보인다). */
+  groupIds: ReadonlySet<string>;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
 }) {
@@ -1983,7 +1987,7 @@ function PendingApprovalSection({
       <h3 className="text-sm font-bold text-amber-400">포스터 승인 ({pending.length})</h3>
     <ul className="space-y-2">
       {pending.map((s) => (
-        <PendingRow key={s.id} schedule={s} onApprove={() => onApprove(s.id)} onReject={() => onReject(s.id)} />
+        <PendingRow key={s.id} schedule={s} isGroup={groupIds.has(s.venueId)} onApprove={() => onApprove(s.id)} onReject={() => onReject(s.id)} />
       ))}
     </ul>
     </section>
@@ -2015,8 +2019,8 @@ function PendingSummary({ posters, counts }: { posters: number; counts: PendingC
 }
 
 function PendingRow({
-  schedule, onApprove, onReject,
-}: { schedule: Schedule; onApprove: () => void; onReject: () => void }) {
+  schedule, isGroup = false, onApprove, onReject,
+}: { schedule: Schedule; isGroup?: boolean; onApprove: () => void; onReject: () => void }) {
   const [rejecting, setRejecting] = useState(false);
   const d = new Date(schedule.date);
 
@@ -2042,6 +2046,11 @@ function PendingRow({
           <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">
             {schedule.format}
           </span>
+          {isGroup && (
+            <span data-testid="pending-group-badge" className="rounded-badge bg-accent-300/15 text-accent-200 border border-accent-400/30 px-1 py-0.5 text-2xs font-semibold leading-none">
+              그룹 · 일정 공개 요청
+            </span>
+          )}
         </div>
         <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
         <p className="text-2xs text-ink-muted mt-0.5 truncate">
