@@ -220,8 +220,8 @@ test.describe('포스터 승인 개편 20261002h', () => {
       if (m === 'PATCH') {
         const b = JSON.parse(r.request().postData() ?? '{}') as Record<string, unknown>;
         patches.push(b);
-        // 서버 판정: 반려된 프리미엄 포스터는 반려 유지(A) — 저장 본문이 무엇이든 approved=false·반려 사유 그대로
-        row = { ...row, ...b, approved: row.rejected_at ? false : row.approved, rejected_at: row.rejected_at, reject_reason: row.reject_reason };
+        // 서버 판정(오너 결정 A 확정): 반려된 포스터는 프리미엄이라도 저장 = 재제출 — 반려 해제·승인 대기(approved=false)
+        row = row.rejected_at ? { ...row, ...b, approved: false, rejected_at: null, reject_reason: null } : { ...row, ...b, approved: row.approved };
         return r.fulfill(json([row]));
       }
       return r.fallback();
@@ -239,7 +239,7 @@ test.describe('포스터 승인 개편 20261002h', () => {
     venue_id: MOCK_VENUE, pub_name: MOCK_VENUE_NAME, owner_id: MOCK_UID, reg_close_time: '10LV', ...extra,
   });
 
-  test('F 내 매장 1440 — 관리자가 반려한 프리미엄 포스터는 다시 저장해도 반려로 남는다(오너 결정 A)', async ({ page }) => {
+  test('F 내 매장 1440 — 관리자가 반려한 프리미엄 포스터는 저장하면 바로 공개가 아니라 다시 승인 요청된다(오너 결정 A)', async ({ page }) => {
     test.setTimeout(150_000);
     const { patches, list } = await bootOwnerWithPoster(page, { premium: true,
       poster: myPoster({ title: '반려된토너', approved: false, rejected_at: '2026-10-02T01:00:00Z', reject_reason: '이미지 확인 필요' }) });
@@ -248,15 +248,15 @@ test.describe('포스터 승인 개편 20261002h', () => {
     await card.getByRole('button', { name: '수정', exact: true }).first().click();
     const d = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '포스터 수정' }) }).last();
     await expect(d).toBeVisible({ timeout: 20_000 });
-    await expect(d.getByTestId('poster-rejected-premium-notice'), '반려된 프리미엄 포스터인데 재승인 안내가 없다').toContainText('관리자가 다시 승인해야 공개');
+    await expect(d.getByTestId('poster-rejected-premium-notice'), '반려된 프리미엄 포스터인데 재승인 요청 안내가 없다').toContainText('저장하면 다시 승인 요청');
     await expect(d.getByTestId('poster-premium-notice'), '반려된 포스터에 바로 공개 안내가 뜬다').toHaveCount(0);
     await d.getByRole('button', { name: '수정 완료' }).click();
     await expect.poll(() => patches.length, { timeout: 15_000 }).toBe(1);
     expect(patches[0].approved, '화면이 승인 값을 실어 보냈다(판정은 서버)').toBeUndefined();
     await expect(d).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText('반려된 포스터라 관리자가 다시 승인해야 공개됩니다').first(), '저장 토스트가 바로 공개로 안내했다').toBeVisible({ timeout: 10_000 });
-    await expect(card.getByText('반려', { exact: true }).first(), '다시 저장한 뒤 반려 표시가 사라졌다').toBeVisible({ timeout: 15_000 });
-    await expect(card.getByText(/반려 사유: 이미지 확인 필요/)).toBeVisible();
+    await expect(page.getByText('다시 승인 요청했습니다').first(), '저장 토스트가 바로 공개로 안내했다').toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText('승인 대기', { exact: true }).first(), '재제출 뒤 승인 대기 표시가 없다').toBeVisible({ timeout: 15_000 });
+    await expect(card.getByText(/반려 사유:/)).toHaveCount(0);
   });
 
   test('G 내 매장 1440 — 승인된 포스터의 이미지를 바꾸면 다시 승인받아야 공개된다고 안내한다(오너 결정 B)', async ({ page }) => {

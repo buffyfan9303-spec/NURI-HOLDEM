@@ -188,8 +188,10 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   useEffect(() => { if (open) setFeedReq(schedule?.feedRequest ?? false); }, [open, schedule]);
   // 기간 안 프리미엄 매장이면 저장 즉시 공개(서버 auto_approve_verified_poster 가 정본 — 여기는 안내만)
   const premiumVenue = !group && !isAdmin && !!venues.find((v) => v.id === (form.venueId || storeVenueId || user?.venueId))?.premium;
-  // 오너 결정 A(10-02 2차): 관리자가 반려한 포스터는 프리미엄 매장이라도 저장만으로 공개되지 않는다(서버가 반려 유지).
-  const rejectedPremium = premiumVenue && isEdit && !!schedule?.rejectedAt;
+  // 오너 결정 A(10-02 2차·확정): 프리미엄 즉시 공개는 새 등록과 '공개 중인 포스터의 수정' 에만 — 반려·승인 대기 포스터는
+  //   프리미엄이라도 저장하면 다시 승인 요청(관리자 대기열)이고 공개는 관리자 승인 후다(서버 prevent_self_approve_poster 가 정본).
+  const pendingPremium = premiumVenue && isEdit && !schedule?.approved;
+  const rejectedPremium = pendingPremium && !!schedule?.rejectedAt;
   const prizeListed = form.rankingPrizes.some((r) => r.amount > 0) || form.prizes.length > 0;
   // KW-1b — 이용권 1장 = 1T = 1만원(오너 결정). N장 × 1만원이 참가비와 다르면 경고만(저장은 허용).
   const voucherMismatch = voucherPerEntryMismatch(form.voucherPerEntry, form.buyIn, TICKET_WON);
@@ -349,7 +351,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
     toast.show(group
       ? (feedReq ? '그룹에 올렸습니다 · 전체 일정 공개는 관리자 승인 후입니다' : '그룹에 올렸습니다 (그룹 전용)')
-      : rejectedPremium ? '포스터가 수정되었습니다 · 반려된 포스터라 관리자가 다시 승인해야 공개됩니다'
+      : pendingPremium ? '포스터가 수정되었습니다 · 다시 승인 요청했습니다. 관리자 승인 후 공개됩니다'
       : premiumVenue ? (isEdit ? '포스터가 수정되었습니다 · 프리미엄 매장이라 바로 공개됩니다' : '포스터가 등록되었습니다 · 프리미엄 매장이라 바로 공개됩니다')
       : isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
     // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(프리셋 실패는 포스터와 무관).
@@ -875,16 +877,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             </span>
           </label>
         )}
-        {premiumVenue && !rejectedPremium && (
+        {premiumVenue && !pendingPremium && (
           <p role="status" data-testid="poster-premium-notice"
             className="rounded-input border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-2xs leading-relaxed text-accent-200">
             프리미엄 매장 — 저장하면 관리자 승인 없이 <b>바로 공개</b>됩니다.
           </p>
         )}
-        {rejectedPremium && (
-          <p role="status" data-testid="poster-rejected-premium-notice"
+        {pendingPremium && (
+          <p role="status" data-testid={rejectedPremium ? 'poster-rejected-premium-notice' : 'poster-pending-premium-notice'}
             className="rounded-input border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-2xs leading-relaxed text-amber-400">
-            관리자가 반려한 포스터입니다. 프리미엄 매장이라도 <b>저장만으로는 공개되지 않고</b>, 관리자가 다시 승인해야 공개됩니다.
+            {rejectedPremium ? '관리자가 반려한 포스터입니다. ' : '승인 대기 중인 포스터입니다. '}
+            프리미엄 매장이라도 <b>저장하면 다시 승인 요청</b>되고, 관리자 승인 후 공개됩니다.
           </p>
         )}
         {reReview && (
