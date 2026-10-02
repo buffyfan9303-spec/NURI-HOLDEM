@@ -55,11 +55,33 @@ export async function getActivePromotedPosts(): Promise<{ ads: PromotedPost[]; e
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[];
-  return {
-    // 서버가 slot 순으로 준다. 같은 슬롯이 두 번 올 수 없다(PK) — 추가 정렬·중복 제거가 필요 없다.
-    ads: rows.map((r) => ({ slot: Number(r.slot), post: rowToPost(r) })),
-    error: null,
-  };
+  // 서버가 slot 순으로 준다. 같은 슬롯이 두 번 올 수 없다(PK) — 추가 정렬·중복 제거가 필요 없다.
+  const ads = rows.map((r) => ({ slot: Number(r.slot), post: rowToPost(r) }));
+  await attachSpots(ads);
+  return { ads, error: null };
+}
+
+/**
+ * 승격된 SPOT 글도 피드처럼 테이블 그림으로 — 광고 글들의 post_spots 를 **한 번에** 받아 spotEmbed 를 채운다.
+ * ⚠ 임시다(2026-10-01 독립 검토 §6): 정식은 community_ads_public 이 공개 열 3개를 싣는 것(마이그레이션 — 리드 판단).
+ *   광고는 최대 5칸이라 `in.(…)` 한 번이면 된다 — 광고마다 따로 부르는 N+1 금지(ads.promoted.test 가 센다).
+ *   읽는 열은 게시판 목록(api/community.ts POST_LIST_SELECT)과 같은 공개 열뿐이라 서버 가림 계약도 그대로다.
+ * 실패하면 spotEmbed 를 건드리지 않는다(undefined = 모름) — 카드는 본문 발췌, 상세는 스팟을 따로 받는 옛 경로로 그린다.
+ */
+async function attachSpots(ads: PromotedPost[]): Promise<void> {
+  const ids = ads.filter((a) => a.post.spotEmbed === undefined).map((a) => a.post.id);
+  if (!ids.length) return;
+  const { data, error } = await supabase.from('post_spots')
+    .select('post_id, spot, reveal_villain, reveal_result').in('post_id', ids);
+  if (error || !data) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byId = new Map((data as any[]).map((r) => [r.post_id as string, r]));
+  for (const a of ads) {
+    if (!ids.includes(a.post.id)) continue;
+    const r = byId.get(a.post.id);
+    // 행이 없으면 스팟 글이 아니다(null) — 목록 끼워 받기와 같은 뜻(rowToPost 주석).
+    a.post.spotEmbed = r ? { spot: r.spot, reveal_villain: r.reveal_villain, reveal_result: r.reveal_result } : null;
+  }
 }
 
 // ── 관리자 ──────────────────────────────────────────────────────────────────

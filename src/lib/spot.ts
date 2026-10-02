@@ -309,14 +309,7 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
   //    히어로의 실제 스택은 언제나 `effectiveBb` 이상이지만, 넘겨 봐야 상대가 커버하지 못한다.
   //    즉 "히어로가 100 을 넘게 넣었다" 는 원장은 어떤 스택 조합으로도 성립하지 않는다.
   if (finite(s.effectiveBb) && s.effectiveBb > 0) {
-    let heroIn = s.heroPos === 'BB' ? 1 + (finite(s.anteBb) ? s.anteBb : 0)
-      : s.heroPos === 'SB' ? (finite(s.sbBb) ? s.sbBb : 0) : 0;
-    for (const a of s.actions) {
-      if (!SIZED.has(a.type)) continue;
-      const pos = a.actor === 'hero' ? s.heroPos : (a.pos ?? s.villainPos);
-      if (pos !== s.heroPos) continue;
-      heroIn += finite(a.sizeBb) ? (a.sizeBb as number) : 0;
-    }
+    let heroIn = committedBb(s, s.heroPos);
     if (s.heroAction && SIZED.has(s.heroAction) && finite(s.heroActionSizeBb)) {
       heroIn += s.heroActionSizeBb as number;
     }
@@ -356,6 +349,24 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
 }
 
 export const hasBlocker = (issues: readonly SpotIssue[]): boolean => issues.some((i) => i.level === 'blocker');
+
+/**
+ * 그 자리가 넣은 칩(BB) — 블라인드(BB 는 BB앤티 포함) + 기록된 call·bet·raise 증분의 합. 결정 액션(heroAction)은 넣지 않는다.
+ * validateSpot 의 G1(히어로 누적 ≤ 유효 스택)이 쓰던 누적을 자리 기준으로 꺼냈다 — 남은 스택 = 스택 − 이 값.
+ * `street` 를 주면 **그 스트리트에 넣은 것만**(콜 금액용): 블라인드는 프리플랍일 때만, 앤티는 죽은 돈이라 빼고 센다.
+ * ⚠ 서버 _spot_vote_choices(20261002c) 가 같은 셈을 SQL 로 한다 — 바꾸면 둘 다 바꿔라(shareView.voteChoices 주석).
+ */
+export function committedBb(s: SpotReview, pos: SpotPosition, street?: Street): number {
+  let v = street && street !== 'preflop' ? 0
+    : pos === 'BB' ? 1 + (!street && finite(s.anteBb) ? s.anteBb : 0)
+      : pos === 'SB' ? (finite(s.sbBb) ? s.sbBb : 0) : 0;
+  for (const a of s.actions) {
+    if (!SIZED.has(a.type) || (street && a.street !== street)) continue;
+    if (actorPos(s, a) !== pos) continue;
+    v += finite(a.sizeBb) ? (a.sizeBb as number) : 0;
+  }
+  return v;
+}
 
 export function streetLabel(s: Street): string {
   return s === 'preflop' ? '프리플랍' : s === 'flop' ? '플랍' : s === 'turn' ? '턴' : '리버';
