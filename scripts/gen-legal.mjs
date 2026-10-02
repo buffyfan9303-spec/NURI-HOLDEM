@@ -253,6 +253,13 @@ function page(doc, bodyHtml, biz) {
 const rendered = await renderAll();
 const biz = extractBiz(rendered['anti-gambling']);
 
+// 이전판(2026-06-15) 아카이브 — git 이력에서 1회 생성(`--archive`). 평소 빌드·--check 에는 들어가지 않는다. 자세한 이유는 legal-archive.mjs 머리말.
+if (process.argv.includes('--archive')) {
+  if (CHECK) throw new Error('--archive 와 --check 는 같이 쓰지 않는다');
+  const { buildArchive } = await import('./legal-archive.mjs');
+  await buildArchive({ root: ROOT, CSS, esc, reclass, biz, SITE });
+}
+
 const files = new Map();
 for (const doc of DOCS) {
   const body = reclass(rendered[doc.slug]).split('\n').map((l) => '      ' + l).join('\n');

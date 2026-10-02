@@ -10,7 +10,7 @@
 //   그래서 상자는 `rounded-input` + `bg-`(→ box), 강조는 `font-bold`(→ b), 보조문은 `text-ink-muted`(→ mute)로만 쓴다.
 // ⚠ §28 — 이 파일의 문구에는 '환전·현금·수익' 계열 단어를 쓰지 않는다.
 //   마케팅 문서(선택 동의) 본문에 그 단어가 들어가면 legalStaticConsistency 게이트가 막는다.
-import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
+import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE, LEGAL_PREV_ARCHIVE_URL } from '../../lib/legalVersion';
 import { LEGAL_HISTORY, type LegalDocKey } from '../../lib/legalHistory';
 
 /** 문서 상단 — 이 문서가 언제부터 시행 중인 판인지, 언제 공지했는지, 직전판은 언제까지 적용됐는지 밝힌다.
@@ -26,7 +26,8 @@ export function RevisionNotice({ firstEdition = false }: { firstEdition?: boolea
       </p>
       <p className="text-2xs text-ink-muted leading-relaxed">
         개정 공지일 {LEGAL_NOTICE_DATE} · 시행일 {LEGAL_EFFECTIVE_DATE}
-        {firstEdition ? '' : ` · 직전판(${LEGAL_PREV_EFFECTIVE_DATE} 시행)은 시행일 전까지 적용되었습니다`}.
+        {firstEdition ? '' : ` · 직전판(${LEGAL_PREV_EFFECTIVE_DATE} 시행)은 시행일 전까지 적용되었습니다`}
+        {firstEdition ? null : <> (<a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="prev-edition-link">이전판 보기</a>)</>}.
         이번 개정에는 회원에게 불리한 변경이 포함된 문서가 있어, 4개 문서 전부를 적용일 30일 전에 공지하였습니다. 변경된 내용은 문서 끝의
         「부칙 — 개정 이력」에서 확인하실 수 있으며, 개정 내용에 동의하지 않으시는 회원은 「내 정보 → 보안 → 회원 탈퇴하기」에서
         언제든지 이용계약을 해지하실 수 있습니다.

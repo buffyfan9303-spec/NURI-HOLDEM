@@ -39,6 +39,8 @@ export const LEGAL_NOTICE_DATE = '2026년 8월 30일';
 /** 직전판 시행일 — 개정판 시행일 전까지 실제로 적용되었던 약관. */
 export const LEGAL_PREV_EFFECTIVE_DATE = '2026년 6월 15일';
 export const LEGAL_PREV_EFFECTIVE_ISO = '2026-06-15';
+/** 직전판(제1판) 원문 보존본 — 개인정보처리방침 제14조③ '이전 방침을 함께 게시'. scripts/gen-legal.mjs --archive 가 만든다(sitemap 에는 넣지 않는다). */
+export const LEGAL_PREV_ARCHIVE_URL = `/legal/archive/${LEGAL_PREV_EFFECTIVE_ISO}/index.html`;
 
 /** 기기 시간대와 무관한 KST 기준 오늘(YYYY-MM-DD).
  *  왜 필요한가: 기기가 UTC·PST 로 맞춰져 있으면 시행일이 사람마다 하루 어긋나 게이트가
