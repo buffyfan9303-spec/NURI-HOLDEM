@@ -90,6 +90,51 @@ async function bootAdmin(page: Page, cap: { method: string; url: string; body: s
   await expect(page.getByRole('button', { name: /^운영 분석/ }).first(), '관리자로 못 들어왔다').toBeVisible({ timeout: 25_000 });
 }
 
+/** 그룹 페이지를 딥링크(/?v=)로 연다. uid=null 이면 비로그인. 반환 = 가로챈 schedules POST 본문들. */
+async function bootGroupPage(page: Page, o: { uid: string | null; group: string; ownerId: string; membership?: Record<string, unknown> }) {
+  const posts: Record<string, unknown>[] = [];
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (o.uid) {
+    const FAKE = fakeSession(o.uid, 'grp@example.com');
+    await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 */ } }, [KEY, JSON.stringify(FAKE)] as [string, string]);
+    await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(FAKE.user)));
+    await page.route(/\/rest\/v1\/profiles\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json(profile(o.uid!, 'user', '운영진'))) : r.fallback()));
+  }
+  await page.route(/\/rest\/v1\/venues\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json([{
+    id: o.group, name: '방문동호회', region: '서울', address: '', owner_id: o.ownerId, approved: true, status: 'active',
+    kind: 'club', join_approval: true, follower_count: 3, display_order: 1, is_paid_ad: false,
+    verification_status: 'unverified', images: [], created_at: '2026-09-01T00:00:00Z',
+  }])) : r.fallback()));
+  await page.route(/\/rest\/v1\/group_members\?/, (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    const single = (r.request().headers()['accept'] ?? '').includes('pgrst.object');
+    return r.fulfill(json(single ? (o.membership ?? null) : (o.membership ? [o.membership] : [])));
+  });
+  await page.route(/\/rest\/v1\/venue_notices\?/, (r) => r.fulfill(json([])));
+  await page.route(/\/rest\/v1\/group_messages\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback()));
+  await page.route(/\/rest\/v1\/group_posts\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback()));
+  // 서버(20261002h get_group_schedules)는 방문자 전체에게 그룹 전용·공개 대기까지 준다 — 반려분은 빠진 상태로 온다
+  await page.route(/\/rest\/v1\/rpc\/get_group_schedules/, (r) => r.fulfill(json([
+    sched('v-only', { title: '그룹전용', venue_id: o.group, owner_id: o.ownerId, feed_request: false }),
+    sched('v-pub', { title: '공개된토너', venue_id: o.group, owner_id: o.ownerId, approved: true }),
+  ])));
+  await page.route(/\/rest\/v1\/schedules(\?|$)/, (r) => {
+    const m = r.request().method();
+    if (m === 'GET') return r.fulfill(json([]));
+    if (m === 'POST') {
+      const b = JSON.parse(r.request().postData() ?? '{}') as Record<string, unknown>;
+      posts.push(b);
+      return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(sched('new', { ...b, id: 'new' })) });
+    }
+    return r.fallback();
+  });
+  await stabilizeBackstack(page);
+  await page.goto(`/?v=${o.group}`);
+  await expect(page.getByRole('dialog', { name: /그룹 페이지/ })).toBeVisible({ timeout: 20_000 });
+  await dismissOverlays(page);
+  return posts;
+}
+
 test.describe('포스터 승인 개편 20261002h', () => {
   test('A 관리자 1440 — 대기열은 그룹 전용을 빼고 그룹 공개 요청에 배지 · 프리미엄 지정은 기간을 함께 저장', async ({ page }) => {
     test.setTimeout(120_000);
@@ -150,6 +195,49 @@ test.describe('포스터 승인 개편 20261002h', () => {
     await expect(d).toBeVisible({ timeout: 20_000 });
     await expect(d.getByTestId('poster-premium-notice'), '프리미엄 매장인데 즉시 공개 안내가 없다').toContainText('바로 공개');
     await expect(d.getByTestId('poster-feed-request'), '매장 포스터에 그룹용 공개 요청 체크가 보인다').toHaveCount(0);
+  });
+
+  // ── D·E. 오너 결정 10-02 ②③ — 운영진 등록 · 비로그인 방문자 열람 ────────────────
+  test('D 그룹 390 — 운영진(개설자 아님)도 [+ 포스터]로 그룹 포스터를 올린다', async ({ page }) => {
+    test.setTimeout(150_000);
+    const UID = '00000000-0000-4000-8000-0000000000d1';
+    const OWNER = '00000000-0000-4000-8000-0000000000d2';
+    const G = '22222222-2222-4222-8222-2222222222d9';
+    const posts = await bootGroupPage(page, { uid: UID, group: G, ownerId: OWNER,
+      membership: { id: 'm-1', group_id: G, user_id: UID, role: 'manager', status: 'approved', member_name: '운영진', created_at: '2026-09-01T00:00:00Z' } });
+    const sec = page.getByTestId('group-posters');
+    await expect(sec).toBeVisible({ timeout: 15_000 });
+    await expect(sec.getByRole('button', { name: '+ 포스터' }), '운영진에게 [+ 포스터]가 없다').toBeVisible({ timeout: 10_000 });
+    await expect(sec.getByRole('button', { name: '수정', exact: true }).first(), '운영진이 남의 그룹 포스터를 고칠 수 없다').toBeVisible();
+    await sec.getByRole('button', { name: '+ 포스터' }).click();
+    const d = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '새 포스터 등록' }) }).last();
+    await expect(d).toBeVisible({ timeout: 20_000 });
+    const f = (name: string) => d.getByLabel(name, { exact: false }).first();
+    await f('게임 이름').fill('운영진 정모');
+    await f('날짜').fill(TOMORROW);
+    await f('지역').selectOption('서울');
+    await f('참가비').fill('30000');
+    await f('보장 상금').fill('50');
+    await f('레벨').fill('10');
+    await d.getByRole('button', { name: '등록하기' }).click();
+    await expect.poll(() => posts.length, { timeout: 15_000 }).toBe(1);
+    expect(posts[0].venue_id).toBe(G);
+    expect(posts[0].owner_id, '본인 명의로 등록해야 한다(서버 정책)').toBe(UID);
+    expect(posts[0].feed_request, '기본은 그룹 전용').toBe(false);
+  });
+
+  test('E 그룹 390 — 비로그인 방문자도 그룹 전용 포스터를 본다(버튼·반려 사유는 없음)', async ({ page }) => {
+    test.setTimeout(120_000);
+    const G = '22222222-2222-4222-8222-2222222222e9';
+    await bootGroupPage(page, { uid: null, group: G, ownerId: '00000000-0000-4000-8000-0000000000e2' });
+    const sec = page.getByTestId('group-posters');
+    await expect(sec, '비로그인 방문자에게 그룹 포스터 구획이 없다').toBeVisible({ timeout: 15_000 });
+    await expect(sec.getByTestId('group-poster-row')).toHaveCount(2);
+    await expect(sec.getByTestId('group-poster-row').filter({ hasText: '그룹전용' }).getByTestId('group-poster-status')).toHaveText('그룹 전용');
+    await expect(sec.getByRole('button', { name: '+ 포스터' })).toHaveCount(0);
+    await expect(sec.getByRole('button', { name: '수정', exact: true })).toHaveCount(0);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(over, `가로 넘침 ${over}px`).toBeLessThanOrEqual(1);
   });
 
   // ── C. 그룹 390 ─────────────────────────────────────────────────────────────

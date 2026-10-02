@@ -1,7 +1,8 @@
 // src/components/features/GroupPosterSection.tsx
 // 그룹 포스터(오너 2026-10-02 B: "그룹도 포스터를 올릴 수 있게 — 그룹에 올라가는 건 상관없고, 일정에 올라가는 부분만 승인").
-//  - 목록은 서버 RPC get_group_schedules(20261002h): 승인된 포스터는 누구나, 미승인(그룹 전용·공개 대기·반려)은 승인 멤버·운영진·관리자만.
-//  - 등록·수정은 개설자(서버 is_group_poster_owner)와 관리자. 그룹이 관리자 승인 전이면 서버가 막는다 — 여기서도 버튼을 감춘다.
+//  - 목록은 서버 RPC get_group_schedules(20261002h): 그룹 페이지 방문자 전체(비로그인 포함)가 본다 — 그룹 전용·공개 대기 포함.
+//    반려된 것만 작성자·운영진·관리자. 전체 일정 피드에는 승인된 것만(서버 schedules_select).
+//  - 등록·수정·삭제는 개설자·운영진(서버 can_post_group_poster)과 관리자. 그룹이 관리자 승인 전이면 서버가 막는다 — 여기서도 버튼을 감춘다.
 //  - 일정 피드 노출(approved)은 서버 트리거가 정한다. 이 화면은 상태를 보여 줄 뿐 승인값을 만들지 않는다.
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
@@ -24,7 +25,7 @@ function statusOf(s: Schedule): { label: string; cls: string } {
 
 export default function GroupPosterSection({ group, canPost, onSubmitPoster }: {
   group: Venue;
-  /** 개설자·관리자 — 서버도 같은 규칙(is_group_poster_owner · 관리자). */
+  /** 개설자·운영진·관리자 — 서버도 같은 규칙(can_post_group_poster · 관리자). */
   canPost: boolean;
   onSubmitPoster?: SubmitPoster;
 }) {

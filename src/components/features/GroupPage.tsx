@@ -308,8 +308,9 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
             )}
           </div>
 
-          {/* 그룹 포스터(20261002h) — 그룹 페이지에는 바로, 전체 일정은 관리자 승인 후. 올리기는 개설자·관리자(공지와 같은 규칙). */}
-          <GroupPosterSection group={group} canPost={isOwner} onSubmitPoster={onSubmitPoster} />
+          {/* 그룹 포스터(20261002h) — 그룹 페이지에는 바로(방문자 전체), 전체 일정은 관리자 승인 후.
+              올리기·고치기는 개설자·운영진·관리자(오너 10-02 ② — 서버 can_post_group_poster 와 같은 범위). */}
+          <GroupPosterSection group={group} canPost={isManager} onSubmitPoster={onSubmitPoster} />
 
           {/* 매니저 패널 */}
           {isManager && (
