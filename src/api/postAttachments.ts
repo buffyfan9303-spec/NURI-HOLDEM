@@ -42,7 +42,11 @@ export interface HandAttachment {
   cards?: Card[] | null;  // 1~4장(PLO 지원). null = 카드 미입력(headline 만)
 }
 
-export interface PollOption { id: string; idx: number; label: string; votes: number }
+export interface PollOption {
+  id: string; idx: number; label: string; votes: number;
+  /** 화면 전용 — 표는 남기되 새로 고를 수 없는 보기(SPOT 옛 글: 지금 자리에서 못 하는 액션 · shareView.fitPollOptions). 서버 값 아님. */
+  locked?: boolean;
+}
 
 export interface PollAttachment {
   kind: 'poll';

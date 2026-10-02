@@ -137,18 +137,20 @@ function canRaise(s: SpotReview): boolean {
 /**
  * 서버가 보기를 고정값(폴드·콜·레이즈)으로 넣은 글 — 20261001o 적용 전 글 — 을 상황에 맞게 **보여 준다**.
  * 표는 보기 id 로 들어가므로 뜻이 같은 쪽으로만 이름을 바꾼다: 콜→체크(넘기기), 레이즈→벳/레이즈(올리기).
- * 고를 수 없는 폴드는 빼되, 이미 표가 있으면 남긴다(있던 표를 화면에서 지우지 않는다).
- * 올리기가 없는 자리(상대 올인·내 스택을 덮는 벳 → 폴드·콜)면 레이즈도 같은 규칙으로 뺀다 — 표가 있으면 '레이즈' 그대로 남긴다.
+ * 고를 수 없는 보기(체크 자리의 폴드 · 올리기가 없는 자리의 레이즈)는 뺀다. 이미 표가 있으면 **표만 남기고 잠근다**(locked) —
+ *   있던 표를 화면에서 지우지 않되, 새로 누를 수 있는 보기는 피드 줄(v.choices)과 **같다**.
+ *   🔴 독립 검토 10-02 a5 ①-a: 예전엔 표 있는 '레이즈' 를 눌리는 채로 남겨 피드 '폴드 · 콜' / 상세 '폴드·콜·레이즈' 가 갈렸다.
  * 보기가 고정값이 아니면(서버 적용 뒤 글·직접 만든 투표) 손대지 않는다.
  */
-export function fitPollOptions<T extends { idx: number; label: string; votes: number }>(opts: T[], choices: string[]): T[] {
+export function fitPollOptions<T extends { idx: number; label: string; votes: number }>(opts: T[], choices: string[]): (T & { locked?: boolean })[] {
   const sorted = [...opts].sort((a, b) => a.idx - b.idx);
   if (sorted.map((o) => o.label).join() !== LEGACY.join() || choices.join() === LEGACY.join()) return opts;
   const passive = choices.includes('체크') ? '체크' : '콜';
   const aggressive = choices.find((c) => c === '벳' || c === '레이즈');
+  const lockIfVoted = (o: T) => (o.votes > 0 ? [{ ...o, locked: true }] : []);
   return sorted.flatMap((o) => {
-    if (o.label === '폴드') return choices.includes('폴드') || o.votes > 0 ? [o] : [];
-    if (o.label === '레이즈' && !aggressive) return o.votes > 0 ? [o] : [];
+    if (o.label === '폴드') return choices.includes('폴드') ? [o] : lockIfVoted(o);
+    if (o.label === '레이즈' && !aggressive) return lockIfVoted(o);
     return [{ ...o, label: o.label === '콜' ? passive : (aggressive as string) }];
   });
 }

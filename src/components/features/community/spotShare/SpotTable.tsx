@@ -2,6 +2,7 @@
 // 내 자리(아래 가운데)·Villain 자리·보드가 한눈에. 정본 캡처: spot-share-design/proto/a-*.png
 // 원본: 시안 브랜치 NURI/spot-share-design-1001(b8982254) VariantTable.tsx.
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import Icon from '../../../atoms/Icon';
 import { positionsFor, type SpotPosition } from '../../../../lib/spot';
 import type { ShareView } from './shareView';
 import { decisionLine, matchupLine } from './shareView';
@@ -76,9 +77,11 @@ function Felt({ v, big }: { v: ShareView; big: boolean }) {
   const label = (text: string, pos: SpotPosition) => (
     // 'Villain A · BTN'(오너 표기) — 인원·폭과 무관하게 **한 줄**(오너 2026-10-02 "7~9인도 한 줄, 좁으면 글자 축소").
     //   글자: 기본 text-2xs(11.7px). 7인 이상이거나 테이블 폭 290px 미만(320 화면)이면 10px — 최소 크기다(더 줄이지 않는다).
+    //   단 7인 이상도 테이블이 340px 이상(PC 두 단 355px · 큰 폰)이면 text-2xs — PC(DPR 1)에서 10px 는 작았다(a5 ④).
     //   예전엔 7인 이상·좁은 테이블에서 'Villain A' / 'UTG1' 두 줄로 나뉘며 가운데 '·' 가 빠졌다(독립 검토 10-02 §1).
     <span className={['inline-flex items-center whitespace-nowrap rounded-badge bg-surface-base/85 px-1.5 py-0.5 font-bold leading-none text-ink-primary ring-1 ring-border-default',
-      v.tableSize > 6 ? 'text-[10px]' : 'text-2xs @max-[290px]:text-[10px]'].join(' ')} data-seat-label>
+      // ⚠ 변형 안의 text-2xs 는 줄 높이(0.9375rem)를 싣고 leading-none 보다 뒤에 온다 — 같은 변형에 leading-none 을 다시 적는다.
+      v.tableSize > 6 ? 'text-[10px] @min-[340px]:text-2xs @min-[340px]:leading-none' : 'text-2xs @max-[290px]:text-[10px]'].join(' ')} data-seat-label>
       {text}&nbsp;·&nbsp;{pos}
     </span>
   );
@@ -160,7 +163,9 @@ export function SpotTableFeed({ v }: { v: ShareView }) {
  * 상세 — 머리(매치업·맥락) → 테이블 → 스트리트 타임라인 → 메모 → 투표 → 공개 블록 → 하단 동작.
  * 투표·공개 블록·하단 동작은 호출부(SpotPostCard)가 실제 배선을 넣는다.
  *
- * 넓은 칸(≥ 520px — PC 2-pane·태블릿)은 두 단(3:2): 왼쪽 테이블·타임라인, 오른쪽 메모·투표·공개. 모바일은 한 단(같은 순서).
+ * 넓은 칸(≥ 480px — PC 2-pane·태블릿)은 두 단(3:2): 왼쪽 테이블·타임라인, 오른쪽 결정 줄·투표·공개·메모. 모바일은 한 단(예전 순서).
+ *   기준 480: 1024 노트북의 2-pane 상세 칸이 506px 라 예전 기준 520 에선 한 단으로 돌아가 투표가 첫 화면 밖이었다(a5 ③-c).
+ *   506 에서 왼쪽 단(테이블)이 ≈ 293px 로 이름표 기본 크기 기준(290px) 위다. 모바일 상세 칸은 최대 ≈ 400px(430 폰)라 한 단 그대로다.
  *   🔴 독립 검토 10-02 §6: PC 2-pane 상세에서 테이블이 608px 정사각으로 커져 투표가 첫 화면 밖으로 밀렸다.
  *   테이블 폭만 420 으로 줄여서는 모자랐다(1440×900 실측: 칸 높이 748 에 투표 아래끝 1087 — 머리 190·테이블 420·리버 타임라인 249 가 위에 쌓인다).
  *   두 단이면 투표가 테이블 옆(칸 위끝에서 ≈ 430px)에 선다. 한 단 묶음은 display:contents 라 모바일 DOM 순서·간격이 그대로다.
@@ -168,21 +173,28 @@ export function SpotTableFeed({ v }: { v: ShareView }) {
 export function SpotTableDetail({ v, poll, reveal, footer }: { v: ShareView; poll?: ReactNode; reveal: ReactNode; footer?: ReactNode }) {
   return (
     <div className="@container" data-spot-share="table">
-      <div className="flex flex-col gap-3 @min-[520px]:grid @min-[520px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[520px]:items-start @min-[520px]:gap-x-4">
-        <div className="@min-[520px]:col-span-2">
+      <div className="flex flex-col gap-3 @min-[480px]:grid @min-[480px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[480px]:items-start @min-[480px]:gap-x-4">
+        <div className="@min-[480px]:col-span-2">
           <p className="text-base font-bold text-ink-primary">{matchupLine(v)}</p>
           <ContextChips v={v} className="mt-0.5" />
         </div>
-        <div className="contents @min-[520px]:flex @min-[520px]:min-w-0 @min-[520px]:flex-col @min-[520px]:gap-3">
+        <div className="contents @min-[480px]:flex @min-[480px]:min-w-0 @min-[480px]:flex-col @min-[480px]:gap-3">
           <div className="mx-auto w-full max-w-[420px]" data-felt-wrap><Felt v={v} big /></div>
           {v.streets.some((s) => s.actions.length) && <StreetTimeline streets={v.streets} decision={v.streetName} />}
         </div>
-        <div className="contents @min-[520px]:flex @min-[520px]:min-w-0 @min-[520px]:flex-col @min-[520px]:gap-3">
-          {v.note && <p className="border-l-2 border-accent-300/50 pl-2.5 text-sm text-ink-secondary wrap-break-word">{v.note}</p>}
+        <div className="contents @min-[480px]:flex @min-[480px]:min-w-0 @min-[480px]:flex-col @min-[480px]:gap-3">
+          {/* 두 단에서만: 결정 지점 한 줄을 투표 바로 위에 — 타임라인 끝의 같은 줄은 왼쪽 단 아래(첫 화면 밖)라 투표를 먼저 보게 됐다(a5 ③-a).
+              한 단(모바일)은 타임라인 끝 줄 바로 다음이 투표라 겹쳐 보이므로 숨긴다. */}
+          <p className="hidden items-center gap-1 text-xs font-bold text-accent-200 @min-[480px]:flex" data-spot-decision>
+            <Icon name="chevron-right" size={14} aria-hidden />{decisionLine(v)} · 내 차례
+          </p>
+          {/* 메모는 두 단에서 투표·공개 **아래**로(order-last) — 236px 칸에서 긴 메모가 6줄로 쌓여 1280×720 첫 화면 밖으로 투표를 밀었다(a5 ③-b).
+              한 단은 display:contents 라 order 가 안 걸리고 예전 순서(메모 → 투표) 그대로다. */}
+          {v.note && <p className="border-l-2 border-accent-300/50 pl-2.5 text-sm text-ink-secondary wrap-break-word @min-[480px]:order-last">{v.note}</p>}
           {poll}
           {reveal}
         </div>
-        {footer && <div className="@min-[520px]:col-span-2">{footer}</div>}
+        {footer && <div className="@min-[480px]:col-span-2">{footer}</div>}
       </div>
     </div>
   );

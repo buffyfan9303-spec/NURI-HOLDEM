@@ -220,7 +220,8 @@ function check(where: string, i: number, rep: FeltReport, bad: string[], place: 
   for (const o of rep.ring) ring.push(`${where} ${titleOf(i)}: ${o}`);
 }
 
-for (const w of [320, 360, 390]) {
+// 412: 테이블이 340px 를 넘는 첫 폰 폭(≈351px) — 7인 이상 이름표가 10px → 11.69px 로 커지는 경계(a5 ④, 10-02)
+for (const w of [320, 360, 390, 412]) {
   test(`좌석 × 보드 겹침 0 · 보드는 타원 안·내 카드 위 · 이름표 한 줄 · 좌석은 둘레 20px 안 — 폭 ${w} · 보드 0/3/4/5장 · 상대 1/2/3/5명 · 6·8·9인 · 피드와 상세`, async ({ page }) => {
     test.setTimeout(420_000);
     await page.setViewportSize({ width: w, height: 844 });

@@ -65,9 +65,9 @@ describe('투표 보기 — 상황에 맞춘다 (README P9)', () => {
     const out = fitPollOptions(legacy, ['체크', '벳']);
     expect(out.map((o) => [o.id, o.label, o.votes])).toEqual([['c', '체크', 3], ['r', '벳', 1]]);
   });
-  it('폴드에 이미 표가 있으면 지우지 않는다', () => {
+  it('폴드에 이미 표가 있으면 지우지 않되 잠근다(새로 고를 수 있는 보기는 체크·벳뿐)', () => {
     const out = fitPollOptions([{ ...legacy[0], votes: 2 }, legacy[1], legacy[2]], ['체크', '벳']);
-    expect(out.map((o) => o.label)).toEqual(['폴드', '체크', '벳']);
+    expect(out.map((o) => [o.label, !!o.locked])).toEqual([['폴드', true], ['체크', false], ['벳', false]]);
   });
   it('보기가 이미 상황에 맞거나(서버 적용 뒤) 고정값이 아니면 손대지 않는다', () => {
     expect(fitPollOptions(legacy, ['폴드', '콜', '레이즈'])).toBe(legacy);
@@ -75,10 +75,19 @@ describe('투표 보기 — 상황에 맞춘다 (README P9)', () => {
     expect(fitPollOptions(fresh, ['체크', '벳'])).toBe(fresh);
   });
   // 🔴 2026-10-02 독립 검토 FAIL(review-share-a3-1002.md §2): 올인 자리의 옛 글이 '레이즈' 를 그대로 보였다.
-  it('올리기가 없는 자리(폴드·콜)면 표 0 인 레이즈를 숨기고, 표가 있으면 레이즈 그대로 남긴다', () => {
+  it('올리기가 없는 자리(폴드·콜)면 표 0 인 레이즈를 숨기고, 표가 있으면 레이즈를 표만 남긴 채 잠근다', () => {
     const zero = legacy.map((o) => ({ ...o, votes: o.id === 'r' ? 0 : o.votes }));
     expect(fitPollOptions(zero, ['폴드', '콜']).map((o) => [o.id, o.label])).toEqual([['f', '폴드'], ['c', '콜']]);
-    expect(fitPollOptions(legacy, ['폴드', '콜']).map((o) => [o.id, o.label, o.votes])).toEqual([['f', '폴드', 0], ['c', '콜', 3], ['r', '레이즈', 1]]);
+    expect(fitPollOptions(legacy, ['폴드', '콜']).map((o) => [o.id, o.label, o.votes, !!o.locked])).toEqual([['f', '폴드', 0, false], ['c', '콜', 3, false], ['r', '레이즈', 1, true]]);
+  });
+  // 🔴 독립 검토 10-02 a5 ①-a: 피드 줄(v.choices)과 상세에서 **누를 수 있는** 보기가 같아야 한다.
+  it('누를 수 있는 보기 = 피드 줄 보기 (옛 글, 표 유무와 무관)', () => {
+    for (const choices of [['폴드', '콜'], ['체크', '벳'], ['체크', '레이즈']]) {
+      for (const votes of [[0, 0, 0], [2, 5, 3]]) {
+        const opts = legacy.map((o, k) => ({ ...o, votes: votes[k] }));
+        expect(fitPollOptions(opts, choices).filter((o) => !o.locked).map((o) => o.label), `${choices} ${votes}`).toEqual(choices);
+      }
+    }
   });
 });
 
