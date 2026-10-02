@@ -2,7 +2,7 @@
 // 음성 대조: authError.ts 의 `AUTH_CODE_TEXT[code]` 분기를 지우면 ① ② 가, msgOf 의 P0001 통과를 지우면 ④ 가,
 //   isUserSentence 를 항상 true 로 바꾸면 ⑤ 가 빨개진다.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { AUTH_CODE_TEXT, authMsgOf } from './authError';
+import { AUTH_CODE_TEXT, authCodeText, authMsgOf } from './authError';
 import { msgOf } from './dbError';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -104,4 +104,18 @@ describe('⑤ SQL·식별자·스키마 원문은 차단된다', () => {
       expect(authMsgOf(err, FB)).toBe(out);
     });
   }
+});
+
+// OAuth 복귀 URL(?error_code=)처럼 바깥에서 온 코드 — 표 문장 아니면 undefined, 프로토타입 키는 문장이 아니다.
+describe('⑥ authCodeText — 외부에서 온 코드', () => {
+  it('표에 있는 코드는 표 문장, 없으면 undefined', () => {
+    expect(authCodeText('unexpected_failure')).toBe(AUTH_CODE_TEXT.unexpected_failure);
+    expect(authCodeText('server_error')).toBeUndefined();
+  });
+  it('constructor·__proto__·toString 은 함수/객체가 아니라 undefined 다', () => {
+    for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(authCodeText(k), k).toBeUndefined();
+      expect(authMsgOf({ code: k }, FB), k).toBe(FB);
+    }
+  });
 });

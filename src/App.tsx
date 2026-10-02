@@ -2974,21 +2974,31 @@ export default function App() {
       if (!err && !code) return;
       oauthErrShown.current = true;
 
-      // 자주 나오는 원인은 사람 말로 바꾸고, 모르는 건 원문을 그대로 보여 준다(추측 금지).
-      const raw = decodeURIComponent(desc).replace(/\+/g, ' ');
-      const known =
-        /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
-        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료되었습니다. 다시 시도해 주세요'
-        : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
-        : '';
-      const detail = [code || err, raw].filter(Boolean).join(' · ').slice(0, 160);
-      toast.show(known ? `${known}\n(${detail})` : `로그인에 실패했습니다. ${detail}`, 'error');
-
-      // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게.
-      const url = new URL(window.location.href);
-      ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
-      const cleanHash = /error/.test(url.hash) ? '' : url.hash;
-      window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
+      try {
+        // 🔴 화면에는 **고정 문장만** 보인다(2026-10-03 C2 독립 검증 N2). URL 의 error_description 은 링크를 만든 사람이
+        //   아무 문구나 심을 수 있어(가짜 안내 문구 위조) 토스트에 그대로 싣지 않는다 — 제공자의 영문 원문도 마찬가지.
+        //   error_code 는 인증 오류 코드 표(authCodeText)로, 모르는 코드는 고정 문구로. 원문은 콘솔에만 남겨 진단한다.
+        //   (URLSearchParams 가 이미 디코딩한 값이다 — decodeURIComponent 를 또 걸면 '100%25' 같은 값에서 던져 아래 정리까지 건너뛰었다.)
+        console.warn('[oauth-return]', { error: err.slice(0, 80), code: code.slice(0, 80), description: desc.slice(0, 300) });
+        const known =
+          /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
+          : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료되었습니다. 다시 시도해 주세요'
+          : /redirect|uri/i.test(desc) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
+          : '';
+        if (known) toast.show(known, 'error');
+        else {
+          // 코드 표(40문장)는 로그인 창 청크에 있다 — 첫 화면 임계 경로(예산 여유 2%)에 얹지 않으려고 이 드문 경로에서만 받는다.
+          void import('./lib/authError')
+            .then((m) => m.authCodeText(code), () => undefined)
+            .then((t) => toast.show(t || '로그인을 완료하지 못했습니다. 다시 시도해 주세요', 'error'));
+        }
+      } finally {
+        // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게. 안내가 던져도 반드시 실행한다.
+        const url = new URL(window.location.href);
+        ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
+        const cleanHash = /error/.test(url.hash) ? '' : url.hash;
+        window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
+      }
     } catch { /* ignore */ }
   }, [toast]);
 

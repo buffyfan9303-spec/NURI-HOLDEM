@@ -16,7 +16,7 @@ const SRC = __dirname;
 // D1(내 매장) 인계 대상 — 아직 원문 관용구가 남은 파일의 src 기준 경로 접두.
 const PENDING_D1 = [
   'components/features/VenueManageTab', 'components/features/NuriPos', 'components/features/Ledger',
-  'components/features/Staff', 'components/features/Voucher', 'components/features/StoreDashboard',
+  'components/features/Staff', 'components/features/VoucherManageModal', 'components/features/StoreDashboard',
   'components/features/Preset', 'components/features/clock/',
   'components/features/RegularsModal', 'components/features/CustomerAnalytics', 'components/features/DealerShiftsModal',
   'components/features/AnnouncePanel', 'components/features/SeasonPanel',

@@ -74,6 +74,12 @@ const AUTH_MESSAGE_CODE: ReadonlyArray<readonly [RegExp, string]> = [
 // 'For security purposes, you can only request this after 45 seconds.' — 기다릴 초가 문장에 들어 있다.
 const WAIT_SECONDS = /you can only request this (?:after|once every) (\d+) seconds?/i;
 
+/** 오류 코드 → 표 문장(표에 없으면 undefined). 코드는 URL(?error_code=)처럼 바깥에서 올 수도 있으니 **own 키만** 본다 —
+ *  `constructor`·`__proto__` 같은 프로토타입 키가 문장 대신 함수를 돌려주지 않게. */
+export function authCodeText(code: unknown): string | undefined {
+  return typeof code === 'string' && Object.prototype.hasOwnProperty.call(AUTH_CODE_TEXT, code) ? AUTH_CODE_TEXT[code] : undefined;
+}
+
 /** Supabase Auth 오류 코드/원문 → 한국어 한 문장. Auth 오류가 아니면 msgOf 와 같다. */
 export function authMsgOf(e: unknown, fallback?: string): string {
   const r = (e && typeof e === 'object' ? e : {}) as { code?: unknown; message?: unknown };
@@ -81,7 +87,8 @@ export function authMsgOf(e: unknown, fallback?: string): string {
   const raw = typeof r.message === 'string' ? r.message : '';
   const wait = WAIT_SECONDS.exec(raw);
   if (wait) return `${wait[1]}초 뒤에 다시 시도해 주세요`;
-  if (AUTH_CODE_TEXT[code]) return AUTH_CODE_TEXT[code];
+  const byCode = authCodeText(code);
+  if (byCode) return byCode;
   if (raw) {
     for (const [re, c] of AUTH_MESSAGE_CODE) if (re.test(raw)) return AUTH_CODE_TEXT[c];
     if (/rate limit/i.test(raw)) return RETRY_LATER;
