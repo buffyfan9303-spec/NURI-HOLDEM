@@ -122,7 +122,9 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
   return (
     <section className="space-y-2 border-t border-border-subtle pt-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-baseline gap-2">
+        {/* items-center(2026-10-02 정렬 전수) — 옆 평점 묶음이 별 아이콘으로 시작하는 flex 라 기준선 정렬이면
+            그 묶음의 기준선이 별 바닥으로 잡혀 평균 숫자가 제목 글자와 어긋난다. */}
+        <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-ink-primary">방문 후기</h3>
           {reviews && reviews.length > 0 && (
             <span className="flex items-center gap-1 text-xs text-ink-secondary">

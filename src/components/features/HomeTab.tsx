@@ -691,7 +691,9 @@ export default function HomeTab({
         )}
         {openNow.length > 0 && (
           <section data-main-enter className="px-page-x pt-5">
-            <header className="flex items-baseline justify-between pb-2.5">
+            {/* items-center(2026-10-02 정렬 전수) — 기준선 정렬이면 제목(md 18px)과 '라이브 ›'(12.75px)의 글자 중심이
+                1440 에서 2px 갈렸다(오른쪽 링크가 제목보다 아래). 390 은 0.5px 라 눈에 안 띄었을 뿐 같은 결함. */}
+            <header className="flex items-center justify-between pb-2.5">
               <h3 className={H3_CLS}>
                 지금 등록 가능 <span className="t-desc font-semibold tabular-nums stat-emerald">{openAll.length}</span>
               </h3>
