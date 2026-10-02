@@ -930,8 +930,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지 — loading 은 날짜가 바뀐 첫 커밋에서 아직 false 라
     //   '지금 session 이 이 칸의 것인가'(sessionFor)를 함께 본다. 안 보면 '이 포스터로 새 장부'가 다른 날짜로 들어올 때
     //   **앞 날짜의 열린 장부**를 보고 "이미 다른 장부가 있어 사이드로 엽니다" 로 옮겼다(review-store-link-1002b A2).
-    if (loading || sessionFor !== prefillKey) return;
+    // 취소는 가드보다 **앞** — 날짜·회차가 바뀐 첫 커밋은 아래 가드가 일찍 돌려보내므로, 가드 뒤에 두면 새 장부 로드가 끝날 때까지
+    //   앞 날짜의 늦은 직전 설정이 setPrefill 로 들어와 빈 칸을 낡은 값으로 채운다(review-store-link-1002 O-1).
     run.cancel('prefill'); // 앞 날짜·회차의 늦은 직전 설정이 아래 어느 갈래의 결과도 덮지 않게(review 1b)
+    if (loading || sessionFor !== prefillKey) return;
     const sf = seedFillRef.current;
     if (!showSetup) {
       setPrefill(null);

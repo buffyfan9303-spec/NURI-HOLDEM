@@ -8,6 +8,13 @@
 // 이 계약은 구조만 잠근다. 실제 전환 동작은 e2e/store-link-1002.spec.ts · store-link-1002c.spec.ts 가 늦은 응답으로 재현해 잰다.
 // 실행: npx vitest run src/components/features/venueScope.contract.test.ts
 //
+// ⚠ 한계 — 이 스캐너는 **구조 경보기**(휴리스틱)이지 증명이 아니다(verify-store-link-1002 §2). 못 잡는 것: ① 헐거운 가드 인정
+//   (조건에 함수 밖 식별자만 있으면 가드로 쳐서 `if (open)`·`mounted.current`·무관한 `if (DEBUG)` 도 통과) ② 소비 모양 미추적
+//   (`const p = getX(venueId); p.then(setX)` · 래퍼 함수 · `ids.map(…)` · `useCallback` 래퍼) ③ `venue.id`·`props.venueId`·
+//   `venue?.id` 같은 매장 id 표기는 인식하지 않는다(식별자 `venueId` 와 그 별칭만) ④ `supabase.from(…)`/`rpc(…)` 직접 질의와
+//   READ 접두어 밖의 이름(`refreshStats` 등)은 보지 않는다. 오늘 저장소의 실례는 0이지만 위 모양이 새로 들어오면 이 테스트는 조용하다 —
+//   새 매장 조회는 `useVenueScope().run` 으로 쓰고, 이 목록을 '안전 증명'으로 읽지 않는다.
+//
 // ⚠ 2026-10-02(review-store-link-1002b A4) — 예전 판은 한 줄 정규식이라 7가지 모양을 놓쳤다(줄 넘김 인자 · `if (s)` 를 가드로 인정 ·
 //   set 아닌 콜백 · await · 별칭 변수 · 객체 인자 · async 화살표). 그리고 대상이 10파일뿐이라 같은 부류(StaffPayroll 인건비 —
 //   저장 시 B 직원 시급을 0/A 값으로 덮음)가 그 밖에 남았다. 이제 TypeScript AST 로 **src/components 전체**를 센다.
@@ -27,7 +34,7 @@ const READ = /^(get|load|fetch|list|search|count|has|my|find|query|pos(Has)?[A-Z
 // venueId 도 넣는다 — 클로저의 venueId 는 요청 때 값이라 `if (venueId)` 는 매장이 바뀌었는지 알려 주지 않는다.
 const BUILTIN = new Set(['venueId', 'Array', 'Object', 'Number', 'String', 'Boolean', 'Math', 'JSON', 'undefined', 'null', 'NaN', 'window', 'document', 'console', 'Date']);
 
-export interface Finding { line: number; name: string; text: string }
+export interface Finding { line: number; name: string; fn: string; text: string }
 
 function calleeName(c: ts.CallExpression): string {
   const e = c.expression;
@@ -91,6 +98,15 @@ function guarded(fn: ts.Node, bound: Set<string>, after = -1): boolean {
 function enclosingFn(n: ts.Node): ts.Node | undefined {
   for (let p = n.parent; p; p = p.parent) if (ts.isArrowFunction(p) || ts.isFunctionExpression(p) || ts.isFunctionDeclaration(p) || ts.isMethodDeclaration(p)) return p;
   return undefined;
+}
+
+/** 가장 가까운 '이름 있는' 함수 — 허용 목록 키(`파일:함수:호출`)용. 이름이 없으면 '<anon>'. */
+function enclosingName(n: ts.Node): string {
+  for (let p = n.parent; p; p = p.parent) {
+    if ((ts.isFunctionDeclaration(p) || ts.isMethodDeclaration(p)) && p.name) return p.name.getText();
+    if (ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) && p.initializer && (ts.isArrowFunction(p.initializer) || ts.isFunctionExpression(p.initializer))) return p.name.text;
+  }
+  return '<anon>';
 }
 
 /** `.catch(…)` · `.finally(…)` 를 지나 위로 — 그 다음이 실제 소비자다. */
@@ -162,7 +178,7 @@ export function scanVenueReads(src: string, file = 'x.tsx'): Finding[] {
   const visit = (n: ts.Node) => {
     if (ts.isCallExpression(n) && READ.test(calleeName(n)) && n.arguments.some(mentions) && unguardedConsumer(n)) {
       const line = sf.getLineAndCharacterOfPosition(n.getStart()).line + 1;
-      out.push({ line, name: calleeName(n), text: n.getText().split('\n')[0].slice(0, 120) });
+      out.push({ line, name: calleeName(n), fn: enclosingName(n), text: n.getText().split('\n')[0].slice(0, 120) });
     }
     ts.forEachChild(n, visit);
   };
@@ -176,16 +192,17 @@ const walkDir = (d: string): string[] => readdirSync(d).flatMap((f) => {
 });
 
 /**
- * 허용 목록 — `파일:호출 이름` → 사유. 매장 전환과 무관하거나(판이 매장마다 새로 마운트됨 · 매장이 바뀌지 않는 손님 화면)
+ * 허용 목록 — `파일:함수:호출 이름` → 사유(함수 = 가장 가까운 이름 있는 함수. 같은 파일에 같은 호출이 다른 함수에서 새로 생기면 잡힌다). 매장 전환과 무관하거나(판이 매장마다 새로 마운트됨 · 매장이 바뀌지 않는 손님 화면)
  * 결과가 매장 경계를 넘어도 쓰기·표시 사고가 없는 곳만. **줄 번호가 아니라 호출 이름**으로 잠가 코드가 움직여도 유지된다.
  */
 const ALLOW: Record<string, string> = {
   // 관리자 매장 목록의 행마다 `<VenueAdminRow key={v.id}>` 로 따로 마운트된다 — 한 인스턴스의 venueId 가 바뀌지 않는다.
-  'features/AdminTab.tsx:getVenueStaff': '행 key=venue.id — 매장마다 새 인스턴스',
-  // 클락 빈 칸 '1탭 시작' — 누름 한 번 안에서 같은 클로저 venueId 로 메인 설정을 읽어 같은 매장 클락을 시작한다(화면 상태를 안 씀).
-  'features/clock/TournamentClock.tsx:getClockState': '누름 한 번 안의 읽기→같은 매장 쓰기, 화면 상태 미사용',
+  'features/AdminTab.tsx:VenueStaffManager:getVenueStaff': '행 key=venue.id — 매장마다 새 인스턴스',
+  // 클락 빈 칸 '1탭 시작'(quickStart) — 누름 한 번 안에서 같은 클로저 venueId 로 메인 설정을 읽어 같은 매장 클락을 시작한다.
+  //   화면 상태 `state?.config`·`sideGameDate(state, main)` 는 **읽는다**(쓰지는 않음) — 읽기만 하고 같은 클로저 매장으로 쓰므로 허용.
+  'features/clock/TournamentClock.tsx:quickStart:getClockState': '누름 한 번 안의 읽기→같은 클로저 매장 쓰기(화면 상태 state?.config 는 읽기만)',
   // 칩 미리 데우기 — 결과를 `${venueId}|${영업일}` 키의 캐시에만 넣는다. 화면 상태를 건드리지 않아 매장 경계를 넘지 않는다.
-  'features/VenueManageTab.tsx:getLedgerGames': '요청 매장 키 캐시에만 기록',
+  'features/VenueManageTab.tsx:warmGameChips:getLedgerGames': '요청 매장 키 캐시에만 기록',
 };
 
 describe('매장 판의 늦은 응답 가드 — 스캐너 표본(거짓 통과 방지)', () => {
@@ -233,7 +250,7 @@ describe('매장 판의 늦은 응답 가드 — src/components 전체', () => {
       if (!/\.tsx?$/.test(p) || /\.test\.tsx?$/.test(p)) continue;
       const rel = relative(COMPONENTS, p).split(sep).join('/');
       for (const f of scanVenueReads(readFileSync(p, 'utf8'), p)) {
-        const key = `${rel}:${f.name}`;
+        const key = `${rel}:${f.fn}:${f.name}`;
         if (ALLOW[key]) { used.add(key); continue; }
         found.push(`${rel}:${f.line} ${f.text}`);
       }
@@ -276,6 +293,33 @@ describe('매장 판의 늦은 응답 가드 — 판별 구조', () => {
     expect(src).toMatch(/run\('list', getLedgerSessionList,/);
     expect(src).toMatch(/deleteLedgerSession\(delTarget\.venueId,/);
     expect(src).toMatch(/delTarget\.venueId !== venueId/);
+  });
+
+  it('🔴 허용 목록 키는 `파일:함수:호출` — 같은 파일의 같은 호출이 허용 함수 밖에서 새로 생기면 키가 달라 잡힌다(verify-store-link-1002 §2-3)', () => {
+    for (const k of Object.keys(ALLOW)) expect(k.split(':').length, k).toBe(3);
+    // 재현된 주입: 허용된 quickStart 밖에 같은 이름(getClockState)의 무가드 호출이 한 줄 더 생김
+    const injected = [
+      'const quickStart = async () => { const s = await getClockState(venueId, 1); startClock(venueId, s); };',
+      'function Other() { useEffect(() => { getClockState(venueId, 2).then(setX); }, []); }',
+    ].join('\n');
+    const keys = scanVenueReads(injected).map((f) => `${f.fn}:${f.name}`);
+    expect(keys).toContain('quickStart:getClockState');
+    expect(keys.filter((k) => k !== 'quickStart:getClockState'), '허용 함수 밖의 호출은 허용 키와 달라야 한다').toHaveLength(1);
+  });
+
+  it("🔴 O-1 NuriPosLedger: 직전 설정 취소(run.cancel('prefill'))는 첫 커밋 가드보다 앞이다 — 같은 매장 날짜 이동 때 앞 날짜 응답이 새 칸을 채우지 않게", () => {
+    const src = read('NuriPosLedger.tsx');
+    const cancel = src.indexOf("run.cancel('prefill')");
+    const guard = src.indexOf('if (loading || sessionFor !== prefillKey) return;');
+    expect(cancel, 'run.cancel(prefill) 가 없다').toBeGreaterThan(0);
+    expect(guard, '판정 이펙트 가드가 없다').toBeGreaterThan(0);
+    expect(cancel, '취소가 가드 뒤에 있으면 날짜가 바뀐 첫 커밋에서 취소되지 않는다').toBeLessThan(guard);
+  });
+
+  it('🔴 D-1 VenueMatchPanel: reload 는 run 의 Promise 를 돌려줘 `await reload()` 가 재조회가 끝날 때까지 처리 중 잠금을 유지한다', () => {
+    const src = read('VenueMatchPanel.tsx');
+    expect(src).toMatch(/const reload = useCallback\(\(\) => \(\s*vrun\('reload'/);
+    expect(src).toMatch(/await reload\(\)/);
   });
 
   it('🔴 StaffSchedule: 매장이 바뀌는 렌더에서 직원 명부를 비운다(A 직원 id 가 B 시프트에 박히지 않게)', () => {

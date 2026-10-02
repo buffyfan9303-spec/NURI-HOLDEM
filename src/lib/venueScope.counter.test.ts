@@ -80,4 +80,26 @@ describe('useVenueScope 반례', () => {
     await flush();
     expect(log).toEqual(['sync']);
   });
+  it('🔴 반환 Promise 는 재조회가 끝난 뒤에 풀린다(D-1: await reload() 처리 중 잠금) — 성공·실패·버려짐 모두', async () => {
+    const h = harness('A'); const log: string[] = [];
+    const d = deferred<string>();
+    const done = h.run('reload', () => d.p, (x) => log.push('ok:' + x)).then(() => log.push('released'));
+    await flush();
+    expect(log, '재조회 응답 전에는 풀리지 않는다').toEqual([]);
+    d.res('A'); await done;
+    expect(log).toEqual(['ok:A', 'released']);
+
+    let rej!: (e: Error) => void; const e = new Promise<string>((_, r) => { rej = r; }); const log2: string[] = [];
+    const done2 = h.run('reload', () => e, () => log2.push('ok'), () => log2.push('err')).then(() => log2.push('released'));
+    await flush();
+    expect(log2, '실패 응답 전에는 풀리지 않는다').toEqual([]);
+    rej(new Error('x')); await done2;
+    expect(log2).toEqual(['err', 'released']);
+
+    // 매장이 바뀌어 버려져도 풀린다 — 안 풀리면 '처리 중' 이 영영 안 꺼진다
+    const f = deferred<string>(); const log3: string[] = [];
+    const done3 = h.run('reload', () => f.p, () => log3.push('ok')).then(() => log3.push('released'));
+    h.setVenue('B'); f.res('late'); await done3;
+    expect(log3).toEqual(['released']);
+  });
 });

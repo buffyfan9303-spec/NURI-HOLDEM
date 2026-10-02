@@ -13,12 +13,14 @@
 //      같은 매장 안에서 날짜·회차·검색어가 바뀌어 다시 조회하면 먼저 낸 늦은 응답이 새 응답을 덮었다 —
 //      D1 메인 참가비가 D2 사이드 '메인 설정 복사'에, 회차 S1 게임명이 S2 클락 설정에 붙었다).
 //      key 는 '서로 독립인 조회 종류'다(목록·직전 설정·검색 …). 다른 key 끼리는 서로를 무효로 하지 않는다.
+//   반환값 — 이 요청이 **끝났을 때**(ok/err 를 부른 뒤, 또는 버려진 뒤) 이행하는 Promise. 새로고침을 기다려 '처리 중' 잠금을
+//   유지하려는 호출부(`await reload()`)용이다(review-store-link-1002 D-1). 버려져도 이행한다 — 안 그러면 잠금이 영영 안 풀린다.
 //   `run.cancel(key)` 는 새 요청 없이 그 key 의 비행 중 응답만 버린다(조건이 꺼져 조회를 안 낼 때).
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { bumpScope, scopedLoad, type ScopeRef } from './scopedLoad';
 
 export interface VenueRun {
-  <T>(key: string, fetch: (venueId: string) => Promise<T>, ok: (v: T) => void, err?: (e: unknown) => void): void;
+  <T>(key: string, fetch: (venueId: string) => Promise<T>, ok: (v: T) => void, err?: (e: unknown) => void): Promise<void>;
   cancel: (key: string) => void;
 }
 
@@ -33,6 +35,8 @@ export function createVenueRun(ref: ScopeRef): VenueRun {
     let p: Promise<T>;
     try { p = fetch(v); } catch (e) { p = Promise.reject(e); }
     scopedLoad(ref, p, (x) => { if (mine()) ok(x); }, (e) => { if (mine()) err(e); });
+    // scopedLoad 의 ok/err 가 먼저 돈 뒤에 이행한다(p 의 두 단 체인 뒤).
+    return p.then(() => {}, () => {}).then(() => {});
   }) as VenueRun;
   run.cancel = (key) => { next(key); };
   return run;
