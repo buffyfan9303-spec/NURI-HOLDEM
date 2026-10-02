@@ -1,5 +1,5 @@
 // src/pages/legal/RevisionBlocks.tsx
-// 약관 4문서가 공유하는 '개정 예정 안내' 박스와 '부칙 — 개정 이력' 절.
+// 약관 4문서가 공유하는 '개정 안내' 박스와 '부칙 — 개정 이력' 절.
 //
 // 왜 공용 컴포넌트인가: 개정 이력은 4문서에 똑같은 형식으로 들어가야 하고, 문서마다 손으로 적으면
 // 다음 개정에서 어긋난다(시행일이 6곳에서 어긋나 있던 것이 정확히 그 사고였다).
@@ -13,18 +13,23 @@
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
 import { LEGAL_HISTORY, type LegalDocKey } from '../../lib/legalHistory';
 
-/** 문서 상단 — "이 문서는 아직 시행 전인 개정판이다"를 사전 고지한다. */
-export function PendingRevisionNotice() {
+/** 문서 상단 — 이 문서가 언제부터 시행 중인 판인지, 언제 공지했는지, 직전판은 언제까지 적용됐는지 밝힌다.
+ *  2026-10-03: 시행일이 지나 '시행 예정' 문구를 현재형으로 바꿨다. 이력(공지일·시행일·직전판 시행일)은 그대로 남긴다.
+ *  `firstEdition` — 직전판이 없는 제정 문서(마케팅 수신 동의)는 직전판 문장을 빼야 오인 소지가 없다. */
+export function RevisionNotice({ firstEdition = false }: { firstEdition?: boolean }) {
   return (
-    <div className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+    <div data-testid="revision-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
       <p className="text-xs font-bold text-ink-primary">
-        개정 안내 — 본 문서는 {LEGAL_EFFECTIVE_DATE}부터 시행되는 개정판입니다.
+        {firstEdition
+          ? `개정 안내 — 본 문서는 ${LEGAL_EFFECTIVE_DATE}부터 시행 중입니다.`
+          : `개정 안내 — 본 문서는 ${LEGAL_EFFECTIVE_DATE}부터 시행 중인 개정판입니다.`}
       </p>
       <p className="text-2xs text-ink-muted leading-relaxed">
-        개정 공지일 {LEGAL_NOTICE_DATE} · 시행일 전까지는 직전판({LEGAL_PREV_EFFECTIVE_DATE} 시행)이 적용됩니다.
-        이번 개정에는 회원에게 불리한 변경이 포함된 문서가 있어, 4개 문서 전부를 적용일 30일 전에 공지합니다. 변경된 내용은 문서 끝의
-        「부칙 — 개정 이력」에서 확인하실 수 있으며, 개정 내용에 동의하지 않으시는 경우 시행일 전까지
-        이용계약을 해지하실 수 있습니다.
+        개정 공지일 {LEGAL_NOTICE_DATE} · 시행일 {LEGAL_EFFECTIVE_DATE}
+        {firstEdition ? '' : ` · 직전판(${LEGAL_PREV_EFFECTIVE_DATE} 시행)은 시행일 전까지 적용되었습니다`}.
+        이번 개정에는 회원에게 불리한 변경이 포함된 문서가 있어, 4개 문서 전부를 적용일 30일 전에 공지하였습니다. 변경된 내용은 문서 끝의
+        「부칙 — 개정 이력」에서 확인하실 수 있으며, 개정 내용에 동의하지 않으시는 회원은 「내 정보 → 보안 → 회원 탈퇴하기」에서
+        언제든지 이용계약을 해지하실 수 있습니다.
       </p>
     </div>
   );

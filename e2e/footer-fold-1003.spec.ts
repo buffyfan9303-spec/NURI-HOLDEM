@@ -44,7 +44,7 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
         footer.getByRole('button', { name: '위치기반서비스 이용약관', exact: true }),
         footer.getByRole('link', { name: '계정 삭제 안내' }),
         footer.getByRole('link', { name: '오픈소스 라이선스' }),
-        footer.getByText('약관·개인정보처리방침 개정 안내'),
+        footer.getByTestId('footer-revision-notice'),
       ];
       for (const l of folded) await expect(l, '접혀야 할 항목이 처음부터 보인다').toBeHidden();
       await footer.locator('summary').filter({ hasText: '더보기' }).click();

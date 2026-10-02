@@ -153,7 +153,8 @@ function rowToSchedule(r: any): Schedule {
 }
 
 // ── 그룹 페이지: 그 그룹의 포스터 ─────────────────────────────────────────────
-// 읽기 RPC get_group_schedules(20261002h) — 승인된 것은 누구나, 미승인(그룹 전용·공개 대기·반려)은 승인 멤버·운영진·관리자만.
+// 읽기 RPC get_group_schedules(20261002h) — 승인·active 그룹이면 그룹 전용·공개 대기 포스터도 그룹 페이지 방문자 전체(비로그인 포함)에게 보인다(오너 결정 10-02).
+// 반려된 포스터만 작성자·운영진·관리자에게 보인다.
 // 일반 피드(getSchedules)는 이 범위를 넓히지 않는다 — 미승인 그룹 포스터는 서버가 피드에 안 준다.
 // 마이그레이션 전(PGRST202·42883)은 '아직 없음' 이라 빈 목록이다.
 export async function getGroupSchedules(groupId: string): Promise<Schedule[]> {

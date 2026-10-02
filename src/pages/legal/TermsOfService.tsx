@@ -23,7 +23,7 @@
 
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
-import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -77,7 +77,7 @@ export default function TermsOfService() {
         </p>
       </div>
 
-      <PendingRevisionNotice />
+      <RevisionNotice />
 
       <Article n={1} title="목적">
         <Para>
@@ -336,7 +336,7 @@ export default function TermsOfService() {
       <RevisionHistory doc="terms" />
 
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 약관은 {LEGAL_EFFECTIVE_DATE}부터 시행됩니다. 시행일 전까지는 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행된 직전판이 적용됩니다.
+        본 약관은 {LEGAL_EFFECTIVE_DATE}부터 시행됩니다. 직전판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행일 전까지 적용되었습니다.
       </p>
     </div>
   );
