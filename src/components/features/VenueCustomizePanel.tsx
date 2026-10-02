@@ -13,6 +13,7 @@ import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updat
 import ContactListEditor from './VenueContactFields';
 import CheckinLocationSection from './CheckinLocationSection';
 import { cleanContacts, ensureOneContact, normalizeKakaoUrl } from '../../lib/venueContacts';
+import { msgOf } from '../../lib/dbError';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -48,6 +49,10 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao
   const [cfg, setCfg] = useState<VenuePageConfig>({});
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 2026-10-03 D1 — 이 판은 매장 전환에 다시 마운트되지 않는다(keep-alive). 저장 중 매장을 바꾸면 A 의 설정이 B 판 상태로 들어가
+  //   다음 저장이 A 값을 B 에 쓴다 → 응답 때 지금 매장이 같을 때만 로컬 상태를 바꾼다(저장 자체는 누른 매장 A 로 이미 갔다).
+  const venueNow = useRef(venueId);
+  useEffect(() => { venueNow.current = venueId; }, [venueId]);
 
   useEffect(() => {
     let alive = true;
@@ -81,9 +86,9 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao
     try {
       const latest = (await getVenuePageConfig(venueId)) ?? {};
       await setVenuePageConfig(venueId, { ...latest, tabOrder: order });
-      setCfg({ ...latest, tabOrder: order }); // 로컬 상태도 최신으로 — 연속 저장이 다시 낡은 값을 쓰지 않게
+      if (venueNow.current === venueId) setCfg({ ...latest, tabOrder: order }); // 로컬 상태도 최신으로 — 연속 저장이 다시 낡은 값을 쓰지 않게
       toast.show('매장 페이지 설정을 저장했습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setSaving(false); }
   };
 
@@ -181,7 +186,7 @@ function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEd
       if (nextKakao !== savedKakao) { await updateVenueKakao(venueId, nextKakao); setSavedKakao(nextKakao); setKakao(nextKakao); }
       setContacts(ensureOneContact(next));
       toast.show(canEditKakao ? '위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다' : '위치 · 연락처 · 영업시간을 저장했습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setSaving(false); }
   };
 
@@ -260,7 +265,7 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
       setSaved(slug || null);
       setCheck('idle');
       toast.show(slug ? `내 매장 링크가 nuriholdem.com/s/${slug} 로 설정됐습니다` : '커스텀 링크를 해제했습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setBusy(false); }
   };
 
@@ -310,6 +315,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
   const [cfg, setCfg] = useState<VenuePageConfig>({});
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 2026-10-03 D1 — 위 VenueCustomizePanel 과 같은 이유(저장 응답이 전환 뒤 B 판 상태를 덮지 않게).
+  const venueNow = useRef(venueId);
+  useEffect(() => { venueNow.current = venueId; }, [venueId]);
   const [nbName, setNbName] = useState('');
   const [nbUnit, setNbUnit] = useState('');
   const [nbPeriod, setNbPeriod] = useState<'all' | 'month' | 'season'>('all');
@@ -399,9 +407,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         customBoards: cfg.customBoards,
       };
       await setVenuePageConfig(venueId, next);
-      setCfg(next);
+      if (venueNow.current === venueId) setCfg(next);
       toast.show('매장 순위 설정을 저장했습니다. 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setSaving(false); }
   };
 
@@ -606,13 +614,13 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
       setName(''); setPoints(''); setReason(''); setReasonPreset(''); setSuggest([]);
       toast.show(sign > 0 ? `「${boardName(board || null)}」에 지급했습니다 (${date})` : `「${boardName(board || null)}」에서 차감했습니다 (${date})`, 'success');
       reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패했습니다'), 'error'); }
     finally { setBusy(false); }
   };
 
   const del = async (id: string) => {
     try { await deleteScoreEntry(id); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
   };
 
   return (
@@ -738,7 +746,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
   const selEntries = sel ? (byDay[sel] ?? []) : [];
   const del = async (id: string) => {
     try { await deleteScoreEntry(id); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); }
   };
 
   return (
@@ -886,7 +894,7 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
         </select>
       </div>
       {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다. 순위 입력·장부 기록·포인트 입력이 쌓이면 표시됩니다.</p>
+        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">아직 데이터가 없습니다</p>
         : (
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {rows.map((b, i) => (

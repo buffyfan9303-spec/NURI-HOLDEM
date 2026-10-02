@@ -1481,7 +1481,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('attendance') && box('attendance', <div className="space-y-3">
                   {isAdmin && <>
                     <p role="note" className="rounded-input border border-border-subtle bg-surface-high px-3 py-2 t-desc break-keep text-ink-muted">
-                      직원 화면 미리보기 · 관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.
+                      직원 화면 미리보기 · 관리자는 보기만(출퇴근은 직원 본인만)
                     </p>
                     <MyStaffCard venueId={venueId} preview />
                   </>}
@@ -2464,7 +2464,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       setRestorable(null);
       toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+      toast.show(msgOf(e, '저장에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }
@@ -2586,7 +2586,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         <Fold open={ledgerPanelOpen}>
           <div className="space-y-2 border-t border-emerald-500/20 p-3">
             {ledgerPlayers.length === 0 ? (
-              <p className="t-desc break-keep py-2 text-center text-ink-muted">이 날짜에 연결된 장부 바인 명단이 없습니다. 장부에서 바인을 먼저 기록하면 여기에 손님 명단이 뜹니다.</p>
+              <p className="t-desc break-keep py-2 text-center text-ink-muted">이 날짜 장부에 바인 명단이 없습니다 · 장부에서 바인을 먼저 기록하세요</p>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
@@ -2834,7 +2834,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         ? '매장이 생성되었습니다. 대표 사진은 올리지 못했습니다 — 매장 설정 › 매장 페이지에서 다시 올려 주십시오'
         : '매장이 생성되었습니다. 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', imgFailed ? 'error' : 'success');
       await onCreated();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '매장 생성 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '매장 생성 실패'), 'error'); }
     setBusy(false);
   };
 
@@ -3320,7 +3320,7 @@ function StaffManager({ venueId }: { venueId: string }) {
           {/* 구성원 목록 */}
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
-            <p className="text-2xs text-ink-muted">직책은 표시용 라벨이고, <span className="text-accent-300 dark:text-accent-200 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
+            <p className="text-2xs text-ink-muted">직책은 표시용 · <span className="text-accent-300 dark:text-accent-200 font-semibold">장부·순위 권한</span>은 따로 켜야 적용</p>
             <datalist id="staff-title-suggest">
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>
@@ -3411,7 +3411,7 @@ function OwnerPendingCard() {
     <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/6 p-5">
       <p className="text-sm font-bold text-ink-primary">관리자 승인 후 운영 기능이 열립니다</p>
       <p className="t-desc break-keep text-ink-secondary">
-        업주 인증을 관리자가 확인하고 있어요. 승인되면 이 화면에서 포스터·장부·클락·순위·이용권을 바로 쓸 수 있습니다.
+        업주 인증을 관리자가 확인하고 있어요 · 승인되면 바로 쓸 수 있어요
       </p>
     </div>
   );

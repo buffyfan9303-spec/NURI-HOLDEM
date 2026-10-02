@@ -1203,7 +1203,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
-    return <EmptyState title="아직 등록된 순위가 없습니다" hint="매장에서 순위를 등록하면 누적 순위가 자동으로 집계됩니다." />;
+    return <EmptyState title="아직 등록된 순위가 없습니다" hint="매장이 순위를 등록하면 집계됩니다" />;
   }
 
   const unit = boardUnit(cur, cfg);

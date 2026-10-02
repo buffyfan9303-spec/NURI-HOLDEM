@@ -18,6 +18,7 @@ import {
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { ambIsolation } from './ambience/ambiencePresets';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
+import { msgOf } from '../../../lib/dbError';
 
 /**
  * ClockMiniFace — TV 송출 화면의 축소판. 프리뷰와 프리셋 버튼 **두 곳**이 같은 것을 쓴다.
@@ -130,7 +131,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       if (orphan) void deleteClockBg(orphan);
       return true;
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+      toast.show(msgOf(e, '저장 실패'), 'error');
       return false;
     } finally { if (aliveRef.current) setBusy(false); }
   };
@@ -167,7 +168,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       if (ok) toast.show('배경 이미지를 등록했습니다. 글자가 잘 보이도록 자동으로 어둡게 처리됩니다', 'success');
       else void deleteClockBg(url); // 저장 실패분은 고아로 남기지 않는다
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '업로드 실패', 'error');
+      toast.show(msgOf(e, '업로드 실패'), 'error');
     } finally { if (aliveRef.current) { setBusy(false); setStage(null); } }
   };
 
@@ -196,8 +197,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       <div>
         <h3 className="text-sm font-bold text-ink-primary">클락 화면 <span className="text-2xs font-normal text-ink-muted">(TV 송출 · 관전 화면)</span></h3>
         <p className="mt-0.5 text-2xs text-ink-muted">
-          손님이 보는 큰 화면의 배경·강조색입니다. 누르면 바로 저장돼요.
-          긴급(1분 미만) 적색·브레이크 청색 표시는 테마와 무관하게 유지됩니다.
+          누르면 바로 저장돼요 · 긴급(1분 미만) 적색·브레이크 청색은 테마와 무관
         </p>
       </div>
 

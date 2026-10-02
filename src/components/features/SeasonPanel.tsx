@@ -11,6 +11,7 @@ import {
 } from '../../api/seasons';
 import { subscribeRankings } from '../../api/rankings';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const addDays = (iso: string, d: number) => { const t = new Date(iso); t.setDate(t.getDate() + d); return t.toLocaleDateString('en-CA'); };
@@ -66,14 +67,14 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
     if (!name.trim()) { toast.show('시즌 이름을 입력하세요', 'error'); return; }
     setBusy(true);
     try { await createVenueSeason(venueId, name.trim(), startsOn, endsOn); toast.show('시즌을 시작했어요', 'success'); setName(''); setCreating(false); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '생성 실패', 'error'); } finally { setBusy(false); }
+    catch (e) { toast.show(msgOf(e, '생성 실패'), 'error'); } finally { setBusy(false); }
   };
   const doEnd = async () => {
     if (busy || !active) return;
     if (!window.confirm('시즌을 종료하고 순위를 명예의 전당에 기록할까요? 되돌릴 수 없습니다.')) return;
     setBusy(true);
     try { const n = await endVenueSeason(active.id); toast.show(`시즌 종료 · ${n}명 기록 아카이브`, 'success'); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); } finally { setBusy(false); }
+    catch (e) { toast.show(msgOf(e, '종료 실패'), 'error'); } finally { setBusy(false); }
   };
   const openArchive = async (id: string) => {
     if (archiveId === id) { setArchiveId(null); return; }

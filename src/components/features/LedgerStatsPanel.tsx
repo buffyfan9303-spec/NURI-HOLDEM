@@ -19,6 +19,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import { useBusinessDate } from '../../lib/businessDate';
 import { kstToday } from '../../lib/kst';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
@@ -618,7 +619,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
   return (
     <div className="space-y-3">
       {/* 이 표의 매출·객단가는 전부 완납(실제 수납) 기준이다 — 기간 탭의 '객단가/인'(미수 포함)과 산식이 달라 한 줄로 못박는다. */}
-      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일 · 매출·객단가는 <b className="text-ink-secondary">완납(실제 수납) 기준</b> · <b className="text-ink-secondary">핵심: 기준 엔트리 달성률</b></p>
+      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일 · 매출·객단가는 <b className="text-ink-secondary">완납(실제 수납) 기준</b></p>
 
       {/* 요약 — 기준 달성률 핵심 */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -952,7 +953,7 @@ ${rpt.risk ? card('미수 · 할인', rpt.risk) : ''}
 ${rpt.weekday ? card('요일 비교', rpt.weekday) : ''}
 ${rpt.actions.length
   ? card('실행 제안', rpt.actions.map((a) => `• ${a.text}\n  근거: ${a.basis}`).join('\n'))
-  : card('실행 제안', '근거가 충분한 제안이 없습니다. 데이터가 더 쌓이면 표시됩니다.')}
+  : card('실행 제안', '근거가 충분한 제안이 아직 없습니다')}
 <script>window.onload=function(){setTimeout(function(){window.print();},250);};</script>
 </body></html>`);
     w.document.close();
@@ -973,7 +974,7 @@ ${rpt.actions.length
         </div>
       </div>
       {/* '인사이트' 라고 부르지 않는다 — 이건 장부 집계이고, 근거 없는 추천을 만들지 않는 것이 이 리포트의 계약이다. */}
-      <p className="text-2xs text-ink-secondary mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
+      <p className="text-2xs text-ink-secondary mt-0.5">최근 {days}일 장부 집계</p>
       </div>
       {/* ── 데이터 신뢰도 — 무엇을 근거로 말하는지 먼저 밝힌다. 표본이 모자라면 여기서 그렇다고 말한다. ── */}
       <p className="rounded-input border border-border-subtle bg-surface-low/60 px-2.5 py-1.5 text-2xs text-ink-muted break-keep">
@@ -992,7 +993,6 @@ ${rpt.actions.length
           <p className="mt-1 text-2xs text-ink-secondary leading-relaxed break-keep">{rpt.sales}</p>
           <p className="mt-1.5 text-2xs text-ink-muted break-keep">
             진단을 만들려면 <b className="text-ink-secondary">바인 {MIN_BUYINS}회 · 영업 {MIN_DAYS}일</b> 이상이 필요합니다.
-            그 아래에서는 한두 건이 비율을 통째로 흔들어 결론이 뒤집힙니다.
           </p>
         </div>
       ) : (
@@ -1016,7 +1016,7 @@ function ReportCard({ tone, title, body, actions }: { tone: 'emerald' | 'rose' |
       {body && <p className="text-2xs text-ink-secondary leading-relaxed">{body}</p>}
       {actions && (actions.length === 0 ? (
         /* 근거가 약하면 제안 대신 그 사실을 적는다 — 빈 칸을 메우려고 일반론을 만들지 않는다. */
-        <p className="text-2xs text-ink-muted leading-relaxed break-keep">근거가 충분한 제안이 없습니다. 데이터가 더 쌓이면 표시됩니다.</p>
+        <p className="text-2xs text-ink-muted leading-relaxed break-keep">근거가 충분한 제안이 아직 없습니다</p>
       ) : (
         <ul className="space-y-2">
           {actions.map((a, i) => (
@@ -1057,7 +1057,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
     const next = !mute;
     setMute(next);
     try { await setMyVenueNotifyMute(next); toast.show(next ? '매장 알림을 받지 않습니다' : '매장 알림을 받습니다', 'success'); }
-    catch (e) { setMute(!next); toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    catch (e) { setMute(!next); toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
 
   const savePw = async () => {
@@ -1065,7 +1065,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
     if (pw !== pw2)     return toast.show('비밀번호가 일치하지 않습니다', 'error');
     setSaving(true);
     try { await setPosCancelPassword(venueId, pw); setHasPw(true); setPw(''); setPw2(''); toast.show('취소 비밀번호를 설정했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패했습니다'), 'error'); }
     finally { setSaving(false); }
   };
 
@@ -1085,7 +1085,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       <div className="flex items-center gap-2 border-t border-border-default pt-3">
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-semibold text-ink-secondary">매장 알림 수신</p>
-          <p className="text-2xs text-ink-muted">매장 공지·직원 호출 알림을 내 알림센터로 받습니다.</p>
+          <p className="text-2xs text-ink-muted">공지·직원 호출을 내 알림센터로</p>
         </div>
         <button type="button" role="switch" aria-checked={!mute} onClick={toggleMute}
           className={['relative h-6 w-11 shrink-0 rounded-full transition-colors', !mute ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
@@ -1116,19 +1116,19 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
     if (!nick.trim()) return;
     setBusy(true);
     try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 초대했습니다. 운영자 승인 후 활성화됩니다', 'success'); setNick(''); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '초대 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '초대 실패'), 'error'); }
     setBusy(false);
   };
   const remove = async (o: VenueOwner) => {
     if (!window.confirm(`${o.nickname} 사장님을 이 매장에서 제외할까요?`)) return;
     try { await removeVenueOwner(venueId, o.userId); toast.show('제외했습니다', 'info'); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '제외 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '제외 실패'), 'error'); }
   };
   const makePrimary = async (o: VenueOwner) => {
     if (!window.confirm(`대표 업주를 ${o.nickname} 사장님으로 교체할까요?
 교체 후에는 새 대표만 다시 변경할 수 있습니다.`)) return;
     try { await transferVenuePrimary(venueId, o.userId); toast.show('대표 업주를 교체했습니다', 'success'); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '교체 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '교체 실패'), 'error'); }
   };
   return (
     <div className="border-t border-border-default pt-3 space-y-2">
@@ -1157,7 +1157,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           placeholder="닉네임" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
-      <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 공동 업주로 활성화 · 장부·포스터·이용권 공동 관리, <b className="text-accent-300">대표</b> 교체 가능.</p>
+      <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 활성화 · <b className="text-accent-300">대표</b> 교체 가능</p>
     </div>
   );
 }

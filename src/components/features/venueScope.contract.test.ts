@@ -205,6 +205,11 @@ const ALLOW: Record<string, string> = {
   //   (2026-10-02 C2: 이 두 줄은 예전엔 catch 의 `e instanceof Error ? …` 삼항이 스캐너에 '가드'로 잘못 잡혀 통과하고 있었다 — 삼항을 msgOf 로 바꾸자 드러났다.)
   'features/VenueReviews.tsx:doReply:getVenueReviews': '<VenuePage key=vid> — 매장마다 새 인스턴스',
   'features/VenueReviews.tsx:submit:getVenueReviews': '<VenuePage key=vid> — 매장마다 새 인스턴스',
+  // 2026-10-03 D1: 아래 둘도 catch 의 `e instanceof Error ?` 삼항이 '가드'로 잘못 잡혀 통과하던 자리다(msgOf 로 바꾸자 드러남).
+  //   둘 다 누름 한 번 안의 읽기→**같은 클로저 매장 쓰기**이고 응답으로 화면 상태를 채우지 않는다(quickStart 와 같은 모양).
+  //   addSide 는 useCallback 안이라 가장 가까운 이름 있는 함수가 컴포넌트(TournamentClock)로 잡힌다 — 이 컴포넌트 본문에서 가드 없이 잡히는 getLedgerSession 은 이 한 곳뿐(2026-10-03 스캔).
+  'features/clock/TournamentClock.tsx:TournamentClock:getLedgerSession': 'addSide — 누름 한 번 안의 메인 장부 읽기→같은 클로저 매장에 사이드 장부 쓰기',
+  'features/clock/TournamentClock.tsx:convertClockPresets:listGamePresets': '누름 한 번 안의 이름 중복 읽기→같은 클로저 매장 프리셋 쓰기',
   // 칩 미리 데우기 — 결과를 `${venueId}|${영업일}` 키의 캐시에만 넣는다. 화면 상태를 건드리지 않아 매장 경계를 넘지 않는다.
   'features/VenueManageTab.tsx:warmGameChips:getLedgerGames': '요청 매장 키 캐시에만 기록',
 };

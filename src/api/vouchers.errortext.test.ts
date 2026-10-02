@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { voucherErrorText } from './vouchers';
+import { voucherErrorText, ownerSafe } from './vouchers';
 
 describe('voucherErrorText — 내부 식별자를 손님에게 보이지 않는다', () => {
   it('🔴 유니크 위반 원문이 그대로 나가지 않는다', () => {
@@ -62,12 +62,31 @@ describe('매핑을 거는 자리 — 손님 경로에만', () => {
     expect(SRC).toMatch(/redeemMyVouchersByPhone[\s\S]{0,220}\.then\(humanize\)/);
   });
 
-  it('🔴 업주 경로는 원문을 잃지 않는다 — 사장님은 원문을 봐야 문의를 넣을 수 있다', () => {
-    // deleteVouchers / revokeVouchers 는 bulk 결과를 그대로 돌려준다.
-    expect(SRC).toContain('export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher);');
+  it('🔴 업주 경로는 손님 문장(humanize)이 아니라 ownerSafe(msgOf)로 거른다 — 2026-10-03 D1', () => {
+    // 종전엔 원문 그대로였다(보안 표준 6 과 충돌). 사장님에게 필요한 한국어 사유는 남기고 SQL·식별자만 막는다.
+    expect(SRC).toContain('export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher).then(ownerSafe);');
     expect(SRC).not.toMatch(/deleteVouchers[\s\S]{0,120}\.then\(humanize\)/);
     const revoke = SRC.slice(SRC.indexOf('export async function revokeVouchers'));
-    expect(revoke.slice(0, revoke.indexOf('\n}'))).not.toContain('humanize');
+    const body = revoke.slice(0, revoke.search(/\r?\n\}/));
+    expect(body).not.toContain('humanize');
+    expect(body).not.toMatch(/reasons: \[error\.message\]/);
+    expect(body).toMatch(/bulk\(ids, revokeVoucher\)\.then\(ownerSafe\)/);
+    expect(body).toMatch(/return ownerSafe\(\{/);
+  });
+});
+
+describe('ownerSafe — 업주 화면 사유', () => {
+  it('🔴 SQL·제약·테이블 이름 원문은 막고, 서버의 한국어 사유는 그대로 둔다', () => {
+    const r = ownerSafe({ ok: 1, failed: 3, reasons: [
+      'duplicate key value violates unique constraint "store_vouchers_pkey"',
+      '이미 사용한 이용권입니다',
+      'permission denied for table store_vouchers',
+    ] });
+    const all = r.reasons.join(' | ');
+    expect(all).not.toMatch(/pkey|store_vouchers|duplicate key|permission denied/);
+    expect(r.reasons).toContain('이미 사용한 이용권입니다');
+    expect(r.reasons.some((m) => m.includes('권한'))).toBe(true);
+    expect(r).toMatchObject({ ok: 1, failed: 3 });
   });
 });
 

@@ -3383,7 +3383,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               );
             })}
           </div>
-          <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영 가능(업주·운영자는 전체 접근). 후보는 장부 권한 직원.</p>
+          <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영(업주·운영자는 전체)</p>
           {operatorOptionsPartial && (
             <p role="status" className="mt-1.5 rounded-input border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-2xs text-ink-primary">
               권한 직원 전체 목록은 업주·운영자 계정에서만 불러올 수 있어요 — 지금 보이는 후보는 전부가 아닐 수 있어요.
@@ -3975,8 +3975,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                    프리셋이 0개면 줄 자체를 안 그려 **기능이 없는 것처럼 보였다.** 없으면 없다고 말한다. */
                 <p className="text-2xs leading-relaxed text-ink-muted">
                   {/* ⚠ 줄 끝 `{' '}` 없으면 JSX 가 줄바꿈+들여쓰기를 통째로 지워 `…수정’의‘할인 이벤트’…` 로 붙는다(2026-09-16 실측). */}
-                  이 게임에 등록된 할인이 없습니다 — <b className="text-ink-secondary">‘세션 정보 수정’</b>의{' '}
-                  <b className="text-ink-secondary">‘할인 이벤트’</b>에 추가하면 여기서 고를 수 있어요.
+                  등록된 할인이 없어요 — <b className="text-ink-secondary">‘세션 정보 수정’ → ‘할인 이벤트’</b>에서 추가
                 </p>
               )}
               <p className="text-2xs text-ink-secondary text-right">
@@ -4173,8 +4172,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
             })()}
           </dl>
           <p className="mt-1.5 text-2xs text-ink-muted">
-            완납 매출(실수령) = 현금+카드+이체 = <b className="tabular-nums text-emerald-300">{wonToMan(stats.revenue)}만원</b>.
-            티켓·가게지원은 자리를 채웠지만 현금이 오가지 않은 몫이라 매출과 따로 섭니다.
+            완납 매출(실수령) = 현금+카드+이체 = <b className="tabular-nums text-emerald-300">{wonToMan(stats.revenue)}만원</b> · 티켓·가게지원은 매출과 따로
           </p>
         </div>
 

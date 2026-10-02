@@ -230,7 +230,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       }
       toast.show('클락을 시작 준비했습니다', 'success');
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '시작 실패'), 'error'); }
   };
 
   const endClock = async () => {
@@ -240,7 +240,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       await clearClockState(venueId, ended);
       if (ended > 1) { toast.show('사이드 클락 종료 · 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
       else { setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
-    } catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '종료 실패'), 'error'); }
   };
   // 멀티 클락 오버뷰에서 다른 게임 탭 → 그 게임 클락으로 전환
   const switchGame = useCallback((g: number) => {
@@ -278,7 +278,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
           title: `${(main.title || '게임').trim()} 사이드${nextSeq - 1}`,
         });
         toast.show(`사이드${nextSeq - 1} 게임을 장부에 생성했어요`, 'success');
-      } catch (e) { toast.show(e instanceof Error ? e.message : '사이드 게임 생성 실패', 'error'); }
+      } catch (e) { toast.show(msgOf(e, '사이드 게임 생성 실패'), 'error'); }
     }
     switchGame(nextSeq);
   }, [venueId, switchGame, toast, state]);
@@ -514,20 +514,20 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       //   업주 계정에서는 **항상** 실패하는데 화면은 이미 바뀌어 저장된 것처럼 보였다
       //   (새로고침하면 원래대로 — '바꿨는데 안 바뀐다' 의 정체, 2026-09-11 점검).
       setAdSize(prev);
-      toast.show(e instanceof Error ? e.message : '크기를 저장하지 못했습니다 (운영자만 변경할 수 있어요)', 'error');
+      toast.show(msgOf(e, '크기를 저장하지 못했습니다 (운영자만 변경할 수 있어요)'), 'error');
     }
   };
   const uploadAd = async (file: File | null) => {
     if (!file || !user) return;
     setAdBusy(true);
     try { const url = await uploadPoster(user.id, file); await setAppSetting(CLOCK_AD_KEY, url); setAdImg(url); publishClockSignal('ad'); toast.show('클락 광고를 등록했습니다(전체 클락 적용)', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '업로드 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '업로드 실패'), 'error'); }
     finally { setAdBusy(false); }
   };
   const removeAd = async () => {
     if (!confirm('클락 광고를 삭제할까요?')) return;
     try { await setAppSetting(CLOCK_AD_KEY, ''); setAdImg(null); publishClockSignal('ad'); toast.show('광고를 삭제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
@@ -738,7 +738,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌에 반영됩니다`, 'success');
       setFinishRows(null);
       if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setFinishBusy(false); }
   };
 
@@ -1444,7 +1444,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       }
       toast.show(`클락 프리셋 ${moved}개를 게임 프리셋으로 가져왔습니다${skipped ? ` · ${skipped}개는 같은 이름이 있어 건너뜀` : ''}`, 'success');
       setPickerKey((k) => k + 1); // 위 게임 프리셋 목록 즉시 갱신
-    } catch (e) { toast.show(e instanceof Error ? e.message : '변환 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '변환 실패'), 'error'); }
     finally { setConvertBusy(false); }
   };
   const filteredSessions = sessions.filter((s) => {
@@ -1488,7 +1488,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const delPreset = async (p: ClockPreset) => {
     if (!confirm(`"${p.name}" 프리셋을 삭제할까요?`)) return;
     try { await deleteClockPreset(p.id); onReloadPresets(); toast.show('삭제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   // §28 — 시상 문구·추가 페이지 글자에 금칙 표현이 있으면 시작 전에 막는다(서버 트리거가 같은 칸을 다시 막는다).

@@ -183,7 +183,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               <li className="flex items-start gap-2">
                 <Icon name="chip" size={13} className="mt-px shrink-0 text-accent-300" />
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  <b className="text-ink-secondary">바인 요청</b> — 테이블 비치 QR. 운영자가 승인하면 오늘 장부 명단에 등록됩니다.
+                  <b className="text-ink-secondary">바인 요청</b> — 테이블 비치 QR · 승인되면 오늘 장부 명단에
                 </p>
               </li>
             </ul>
