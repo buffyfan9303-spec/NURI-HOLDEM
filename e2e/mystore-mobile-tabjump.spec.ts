@@ -334,6 +334,10 @@ for (const from of ['요약', '이용권'] as const) {
     //   그래서 '보드로 열렸다' 는 판 안 날짜 입력(목록 모드엔 없다)으로, '하나뿐' 은 보이는 게임 선택 줄 수로 잰다.
     await expect(page.locator('[data-pane="ledger"] [data-testid="ledger-date"]'), '장부가 보드가 아니라 목록 모드로 열렸다').toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('group', { name: /게임 선택$/ }), '게임 선택 줄이 두 벌이다(셸 칩 줄 + 장부 스위처)').toHaveCount(1);
+    // 4c(2026-10-02 검토) — 예전 'button.bg-accent-300 = 사이드1' 단언의 등가 교체. 하나뿐인 게임 선택 줄에서 눌린 칩이 정확히 하나이고 사이드1 이다
+    //   (조회 poll 만으로는 화면이 다른 게임에 서 있어도 통과했다).
+    await expect(page.getByRole('group', { name: /게임 선택$/ }).getByRole('button', { pressed: true }),
+      '장부 게임 스위처에서 사이드1 이 선택되지 않았다').toHaveText(/사이드1/, { timeout: 10_000 });
   });
 }
 

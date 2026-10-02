@@ -676,6 +676,28 @@ export function isBuyinExcluded(
   return exKeys.has(`method:${b.paymentMethod}`);
 }
 
+/**
+ * 모바일 장부 요약(1d)의 손님 줄 — 바인 횟수·미수·바인 가치를 **정산 제외를 뺀 행만**으로 센다.
+ * 요약 머리(정산바와 같은 stats: 제외 적용 바인 수 · 바인 미수 + 애드온 미수)와 같은 규칙이라
+ * Σ손님 줄 = 머리 가 언제나 성립한다(2026-10-02 검토 반례: 직원 제외를 켜면 머리 1회 · 줄 합 3회로 갈렸다).
+ */
+export function summaryRowsOf(
+  buyins: readonly LedgerBuyin[],
+  s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] },
+  isExcluded: (b: LedgerBuyin) => boolean,
+): Map<string, { count: number; unpaid: number; value: number }> {
+  const m = new Map<string, { count: number; unpaid: number; value: number }>();
+  for (const b of buyins) {
+    const cur = m.get(b.playerName) ?? { count: 0, unpaid: 0, value: 0 };
+    if (!isExcluded(b)) {
+      const f = buyinFinance(b, s);
+      cur.count++; cur.unpaid += f.unpaid + addonFinance(b).unpaid; cur.value += f.value;
+    }
+    m.set(b.playerName, cur);
+  }
+  return m;
+}
+
 export function discountSummary(
   buyins: LedgerBuyin[],
   // cardAmount 는 선택 — 호출부(테스트 포함)가 세션 일부만 넘기는 곳이 있어 없으면 현금 단가로 본다.

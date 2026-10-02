@@ -565,8 +565,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 2026-10-02 — 게임 줄이 장부 스위처 하나가 된 뒤, 장부가 영업일에 보는 게임을 셸에 알린다(문맥 줄·클락 시드·순위 칩 픽).
   //   onPickGame 과 달리 장부 추종 신호(ledgerFollow)는 내지 않는다 — 장부가 이미 그 게임이다(되먹임 0). 같은 게임이면 아무것도 안 바꾼다.
   const lastLedgerGame = useRef(0);
-  const onLedgerGame = useCallback((seq: number, title?: string) => {
-    gameChosen.current = true;
+  const onLedgerGame = useCallback((seq: number, title?: string, byUser?: boolean) => {
+    // 3b — 장부가 '사용자가 직접 골랐다' 고 할 때만 고름으로 센다. 기본 메인·자동 착지는 세지 않는다(그래야 다음 진입도 착지한다).
+    if (byUser) gameChosen.current = true;
     if (lastLedgerGame.current === seq) return;
     lastLedgerGame.current = seq;
     setClockSeed(null);
