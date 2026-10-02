@@ -19,6 +19,7 @@ import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
+import { authMsgOf } from '../../lib/authError';
 import { SkeletonList } from '../atoms/Skeleton';
 import { readSeenCount, writeSeenCount } from '../../lib/seenCount'; // 지난 방문 실제 행 수를 기억해 스켈레톤 CLS 를 줄인다(홈과 같은 조리법)
 import { goSubTab } from '../../lib/subTabTransition';
@@ -854,7 +855,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
                 setBusy('google');
                 signInWithGoogle(keepSignedIn).catch((e) => {
                   clearViewIntent();
-                  toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error');
+                  toast.show(authMsgOf(e, '구글 로그인 실패'), 'error');
                   setBusy(null);
                 });
               }}

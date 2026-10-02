@@ -55,6 +55,7 @@ import QrScanModal from './QrScanModal';
 import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
 import SlidingPill from '../atoms/SlidingPill';
+import { msgOf } from '../../lib/dbError';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -260,7 +261,7 @@ export default function VenuePage({
       // 홈 '이어서 하기'·'가 본 매장' 은 App 의 visitedVenues 가 만든다 — 여기서 재조회한 목록은 이 페이지 몫이고,
       // App 은 이 신호를 듣고 자기 것을 다시 읽는다(연결 감사 E · 첫 방문 매장에서 체크인해도 홈이 옛 값이던 것).
       window.dispatchEvent(new Event('nuri:checkin-done'));
-    } catch (e) { toast.show(e instanceof Error ? e.message : '출석 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '출석 실패'), 'error'); }
     finally { setCheckinBusy(false); }
   };
   const shareVenue = async () => {
@@ -963,7 +964,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
       const m = await sendVenueMessage(venueId, { userName: user.nickname ?? user.name, userColor: user.avatarColor, content: body });
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
       setDraft('');
-    } catch (err) { toast.show(err instanceof Error ? err.message : '전송 실패', 'error'); }
+    } catch (err) { toast.show(msgOf(err, '전송 실패'), 'error'); }
     finally { setSending(false); }
   };
 
@@ -981,7 +982,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
                     메시지를 읽으려 탭한 손가락이 확인 없이 삭제를 실행한다(되돌리기 없음, 커뮤니티 라이브월과 같은 결함).
                     실제 박스를 키우고 음수 마진으로 되돌린다: 마진박스 16px = 이름행 높이라 행 높이가 그대로다. */}
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch((e) => toast.show(msgOf(e, '삭제 실패'), 'error'))} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 wrap-break-word whitespace-pre-wrap">{m.content}</p>
@@ -1345,7 +1346,7 @@ function useVenueFollow(venueId: string | undefined, baseCount: number) {
       toast.show(next ? '팔로우 완료. 새 대회 포스터가 올라오면 알려드립니다' : '팔로우를 해제했습니다', next ? 'success' : 'info');
     } catch (e) {
       setView(before);                // 실패 원복 — 버튼과 팔로워 수를 함께 되돌린다
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   }, [venueId, user, busy, view, toast]);
 
@@ -1418,7 +1419,7 @@ function AboutPanel({
       setAddr(addrDraft.trim()); setContacts(next); setHours(hoursDraft.trim());
       setInfoEditing(false);
       toast.show('매장 정보가 저장되었습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setInfoSaving(false); }
   };
 
@@ -1999,7 +2000,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
       toast.show('공지를 등록했습니다', 'success');
       reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '등록에 실패했습니다', 'error');
+      toast.show(msgOf(e, '등록에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
   const remove = async (id: string) => {

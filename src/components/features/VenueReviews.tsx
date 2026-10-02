@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, replyToReview, type VenueReview } from '../../api/reviews';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 interface Props {
   venueId: string;
@@ -68,7 +69,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       toast.show('답글을 등록했습니다', 'success');
       setReplyOpen(null);
       setReviews(await getVenueReviews(venueId));
-    } catch (e) { toast.show(e instanceof Error ? e.message : '답글 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '답글 실패'), 'error'); }
     finally { setReplyBusy(null); }
   };
   // (2026-09-11) AI 답글 초안 제거 — 후기 본문을 외부 모델로 보내던 경로였다. 답글은 직접 쓴다.
@@ -98,7 +99,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       setWriting(false);
       setReviews(await getVenueReviews(venueId));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '후기 저장 실패', 'error');
+      toast.show(msgOf(e, '후기 저장 실패'), 'error');
     } finally {
       setSaving(false);
     }
@@ -110,7 +111,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       setReviews((prev) => prev?.filter((x) => x.id !== r.id) ?? prev);
       toast.show('후기를 삭제했습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제 실패', 'error');
+      toast.show(msgOf(e, '삭제 실패'), 'error');
     }
   };
 

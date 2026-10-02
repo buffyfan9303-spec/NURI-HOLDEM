@@ -20,6 +20,7 @@ import { useResyncOnWake } from '../../lib/realtimeResync';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { isVisited, createReqGuard } from '../../lib/ownerReservations';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 interface MyPostersTabProps {
   schedules: Schedule[];
@@ -268,7 +269,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
       deleteReservation(r.id)
         // 예약 삭제는 여태 아무 흔적도 안 남아 '누가 지웠는지' 추적이 불가능했다
         .then(() => logActivity({ action: 'delete', targetType: 'reservation', targetId: r.id, targetSummary: `${schedule.title} / ${r.displayName}` }))
-        .catch((e) => { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); loadRes(resSchedId); });
+        .catch((e) => { toast.show(msgOf(e, '삭제 실패'), 'error'); loadRes(resSchedId); });
     });
     toast.show(`‘${r.displayName}’ 예약 삭제됨`, 'info', {
       durationMs: 5000, // 유예 시간과 일치 — 더 길면 이미 삭제된 뒤에도 되돌리기가 눌러지는 것처럼 보인다
@@ -282,7 +283,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
   };
   const onRename = async (r: OwnerReservation) => {
     const n = window.prompt('예약자 이름 수정', r.displayName); if (n === null) return;
-    try { await updateReservationName(r.id, n); setReservations((arr) => (arr ?? []).map((x) => (x.id === r.id ? { ...x, displayName: n.trim() } : x))); } catch (e) { toast.show(e instanceof Error ? e.message : '수정 실패', 'error'); }
+    try { await updateReservationName(r.id, n); setReservations((arr) => (arr ?? []).map((x) => (x.id === r.id ? { ...x, displayName: n.trim() } : x))); } catch (e) { toast.show(msgOf(e, '수정 실패'), 'error'); }
   };
 
   return (

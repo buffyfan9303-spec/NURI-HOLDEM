@@ -37,6 +37,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { PhoneActionButton, KakaoActionButton, PhoneRow } from './ContactActions';
 
 import { goSubTab } from '../../lib/subTabTransition';
+import { msgOf } from '../../lib/dbError';
 
 /** 그룹 3탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const GROUP_TAB_ORDER = ['chat', 'board', 'ranking'] as const;
@@ -134,7 +135,7 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
       await setGroupMemberRole(m.id, next);
       toast.show(next === 'manager' ? `${m.name} 님을 운영진으로 지정했습니다` : `${m.name} 님의 운영진 지정을 해제했습니다`, 'success');
       reloadMembers();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
 
   /** 가입 방식 변경 — 운영진이면 가능(서버 is_group_manager) */
@@ -144,7 +145,7 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
       await setGroupJoinApproval(group.id, value);
       setJoinPolicy(value);
       toast.show(value ? '이제 운영진이 승인해야 가입됩니다' : '이제 누구나 바로 가입할 수 있습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '변경 실패'), 'error'); }
   };
   const pendingMembers = members.filter((m) => m.status === 'pending');
 
@@ -156,14 +157,14 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
       toast.show(st === 'approved' ? '가입되었습니다' : '가입 신청이 접수되었습니다(승인 대기)', 'success');
       reloadMembership();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '가입 실패';
+      const msg = msgOf(e, '가입 실패');
       setJoinError(msg);
       toast.show(msg, 'error');
     }
   };
   const doApprove = async (m: GroupMember) => {
     try { await approveMember(m.id); toast.show(`${m.name} 님을 승인했습니다`, 'success'); reloadMembers(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
   const doKick = async (m: GroupMember, label: string) => {
     const self = m.userId === user?.id;
@@ -178,13 +179,13 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
       toast.show(`${label} 완료`, 'info'); reloadMembers();
       if (self) reloadMembership();
       if (kick) reloadBans();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
   /** 차단 해제 — 개설자·관리자만(서버 unban_group_member 도 같은 선) */
   const doUnban = async (b: GroupBan) => {
     if (!confirm(`${b.name} 님의 차단을 해제할까요?\n해제하면 이 그룹에 다시 가입할 수 있습니다.`)) return;
     try { await unbanGroupMember(group.id, b.userId); toast.show(`${b.name} 님의 차단을 해제했습니다`, 'success'); reloadBans(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '차단 해제 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '차단 해제 실패'), 'error'); }
   };
   const leave = async () => {
     if (!membership) return;
@@ -197,13 +198,13 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
       const urls = await uploadVenueImages(group.id, Array.from(files));
       await updateVenueImages(group.id, [...(group.images ?? []), ...urls]);
       toast.show('이미지를 추가했습니다(새로고침 시 반영)', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '업로드 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '업로드 실패'), 'error'); }
   };
   const addNotice = async () => {
     const content = prompt('공지 내용을 입력하세요');
     if (!content?.trim()) return;
     try { await createVenueNotice(group.id, content.trim()); getVenueNotices(group.id).then(setNotices); toast.show('공지를 등록했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   const images = group.images ?? (group.imageUrl ? [group.imageUrl] : []);
@@ -339,7 +340,7 @@ export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
                     <div className="mt-0.5 flex items-center gap-2 text-2xs text-ink-muted">
                       <span>{relativeTime(n.createdAt)}</span>
                       {/* 삭제는 서버(venue_notices_delete)가 관리자·작성자·개설자만 받는다 */}
-                      {(isOwner || n.authorId === user?.id) && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices)).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} className="ml-auto hover:text-danger-light">삭제</button>}
+                      {(isOwner || n.authorId === user?.id) && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices)).catch((e) => toast.show(msgOf(e, '삭제 실패'), 'error'))} className="ml-auto hover:text-danger-light">삭제</button>}
                     </div>
                   </li>
                 ))}
@@ -519,7 +520,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
       const m = await sendGroupMessage(groupId, { userName: user.nickname ?? user.name, userColor: user.avatarColor, content: body });
       setMessages((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
       setDraft('');
-    } catch (err) { toast.show(err instanceof Error ? err.message : '전송 실패', 'error'); }
+    } catch (err) { toast.show(msgOf(err, '전송 실패'), 'error'); }
     finally { setSending(false); }
   };
 
@@ -535,7 +536,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
                 <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                 <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
+                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id))).catch((e) => toast.show(msgOf(e, '삭제 실패'), 'error'))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 wrap-break-word whitespace-pre-wrap">{m.content}</p>
@@ -577,12 +578,12 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
       await createGroupPost(groupId, { authorName: user.nickname ?? user.name, authorColor: user.avatarColor, title, content });
       setTitle(''); setContent(''); setOpen(false); reload();
       toast.show('등록되었습니다', 'success');
-    } catch (err) { toast.show(err instanceof Error ? err.message : '등록 실패', 'error'); }
+    } catch (err) { toast.show(msgOf(err, '등록 실패'), 'error'); }
     finally { setSending(false); }
   };
   const del = async (p: GroupPost) => {
     if (!confirm('이 글을 삭제하시겠습니까?')) return;
-    try { await deleteGroupPost(p.id); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    try { await deleteGroupPost(p.id); reload(); } catch (e) { toast.show(msgOf(e, '실패'), 'error'); }
   };
 
   return (
@@ -640,7 +641,7 @@ function GroupProfileForm({ groupId, initial, onSaved, onCancel }: {
       onSaved({ description: description.trim(), phone: phone.trim(), kakao: kakao.trim() });
       toast.show('팀 정보가 저장되었습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+      toast.show(msgOf(e, '저장에 실패했습니다'), 'error');
     } finally { setSaving(false); }
   };
 

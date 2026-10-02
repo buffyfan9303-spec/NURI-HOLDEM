@@ -4,6 +4,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { submitReport, type ReportTargetType } from '../../api/reports';
+import { msgOf } from '../../lib/dbError';
 
 const REASONS = [
   '욕설/비방',
@@ -42,7 +43,7 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
       setReason(''); setDetail('');
       onClose();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '신고 접수에 실패했습니다', 'error');
+      toast.show(msgOf(err, '신고 접수에 실패했습니다'), 'error');
     } finally { setSaving(false); }
   };
 

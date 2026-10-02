@@ -21,6 +21,7 @@ import LegalNotice      from '../../pages/legal/LegalNotice';
 import MarketingConsent from '../../pages/legal/MarketingConsent';
 import SignupLocationConsent from './SignupLocationConsent';
 import { rememberSignupLocationConsent, flushSignupLocationConsent } from '../../lib/locationConsent';
+import { authMsgOf } from '../../lib/authError';
 
 type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
 type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
@@ -442,7 +443,7 @@ function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) 
           signInWithGoogle(keepSignedIn).catch((e) => {
             // 떠나지 못했으면 남겨 둘 이유가 없다. 남기면 다음 로그인에 엉뚱한 화면이 열린다.
             clearViewIntent();
-            onError(e instanceof Error ? e.message : '구글 로그인 실패');
+            onError(authMsgOf(e, '구글 로그인 실패'));
             setBusy(null);
           });
         }}
@@ -600,7 +601,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       setStep('reset');
       toast.show('인증번호를 이메일로 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '발송에 실패했습니다', 'error');
+      toast.show(authMsgOf(err, '발송에 실패했습니다'), 'error');
     } finally { setLoading(false); }
   };
 
@@ -616,7 +617,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       toast.show('비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요.', 'success');
       onBack();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '재설정 실패. 인증번호를 확인해 주세요', 'error');
+      toast.show(authMsgOf(err, '재설정 실패. 인증번호를 확인해 주세요'), 'error');
     } finally { setLoading(false); }
   };
 
@@ -709,7 +710,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
       toast.show('가입 완료! 로그인 후 휴대폰 본인인증을 진행해 주세요.', 'success');
       onDone();
     } catch (err: unknown) {
-      toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
+      toast.show(authMsgOf(err, '가입 중 오류가 발생했습니다.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -806,7 +807,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
       toast.show('매장 운영자 가입 신청이 완료되었습니다. 로그인 후 휴대폰 본인인증과 관리자 승인을 거치면 포스터를 올릴 수 있습니다.', 'success');
       onDone();
     } catch (err: unknown) {
-      toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
+      toast.show(authMsgOf(err, '가입 중 오류가 발생했습니다.'), 'error');
     } finally {
       setLoading(false);
     }

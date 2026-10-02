@@ -228,6 +228,7 @@ const EventPage = lazyWithReload(() => import('./components/features/EventPage')
 const EventListPage = lazyWithReload(() => import('./components/features/EventListPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 import { readSeenCount, writeSeenCount } from './lib/seenCount';
+import { msgOf } from './lib/dbError';
 /** 일정 탐색 목록이 지난 방문에 몇 줄이었나 — 스켈레톤 자리 예약용(홈의 nuri:upcoming-seen 과 같은 조리법). */
 const BROWSE_SEEN = 'nuri:browse-seen';
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
@@ -1418,7 +1419,7 @@ export default function App() {
   }, [user, isOwner, isAdmin]);
   const doEnablePush = async () => {
     try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다. 중요한 소식을 폰으로 받습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '알림 설정 실패'), 'error'); }
   };
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
 
@@ -1557,7 +1558,7 @@ export default function App() {
   const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
     const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
       .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다. 매장 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
+      .catch((e) => toast.show(msgOf(e, '요청 전송 실패'), 'error'));
     if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
     (async () => {
       const games = await ledgerMod().then((m) => m.venueTodayGames(venueId)).catch(() => [] as { gameSeq: number; title: string }[]);
@@ -3338,7 +3339,7 @@ export default function App() {
         setComments((prev) => [saved, ...prev]);
       } catch (err) {
         // 사유를 버리면 제재된 회원이 왜 막혔는지 모른 채 계속 재시도한다(PostDetailModal 과 같은 처리).
-        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        toast.show(msgOf(err, '댓글 등록에 실패했습니다'), 'error');
         throw err;   // 입력 보존은 호출부(CommentThread)가 이 예외로 판단한다
       }
     },
@@ -3358,7 +3359,7 @@ export default function App() {
         });
         setComments((prev) => [saved, ...prev]);
       } catch (err) {
-        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        toast.show(msgOf(err, '댓글 등록에 실패했습니다'), 'error');
         throw err;
       }
     },
@@ -3417,7 +3418,7 @@ export default function App() {
   // 큐는 첫 누름 때 불러온다 — 이 파일은 첫 화면 임계 경로라 번들 예산(entryGzipKb) 여유가 0 이다(전송·반영 묶음은 lib/postLikeQueue).
   //   누름 순서는 같은 프라미스의 then 순서(FIFO)로 지켜진다. 청크를 못 받으면 그 누름의 뒤집기를 되돌린다.
   const likeTapRef = useRef<Promise<(id: string, uid: string | null) => void> | null>(null);
-  const likeFail = useCallback((e: unknown) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'), [toast]);
+  const likeFail = useCallback((e: unknown) => toast.show(msgOf(e, '좋아요 처리 실패'), 'error'), [toast]);
   const handleLikePost = useCallback((postId: string) => {
     const uid = userRefForGate.current?.id;
     if (!uid) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
@@ -3458,7 +3459,7 @@ export default function App() {
     } catch (e) {
       // 실패는 반드시 보인다 — 서버 메시지를 그대로 띄우고(예: RPC 미적용·매장 대표) 목록을 서버와
       // 재동기화해 낙관적으로 바뀐 배지를 원상 복구한다. 그리고 **던져서** 호출부가 성공 표시를 막게 한다.
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
       loadUsers();
       throw e;
     }
@@ -3520,7 +3521,7 @@ export default function App() {
       setNotices((prev) => prev.filter((n) => n.id !== id));
       setOpenNotice(null);
       toast.show('공지사항이 삭제되었습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '삭제에 실패했습니다'), 'error'); }
   }, [toast]);
 
   // 매장 소개/이미지 저장 — 실패 시 낙관적 반영을 서버 상태로 되돌림(저장된 것처럼 보이는 불일치 방지)
@@ -4572,7 +4573,7 @@ export default function App() {
                           .then((m) => m.cancelBuyinRequest(r.id)
                             .then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))
                             .then(() => toast.show(r.usedVoucher ? '요청을 취소했습니다 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했습니다', 'success')))
-                          .catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                          .catch((e) => toast.show(msgOf(e, '취소 실패'), 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
                   </div>
@@ -4767,7 +4768,7 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(msgOf(e, '요청 실패'), 'error'));
         };
         return (
           <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>

@@ -21,6 +21,7 @@ import { uploadPoster } from '../../lib/storage';
 import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../api/settings';
 import { IDENTITY_FLAG_KEY, refreshIdentityFlag, useIdentityEnabled } from '../../lib/identityFlag';
 import { publishClockSignal } from './clock/clockTheme';
+import { msgOf } from '../../lib/dbError';
 
 type AdSize = 'sm' | 'md' | 'lg';
 const AD_SIZES: { v: AdSize; label: string }[] = [
@@ -68,7 +69,7 @@ function IdentityVoucherSwitch() {
       const nowOn = await refreshIdentityFlag();
       toast.show(nowOn ? '본인인증·매장이용권을 켰습니다' : '본인인증·매장이용권을 껐습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '변경하지 못했습니다', 'error');
+      toast.show(msgOf(e, '변경하지 못했습니다'), 'error');
       load();   // 화면을 서버 값으로 되돌린다
     } finally {
       setBusy(false);
@@ -173,7 +174,7 @@ function ClockAdCard() {
       publishClockSignal('ad');   // 같은 탭에 열린 클락은 즉시, 다른 창·기기는 폴링(30초)으로 따라온다
     } catch (e) {
       setSize(prev);                  // ⚠ 되돌리지 않으면 '바꿨는데 새로고침하면 원래대로' 가 된다
-      toast.show(e instanceof Error ? e.message : '크기를 저장하지 못했습니다', 'error');
+      toast.show(msgOf(e, '크기를 저장하지 못했습니다'), 'error');
     }
   };
 
@@ -187,7 +188,7 @@ function ClockAdCard() {
       setImg(url);
       toast.show('클락 광고를 등록했습니다 — 전 매장 클락에 적용됩니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '업로드하지 못했습니다', 'error');
+      toast.show(msgOf(e, '업로드하지 못했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -200,7 +201,7 @@ function ClockAdCard() {
       setImg(null);
       toast.show('클락 광고를 삭제했습니다', 'info');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '삭제하지 못했습니다', 'error');
+      toast.show(msgOf(e, '삭제하지 못했습니다'), 'error');
     } finally { setBusy(false); }
   };
 

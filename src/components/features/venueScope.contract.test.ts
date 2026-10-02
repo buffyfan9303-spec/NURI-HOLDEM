@@ -201,6 +201,10 @@ const ALLOW: Record<string, string> = {
   // 클락 빈 칸 '1탭 시작'(quickStart) — 누름 한 번 안에서 같은 클로저 venueId 로 메인 설정을 읽어 같은 매장 클락을 시작한다.
   //   화면 상태 `state?.config`·`sideGameDate(state, main)` 는 **읽는다**(쓰지는 않음) — 읽기만 하고 같은 클로저 매장으로 쓰므로 허용.
   'features/clock/TournamentClock.tsx:quickStart:getClockState': '누름 한 번 안의 읽기→같은 클로저 매장 쓰기(화면 상태 state?.config 는 읽기만)',
+  // 후기 답글·저장 뒤 재조회 — App 이 `<VenuePage key={vid}>` 로 매장마다 새로 마운트한다(App.tsx 'key=대상' 주석) → 한 인스턴스의 venueId 는 바뀌지 않는다.
+  //   (2026-10-02 C2: 이 두 줄은 예전엔 catch 의 `e instanceof Error ? …` 삼항이 스캐너에 '가드'로 잘못 잡혀 통과하고 있었다 — 삼항을 msgOf 로 바꾸자 드러났다.)
+  'features/VenueReviews.tsx:doReply:getVenueReviews': '<VenuePage key=vid> — 매장마다 새 인스턴스',
+  'features/VenueReviews.tsx:submit:getVenueReviews': '<VenuePage key=vid> — 매장마다 새 인스턴스',
   // 칩 미리 데우기 — 결과를 `${venueId}|${영업일}` 키의 캐시에만 넣는다. 화면 상태를 건드리지 않아 매장 경계를 넘지 않는다.
   'features/VenueManageTab.tsx:warmGameChips:getLedgerGames': '요청 매장 키 캐시에만 기록',
 };

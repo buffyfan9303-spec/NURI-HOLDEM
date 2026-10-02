@@ -31,7 +31,9 @@ export default function CalendarToolsPanel() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-xs font-bold text-ink-primary">{t.name}</span>
-              <span className="mt-0.5 block truncate text-2xs text-ink-muted">{t.desc}</span>
+              {/* 2026-10-02 K-1: `truncate` 는 390px 2열(칸 글자폭 77px)에서 '게임별 권장 참가비 배수' 110px·'운 나쁠 때 잃을 폭 예측' 106px 를 잘랐다.
+                  형제 StoreToolsPanel 과 같은 2줄 clamp 로 — 부제 문구는 그대로(검색·툴팁이 계속 읽는다), 같은 행 두 칸은 grid 가 높이를 맞춘다. */}
+              <span className="mt-0.5 text-2xs text-ink-muted [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden break-keep">{t.desc}</span>
             </span>
           </button>
         ))}

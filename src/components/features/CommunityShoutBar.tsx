@@ -62,6 +62,7 @@ import {
   RESERVE_MIN_LEAD_MIN, RESERVE_MAX_LEAD_DAYS,
   type Shout, type ShoutRules, type PointBalance, type ShopSku, type ShoutTier, type ShoutColor,
 } from '../../api/community';
+import { msgOf } from '../../lib/dbError';
 
 // ⚠ 서버 shout_rules() 와 동기. 낮게 두면 표시가가 실제 청구가보다 싸 보인다
 //   (2026-08-29: 30 → 200 · 2026-08-30 슬롯 전환: 200 → 50). ttlHours 는 슬롯 전환으로 항상 0.
@@ -435,7 +436,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       await refreshProfile?.();
       onClose();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '외치기에 실패했습니다', 'error');
+      toast.show(msgOf(e, '외치기에 실패했습니다'), 'error');
     } finally { setBusy(false); }
   };
 
@@ -645,7 +646,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
       await hideShout(id);
       setShouts((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
       toast.show('외침을 내렸습니다', 'info');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '실패했습니다'), 'error'); }
   };
 
   const openComposer = () => {

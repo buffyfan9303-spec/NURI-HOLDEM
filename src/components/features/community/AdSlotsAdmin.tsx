@@ -24,6 +24,7 @@ import { POST_CATEGORIES } from '../../../lib/postCategory';
 import { filterContent } from '../../../lib/content-filter';
 import { useAuth } from '../../../contexts/AuthContext';
 import { PostRow, PostCard } from './PostRowCard';
+import { msgOf } from '../../../lib/dbError';
 
 export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   const toast = useToast();
@@ -74,7 +75,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
       setSlots((arr) => arr.map((x) => (x.slot === saved.slot ? saved : x)));
       toast.show(msg, 'success');
       announce();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); reload(); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); reload(); }
     finally { setBusySlot(null); }
   };
 
@@ -88,7 +89,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
       await swapAdSlots(sorted[i], sorted[j]);
       toast.show('광고 순서를 바꿨습니다', 'success');
       announce();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '순서 변경 실패'), 'error'); }
     // 성공이든 실패든 서버 상태로 되맞춘다 — 종전엔 부분 성공 시 UI 가 옛 순서를 계속 보여줬다.
     finally { setBusySlot(null); reload(); }
   };
@@ -112,7 +113,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
       await setAppSetting(COMMUNITY_ADS_EVERY_KEY, String(n));
       toast.show('게시판 글 ' + n + '개마다 광고 1칸으로 저장했습니다', 'success');
       announce();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setSavingEvery(false); }
   };
 
@@ -288,7 +289,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
             } catch (e) {
               toast.show(
                 '글은 등록됐지만 광고 ' + s.slot + '번 연결에 실패했습니다 ('
-                + (e instanceof Error ? e.message : '원인 불명') + ') — 아래 게시글 연결에서 “' + draft.title + '” 글을 골라 주세요',
+                + (msgOf(e, '원인 불명')) + ') — 아래 게시글 연결에서 “' + draft.title + '” 글을 골라 주세요',
                 'error',
               );
               reload();
@@ -450,7 +451,7 @@ function AdPostComposer({ slot, onClose, onSubmit }: {
       onClose();
     } catch (e) {
       // 등록 자체가 실패했다 — 초안을 지우지 않는다(다시 쓰게 하면 그게 손실이다).
-      toast.show(e instanceof Error ? e.message : '글 등록에 실패했습니다', 'error');
+      toast.show(msgOf(e, '글 등록에 실패했습니다'), 'error');
     } finally { setSaving(false); }
   };
 

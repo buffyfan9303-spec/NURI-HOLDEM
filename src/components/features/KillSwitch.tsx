@@ -9,6 +9,7 @@ import { killSwitchIsSet, setKillPassword, killVenue, exportVenueCsv, VENUE_EXPO
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { msgOf } from '../../lib/dbError';
 
 const CONFIRM_PHRASE = '영구 삭제';
 
@@ -47,7 +48,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
       setExported((s) => new Set(s).add(g));
       toast.show(`${VENUE_EXPORT_GROUPS[g].label} ${rows}행을 내려받았습니다`, 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '내려받기에 실패했습니다', 'error');
+      toast.show(msgOf(e, '내려받기에 실패했습니다'), 'error');
     } finally { setExporting(null); }
   };
   const missing = (Object.keys(VENUE_EXPORT_GROUPS) as VenueExportGroup[]).filter((g) => !exported.has(g));
@@ -78,7 +79,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
       toast.show('킬스위치 비밀번호를 설정했습니다. 한 번 만든 비밀번호는 변경할 수 없습니다.', 'success');
       setOpen(false);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '설정에 실패했습니다.');
+      setErr(msgOf(e, '설정에 실패했습니다.'));
       // 서버가 '이미 설정됨'으로 거부했을 수 있다 → 상태를 다시 물어 화면을 실제와 맞춘다(막다른 길 방지)
       refreshStatus();
     } finally { setBusy(false); }
@@ -96,7 +97,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
       setTimeout(() => window.location.reload(), 900);
     } catch (e) {
       // 실명/비밀번호 불일치 등은 서버가 거부 → 1단계부터 다시
-      setErr(e instanceof Error ? e.message : '삭제에 실패했습니다.');
+      setErr(msgOf(e, '삭제에 실패했습니다.'));
       setStep(1); setPassword(''); setConfirmText('');
     } finally { setBusy(false); }
   };

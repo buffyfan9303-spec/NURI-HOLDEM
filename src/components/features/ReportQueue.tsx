@@ -7,6 +7,7 @@ import type { ReportQueueItem, ReportDecision, DecideOptions } from '../../api/r
 import { adminSetPostBlinded } from '../../api/community';
 import type { User } from '../../api/auth';
 import { relativeTime } from '../../lib/relativeTime';
+import { msgOf } from '../../lib/dbError';
 
 const TYPE_LABEL: Record<string, string> = {
   post: '게시글', comment: '댓글', listing: '매물', live: '실시간', user: '회원',
@@ -59,7 +60,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
       toast.show(`신고를 ${done}${n}${mail}`, action === 'dismiss' || action === 'resolve' ? 'info' : 'success');
       setSuspendOpen(null);
       load();   // 같은 대상의 다른 신고도 닫혔을 수 있다 — 서버에서 다시 읽는다
-    } catch (e) { toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '처리에 실패했습니다'), 'error'); }
     finally { setBusy(null); }
   };
 
@@ -71,7 +72,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
       await adminSetPostBlinded(r.targetId, true);
       setBlinded((s) => new Set(s).add(r.id));
       toast.show('글을 블라인드했습니다', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '블라인드에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '블라인드에 실패했습니다'), 'error'); }
     finally { setBusy(null); }
   };
 

@@ -31,6 +31,7 @@ import { saveHand, savePoll, type HandAttachment, type PollAttachment } from '..
 // supabase 클라이언트는 더 이상 쓰지 않는다 — 글 id 재조회(findCreatedPostId)가 사라졌다. IS_MOCK 만 남는다.
 import { IS_MOCK } from '../../lib/supabase';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 export interface PostFormData {
   category: PostCategory;
@@ -312,7 +313,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         'error',
       );
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '게시글 등록에 실패했습니다', 'error');
+      toast.show(msgOf(err, '게시글 등록에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }

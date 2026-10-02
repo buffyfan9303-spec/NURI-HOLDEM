@@ -25,6 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateMyConsent } from '../../api/auth';
 import { LEGAL_EFFECTIVE_DATE, legalConsentStage } from '../../lib/legalVersion';
 import { saveLocationConsent } from '../../lib/locationConsent';
+import { msgOf } from '../../lib/dbError';
 
 // 위치 동의 칸은 소셜 가입의 첫 동의에서만 보인다 — 이 게이트는 첫 화면 번들에 실리므로 칸은 지연 로드한다(번들 예산).
 const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
@@ -114,7 +115,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
       if (reconsent && wasMarketing && !marketing) toast.show('마케팅 정보 수신 동의가 철회되었습니다', 'success');
       else toast.show('동의가 완료되었습니다', 'success');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '저장에 실패했습니다', 'error');
+      toast.show(msgOf(err, '저장에 실패했습니다'), 'error');
     } finally {
       setSaving(false);
     }

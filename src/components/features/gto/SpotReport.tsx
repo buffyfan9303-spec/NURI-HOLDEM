@@ -28,6 +28,7 @@ import {
 import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
 import SpotDetails from './SpotDetails';
+import { msgOf } from '../../../lib/dbError';
 
 /** 등급별 색 — **색만으로 의미를 전하지 않는다.** 항상 라벨·아이콘과 함께 쓴다. */
 /** led = [data-aura-variant](index.css) — 인라인 rgb 링은 라이트·고대비·강제색에서 못 껐다(2026-09-18). unsupported 는 LED 없음. */
@@ -85,7 +86,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
       onSaved({ id, key: spotKey(spot) });
       toast.show('내 스팟에 저장했습니다', 'success');
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+      toast.show(msgOf(e, '저장에 실패했습니다'), 'error');
     } finally { setBusy(null); }
   };
 
@@ -134,7 +135,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
       // 게시판으로 넘어가 방금 만든 글을 연다(오너 지시 2026-09-11).
       gotoBoardPost(postId);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '공유에 실패했습니다', 'error');
+      toast.show(msgOf(e, '공유에 실패했습니다'), 'error');
     } finally { setBusy(null); }
   };
 
@@ -356,7 +357,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       setAsking(false);
       if (!r.cached) setStatus((s) => (s ? { ...s, usedToday: s.usedToday + 1, available: s.available - s.price } : s));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : spotAiMessage('UNKNOWN'), 'error');
+      toast.show(msgOf(e, spotAiMessage('UNKNOWN')), 'error');
       setAsking(false);
       // 환불·한도 변화가 있었을 수 있다 — 서버 값으로 다시 맞춘다.
       getSpotAiStatus().then(setStatus);
