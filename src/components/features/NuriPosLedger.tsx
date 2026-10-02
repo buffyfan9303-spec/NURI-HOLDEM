@@ -7,7 +7,8 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
 // (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { LedgerToolsContext } from './ledgerTools';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -182,6 +183,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   settleSignal?: number;
 }) {
   const toast = useToast();
+  const wsTools = useContext(LedgerToolsContext); // 작업대 도구([이용권 확인]·[전체화면]) — 날짜 줄·목록 검색 줄 끝에 그린다
   const { user, isAdmin } = useAuth();
   const operatorOk = isAdmin || !!user?.approved; // 담당직원: 승인된 계정만 운영
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
@@ -1396,6 +1398,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
         </div>
         <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
+        {wsTools}
         </div>
 
         {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터)
@@ -1528,7 +1531,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   if (loadError && !hasBoardData) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
+        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} tools={wsTools} />
         <LoadErrorCard error={loadError} what="장부" onRetry={() => { setLoadError(null); reloadSession(); reload(); }} />
       </div>
     );
@@ -1538,7 +1541,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   if (showSetup) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
+        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} tools={wsTools} />
         {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
           <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
         )}
@@ -1575,7 +1578,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3 pb-48 lg:pb-28">
-      <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
+      <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} tools={wsTools} />
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
       {!!(loadError || rowsErr) && hasBoardData && (
@@ -2102,7 +2105,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
       {/* S-04(2026-10-01) — `lg:pr-16`: PC 폭에서 바가 화면 오른쪽 끝 가까이 닿으면(1024·1280) '맨 위로' FAB(App.tsx `.scroll-top-fab`,
           lg:bottom-5 right-4 z-40, 42.5px)가 맨 아래 스크롤 때 '정산 마감' 버튼을 덮었다(버튼 면 21점 중 1024 11점 · 1280 4점이 FAB — '정' 한 글자만 보임).
           FAB 자리(right 17 + 폭 42.5 ≈ 59.5px)+여백만큼 오른쪽을 비운다. 아래 실행 버튼 바(`pr-12`)와 같은 처방 — FAB 는 App.tsx(공용)라 손대지 않는다. */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
+      <div ref={settleBarRef} data-ledger-settlebar="" className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x lg:pr-16 py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
@@ -2584,9 +2587,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 // ── 날짜 바 ───────────────────────────────────────────────────────────────────
-function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void }) {
+// tools — 장부 작업대(LedgerWorkspace)의 [이용권 확인]·[전체화면]. 2026-10-02(감사 L-4) 혼자 한 줄을 차지하던 도구 줄을 이 줄 끝으로 흡수했다.
+function DateBar({ date, setDate, biz, onBack, tools }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void; tools?: ReactNode }) {
   return (
-    <div data-ledger-daterow className="flex items-center gap-2">
+    <div data-ledger-daterow className="flex min-w-0 items-center gap-2">
       {/* 크기 사다리 .btn-sm(34px) 을 쓴다 — text-xs(12.75px) 라벨인데 .btn 기본 하한(min-h 2.4rem=40.8px)을
           그대로 받아 필요보다 6.8px 컸다(오너: "글씨에 비해 버튼이 쓸데없이 커져"). 실측 55.8×40.8 → 34px.
           ⚠ 색 변형 뒤에 크기 변형이 와야 한다(index.css §B1 선언 순서).
@@ -2596,8 +2600,9 @@ function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: st
         <button type="button" onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0" aria-label="목록으로">← 목록</button>
       )}
       {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
-      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm lg:w-52 lg:flex-none" />
+      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input min-w-0 flex-1 text-sm lg:w-52 lg:flex-none" />
       {date !== biz && <button type="button" onClick={() => setDate(biz)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
+      {tools && <div className="ml-auto flex shrink-0 items-center gap-1.5">{tools}</div>}
     </div>
   );
 }

@@ -21,6 +21,14 @@ export function useIsMdUp(): boolean {
 }
 
 /**
+ * 1440px 이상 — 장부 작업대가 이용권 레일을 표 옆에 **상시 펼치는** 폭(그 아래는 접힌 띠, LedgerWorkspace).
+ * Tailwind 기본 브레이크포인트가 아니라 CSS 쪽 대응 클래스가 없다 — 이 값으로 렌더를 가르는 곳은 JS 만 쓴다.
+ */
+export function useIsWide(): boolean {
+  return useMinWidth(1440);
+}
+
+/**
  * 공통 구현 — matchMedia 구독. px 는 Tailwind 브레이크포인트와 반드시 일치시킬 것.
  *
  * ⚠ 왜 resize 까지 함께 듣나(중복처럼 보이지만 아니다)

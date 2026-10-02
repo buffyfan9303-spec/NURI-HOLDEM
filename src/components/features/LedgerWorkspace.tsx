@@ -5,12 +5,36 @@
 //     대신 화면을 넓히는 쪽을 택했다(오너 판단) — 앱 크롬(헤더·탭바)까지 걷어내고 브라우저 UI 도 접는다.
 //  ② **우측 이용권 실시간 레일.** 평소엔 장부 옆, 전체화면에선 방송 채팅 자리처럼 세로로 길게.
 //
-// ⚠ 장부(NuriPosLedger, 2800줄)는 건드리지 않는다. 이 파일은 자리만 만들어 준다 —
-//   장부 안에 전체화면 상태를 심으면 그 큰 파일의 조건 분기가 하나 더 늘고, 되돌리기도 어려워진다.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+// 🔴 2026-10-02 오너 1b — 레일을 다시 **장부 오른쪽**에 둔다. 09-27 에 '모든 폭에서 장부 아래'로 옮긴 것(cd2d97e0)은
+//   "장부를 보며 옆에서 이용권 발급·전송·사용이 새로고침 없이 들어오는지 본다" 는 오너 의도와 어긋났다(레일이 표 아래 1.5~2.2 화면).
+//   그때 옮긴 이유(표가 1024 에서 1칸·1440 에서 5칸)는 폭별로 푼다 — 감사 실측(audit-mystore-ui-1002 §1-2):
+//   · ≥1440 : 판 폭 상한(앱 프레임·main 1224px)을 **장부 판이 보일 때만** 풀고 레일 18rem 을 상시 펼친다(1440 바인 9칸).
+//   · 768~1439 : 접힌 띠(3rem) + 새 이용권 배지. 누르면 표 위로 20rem 레일이 펼쳐진다(표 폭은 그대로 — 1280 10칸).
+//   · <768 : 종전처럼 표 아래(모바일은 폭이 없다) + 상단 [이용권] 바로가기.
+//   레일은 어느 폭에서도 **한 인스턴스**다 — 접고 펼쳐도 구독·폴링이 끊기지 않고(배지를 세야 한다) 재조회도 없다.
+//
+// ⚠ 장부(NuriPosLedger)는 이 파일이 주는 도구(전체화면·이용권 바로가기)를 LedgerToolsContext 로 받아
+//   자기 날짜 줄 끝에 그린다(혼자 한 줄을 차지하던 도구 줄 41px 회수 — 감사 L-4·L-9).
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Icon from '../atoms/Icon';
 import LedgerVoucherRail from './LedgerVoucherRail';
-import { useIsMdUp } from '../../lib/responsive';
+import { LedgerToolsContext } from './ledgerTools';
+import { useIsDesktop, useIsMdUp, useIsWide } from '../../lib/responsive';
+
+/** 판 폭 상한을 푸는 자리 — 장부 판이 보이는 동안만, 조상 중 max-width 가 걸린 것(앱 프레임·main·내 매장 판)의 상한을 푼다.
+ *  클래스 대신 인라인으로 푸는 이유: 그 상한들은 앱 셸·전역 CSS(공용 파일)에 있다. 여기서 켜고 끄면 장부를 떠나는 즉시 원래대로다. */
+function useUncapAncestors(host: HTMLElement | null, on: boolean) {
+  useLayoutEffect(() => {
+    if (!on || !host) return;
+    const undo: { el: HTMLElement; prev: string }[] = [];
+    for (let e = host.parentElement; e && e !== document.body; e = e.parentElement) {
+      if (getComputedStyle(e).maxWidth === 'none') continue;
+      undo.push({ el: e, prev: e.style.maxWidth });
+      e.style.maxWidth = 'none';
+    }
+    return () => { for (const u of undo) u.el.style.maxWidth = u.prev; };
+  }, [host, on]);
+}
 
 export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
@@ -28,24 +52,66 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 }) {
   const [full, setFull] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
-  // 🔴 LVR-1(2026-09-22) — 전체화면 레일 wrapper 는 아래에서 `hidden … md:block` 이라
-  //   <768px 에서는 **보이지도 조작되지도 않는다.** 그런데 레일은 언마운트되지 않고 `active` 가
-  //   항상 true 여서 Realtime 채널 1개 + 30초 interval 1개가 계속 돈다(LedgerVoucherRail 의
-  //   effect 는 active=false 나 unmount 에서만 정리한다).
-  //   → UI 는 그대로 두고 **숨은 백그라운드 작업만** 끊는다. CSS 의 `md:` 와 반드시 같은 768px 이어야
-  //     767~768 경계에서 '보이는데 안 도는' 창이 안 생긴다. 그래서 useIsDesktop(1024) 이 아니라 이것이다.
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const setHostEl = useCallback((el: HTMLDivElement | null) => { hostRef.current = el; setHost(el); }, []);
+  // 🔴 LVR-1(2026-09-22) — 전체화면 레일 wrapper 는 `hidden … md:block` 이라 <768px 에서는 **보이지도 조작되지도 않는다.**
+  //   CSS 의 `md:` 와 반드시 같은 768px 이어야 767~768 경계에서 '보이는데 안 도는' 창이 안 생긴다.
   const isMdUp = useIsMdUp();
-  // 2026-09-27(오너 승인) — 레일이 모든 폭에서 표 **아래**로 내려가 검색칸이 화면 2.4개 밑이 됐다.
-  //   카운터에서 "이 손님 이용권 있나?" 는 바인만큼 잦다 → 상단 바로가기로 레일까지 부드럽게 내리고 검색칸에 포커스.
-  //   레일 상자의 scroll-mt 가 앱 헤더(--stack-top) 아래에 멈추게 한다 — 검색칸은 레일 맨 위라 하단 정산바와 겹치지 않는다.
+  const isLg = useIsDesktop();
+  const isWide = useIsWide();
+  /** 표 옆 레일(상시 펼침 또는 접힌 띠). <768 은 표 아래. */
+  const side = canViewVouchers && isMdUp;
+  /** 접힌 띠 구간(768~1439) */
+  const strip = side && !isWide;
+  const [railOpen, setRailOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
+  // 장부를 떠나면(다른 단계·탭) 펼쳐 둔 레일을 접는다 — 돌아왔을 때 표 위를 덮은 채로 남지 않게.
+  useEffect(() => { if (!active) setRailOpen(false); }, [active]);
+
+  // ≥1440 · 장부 판이 보일 때만 판 폭 상한을 푼다(감사 시뮬 B: 1440 바인 9칸 · 1920 10칸).
+  useUncapAncestors(host, active && !full && isWide && side);
+
+  // 정산바(position:fixed, NuriPosLedger)의 좌우 경계를 **표 칸**에 맞춘다 — 레일이 옆에 서면 바가 레일 밑까지 뻗지 않게.
+  //   값은 표 칸의 실제 좌우 끝(뷰포트 기준). 바는 CSS 변수(--ledger-bar-left/right/max)를 읽는다(전체화면은 index.css 가 같은 일을 한다).
+  const colRef = useRef<HTMLDivElement>(null);
+  const [barVars, setBarVars] = useState<Record<string, string> | undefined>(undefined);
+  useLayoutEffect(() => {
+    const col = colRef.current;
+    if (!side || full || !isLg || !col) { setBarVars(undefined); return; }
+    let raf = 0;
+    const sync = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = col.getBoundingClientRect();
+        if (r.width <= 0) return;   // 숨은 판(display:none) — 다음 발화에서 다시 잰다
+        const vw = document.documentElement.clientWidth;
+        const next = { '--ledger-bar-left': `${Math.max(0, Math.round(r.left))}px`, '--ledger-bar-right': `${Math.max(0, Math.round(vw - r.right))}px`, '--ledger-bar-max': 'none' };
+        setBarVars((p) => (p && p['--ledger-bar-left'] === next['--ledger-bar-left'] && p['--ledger-bar-right'] === next['--ledger-bar-right'] ? p : next));
+      });
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(col);
+    window.addEventListener('resize', sync);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', sync); };
+  }, [side, full, isLg, active, isWide]);
+
+  // [이용권 확인] — 모바일은 표 아래 레일까지 내려가고, 접힌 띠는 펼친 뒤, 상시 레일은 그대로 검색칸에 포커스한다.
+  //   레일 상자의 scroll-mt 가 앱 헤더(--stack-top) 아래에 멈추게 한다 — 검색칸은 레일 맨 위라 하단 정산바와 겹치지 않는다.
   const jumpToRail = useCallback(() => {
-    const box = railRef.current;
-    if (!box) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    box.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
-  }, []);
+    const focus = () => searchRef.current?.focus({ preventScroll: true });
+    if (!side) {
+      const box = railRef.current;
+      if (!box) return;
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      focus();
+      return;
+    }
+    if (strip && !railOpen) { setRailOpen(true); requestAnimationFrame(focus); return; }
+    focus();
+  }, [side, strip, railOpen]);
 
   // 브라우저 전체화면은 '되면 좋은 것'이다 — 거부돼도(권한·iOS 사파리) 앱 안에서의 전체화면은 그대로 된다.
   const enter = useCallback(() => {
@@ -71,24 +137,34 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, [full]);
-  // Esc 로도 닫힌다(브라우저 전체화면이 거부된 경우 fullscreenchange 가 오지 않는다)
+  // Esc 로도 닫힌다(브라우저 전체화면이 거부된 경우 fullscreenchange 가 오지 않는다). 펼친 띠 레일도 Esc 로 접힌다.
   useEffect(() => {
-    if (!full) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exit(); };
+    if (!full && !railOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (full) exit(); else setRailOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [full, exit]);
+  }, [full, railOpen, exit]);
 
+  // 도구 — 장부 날짜 줄(또는 목록 검색 줄) 끝에 붙는다. 모바일은 글자를 줄여 날짜 칸과 한 줄에 선다.
+  // 🔴 2026-09-20 — 유효 표적 30.7px → 32px 상자 + `tap-y-44`(::before inset -6px 0) = 누름영역 44px.
+  const toolBtn = 'tap-y-44 inline-flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300';
   const toggle = (
-    <button type="button" onClick={full ? exit : enter}
-      // 🔴 2026-09-20 — 유효 표적이 30.7px 였다(WCAG AA 24 는 통과하나 이 저장소 기준 44 미달).
-      //   `tap-y-44`(::before inset -6px 0)는 조상에 overflow 가 없고 세로 이웃과 12px 이상 떨어져 있어
-      //   여기서는 안전하게 동작한다(단계 바처럼 잘리는 자리가 아니다 — 실측으로 확인).
-      //   박스 크기를 키우지 않아 헤더 줄 배치가 그대로다.
-      className="tap-y-44 inline-flex shrink-0 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
+    <button type="button" onClick={full ? exit : enter} data-testid="ledger-fullscreen" aria-label={full ? '전체화면 끄기' : '전체화면'} className={toolBtn}>
       <Icon name={full ? 'minimize' : 'maximize'} size={13} className="shrink-0" />
-      {full ? '전체화면 끄기' : '전체화면'}
+      <span className={full ? undefined : 'max-sm:hidden'}>{full ? '전체화면 끄기' : '전체화면'}</span>
     </button>
+  );
+  const tools = (
+    <>
+      {/* 권한 없는 직원은 레일이 없으니 바로가기도 없다(아래 레일과 같은 게이트) */}
+      {canViewVouchers && (
+        <button type="button" onClick={jumpToRail} data-testid="ledger-voucher-jump" className={toolBtn}>
+          <Icon name="ticket" size={13} className="shrink-0" />
+          이용권<span className="max-sm:hidden"> 확인</span>
+        </button>
+      )}
+      {toggle}
+    </>
   );
 
   if (full) {
@@ -99,15 +175,17 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       /* 안전영역: 브라우저 전체화면이 거부되면(iOS 사파리 등) 이건 그냥 `fixed inset-0` 오버레이라
           viewport-fit=cover 아래에서 머리말이 상태바 밑으로, 바닥이 홈 인디케이터 밑으로 들어간다.
           데스크톱에서는 env(...) 가 0 이라 PC 렌더는 한 픽셀도 안 바뀐다. */
-      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-70 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+      <div ref={setHostEl} data-ledger-fullscreen className="fixed inset-0 z-70 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">장부 · 전체화면</span>
           <span className="hidden text-2xs text-ink-muted sm:inline">Esc 로 나가기</span>
           {toggle}
         </div>
         {/* 좌: 장부(스크롤) / 우: 이용권 레일(고정). 레일은 세로로 길수록 쓸모가 커진다. */}
         <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1 overflow-y-auto px-3 py-3">{children}</div>
+          <div className="min-w-0 flex-1 overflow-y-auto px-3 py-2">
+            <LedgerToolsContext.Provider value={null}>{children}</LedgerToolsContext.Provider>
+          </div>
           {canViewVouchers && (
             <div className="hidden w-[20rem] shrink-0 border-l border-border-subtle p-3 md:block">
               <LedgerVoucherRail venueId={venueId} active={active && isMdUp} dense />
@@ -118,36 +196,30 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
     );
   }
 
+  // 레일 칸 높이 — 앱 헤더(--stack-top) 밑에서 하단 고정 바(--footer-reserve = 정산바+여유, 정산바 없는 화면은 0) 위까지.
+  //   lg 미만(768~1023)은 하단 탭바가 있다 — 정산바가 없는 목록 모드에서도 탭바 밑으로 들어가지 않게 둘 중 큰 쪽을 뺀다.
+  const railBox = 'sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] h-[calc(100svh-var(--stack-top,6.0625rem)-max(var(--footer-reserve,0px),var(--tabbar-safe,0px))-1.5rem)] lg:h-[calc(100svh-var(--stack-top,6.0625rem)-var(--footer-reserve,0px)-1.5rem)] min-h-80 shrink-0';
   return (
-    // P-04(2026-10-01) — PC(lg+)에서 장부 날짜 줄(DateBar·그 스켈레톤 = data-ledger-daterow)이 있으면 이 도구 줄을
-    // 그 줄 오른쪽 끝에 겹쳐 올린다(혼자 차지하던 한 줄 41px 회수). 날짜 칸은 내용 폭(w-52)이라 겹치지 않는다.
-    // 세션 목록('← 목록')·전체화면 등 날짜 줄이 없는 화면은 종전처럼 자기 줄에 남는다(:has 조건).
-    <div ref={hostRef} className="group/lw lg:has-[[data-ledger-daterow]]:relative">
-      <div className="mb-2 flex items-center justify-end gap-2 lg:group-has-[[data-ledger-daterow]]/lw:absolute lg:group-has-[[data-ledger-daterow]]/lw:[inset:5px_0_auto_auto]">
-        {/* 권한 없는 직원은 레일이 없으니 바로가기도 없다(아래 레일과 같은 게이트) */}
-        {canViewVouchers && (
-          <button type="button" onClick={jumpToRail} data-testid="ledger-voucher-jump"
-            // 32px 상자 + tap-y-44(위아래 6px) = 누름영역 44px. whitespace-nowrap — 360 에서도 한 줄.
-            className="tap-y-44 inline-flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
-            <Icon name="ticket" size={13} className="shrink-0" />
-            이용권 확인
-          </button>
-        )}
-        {toggle}
+    <div ref={setHostEl} data-ledger-workspace={side ? (strip ? 'strip' : 'rail') : 'below'} style={barVars}
+      className={side ? 'flex items-start gap-3' : undefined}>
+      <div ref={colRef} className="min-w-0 flex-1">
+        <LedgerToolsContext.Provider value={tools}>{children}</LedgerToolsContext.Provider>
       </div>
-      {/* 🔴 2026-09-27 장부 점검 #6(리드 결정) — 이용권 레일은 **모든 폭에서 장부 아래**다.
-          옆에 붙였더니 표 상자가 1024 에서 402px(바인 **1칸**), 1280·1440·1920 에서 606px(5칸)이었다 —
-          판 폭 상한 때문에 큰 모니터에서도 레일이 표 폭을 그대로 깎는다(업주 = PC 99%, 표가 본업).
-          2열 그리드를 두지 않으므로 권한 없는 직원 화면의 빈 거터 문제도 생기지 않는다.
-          전체화면(위 분기)은 그대로 — 거기 경계값은 index.css [data-ledger-fullscreen] 이 같이 들고 있다. */}
-      <div>
-        <div className="min-w-0">{children}</div>
-        {canViewVouchers && (
-          <div ref={railRef} className="mt-4 h-104 scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
-            <LedgerVoucherRail venueId={venueId} active={active} />
+      {/* 표 옆(≥768) — 펼친 띠는 표 위로 덮는다(표 칸 폭은 그대로라 바인 칸이 다시 접히지 않는다). */}
+      {canViewVouchers && side && (
+        <div className={[railBox, strip ? 'relative w-[48px]' : 'w-[18rem]'].join(' ')}>
+          <div className={strip && railOpen ? 'absolute inset-y-0 right-0 z-35 w-[20rem] rounded-aura shadow-2xl' : 'h-full'}>
+            <LedgerVoucherRail venueId={venueId} active={active} searchRef={searchRef}
+              collapsed={strip && !railOpen} onToggle={strip ? () => setRailOpen((v) => !v) : undefined} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {/* 표 아래(<768) — 모바일은 폭이 없다. 상단 [이용권] 이 여기까지 내려와 검색칸에 포커스한다. */}
+      {canViewVouchers && !side && (
+        <div ref={railRef} className="mt-4 h-104 scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
+          <LedgerVoucherRail venueId={venueId} active={active} searchRef={searchRef} />
+        </div>
+      )}
     </div>
   );
 }
