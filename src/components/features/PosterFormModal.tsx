@@ -42,12 +42,14 @@ interface PosterFormModalProps {
    *  부분 성공까지 정확히 판정하고 있었는데 그 결과가 폼까지 오지 않았다.
    *  `void` 반환도 계속 받는다 — 결과를 안 주면 종전대로 낙관 처리한다(기존 호출부 보호). */
   onSubmit: (data: PosterFormData) => void | PosterSubmitResult | Promise<PosterSubmitResult>;
-  /** 관리자 직접 등록 시 선택 가능한 홀덤펍 목록 */
-  venues?: { id: string; name: string; region?: string }[];
+  /** 관리자 직접 등록 시 선택 가능한 홀덤펍 목록. premium = 기간 안 프리미엄 매장(포스터 즉시 공개 안내용, 판정은 서버) */
+  venues?: { id: string; name: string; region?: string; premium?: boolean }[];
   /** 신규 작성 시 "지난 포스터 불러오기" 후보(전체 일정 — 내부에서 내 것만 필터) */
   pastPosters?: Schedule[];
   /** 내 매장 전환기에서 고른 매장(2026-09-28) — 게임 프리셋을 그 매장 것으로 읽는다. 없으면 프로필 매장. */
   storeVenueId?: string | null;
+  /** 그룹 포스터 모드(20261002h) — 그 그룹에 올린다. '전체 일정에도 공개 요청' 체크가 생기고 이미지는 그룹 폴더로 올라간다. */
+  group?: { id: string; name: string } | null;
 }
 
 export interface PosterFormData extends PosterSaveForm {
@@ -90,6 +92,11 @@ export interface PosterFormData extends PosterSaveForm {
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
   pubName?: string;
+  /** 그룹 포스터(20261002h) — 있으면 App 이 그 그룹으로 저장한다. */
+  groupId?: string;
+  groupName?: string;
+  /** 그룹 포스터의 '전체 일정에도 공개 요청'. false = 그룹 전용(관리자 대기열 밖). 매장 포스터는 싣지 않는다. */
+  feedRequest?: boolean;
 }
 
 const PAYMENT_BASE = ['현금', '카드', '매장이용권'];
@@ -100,7 +107,7 @@ const MAX_RANKS = 20;
 const MAX_EVENTS = 10;
 const MAX_SIDE_EVENTS = 5;
 
-export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [], storeVenueId = null }: PosterFormModalProps) {
+export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [], storeVenueId = null, group = null }: PosterFormModalProps) {
   const toast  = useToast();
   const { user } = useAuth();
   const isEdit = !!schedule;
@@ -176,6 +183,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const fileRef = useRef<HTMLInputElement>(null);
   // 세부 규칙 접힘 — 무언가 입력돼 있으면 머리에 개수를 보여 준다(접힌 채로도 '비어 있지 않음'을 안다)
   const [moreOpen, setMoreOpen] = useState(false);
+  // 그룹 포스터의 '전체 일정에도 공개 요청' — 기본 꺼짐(그룹 전용). 수정이면 저장본 값.
+  const [feedReq, setFeedReq] = useState(false);
+  useEffect(() => { if (open) setFeedReq(schedule?.feedRequest ?? false); }, [open, schedule]);
+  // 기간 안 프리미엄 매장이면 저장 즉시 공개(서버 auto_approve_verified_poster 가 정본 — 여기는 안내만)
+  const premiumVenue = !group && !isAdmin && !!venues.find((v) => v.id === (form.venueId || storeVenueId || user?.venueId))?.premium;
   const prizeListed = form.rankingPrizes.some((r) => r.amount > 0) || form.prizes.length > 0;
   // KW-1b — 이용권 1장 = 1T = 1만원(오너 결정). N장 × 1만원이 참가비와 다르면 경고만(저장은 허용).
   const voucherMismatch = voucherPerEntryMismatch(form.voucherPerEntry, form.buyIn, TICKET_WON);
@@ -304,7 +316,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (imgFile && user) {
       setUploading(true);
       try {
-        posterUrl = await uploadPoster(user.id, imgFile);
+        posterUrl = await uploadPoster(user.id, imgFile, group?.id);
       } catch {
         toast.show('이미지 업로드에 실패했습니다. 다시 시도해 주세요.', 'error');
         setUploading(false);
@@ -322,7 +334,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     setSaving(true);
     let res: PosterSubmitResult | void;
     try {
-      res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl, saveParts: posterSaveParts(schedule ?? null, isEdit ? initial : null, form) });
+      res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl, saveParts: posterSaveParts(schedule ?? null, isEdit ? initial : null, form),
+        ...(group && { groupId: group.id, groupName: group.name, feedRequest: feedReq }) });
     } catch {
       // onSubmit 이 던지는 경우까지 막는다 — 던져도 폼은 열린 채 남아야 한다.
       res = { ok: false, saved: 0, total: 1 };
@@ -332,7 +345,10 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     const ok = res == null || res.ok;
     if (!ok) return; // ⚠ 실패·부분 성공은 **닫지 않는다.** 구체적인 실패 문구는 App 이 이미 띄웠다.
 
-    toast.show(isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
+    toast.show(group
+      ? (feedReq ? '그룹에 올렸습니다 · 전체 일정 공개는 관리자 승인 후입니다' : '그룹에 올렸습니다 (그룹 전용)')
+      : premiumVenue ? (isEdit ? '포스터가 수정되었습니다 · 프리미엄 매장이라 바로 공개됩니다' : '포스터가 등록되었습니다 · 프리미엄 매장이라 바로 공개됩니다')
+      : isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
     // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(프리셋 실패는 포스터와 무관).
     //   ⚠ 포스터가 **실제로 저장된 뒤**에만 만든다. 종전에는 저장 실패에도 프리셋이 남았다.
     if (alsoPreset && presetVenueId && form.title.trim()) {
@@ -345,7 +361,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
   // 서버(prevent_self_approve_poster)와 같은 여섯 칸을 App 의 patch 규칙(prizePool = GTD ? 만원×10,000 : 0)으로 비교한다.
   //   ⚠ 서버는 buy_in 을 **통째로** 비교한다 — 리엔트리·스택·얼리처럼 참가비 외 칸을 바꿔도 재심사다. 실제로 실릴 buy_in 으로 판정한다.
-  const reReview = isEdit && !isAdmin && !!schedule?.approved && (posterCoreChanged(form, schedule)
+  const reReview = isEdit && !isAdmin && !premiumVenue && !!schedule?.approved && (posterCoreChanged(form, schedule)
     || (() => { const bi = posterSaveParts(schedule, initial, form).buyIn; return !!bi && !sameJson(bi, schedule.buyIn); })());
 
   return (
@@ -374,7 +390,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         )}
 
         {/* ── PL2c: 게임 프리셋 불러오기(신규 전용) — 포스터/장부/클락 공용 PresetPicker ── */}
-        {!isEdit && presetVenueId && (
+        {!isEdit && presetVenueId && !group && (
           <PresetPicker venueId={presetVenueId} scope="poster" onApply={applyGamePreset} />
         )}
 
@@ -421,7 +437,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         </div>
 
         {/* 관리자: 홀덤펍 선택(기존) 또는 직접 입력 */}
-        {isAdmin && (
+        {isAdmin && !group && (
           <FieldWrap label="홀덤펍 (매장)" required htmlFor={venueSelectId}>
             <div className="space-y-1.5">
               <select
@@ -834,7 +850,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         </FieldWrap>
 
         {/* PL3: 등록 직후 프리셋 저장 인라인 — 프리셋이 별도 작업이 아니라 등록의 부산물로 쌓이게 */}
-        {!isEdit && presetVenueId && (
+        {!isEdit && presetVenueId && !group && (
           <label className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-xs text-ink-secondary">
             <input type="checkbox" checked={alsoPreset} onChange={(e) => setAlsoPreset(e.target.checked)} className="h-4 w-4 accent-accent-300" />
             이 설정을 <b className="text-ink-primary">게임 프리셋으로도 저장</b>
@@ -843,6 +859,22 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 20260925g N14 — 승인된 포스터의 핵심 항목(제목·참가비·상금·보장·날짜·시작 시각)이 바뀌면 서버 트리거가 approved=false 로 되돌린다.
             업주가 모르고 저장하면 손님 화면에서 포스터가 내려가 놀란다 → **실제로 바뀌었을 때만** 저장 전에 알린다(관리자는 재심사 대상이 아니다). */}
+        {/* 20261002h — 그룹 포스터: 그룹 페이지에는 바로 보이고, 전체 일정 피드는 관리자 승인 후에만 오른다. */}
+        {group && (
+          <label data-testid="poster-feed-request" className="flex items-start gap-2 rounded-input border border-border-default bg-surface-low px-3 py-2.5 text-xs text-ink-secondary">
+            <input type="checkbox" checked={feedReq} onChange={(e) => setFeedReq(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-accent-300" />
+            <span>
+              <b className="text-ink-primary">전체 일정에도 공개 요청</b>
+              <span className="block text-2xs text-ink-muted mt-0.5">{group.name} 그룹 페이지에는 바로 올라갑니다. 체크하면 관리자 승인 뒤 일정탐색에도 보입니다.</span>
+            </span>
+          </label>
+        )}
+        {premiumVenue && (
+          <p role="status" data-testid="poster-premium-notice"
+            className="rounded-input border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-2xs leading-relaxed text-accent-200">
+            프리미엄 매장 — 저장하면 관리자 승인 없이 <b>바로 공개</b>됩니다.
+          </p>
+        )}
         {reReview && (
           <p role="status" data-testid="poster-rereview-notice"
             className="rounded-input border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-2xs leading-relaxed text-amber-400">

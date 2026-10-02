@@ -3652,6 +3652,7 @@ export default function App() {
         rankingPrizes: data.rankingPrizes.filter((r) => r.amount > 0),
         promotions:   data.events,
         seats,
+        ...(data.feedRequest !== undefined && { feedRequest: data.feedRequest }), // 그룹 포스터만(20261002h)
       };
       // `null`(이미지 제거)도 **반드시 실어 보낸다** — 예전엔 제거가 undefined 라 이 게이트에서
       //   사라졌고, 업주는 '수정되었습니다' 를 보고도 옛 이미지가 그대로 남는 것을 봤다.
@@ -3680,9 +3681,11 @@ export default function App() {
     // 로그인이 풀린 상태 — 조용히 무시하면 폼이 '등록됐다' 고 닫힌다. 실패로 돌려준다.
     if (!user) { toast.show('로그인이 풀렸습니다. 다시 로그인해 주세요.', 'error'); return { ok: false, saved: 0, total: 1 }; }
     const adminPosting = user.role === 'admin';
-    // 관리자: 선택/직접입력한 홀덤펍 사용, 즉시 승인. 업주: 본인 매장, 승인 대기.
-    const venueIdToUse = adminPosting ? (data.venueId || '') : (storePosterVenueRef.current ?? user.venueId ?? '');
-    const pubNameToUse = adminPosting
+    // 관리자: 선택/직접입력한 홀덤펍 사용, 즉시 승인. 업주: 본인 매장, 승인 대기(기간 안 프리미엄 매장은 서버가 즉시 공개).
+    // 그룹 포스터(20261002h): 그 그룹으로 저장 — 공개 여부는 서버 트리거가 정한다(그룹 전용은 언제나 비공개).
+    const groupPosting = !!data.groupId;
+    const venueIdToUse = groupPosting ? data.groupId! : adminPosting ? (data.venueId || '') : (storePosterVenueRef.current ?? user.venueId ?? '');
+    const pubNameToUse = groupPosting ? (data.groupName ?? '그룹') : adminPosting
       ? (venues.find((v) => v.id === data.venueId)?.name ?? data.pubName ?? '미지정')
       : (venues.find((v) => v.id === venueIdToUse)?.name ?? user.name);
     const addDays = (iso: string, n: number) => { const dd = new Date(iso + 'T00:00:00'); dd.setDate(dd.getDate() + n); return dd.toLocaleDateString('en-CA'); };
@@ -3690,7 +3693,8 @@ export default function App() {
       title:          data.title,
       venueId:        venueIdToUse,
       pubName:        pubNameToUse,
-      approved:       adminPosting ? true : false,
+      approved:       adminPosting && data.feedRequest !== false,
+      ...(groupPosting && { feedRequest: data.feedRequest ?? false }),
       region:         data.region,
       date:           dateStr,
       startTime:      data.startTime,
@@ -4890,7 +4894,7 @@ export default function App() {
           <Suspense fallback={<OverlayFallback />}>
             {/* key=대상: 그룹/매장이 바뀌면 재마운트 — 이전 대상의 늦은 멤버십·게시글·전송 응답이 새 대상에 붙지 않는다 */}
             {isGroup ? (
-              <GroupPage key={vid} open={vOpen} group={ov} onClose={closeVenue} />
+              <GroupPage key={vid} open={vOpen} group={ov} onClose={closeVenue} onSubmitPoster={handleSubmitPoster} />
             ) : (
               <VenuePage
                 key={vid}
@@ -4943,7 +4947,7 @@ export default function App() {
         schedule={posterFormTarget !== null ? posterFormTarget : lastPosterTarget.current}
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
-        venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
+        venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region, premium: v.isPaidAd && (v.kind ?? 'venue') === 'venue' }))}
         pastPosters={schedules}
         storeVenueId={storePosterVenueRef.current}
       />

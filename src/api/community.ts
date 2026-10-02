@@ -412,10 +412,13 @@ export async function updateVenueStatus(venueId: string, status: VenueStatus): P
     .update({ status, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
-export async function setVenueAd(venueId: string, isAd: boolean): Promise<void> {
+/** 관리자: 프리미엄 지정/해제. `until` — ISO = 그때까지, null = 기한 없음, undefined = 기간 칸을 건드리지 않는다
+ *  (마이그레이션 20261002h 전 서버에는 premium_until 칸이 없다 — 그때 해제는 키를 안 실어야 저장된다).
+ *  비관리자 변경은 서버 트리거(guard_venue_verification · _guard_venue_premium_until)가 막는다. */
+export async function setVenueAd(venueId: string, isAd: boolean, until?: string | null): Promise<void> {
   if (IS_MOCK) return;
   await mustAffect(supabase.from('venues')
-    .update({ is_paid_ad: isAd, updated_at: new Date().toISOString() }).eq('id', venueId));
+    .update({ is_paid_ad: isAd, ...(until !== undefined && { premium_until: until }), updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 export async function deleteVenue(venueId: string): Promise<void> {
@@ -1118,7 +1121,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     cnt('schedules'),
     // 반려된 포스터는 '승인대기' 가 아니다(20260911o) — 행이 더 이상 지워지지 않으므로
     // 필터를 안 걸면 이 숫자가 영구히 부풀고 좌측 네비 배지(pending.length)와 갈라진다.
-    cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null)),
+    // 그룹 전용(feed_request=false, 20261002h)도 대기가 아니다 — AdminTab 대기열(pending)과 같은 기준.
+    //   ⚠ 이 칸은 20261002h 가 만든다 — 클라이언트를 마이그레이션보다 먼저 내보내면 이 조회가 실패한다(DB 먼저).
+    cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null).eq('feed_request', true)),
     cnt('profiles', (q) => q.gt('joined_at', since)),
   ]);
   // 🔴 점검 A-10: RLS 가 막은 count 는 오류가 아니라 **0** 으로 온다(권한 없는 세션에서 '전체 회원 0 · 업주 0' 이 그려졌다).

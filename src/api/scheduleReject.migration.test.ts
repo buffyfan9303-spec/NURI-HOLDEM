@@ -143,12 +143,13 @@ describe('20260911o — 클라이언트: 앱이 먼저 배포돼도 화면이 �
     expect(API).toContain('rejectReason: r.reject_reason ?? null');
   });
 
-  it('대기열이 반려된 것을 제외한다', () => {
-    expect(ADMIN).toContain('schedules.filter((s) => !s.approved && !s.rejectedAt)');
+  // 20261002h — 그룹 전용(feed_request=false)도 대기열이 아니다. 대기열·통계가 같은 기준이어야 배지와 숫자가 안 갈린다.
+  it('대기열이 반려된 것·그룹 전용을 제외한다', () => {
+    expect(ADMIN).toContain('schedules.filter((s) => !s.approved && !s.rejectedAt && s.feedRequest !== false)');
   });
 
-  it("관리자 분석 '승인대기 포스터' 도 반려분을 빼고 센다 — 안 그러면 영구히 부푼다", () => {
-    expect(STATS).toContain("cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null))");
+  it("관리자 분석 '승인대기 포스터' 도 반려분·그룹 전용을 빼고 센다 — 안 그러면 영구히 부푼다", () => {
+    expect(STATS).toContain("cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null).eq('feed_request', true))");
   });
 
   it('업주 화면이 반려 사유를 그린다', () => {
