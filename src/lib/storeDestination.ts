@@ -33,6 +33,9 @@ export interface StoreDest {
   scheduleId?: string;
   /** 장부의 정산/마감으로 데려간다(스크롤이 아니라 포커스 — 정산바는 fixed 라 이미 화면에 있다). */
   settle?: boolean;
+  /** 2026-10-02 오너(데일리 펍) — 게임을 고르지 않고 단계 바로 장부에 들어온 경우. 장부가 그날 **진행 중인 마지막 게임**에 착지한다
+   *  (메인이 마감이고 진행 중 게임이 따로 있으면 메인 마감 보드에 서지 않는다). 칩·대시보드처럼 게임을 고른 이동은 주지 않는다. */
+  autoLand?: boolean;
 }
 
 /** 대시보드가 부르는 이동 함수. 문자열 = 문맥 없는 기존 이동. */
@@ -52,7 +55,7 @@ export function toDest(d: string | StoreDest): StoreDest {
 
 /** 목적지가 시드 상태에 남길 값. 키가 없으면 **그 시드는 건드리지 않는다**(기존 동작 보존). */
 export interface DestSeeds {
-  ledgerSeed?: { date: string; gameSeq: number; scheduleId: string; isNew: boolean };
+  ledgerSeed?: { date: string; gameSeq: number; scheduleId: string; isNew: boolean; autoLand?: boolean };
   clockSeed?: string;
   clockSeedGame?: number;
   rankingDraft?: { date: string; names: string[]; event: string };
@@ -76,7 +79,7 @@ export function resolveDest(d: string | StoreDest): { section: string; seeds: De
     if (dest.section === 'ledger') {
       // isNew=false — 이미 있는 장부를 여는 이동이다. 새 장부 프리필(포스터→장부)은
       // 기존 onOpenLedgerFromPosters 경로가 그대로 담당한다.
-      seeds.ledgerSeed = { date: dest.date, gameSeq: seq, scheduleId: dest.scheduleId ?? '', isNew: false };
+      seeds.ledgerSeed = { date: dest.date, gameSeq: seq, scheduleId: dest.scheduleId ?? '', isNew: false, ...(dest.autoLand ? { autoLand: true } : {}) };
     } else if (dest.section === 'clock') {
       seeds.clockSeed = dest.date;
       seeds.clockSeedGame = seq;

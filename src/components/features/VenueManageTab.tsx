@@ -336,6 +336,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 클락은 seedGameSeq 배선으로 즉시 따라오고, 순위(이벤트명 기반)엔 아래 픽 신호만 얹는다.
   const [gameSel, setGameSel] = useState<GameSel | null>(null);
   const [ledgerFollow, setLedgerFollow] = useState<{ seq: number; n: number } | null>(null); // 칩 픽 → 장부 보드 추종
+  // 2026-10-02 오너(데일리 펍) — 이번 세션에 게임을 한 번이라도 골랐는가(칩·클락·장부). 안 골랐으면 단계 바 '장부' 진입이
+  //   그날 진행 중인 마지막 게임에 착지한다(storeDestination.autoLand). 마감된 메인 보드에 서던 것(감사 1-3).
+  const gameChosen = useRef(false);
   // '정산' 이동 신호(논스). 스크롤이 아니라 신호다 — 장부의 정산바는 position:fixed 라 이미 화면에 있고,
   // 필요한 건 "그 바의 마감 버튼을 지목해 주는 것"이다. 판이 붙은 뒤 장부가 알아서 포커스·강조한다.
   const [settleSignal, setSettleSignal] = useState(0);
@@ -541,6 +544,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 순위는 gameSel 신호로, 장부 보드는 followGame 신호(NuriPosLedger 제어 prop)로
   // 오늘·해당 게임에 함께 착지한다 — 칩 하나로 장부·클락·순위 3면이 같은 게임을 본다.
   const onPickGame = useCallback((seq: number, title?: string) => {
+    gameChosen.current = true;
     setClockSeed(null);
     setClockSeedGame(seq);
     const n = ++gameSelN.current;
@@ -555,8 +559,21 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     onGotoStore({ section: 'ledger', date: businessDateOf(venueId), gameSeq: seq });
   }, [onPickGame, onGotoStore, venueId]);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
+    gameChosen.current = true;
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
+  // 2026-10-02 — 게임 줄이 장부 스위처 하나가 된 뒤, 장부가 영업일에 보는 게임을 셸에 알린다(문맥 줄·클락 시드·순위 칩 픽).
+  //   onPickGame 과 달리 장부 추종 신호(ledgerFollow)는 내지 않는다 — 장부가 이미 그 게임이다(되먹임 0). 같은 게임이면 아무것도 안 바꾼다.
+  const lastLedgerGame = useRef(0);
+  const onLedgerGame = useCallback((seq: number, title?: string) => {
+    gameChosen.current = true;
+    if (lastLedgerGame.current === seq) return;
+    lastLedgerGame.current = seq;
+    setClockSeed(null);
+    setClockSeedGame(seq);
+    const n = ++gameSelN.current;
+    setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
+  }, []);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
   const onGotoRankingFromPosters = useCallback((date: string, event?: string) => {
     setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
@@ -954,6 +971,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 🔴 오너 10-02 결정 「중복 줄을 빈칸으로 올리기」 — 모바일 요약 머리 칸의 '오늘 장부 요약' 제목 줄 오른쪽 자리.
   //   StoreDashboard 가 자기 새로고침(갱신 시각·라이브·버튼)을 이 자리로 portal 한다(상태·동작은 대시보드에 그대로).
   const [dashRefreshSlot, setDashRefreshSlot] = useState<HTMLElement | null>(null);
+  // 🔴 2026-10-02 오너(데일리 펍) 「게임 선택 줄은 하나로」 — 장부 단계에서는 이 칩 줄 자리를 장부가 쓴다.
+  //   장부(NuriPosLedger)가 자기 게임 스위처(날짜 따라감·작성 중 사이드·+ 사이드)를 이 자리로 portal 한다 — 같은 자리·같은 모양이라
+  //   단계를 옮겨도 시작선이 그대로고, 장부 판 안의 두 번째 게임 줄(감사 L-3 중복)이 사라진다. 선택 상태의 정본은 장부다.
+  const [ledgerGameSlot, setLedgerGameSlot] = useState<HTMLElement | null>(null);
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -1211,7 +1232,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     return onGotoStore(fromDash);
                   }
                   return st === 'ledger'
-                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
+                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, autoLand: !ledgerSeed && !gameChosen.current })
                     : gotoSection(st);
                 }} />
               </div>
@@ -1258,7 +1279,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <div className={isGame ? undefined : 'lg:hidden'}>
                     <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
                       canPosters={canPosters} onPick={isGame ? onPickGame : onPickGameToLedger} onNewGame={createPosterHere}
-                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame} />
+                      venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} summary={!isGame}
+                      slotRef={isGame && renderGameStep === 'ledger' && ledgerOk ? setLedgerGameSlot : undefined} />
                   </div>
                   {/* grid-cols-1 = minmax(0,1fr): auto 트랙은 가장 긴 설명 폭(390 에서 564px)까지 늘어나 말줄임이 화면 밖에서 일어났다 */}
                   <div className="grid grid-cols-1 max-lg:border-b max-lg:border-border-subtle max-lg:pb-3" data-step-header="">
@@ -1369,6 +1391,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <LedgerWorkspaceM venueId={venueId} canViewVouchers={caps.voucher} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
                     <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                       followGame={ledgerFollow}
+                      gameSlot={ledgerGameSlot}
+                      onTodayGame={onLedgerGame}
                       settleSignal={settleSignal}
                       onMakeRankingDraft={onMakeRankingDraft}
                       onOpenClock={onOpenClockFromLedger}
@@ -1609,8 +1633,10 @@ function warmGameChips(venueId: string) {
   if (chipCache.has(key)) return;
   getLedgerGames(venueId, businessDateOf(venueId)).then((g) => { chipCache.set(key, g); }).catch(() => {});
 }
-const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false }: {
+const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame, summary = false, slotRef }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
+  /** 장부 단계 — 칩 줄 대신 빈 자리를 그리고 장부가 자기 게임 스위처를 portal 한다(오너 10-02 '게임 줄 하나로'). */
+  slotRef?: (el: HTMLDivElement | null) => void;
   /** 🔴 오너 2026-10-01 — 요약·이용권(모바일)의 머리 칸 빈 띠를 '매장 › 날짜(요일) › 오늘 게임' 요약 줄로 채운다.
    *  문맥 줄 자리·높이를 그대로 쓰고(시작선·구분선 불변), 칩 줄은 게임 단계와 같이 보인다(오너 10-02 결정).
    *  날짜는 항상 영업일(오늘), 게임 칸은 오늘 게임 수(2개 이상) 또는 그 게임 이름(1개). 조회 전·실패는 같은 높이 자리표시. */
@@ -1666,7 +1692,8 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
     : games.length === 1 ? (games[0].title ? `${label(games[0].gameSeq)} · ${games[0].title}` : label(games[0].gameSeq))
     : `오늘 게임 ${games.length}개`;
   return (
-    <div className="space-y-2">
+    // flex gap — 장부 단계의 빈 자리(empty:hidden)가 줄 간격을 남기지 않게(space-y 는 숨은 형제에도 여백을 준다).
+    <div className="flex flex-col gap-2">
       {/* 스텝 4개(포스터·장부·클락·순위) 공통 위치·공통 문법 — "지금 어느 대회를 만지는 중인가"를
           스텝을 옮겨도 같은 자리에서 계속 읽는다. 각 스텝의 날짜·게임 입력칸은 그대로 정본으로 남는다. */}
       <p data-summary-line={summary ? '' : undefined} className="flex min-w-0 items-center gap-1 whitespace-nowrap text-2xs">
@@ -1693,7 +1720,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
       {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지).
           🔴 오너 2026-10-02 결정 「요약에도 오늘 게임 칩 표시」 — 요약 줄 모드(요약·이용권)에서도 같은 자리·같은 모양으로 보인다
           (종전엔 invisible 로 높이만 예약해 빈 띠였다). 누르면 부모가 준 onPick 이 그 게임을 고른 채 장부로 데려간다. */}
-      {games.length > 1 && (
+      {slotRef ? <div ref={slotRef} data-ledger-game-slot="" className="min-w-0 empty:hidden" /> : games.length > 1 && (
         <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
           <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
           {games.map((g) => {
