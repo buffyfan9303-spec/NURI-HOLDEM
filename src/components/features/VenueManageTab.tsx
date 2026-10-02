@@ -3320,7 +3320,7 @@ function StaffManager({ venueId }: { venueId: string }) {
           {/* 구성원 목록 */}
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
-            <p className="text-2xs text-ink-muted">직책은 표시용 · <span className="text-accent-300 dark:text-accent-200 font-semibold">장부·순위 권한</span>은 따로 켜야 적용</p>
+            <p className="text-2xs text-ink-muted">직책은 표시용 · <span className="text-accent-300 dark:text-accent-200 font-semibold">장부·순위 권한</span>을 켜야 적용(장부 담당 후보가 됨)</p>
             <datalist id="staff-title-suggest">
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>

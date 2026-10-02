@@ -14,6 +14,7 @@ import ContactListEditor from './VenueContactFields';
 import CheckinLocationSection from './CheckinLocationSection';
 import { cleanContacts, ensureOneContact, normalizeKakaoUrl } from '../../lib/venueContacts';
 import { msgOf } from '../../lib/dbError';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -52,17 +53,20 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao
   // 2026-10-03 D1 — 이 판은 매장 전환에 다시 마운트되지 않는다(keep-alive). 저장 중 매장을 바꾸면 A 의 설정이 B 판 상태로 들어가
   //   다음 저장이 A 값을 B 에 쓴다 → 응답 때 지금 매장이 같을 때만 로컬 상태를 바꾼다(저장 자체는 누른 매장 A 로 이미 갔다).
   const venueNow = useRef(venueId);
-  useEffect(() => { venueNow.current = venueId; }, [venueId]);
+  venueNow.current = venueId; // 렌더 중 대입 — useEffect 로 미루면 커밋~effect 사이에 온 응답이 샌다(D1 재검토 P3)
 
+  // 2026-10-03 D1 재검토 P2 — 매장이 바뀌면 A 값을 먼저 비운다. 종전엔 조회가 실패해도 loaded=true 로 잠금이 풀려
+  //   B 화면이 A 설정을 든 채 저장할 수 있었다(관리자 매장 전환 — 판이 다시 마운트되지 않는 경로). 실패면 잠금 유지 + 다시 시도.
+  const [loadErr, setLoadErr] = useState(false);
+  const [loadKey, setLoadKey] = useState(0);
   useEffect(() => {
     let alive = true;
-    setLoaded(false);
+    setLoaded(false); setLoadErr(false); setCfg({});
     getVenuePageConfig(venueId)
-      .then((c) => { if (alive) setCfg(c ?? {}); })
-      .catch(() => {})
-      .finally(() => { if (alive) setLoaded(true); });
+      .then((c) => { if (alive) { setCfg(c ?? {}); setLoaded(true); } })
+      .catch(() => { if (alive) setLoadErr(true); });
     return () => { alive = false; };
-  }, [venueId]);
+  }, [venueId, loadKey]);
 
   const order: string[] = useMemo(() => {
     const saved = (cfg.tabOrder ?? []).filter((k) => PAGE_TABS.some((t) => t.key === k));
@@ -101,6 +105,7 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao
     <div className="space-y-3">
       <section className="rounded-aura border card-aura p-3 space-y-2" aria-busy={!loaded || undefined}>
         <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
+        {loadErr && <LoadErrorCard compact what="탭 순서" onRetry={() => setLoadKey((k) => k + 1)} />}
         <p className="text-2xs text-ink-muted">가장 위가 가장 왼쪽에 노출됩니다.</p>
         <ul className="space-y-1">
           {order.map((k, i) => {
@@ -158,20 +163,28 @@ function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEd
   const [kakao, setKakao] = useState('');
   const [savedKakao, setSavedKakao] = useState('');
   const [saving, setSaving] = useState(false);
+  // 2026-10-03 D1 재검토 P1·P2 — 관리자 매장 전환에서 이 판은 다시 마운트되지 않는다.
+  //   ① 저장 응답이 전환 뒤에 오면 A 연락처가 B 입력칸에 들어가고, 그대로 B 를 저장하면 B 공개 매장 페이지에 A 번호가 실렸다.
+  //   ② 조회 실패면 A 값을 든 채 잠금이 풀렸다. → 지금 매장 ref 로 응답을 거르고, 조회 시작에 비우고, 실패면 잠금 유지.
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId; // 렌더 중 대입(P3)
+  const [loadErr, setLoadErr] = useState(false);
+  const [loadKey, setLoadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    setLoaded(false);
+    setLoaded(false); setLoadErr(false);
+    setAddr(''); setHours(''); setContacts([{ label: '', phone: '' }]); setKakao(''); setSavedKakao('');
     getVenueContactInfo(venueId)
       .then((v) => {
         if (!alive) return;
         setAddr(v.address); setHours(v.hours); setContacts(ensureOneContact(v.contacts));
         setKakao(v.kakao); setSavedKakao(v.kakao);
+        setLoaded(true);
       })
-      .catch(() => {})
-      .finally(() => { if (alive) setLoaded(true); });
+      .catch(() => { if (alive) setLoadErr(true); });
     return () => { alive = false; };
-  }, [venueId]);
+  }, [venueId, loadKey]);
 
   const save = async () => {
     const next = cleanContacts(contacts);
@@ -183,7 +196,12 @@ function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEd
     setSaving(true);
     try {
       await updateVenueContact(venueId, { address: addr, hours, contacts: next });
-      if (nextKakao !== savedKakao) { await updateVenueKakao(venueId, nextKakao); setSavedKakao(nextKakao); setKakao(nextKakao); }
+      if (venueNow.current !== venueId) return; // 저장은 누른 매장 A 로 이미 갔다 — 지금 판(B) 상태는 건드리지 않는다
+      if (nextKakao !== savedKakao) {
+        await updateVenueKakao(venueId, nextKakao);
+        if (venueNow.current !== venueId) return;
+        setSavedKakao(nextKakao); setKakao(nextKakao);
+      }
       setContacts(ensureOneContact(next));
       toast.show(canEditKakao ? '위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다' : '위치 · 연락처 · 영업시간을 저장했습니다', 'success');
     } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
@@ -197,6 +215,7 @@ function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEd
         <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간 · 카카오톡</h3>
         <p className="text-2xs text-ink-muted">연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>입니다.</p>
       </div>
+      {loadErr && <LoadErrorCard compact what="연락처" onRetry={() => setLoadKey((k) => k + 1)} />}
       <fieldset disabled={!loaded} className="contents">
         <label className="block space-y-1">
           <span className="block text-2xs font-semibold text-ink-secondary">주소</span>
@@ -242,8 +261,11 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
   const [check, setCheck] = useState<'idle' | 'ok' | 'taken' | 'invalid'>('idle');
   const [busy, setBusy] = useState(false);
 
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId; // 렌더 중 대입(D1 재검토 P3)
   useEffect(() => {
     let alive = true;
+    setSaved(null); setSlug(''); setCheck('idle');
     getVenueSlug(venueId).then((s) => { if (alive) { setSaved(s); setSlug(s ?? ''); } }).catch(() => {});
     return () => { alive = false; };
   }, [venueId]);
@@ -262,8 +284,7 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
     setBusy(true);
     try {
       await setVenueSlug(venueId, slug);
-      setSaved(slug || null);
-      setCheck('idle');
+      if (venueNow.current === venueId) { setSaved(slug || null); setCheck('idle'); }
       toast.show(slug ? `내 매장 링크가 nuriholdem.com/s/${slug} 로 설정됐습니다` : '커스텀 링크를 해제했습니다', 'success');
     } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
     finally { setBusy(false); }
@@ -317,20 +338,23 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
   const [saving, setSaving] = useState(false);
   // 2026-10-03 D1 — 위 VenueCustomizePanel 과 같은 이유(저장 응답이 전환 뒤 B 판 상태를 덮지 않게).
   const venueNow = useRef(venueId);
-  useEffect(() => { venueNow.current = venueId; }, [venueId]);
+  venueNow.current = venueId; // 렌더 중 대입 — useEffect 로 미루면 커밋~effect 사이에 온 응답이 샌다(D1 재검토 P3)
   const [nbName, setNbName] = useState('');
   const [nbUnit, setNbUnit] = useState('');
   const [nbPeriod, setNbPeriod] = useState<'all' | 'month' | 'season'>('all');
 
+  // 2026-10-03 D1 재검토 P2 — 매장이 바뀌면 A 값을 먼저 비운다. 종전엔 조회가 실패해도 loaded=true 로 잠금이 풀려
+  //   B 화면이 A 설정을 든 채 저장할 수 있었다(관리자 매장 전환 — 판이 다시 마운트되지 않는 경로). 실패면 잠금 유지 + 다시 시도.
+  const [loadErr, setLoadErr] = useState(false);
+  const [loadKey, setLoadKey] = useState(0);
   useEffect(() => {
     let alive = true;
-    setLoaded(false);
+    setLoaded(false); setLoadErr(false); setCfg({});
     getVenuePageConfig(venueId)
-      .then((c) => { if (alive) setCfg(c ?? {}); })
-      .catch(() => {})
-      .finally(() => { if (alive) setLoaded(true); });
+      .then((c) => { if (alive) { setCfg(c ?? {}); setLoaded(true); } })
+      .catch(() => { if (alive) setLoadErr(true); });
     return () => { alive = false; };
-  }, [venueId]);
+  }, [venueId, loadKey]);
 
   const customBoards = cfg.customBoards ?? [];
   const allBoards: RankBoardId[] = [...BUILTIN_METRICS, ...customBoards.map((b) => `custom:${b.key}`)];
@@ -413,7 +437,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
     finally { setSaving(false); }
   };
 
-  if (!loaded) return <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  if (!loaded) return loadErr
+    ? <LoadErrorCard what="순위 설정" onRetry={() => setLoadKey((k) => k + 1)} />
+    : <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>;
 
   // 제목·설명은 VenueManageTab 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
@@ -894,7 +920,7 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
         </select>
       </div>
       {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">아직 데이터가 없습니다</p>
+        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">아직 데이터가 없습니다 · 순위·장부·포인트 입력이 쌓이면 표시</p>
         : (
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {rows.map((b, i) => (

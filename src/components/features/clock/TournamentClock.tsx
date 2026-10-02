@@ -129,6 +129,10 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   }, [saver, bumpClockReq]);
   // L-06(audit-link-1002) — 매장 전환에 다시 마운트되지 않으므로 늦게 온 A 매장 응답은 run 이 버린다(공용 지점 lib/useVenueScope).
   const run = useVenueScope(venueId);
+  // 2026-10-03 D1 재검토 P2 — 누름 한 번 안의 await 뒤에 A 클로저의 switchGame/startClock 이 새 요청 번호를 받아 나가면
+  //   매장 전환 때 올린 번호에 걸리지 않아 B 화면에 A 클락이 떴다(관리자 전환 경로). await 뒤마다 지금 매장을 확인한다.
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId; // 렌더 중 대입 — effect 한 틱 사이 응답이 새지 않게
   const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
@@ -256,10 +260,12 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   const addSide = useCallback(async (nextSeq: number) => {
     // C8(2026-09-25): 기기 로컬 오늘이 아니라 **지금 대회의 장부 날짜**(자정 넘긴 대회면 어제) → 메인 클락 → KST 오늘.
     const mainClock = state?.sessionDate ? null : await getClockState(venueId, 1).catch(() => null);
+    if (venueNow.current !== venueId) return;
     const linkDate = sideGameDate(state, mainClock);
     if (window.confirm(`사이드${nextSeq - 1} 게임을 장부에도 만들고 클락을 시작할까요?\n\n확인 = 장부 사이드 게임 생성 + 클락 / 취소 = 클락만`)) {
       try {
         const main = await getLedgerSession(venueId, linkDate, 1);
+        if (venueNow.current !== venueId) return; // 그새 매장을 바꿨다 — A 에 사이드 장부를 만들지도, B 화면을 A 클락으로 돌리지도 않는다
         // ⚠ P1(2026-09-14) — 오늘 메인 장부가 없으면 getLedgerSession 은 **빈 세션**을 돌려준다(ledger.ts:637).
         //   그걸 그대로 복사하면 **단가 0원짜리 사이드 장부**가 생기고, 그 0원 게임이 장부 목록과
         //   venue_today_games(출석 QR)에까지 나타난다. 단가 0 은 정산에서 엔트리 분모가 0 이라 의미도 없다.
@@ -280,11 +286,13 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
         toast.show(`사이드${nextSeq - 1} 게임을 장부에 생성했어요`, 'success');
       } catch (e) { toast.show(msgOf(e, '사이드 게임 생성 실패'), 'error'); }
     }
+    if (venueNow.current !== venueId) return;
     switchGame(nextSeq);
   }, [venueId, switchGame, toast, state]);
   // 빈 슬롯 1탭 시작 — 메인(또는 현재) 클락 설정을 복사해 그 게임 클락을 오늘 장부에 연동하여 바로 시작
   const quickStart = async (g: number) => {
     const main = await getClockState(venueId, 1).catch(() => null);
+    if (venueNow.current !== venueId) return;
     const base = main?.config ?? state?.config ?? defaultClockConfig();
     // 사이드는 제목에 접미 강제 — 같은 event_name 으로 END 순위를 저장하면
     // 메인 대회 순위·점수 지급이 통째로 교체되는 사고가 났다(save 가 (날짜,이벤트) 단위 replace)

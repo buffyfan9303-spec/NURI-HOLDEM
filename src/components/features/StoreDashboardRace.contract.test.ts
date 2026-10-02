@@ -269,7 +269,7 @@ describe('§9-1 · 좁은 재조회와 1회성 effect 도 같은 소유자 축�
   it('매장당 1회 로드(생일·요일 평균·지난 회차)도 ownerOnly 로 소유자를 확인한다', () => {
     expect(code).toMatch(/getUpcomingBirthdays\(venueId\)\.then\(ownerOnly\(owner, setBdays\)\)/);
     expect(code).toMatch(/getLedgerRange\(venueId, d28\[0\], d28\[27\]\)\.then\(ownerOnly\(owner, /);
-    expect(code).toMatch(/getLastClosedRound\(venueId, d\)\.then\(ownerOnly\(owner, setLastRound\)\)/);
+    expect(code).toMatch(/getLastClosedRound\(venueId, d\)\.then\(ownerOnly\(owner, [^]*?\.catch\(ownerOnly\(owner,/);
     expect((code.match(/const owner = `\$\{venueId\}#\$\{d\}`;/g) ?? []).length).toBe(3);
   });
 
