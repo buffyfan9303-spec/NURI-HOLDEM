@@ -68,7 +68,7 @@ export function MzoneCalc() {
     : m >= 1 ? { l: '레드 · 위험(푸시/폴드)', c: '#EF4444' }
     : { l: '데드 · 즉시 올인', c: '#94A3B8' };
   return (
-    <CalcCard title="M-zone 스택 코치" desc="한 바퀴 비용 대비 스택(M)으로 전략 존 판단">
+    <CalcCard title="M-zone 스택 코치" desc="한 바퀴 비용 대비 스택(M)으로 존 판단">
       <div className="grid grid-cols-2 gap-2">
         <Field label="내 스택"><NumIn value={stack} onChange={setStack} /></Field>
         <Field label="인원"><NumIn value={players} onChange={setPlayers} suffix="명" /></Field>
@@ -111,7 +111,7 @@ export function EvCalc() {
   const applyFlip = () => { setWin(50); setGain(20000); setLoss(20000); setFoldPct(0); setPot(0); };
   const applyBluff = () => { setWin(0); setGain(0); setLoss(20000); setFoldPct(50); setPot(20000); };
   return (
-    <CalcCard title="EV 계산기" desc="EV = 승률×이득 − (1−승률)×손실 (폴드에퀴티 선택 반영)">
+    <CalcCard title="EV 계산기" desc="이 선택의 장기 기대값">
       <div className="flex gap-1.5">
         <button type="button" onClick={applyFlip}
           className={`${CHIP_HIT} flex-1 h-[32px] rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors`}>플립 콜</button>
@@ -177,7 +177,7 @@ export function VarianceCalc() {
   const lossProb = sigma > 0 ? cdf(-mean / sigma) : (mean < 0 ? 1 : 0);
   const fmt = (v: number) => `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString()}bb`;
   return (
-    <CalcCard title="변동성 시뮬레이터" desc="승률·표준편차로 예상 결과 범위와 손실 확률(근사)">
+    <CalcCard title="변동성 시뮬레이터" desc="예상 결과 범위와 손실 확률(근사)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="승률 (bb/100)"><NumIn value={wr} onChange={setWr} /></Field>
         <Field label="표준편차 (bb/100)"><NumIn value={sd} onChange={setSd} /></Field>

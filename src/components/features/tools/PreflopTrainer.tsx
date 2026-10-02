@@ -54,7 +54,7 @@ export default function PreflopTrainer(
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 · 경계 핸드 집중 출제">
+    <CalcCard desc="차트와 같은 데이터 · 경계 핸드 집중">
       {/* 모드 + 점수 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* gap-y-3.5: 320px 에서 5+1 로 접히면 아랫줄 칩의 히트 확장(CHIP_HIT)이 윗줄을 덮었다(실측 '오픈' 39.75px) — 줄 간격을 확장보다 넓힌다. */}

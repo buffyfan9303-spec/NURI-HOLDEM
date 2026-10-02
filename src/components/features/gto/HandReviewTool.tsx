@@ -92,7 +92,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
 
   return (
     <div className="space-y-3">
-      <CalcCard desc="그 핸드를 카드로 놓고 스트리트별로 다시 돌려봅니다. 승률 추이와 아웃 카드는 앱이 계산합니다">
+      <CalcCard desc="카드로 놓고 스트리트별로 다시 돌려봅니다">
         <HandBoardPicker hb={hb} hint={<>보드는 플랍 3장부터 리버 5장까지</>} />
       </CalcCard>
 
@@ -107,7 +107,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
           </div>
         ) : (
           <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs leading-relaxed text-ink-muted">
-            내 핸드 2장부터 골라 보세요. 상대 핸드까지 넣으면 스트리트별 승률 추이와 아웃 카드가 함께 나옵니다.
+            내 핸드 2장부터 골라 보세요 · 상대 핸드를 넣으면 승률 추이도 나옵니다.
           </p>
         )}
       </div>
@@ -141,7 +141,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
           이 핸드로 글쓰기 — 커뮤니티에 물어보기
         </button>
         <p className="text-2xs leading-relaxed text-ink-muted">
-          이 핸드가 <b className="text-ink-secondary">첨부된 채로 글쓰기 폼이 열립니다.</b> 본문만 쓰면 글에서도 같은 리플레이가 재생됩니다.
+          이 핸드가 <b className="text-ink-secondary">첨부된 채로 글쓰기 폼이 열립니다.</b>
         </p>
         <div className="flex justify-end">
           <button type="button" onClick={resetAll} className="text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light">

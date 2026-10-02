@@ -372,12 +372,12 @@ export default function ICMCalculator({ initialMode = 'equity', variant = 'full'
   return (
     // 제목은 전체화면 헤더(도구 런처)가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
     <CalcCard title={chopOnly ? '찹(딜) 분배 — ICM' : undefined} desc={chopOnly
-      ? '파이널테이블에서 찹 제안이 나오면 남은 스택과 남은 상금을 넣으세요. 각 플레이어의 ICM 기준 분배 금액을 계산합니다.'
+      ? '남은 스택·상금을 넣으면 ICM 분배액 계산'
       : mode === 'equity'
-      ? '스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.'
+      ? '스택·상금으로 기대 상금(ICM) 계산'
       : mode === 'deal'
-        ? '남은 스택과 남은 상금을 입력하면 ICM 딜과 칩찹 분배액을 비교합니다.'
-        : '상대가 올인했을 때, 콜하려면 칩 기준 승률이 몇 % 필요한지 계산합니다.'}>
+        ? 'ICM 딜과 칩찹 분배액 비교'
+        : '상대 올인에 콜할 때 필요한 승률'}>
       {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
       {!chopOnly && (
       <div className="flex flex-wrap items-center justify-between gap-2">

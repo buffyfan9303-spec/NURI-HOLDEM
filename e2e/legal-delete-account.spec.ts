@@ -23,7 +23,12 @@ test('계정 삭제 안내는 JS 없이 열리고 필수 항목을 모두 담는
 
 test('푸터와 공개 처리방침이 계정 삭제 안내를 가리킨다', async ({ page }) => {
   await page.goto('/');
-  const link = page.getByTestId('footer-delete-account');
+  // 2026-10-03 — 계정 삭제 안내는 푸터 '더보기' 안으로 접혔다(법정 초기 화면 표시사항이 아니다 · BusinessFooter 주석).
+  //   접힌 상태에서는 보이지 않는 게 맞고, 펼치면 보여야 한다 — 두 상태를 모두 단언한다.
+  const footer = page.getByTestId('business-footer').filter({ visible: true }).last();
+  const link = footer.getByTestId('footer-delete-account');
+  await expect(link).toBeHidden();
+  await footer.getByTestId('footer-more').locator('summary').click();
   await link.scrollIntoViewIfNeeded();
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute('href', URL);

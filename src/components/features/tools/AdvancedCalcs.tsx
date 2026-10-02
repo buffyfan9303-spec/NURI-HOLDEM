@@ -86,7 +86,7 @@ const AGGRO_ROWS: { pos: string; open: number; threeBet: number; coldCall: numbe
 export function AggroChart() {
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc="6인 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있습니다.">
+    <CalcCard desc="6인·100bb 기준 포지션별 권장 빈도(근사)">
       {/* 🔴 2026-09-19 GTO 감사 [medium]: 70~71행 주석이 스스로 "자체 제작 학습 차트로 표시한다"고
           약속해 놓고 실제로는 배지가 없었다. 출처는 결과 바로 옆(RangeGuide.tsx 와 같은 자리). */}
       <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>

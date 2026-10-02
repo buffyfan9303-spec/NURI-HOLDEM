@@ -48,7 +48,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
       </div>
       {/* leading-relaxed(1.625)를 따로 걸면 같은 11.69px 글자가 화면에서 18.99 / 15.94 두 행간으로 갈린다
           (2026-09-07 실측: 표준 15.94 가 27곳, 이 줄만 18.99). 크기별 행간은 한 값이어야 리듬이 산다. */}
-      <p className="text-2xs text-ink-muted">새 대회가 승인되면 팔로워에게 자동으로 알림이 가요.</p>
+      <p className="text-2xs text-ink-muted">새 대회는 승인되면 자동으로 알림이 가요</p>
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={loadError ? load : send} disabled={busy || (!loadError && (remaining === 0 || status.followers === 0))}
