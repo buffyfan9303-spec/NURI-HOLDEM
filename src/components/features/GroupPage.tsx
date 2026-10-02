@@ -4,9 +4,10 @@
 //  - 멤버 전용(승인된 멤버만): 실시간 채팅 · 게시판 · 활동 순위 3탭
 //  - 매니저: 가입 승인/거절, 멤버 추방, 이미지·공지 관리, 팀 프로필(소개·전화·카톡) 설정
 // 오너 #16: 매장 커뮤니티에 있는 것(소개·순위·전화·카카오톡)을 일반 커뮤니티에도.
-//   포스터·진행정보는 오너가 명시적으로 제외 — 그룹은 대회를 열지 않는다.
+//   (옛 결정 '포스터 제외'는 2026-10-02 오너 B 로 바뀌었다 — 그룹 포스터는 GroupPosterSection, 진행정보는 여전히 없다.)
 import { Fold } from '../atoms/Fold';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import GroupPosterSection from './GroupPosterSection';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { isAuthorShown } from '../../lib/postVisible';
@@ -40,7 +41,11 @@ import { goSubTab } from '../../lib/subTabTransition';
 /** 그룹 3탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const GROUP_TAB_ORDER = ['chat', 'board', 'ranking'] as const;
 
-export default function GroupPage({ group, open, onClose }: { group: Venue | null; open: boolean; onClose: () => void }) {
+export default function GroupPage({ group, open, onClose, onSubmitPoster }: {
+  group: Venue | null; open: boolean; onClose: () => void;
+  /** 그룹 포스터 저장(App.handleSubmitPoster) — 20261002h 오너 B 로 그룹도 포스터를 올린다. */
+  onSubmitPoster?: ComponentProps<typeof GroupPosterSection>['onSubmitPoster'];
+}) {
   const { user } = useAuth();
   const toast = useToast();
 
@@ -341,6 +346,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               </ul>
             )}
           </div>
+
+          {/* 그룹 포스터(20261002h) — 그룹 페이지에는 바로(방문자 전체), 전체 일정은 관리자 승인 후.
+              올리기·고치기는 개설자·운영진·관리자(오너 10-02 ② — 서버 can_post_group_poster 와 같은 범위). */}
+          <GroupPosterSection group={group} canPost={isManager} onSubmitPoster={onSubmitPoster} />
 
           {/* 매니저 패널 */}
           {isManager && (
