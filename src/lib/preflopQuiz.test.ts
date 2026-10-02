@@ -27,13 +27,34 @@ describe('call 모드 — 격리된 빅앤티 k≥3 표는 문제로 내지 않�
     expect(makeQuiz('call', 'call|sb-3-10|AA').key, '10bb k≥3 가 복원됐다 — 격리 하한이 밀렸다').not.toBe('call|sb-3-10|AA');
     expect(makeQuiz('call', 'call|sb-3-12|AA').key, '12bb k≥3 가 막혔다 — 격리 상한이 밀렸다').toBe('call|sb-3-12|AA');
   });
-  it('새로 뽑는 콜 문제 100건 중 격리된 (k≥3 · 2~10bb) 조합이 없다', () => {
+  it('새로 뽑는 콜 문제 100건 중 격리된 (k≥3 · 6~10bb) 조합이 없다 — 2~5bb 는 2026-10-02 다인 균형으로 해제', () => {
     for (let i = 0; i < 100; i += 1) {
       const k = makeQuiz('call').key;                       // call|<seat>-<k>-<stack>|<hand>
       const [, situ] = k.split('|');
       const [, kk, stack] = situ.split('-');
-      if (Number(kk) >= 3) expect(Number(stack), k).toBeGreaterThanOrEqual(12);
+      if (Number(kk) >= 3) expect(Number(stack) <= 5 || Number(stack) >= 12, k).toBe(true);
     }
+  });
+});
+
+// N7: 2026-10-01 오너 "일단 숨기고 재생성" 으로 빅앤티 2~5bb · 뒤 3명+ 를 내렸고, 2026-10-02 다인 균형(solve-deal.mjs)으로
+// 다시 만들어 격리에서 뺐다(숨김 해제는 별도 커밋 — 되돌리면 이 계약도 같이 돌아간다).
+// 이 계약은 그 칸이 **새 문제·복원 문제로 실제로 나온다**는 것을 잠근다(격리 목록만 남아 있으면 여기서 빨개진다).
+describe('N7 — 드릴이 2~5bb · 뒤 3명+ 칸을 다시 낸다(다인 균형 재생성, 2026-10-02)', () => {
+  it('새 올인 문제 600건 — 5bb 이하 · 뒤 3명+ 문제가 실제로 나오고 선택지가 있다', () => {
+    let deep3 = 0;
+    for (let i = 0; i < 600; i += 1) {
+      const p = makeQuiz('push');
+      expect(p, 'push 문제가 안 만들어졌다').toBeTruthy();
+      const [k, stack] = p.key.split('|')[1].split('-').map(Number);
+      if (stack <= 5 && k >= 3) deep3 += 1;
+      expect(p.acts.length).toBeGreaterThan(0);
+    }
+    expect(deep3, '5bb 이하 · 뒤 3명+ 문제가 한 번도 안 나왔다 — 아직 격리돼 있다').toBeGreaterThan(0);
+  });
+  it('저장된 오답 키 push|3-5 · push|8-5 · call|bb-8-4 가 이제 그대로 복원된다(BTN·SB 5bb 도 복원 — 양성 대조)', () => {
+    for (const key of ['push|3-5|A5s', 'push|8-5|AA', 'push|2-5|A5s', 'push|1-5|A5s']) expect(makeQuiz('push', key).key, key).toBe(key);
+    expect(makeQuiz('call', 'call|bb-8-4|AA').key).toBe('call|bb-8-4|AA');
   });
 });
 

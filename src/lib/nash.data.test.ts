@@ -13,7 +13,7 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
     //   여기서 예외로 두지 않고 격리를 풀면 "K2o 100% 올인" 이 다시 라이브로 나간다.
     //   격리가 **실제로 걸려 있는지**는 `ranges.test.ts` 의 격리 계약이 따로 잠근다(여기서 되풀이하지 않는다).
     for (const kind of ['shove', 'callBB'] as NashKind[]) for (const ante of [false, true]) for (const k of NASH_KS) for (const s of NASH_STACKS) {
-      if (isNashQuarantined(s, ante, k, kind)) continue;   // (깊이, k, kind) 단위 격리 — 빅앤티 2~10bb k≥3 · 노앤티 2~4bb k≥3. kind 전용 목록은 지금 비어 있다(2026-09-25)
+      if (isNashQuarantined(s, ante, k, kind)) continue;   // (깊이, k, kind) 단위 격리 — 빅앤티 6~10bb k≥3(2~5bb 는 2026-10-02 해제) · 노앤티 2~4bb k≥3. kind 전용 목록은 지금 비어 있다(2026-09-25)
         //   (2026-09-19: 빅앤티 7~9bb 는 NASH_CALLBB_QUARANTINE.ante 에서 빠지고 NASH_ANTE_QUARANTINE 이 통째로 막는다)
       expect(hasNashRange(kind, k, s, ante), `${kind} ante=${ante} k=${k} ${s}bb`).toBe(true);
       expect(nashRange(kind, k, s, ante).some((v) => v > 0), `${kind} ante=${ante} k=${k} ${s}bb 가 전부 0`).toBe(true);
@@ -24,11 +24,11 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
     let checked = 0;
     for (const ante of [false, true]) for (const s of NASH_STACKS) {
       expect(hasNashRange('callSB', 1, s, ante)).toBe(false);
-      // 격리는 (깊이, k) 짝 단위다(빅앤티 2~10bb · 노앤티 2~4bb 의 k≥3) — k 마다 따로 본다. k=2 는 어느 깊이에서도 살아 있다(2026-09-25).
+      // 격리는 (깊이, k) 짝 단위다(빅앤티 6~10bb · 노앤티 2~4bb 의 k≥3) — k 마다 따로 본다. k=2 는 어느 깊이에서도 살아 있다(2026-09-25).
       for (const k of NASH_KS) if (k >= 2 && !isNashQuarantined(s, ante, k, 'callSB')) { expect(hasNashRange('callSB', k, s, ante), `callSB k=${k} ${s}bb`).toBe(true); checked += 1; }
       expect(hasNashRange('callSB', 2, s, ante), `callSB k=2 ${s}bb ante=${ante} 가 막혔다 — 정확 3인 균형 열이다`).toBe(true);
     }
-    expect(checked, '격리가 너무 넓어 검사할 칸이 줄었다').toBe(2 * NASH_STACKS.length * 7 - (9 + 3) * 6);   // 빅앤티 9깊이 + 노앤티 3깊이 × k=3..8
+    expect(checked, '격리가 너무 넓어 검사할 칸이 줄었다').toBe(2 * NASH_STACKS.length * 7 - (5 + 3) * 6);   // 빅앤티 5깊이(6~10bb — 2~5bb 는 2026-10-02 해제) + 노앤티 3깊이 × k=3..8
     // 데이터에 없는 깊이(11bb)는 어느 표에서도 '있다'고 하지 않는다 — UI 가 가까운 값으로 몰래 대체할 수 없게
     expect(hasNashRange('shove', 2, 11, false)).toBe(false);
   });
@@ -42,6 +42,16 @@ describe('PushFoldChart 화면 계약(소스)', () => {
     expect(src).toMatch(/const hasData = hasNashRange\(effView, k, stack, NASH_BIG_ANTE, true\)/);
     expect(src).toMatch(/\{hasData\s*\?\s*<RangeMatrix13/);
     expect(src).toContain('데이터가 없습니다');
+  });
+
+  it('출처 배지 힌트가 실제 생성 방식을 말한다 — 옛 "단일 콜러 근사 · 몬테카를로" 한 줄로 돌아가지 않는다(online-audit2 N10, 2026-10-01)', () => {
+    const badge = readFileSync(join(__dirname, '../components/features/tools/SourceBadge.tsx'), 'utf-8');
+    const hint = badge.match(/nash: \{[\s\S]*?hint: '([^']*)'/)?.[1] ?? '';
+    expect(hint, 'nash 힌트를 못 찾았다').not.toBe('');
+    expect(hint).not.toContain('단일 콜러 근사 · 2~20bb');
+    expect(hint).not.toContain('준비 중');      // 2026-10-02 N7 2단계: 2~5bb 는 다인 균형으로 다시 만들었다 — 숨긴 칸이 없다
+    expect(hint).toContain('다인 균형');        // 뒤 3명+ 2~5bb(solve-deal.mjs)
+    expect(hint).toContain('정확 균형');        // SB·BTN(NASH_EXACT_KS)
   });
 
   it('① 스택은 한 줄 슬라이더(44px 트랙) + 실제 깊이 눈금 — 칩 두 줄이 아니다', () => {
@@ -152,7 +162,8 @@ describe('nash.data — 빅앤티 k=2 열은 정확 3인 균형(2026-09-25)', ()
     for (const s of [2, 5, 10]) {
       expect(isNashApprox(s, NASH_BIG_ANTE, 2), `${s}bb BTN 배지가 '추정'`).toBe(false);
       expect(isNashQuarantined(s, NASH_BIG_ANTE, 2), `${s}bb BTN 이 드릴·스팟에서 격리`).toBe(false);
-      expect(isNashApprox(s, NASH_BIG_ANTE, 3), `${s}bb CO(k=3) 는 아직 추정이어야 한다`).toBe(true);
+      // CO(k=3): 2~5bb 는 2026-10-02 다인 균형(추정 아님), 6~10bb 는 아직 추정이다
+      expect(isNashApprox(s, NASH_BIG_ANTE, 3), `${s}bb CO(k=3) 추정 등급이 어긋났다`).toBe(s >= 6);
     }
   });
 });

@@ -6,6 +6,7 @@
 //   **그대로 옮겼다**(디자인 변경 0).
 import { type ReactNode } from 'react';
 import Icon from '../../atoms/Icon';
+import MultiwayNotice from './MultiwayNotice';
 import { isScenarioCorrect, type Action, type Scenario } from './postflop.data';
 import { foldFreq, passOf, verdictOf, type Quiz } from '../../../lib/preflopQuiz';
 
@@ -120,6 +121,7 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
       {/* 문제 카드 — 호스트(PreflopTrainer·DailyDrill·WrongNote)가 전부 CalcCard(card-aura)라 카드 속 카드 = card-aura-sub */}
       <div className="rounded-input border card-aura-sub p-4 text-center space-y-3">
         <p className="text-2xs font-bold text-ink-muted">{quiz.situ}</p>
+        {quiz.multiway && <MultiwayNotice className="-my-2" />}
         <p className="text-2xl font-extrabold text-accent-200 leading-none">{quiz.posLabel}</p>
         <div className="flex items-center justify-center gap-2 pt-1">
           {quiz.cards.map((c, i) => (
