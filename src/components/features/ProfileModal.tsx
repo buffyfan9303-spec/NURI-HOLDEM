@@ -566,7 +566,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             />
             {nameHint && <p className={`mt-1 text-2xs ${nameHint.cls}`} aria-live="polite">{nameHint.text}</p>}
             <div className="mt-1 flex items-start justify-between gap-2">
-              <p className="text-2xs leading-relaxed text-ink-muted">커뮤니티·순위·매장 이용권에 쓰이는 공개 이름입니다 · 다른 사람과 겹칠 수 없습니다</p>
+              <p className="text-2xs leading-relaxed text-ink-muted">공개 이름 · 다른 사람과 겹칠 수 없습니다</p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
             </div>
             {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
@@ -1060,7 +1060,7 @@ function BlockListSection() {
     <div className="px-4 pb-4 -mt-1">
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">차단한 사용자 {blocks.length > 0 && <span className="text-ink-muted">({blocks.length})</span>}</h3>
       {blocks.length === 0 ? (
-        <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다. 글·매물에서 ‘차단’을 누르면 그 사용자의 글이 보이지 않게 됩니다.</p>
+        <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다</p>
       ) : (
         <ul className="space-y-1.5">
           {blocks.map((b) => (

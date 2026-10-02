@@ -251,7 +251,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
            — PosterCarousel.tsx:153 은 `[...posters, ...brands, ...dyn]` 이라 **앞에 붙을 뿐** 대체하지 않는다.
            오너가 이 문구를 믿으면 등록 후에도 브랜드 슬라이드가 남는 것을 '연동 실패' 로 읽는다. */
         <p className="py-4 text-center text-xs leading-relaxed text-ink-muted">
-          등록된 배너가 없습니다. 여기에 등록하면 캐러셀 <b className="text-ink-secondary">맨 앞에</b> 추가됩니다.
+          등록된 배너가 없습니다
         </p>
       ) : (
         <ul className="space-y-1.5">
@@ -301,7 +301,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
         <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />홈 캐러셀 구성
       </p>
       <p data-testid="home-carousel-explain" className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
-        손님 홈에는 위에서 켠 등록 배너에 이벤트 슬라이드·브랜드 슬라이드가 이어 붙습니다. 아래 목록이 홈과 같은 계산으로 만든 실제 순서입니다.
+        등록 배너 뒤에 이벤트·브랜드 슬라이드가 붙습니다
       </p>
       <div className="mt-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">
         <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-ink-primary">
@@ -381,9 +381,9 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       </div>
       <div className="mt-1.5 space-y-1.5">
         <SlideSwitch sw={evSw} settingKey={HOME_SLIDE_EVENT_KEY} label="이벤트 슬라이드"
-          desc="진행 중인 매장 이벤트로 가는 한 장. 진행 중인 이벤트가 없으면 켜 두어도 안내 문구만 뜹니다." />
+          desc="진행 중 매장 이벤트로 가는 한 장 · 없으면 안내만" />
         <SlideSwitch sw={brSw} settingKey={HOME_SLIDE_BRAND_KEY} label="브랜드 슬라이드 2장"
-          desc="오늘의 NURI MIND · NURI HOLDEM. 끄면 등록한 배너와 이벤트 슬라이드만 돕니다." />
+          desc="오늘의 NURI MIND · NURI HOLDEM" />
       </div>
       <button type="button" onClick={purge} disabled={busy === 'purge'}
         className="btn-ghost w-full py-1.5 text-xs disabled:opacity-60">만료 후 7일 지난 배너 정리</button>

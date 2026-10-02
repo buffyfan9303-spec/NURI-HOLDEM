@@ -1474,7 +1474,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </div>
         </div>
 
-        <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 관리자 승인 후 목록에 공개됩니다.</p>
+        <p className="text-2xs text-ink-muted">관리자 승인 후 목록에 공개됩니다</p>
         <button type="submit" disabled={sending || !name.trim() || purpose.trim().length < 10} className="btn-primary w-full disabled:opacity-60">{sending ? '신청 중…' : '개설 신청'}</button>
       </form>
     </Modal>

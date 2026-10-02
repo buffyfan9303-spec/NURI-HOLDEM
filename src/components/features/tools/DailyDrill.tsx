@@ -81,7 +81,7 @@ export default function DailyDrill() {
   const nextBtn = <button type="button" onClick={next} className="btn-primary w-full py-2 text-sm">{plan.idx + 1 >= total ? '드릴 마치기 →' : '다음 문제 →'}</button>;
 
   return (
-    <CalcCard desc="약점 카테고리와 오답 노트를 섞어 매일 5문제를 자동 편성합니다. 오늘 편성은 하루 동안 고정입니다.">
+    <CalcCard desc="약점·오답으로 매일 5문제 · 하루 동안 고정">
       {/* 진행 — 점 5개(고정 높이, 도착해도 밀리지 않음) */}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-bold text-ink-primary">오늘의 드릴 <span className="tabular-nums text-accent-200">{done}/{total}</span></p>

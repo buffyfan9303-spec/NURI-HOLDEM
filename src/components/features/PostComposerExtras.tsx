@@ -498,7 +498,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
             })}
           </div>
 
-          <p className="text-2xs text-ink-muted">질문과 보기 2개 이상을 채우면 게시할 때 투표가 함께 올라가요</p>
+          <p className="text-2xs text-ink-muted">질문과 보기 2개 이상이면 투표도 함께 올라가요</p>
         </div>
       )}
     </div>

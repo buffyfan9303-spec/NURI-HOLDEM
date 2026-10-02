@@ -109,7 +109,7 @@ export default function OutsCalc() {
           {street === 'flop' && (
             <p className="flex items-start gap-1 text-2xs leading-relaxed text-amber-400"><Icon name="alert" size={12} className="mt-px shrink-0" />한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
           )}
-          <p className="text-2xs leading-relaxed text-ink-muted">아웃을 셀 줄 모르면 <b className="text-ink-secondary">카드로 세기</b> 모드에서 카드만 고르세요.</p>
+          <p className="text-2xs leading-relaxed text-ink-muted"><b className="text-ink-secondary">카드로 세기</b>는 카드만 고르면 됩니다</p>
         </CalcCard>
       )}
 

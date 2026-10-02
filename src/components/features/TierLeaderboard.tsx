@@ -1269,8 +1269,7 @@ export default function TierLeaderboard() {
                         </p>
                       </div>
                       <p className="text-2xs leading-relaxed text-ink-muted">
-                        인스타·카톡에 올릴 수 있는 이미지로 저장합니다. 프레임을 사면 바로 적용되고,
-                        소장한 프레임은 언제든 바꿔 달 수 있습니다.
+                        SNS에 올릴 이미지로 저장 · 산 프레임은 언제든 교체
                       </p>
                       <button type="button" onClick={handleSaveCard}
                         className="btn-primary w-full py-2 text-xs">

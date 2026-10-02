@@ -5,7 +5,7 @@
 //   ① 조건부 렌더 = 한 프레임 점프      → 일정 탐색 '공지사항'(App.tsx) — 높이가 여러 프레임에 걸쳐 변하는가(≥5단)
 //   ② 옆 요소가 사라져 버튼이 올라감   → 대회 상세 '참가 예약 더보기'(ScheduleDetailModal) — 전 −9.76px
 //   ③ 버튼 위에 내용이 생김            → 내 매장 대시보드 '더 보기'(StoreDashboard, 1440) — 전 +400px
-//   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '추가 정보'(BusinessFooter details) — 전 +44px
+//   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '더보기'(BusinessFooter details, 옛 '추가 정보') — 전 +44px
 //   ⑤ 한 번에 하나 열리는 아코디언      → 내 매장 직원 관리(StaffHub) — 위 항목이 닫혀 줄면 누른 항목이 끌려 올라갔다
 //   ⑥ sticky 띠 안 위 삽입             → 일정 탐색 검색 입력(IntegratedSearchBar) — 칩 줄 안에서 가로로(오너 결정 (a)), 전 55.25px
 //   ⑦ 지연 청크로 뺀 모달               → 대시보드 '딜러 로테이션·급여'(DealerShiftsModal) — 눌러서 열리고 폴백 판이 안 보인다
@@ -198,11 +198,12 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     expect(open.dCenter, `펼칠 때 누른 버튼이 ${open.dCenter}px 움직였다(수정 전 +400)`).toBeLessThanOrEqual(1);
   });
 
-  for (const rm of [false, true]) test(`④ 법정 푸터 추가 정보 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)${rm ? ' · 동작 줄이기' : ''}`, async ({ page }) => {
+  for (const rm of [false, true]) test(`④ 법정 푸터 더보기 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)${rm ? ' · 동작 줄이기' : ''}`, async ({ page }) => {
     // 동작 줄이기도 따로 잰다 — 전역 `*{transition-duration:.01ms}` 가 padding 변경을 한 프레임 늦춰 RM 에서만 +44 가 남았던 부류(2026-09-29).
     if (rm) await page.emulateMedia({ reducedMotion: 'reduce' });
     await gotoBrowse(page);
-    const summary = page.locator('footer summary').filter({ hasText: '추가 정보' }).first();
+    // 2026-10-03 요약줄 이름 '추가 정보' → '더보기'(법정 표시사항은 밖으로, 링크·개정 안내만 접힘) — 문구 대신 testid 로 잡는다.
+    const summary = page.locator('[data-testid="business-footer"] [data-testid="footer-more"] > summary').first();
     await summary.evaluate((s) => s.scrollIntoView({ block: 'center' }));
     await page.waitForTimeout(400);
     await toggle(page, summary, 'details'); // 열기

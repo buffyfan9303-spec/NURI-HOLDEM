@@ -60,9 +60,9 @@ const SIZE_PRESETS: Record<'pre' | 'post', number[]> = {
 // 🔴 2026-09-24 오너 G3: 게임 + 자리·스택 두 단계를 하나로 합쳤다(다섯 → 네 단계). 입력 항목·검증·AI 입력은 그대로 —
 //   화면 묶음만 바뀌었다. key 'game' 을 유지해 '진입은 1번 게임부터' 계약이 이어진다.
 const STEPS = [
-  { key: 'game', label: '게임·자리', hint: '어떤 판이었는지와 내 자리·상대 자리·유효 스택을 정합니다.' },
-  { key: 'cards', label: '카드', hint: '내 카드와 보드를 고릅니다. 상대 카드는 알 때만 넣으세요.' },
-  { key: 'action', label: '액션', hint: '액션을 순서대로 쌓고, 그때 내가 한 선택을 고릅니다.' },
+  { key: 'game', label: '게임·자리', hint: '게임과 양쪽 자리·유효 스택을 정합니다.' },
+  { key: 'cards', label: '카드', hint: '내 카드와 보드 · 상대 카드는 알 때만' },
+  { key: 'action', label: '액션', hint: '액션을 순서대로 쌓고 내 선택을 고릅니다.' },
   { key: 'confirm', label: '확인', hint: '작성한 내용을 확인하고 저장·공유합니다.' },
 ] as const;
 type StepKey = typeof STEPS[number]['key'];

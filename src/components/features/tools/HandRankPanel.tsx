@@ -16,7 +16,7 @@ const fmtFreq = (p: number) => (p < 0.1 ? `${p.toFixed(4)}%` : p < 10 ? `${p.toF
 export default function HandRankPanel() {
   return (
     <div className="space-y-3">
-      <p className="text-2xs text-ink-muted">강한 순서. 빈도는 내 2장 + 보드 5장(7장)에서 최선 5장이 그 족보가 될 확률입니다.</p>
+      <p className="text-2xs text-ink-muted">강한 순서 · 빈도는 7장 중 최선 5장 기준</p>
 
       <ol className="rounded-aura border card-aura divide-y divide-border-subtle" aria-label="홀덤 족보 — 강한 순서">
         {HAND_RANKS.map((h, i) => (

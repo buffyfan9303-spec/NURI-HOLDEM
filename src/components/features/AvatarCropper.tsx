@@ -135,7 +135,7 @@ export default function AvatarCropper({
       <div className="w-full max-w-xs bg-surface-mid rounded-dialog overflow-hidden shadow-dialog">
         <div className="px-4 py-3 border-b border-border-subtle">
           <h3 id="avatar-cropper-title" className="text-sm font-semibold text-ink-primary">사진 편집</h3>
-          <p className="text-2xs text-ink-muted mt-0.5">드래그로 위치, 두 손가락(핀치)·휠·슬라이더로 확대를 조절하세요</p>
+          <p className="text-2xs text-ink-muted mt-0.5">드래그로 위치 · 핀치·휠·슬라이더로 확대</p>
         </div>
 
         <div className="p-4 flex flex-col items-center gap-4">

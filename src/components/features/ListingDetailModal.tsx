@@ -240,7 +240,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         <section id="listing-comments" data-mk-card="inquiry" {...DETAIL_CARD_AURA} className={[MK_CARD, 'dark:bg-surface-low text-center'].join(' ')}>
           <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-            가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 연락</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있습니다.
+            <b className="text-accent-300">판매자에게 연락</b> 버튼으로 1:1 채팅하세요
           </p>
           <p className="mt-2 rounded-input bg-amber-500/8 px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
@@ -251,7 +251,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       {/* ── 하단 고정 CTA ── 버튼은 전부 44px 실박스·한 줄(whitespace-nowrap). ───────────── */}
       {mine ? (
         <div className="sticky bottom-0 border-t border-border-default bg-surface-mid px-4 py-3">
-          <p className="mb-1.5 text-2xs font-bold text-ink-muted">내 매물 상태. 채팅으로 확정되면 바로 바꿔주세요</p>
+          <p className="mb-1.5 text-2xs font-bold text-ink-muted">내 매물 상태 · 거래되면 바로 바꿔 주세요</p>
           <div className="flex items-center gap-2">
             {([['on_sale', '판매중'], ['reserved', '예약중'], ['sold', '거래완료']] as const).map(([k, l]) => (
               <button key={k} type="button" disabled={statusBusy}
