@@ -98,7 +98,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [reservations, setReservations] = useState<MyReservationRow[]>([]);
   const [bankroll, setBankroll] = useState<BankrollEntry[]>([]);
-  /** 내가 저장한 누리 SPOT(최근 100) — 사용자가 고른 날짜(playedOn) 칸, 없으면 저장한 날(KST) 칸에 놓는다(2026-09-25). 조회 실패는 빈 배열(listMySpots 가 삼킨다 — 보조 표시). */
+  /** 내가 저장한 누리 SPOT(최근 100) — 사용자가 고른 날짜(playedOn) 칸, 없으면 저장한 날(KST) 칸에 놓는다(2026-09-25). 조회 실패는 reload 가 `.catch` 로 빈 배열 처리한다(보조 표시 — 오류 카드를 띄우지 않는다). */
   const [spots, setSpots] = useState<SavedSpot[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState<unknown>(null);
@@ -128,7 +128,10 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     if (!uid) { setLoaded(true); setErr(null); setBankrollErr(null); return; }
     setErr(null); setBankrollErr(null);
     const r = await Promise.allSettled([
-      getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300), listMySpots(100),
+      getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300),
+      // 스팟은 날짜 칸에 올리는 보조 표시 — listMySpots 는 실패하면 throw 하지만 여기서는 빈 목록으로 받는다.
+      //   안 그러면 스팟 조회만 실패해도 위 err 로 올라가 캘린더 전체에 오류 카드가 뜬다(2026-10-01 리드 결정).
+      listMySpots(100).catch((): SavedSpot[] => []),
     ]);
     // ⚠ 여기서부터는 **늦게 도착한 응답일 수 있다.** 내 세대가 아니면 아무것도 그리지 않는다.
     //   판정 계약은 `lib/staleResponse.ts` 하나로 둔다 — 화면마다 다르게 막으면 그중 하나는 반드시 빠진다.

@@ -187,6 +187,7 @@ const DEEP_SECTION_ALIAS: Record<string, Section | GameStep | SettingsTab> = {
   venueRank: 'page', voucher: 'voucher', page: 'page', settings: 'pos', optools: 'optools',
   league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
   partners: 'partners', // 연합 대회 파트너 알림(/my-store/partners)
+  event: 'event',       // 매장 이벤트 승인·반려 알림(/my-store/event?venue=, 20261002b)
 };
 const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | null => DEEP_SECTION_ALIAS[raw] ?? null;
 
@@ -238,7 +239,7 @@ const VenueEventRequestPanelM = memo(VenueEventRequestPanelL);
 const CalendarPanelL = lazyWithReload(() => import('./CalendarPanel'));
 const CalendarPanelM = memo(CalendarPanelL);
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, deepVenueId, onConsumeDeepVenue, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
   schedules: Schedule[]; onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
@@ -247,6 +248,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   /** 알림 딥링크 등 외부 진입 — 지정 섹션/게임스텝으로 바로 이동(1회 소비, 구 id 는 LINK-MAP 이 정규화) */
   deepSection?: Section | GameStep | null;
   onConsumeDeepSection?: () => void;
+  /** 알림 link 의 ?venue= — 그 매장으로 바꾼 뒤 deepSection 을 연다(1회 소비, L-04 20261002b). 접근할 수 없는 매장이면 안내하고 섹션 이동도 버린다 */
+  deepVenueId?: string | null;
+  onConsumeDeepVenue?: () => void;
   /** 탭 keep-alive: '내 매장' 탭이 화면에 보이는가 — 숨김이면 섹션 active 를 전부 끈다(구독·틱 정지) */
   tabActive?: boolean;
   /** 하단 '내 매장' 탭을 누른 횟수 — 바뀔 때마다 대시보드로 돌아간다(오너 2026-09-05:
@@ -276,6 +280,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   목록은 서버(my_member_venues)가 정한다. 미적용·실패면 빈 목록 → 종전처럼 profiles.venue_id 한 매장.
   const [memberVenues, setMemberVenues] = useState<MemberVenue[]>([]);
   const [memberVenueId, setMemberVenueId] = useState<string | null>(null);
+  // 알림 딥링크의 매장 전환(deepVenueId)이 '목록이 아직 안 옴' 과 '목록이 빔' 을 가르는 데 쓴다
+  const [memberVenuesLoaded, setMemberVenuesLoaded] = useState(false);
+  const [adminVenuesLoaded, setAdminVenuesLoaded] = useState(false);
   // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
   const venueId: string | null = isAdmin ? adminVenueId
     : (memberVenueId ?? user?.venueId ?? memberVenues[0]?.id ?? null);
@@ -669,9 +676,30 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!canSettingsTab(settingsTab)) setSettingsTab(firstSettingsTab());
   }, [permsLoaded, settingsTab, canSettingsTab, firstSettingsTab]);
 
+  // 알림 딥링크의 매장(?venue=) — 섹션 이동보다 먼저 매장을 바꾼다(L-04: A 매장 알림이 지금 고른 B 매장 장부를 열던 것).
+  //   목록이 올 때까지 기다린다. 바꾸면 permsLoaded 를 같은 커밋에서 내려 아래 섹션 이동이 **새 매장의 권한**을 기다리게 한다.
+  //   접근할 수 없는 매장(소속 해제 등)이면 지금 매장에서 엉뚱한 화면을 열지 않도록 섹션 이동까지 버린다.
+  useEffect(() => {
+    if (!deepVenueId) return;
+    const loaded = isAdmin ? adminVenuesLoaded : memberVenuesLoaded;
+    if (!loaded) return;
+    const list: { id: string }[] = isAdmin ? adminVenues : memberVenues;
+    if (deepVenueId !== venueId) {
+      if (list.some((v) => v.id === deepVenueId)) {
+        if (isAdmin) setAdminVenueId(deepVenueId); else setMemberVenueId(deepVenueId);
+        setPermsLoaded(false);
+      } else {
+        toast.show('이 알림의 매장은 지금 계정에서 열 수 없습니다', 'info');
+        onConsumeDeepSection?.();
+      }
+    }
+    onConsumeDeepVenue?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepVenueId, isAdmin, adminVenuesLoaded, memberVenuesLoaded, adminVenues, memberVenues]);
+
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
-    if (!deepSection || !permsLoaded) return;
+    if (!deepSection || !permsLoaded || deepVenueId) return;   // 매장 전환이 남아 있으면 그게 먼저다(위 이펙트)
     // LINK-MAP 정규화 → IA1 폴백: 없는 섹션이면 무음 실패 대신 대시보드 + 안내(§15.6 #9)
     const target = normalizeDeepSection(deepSection);
     const targetSection: Section | null = target == null ? null
@@ -690,7 +718,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     }
     onConsumeDeepSection?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepSection, permsLoaded]);
+  }, [deepSection, permsLoaded, deepVenueId]);
 
   // ★ 즐겨찾기는 IA1 에서 전량 삭제 — 5섹션 그룹 구조에선 '제품이 중요도를 못 정해 정렬을 외주 준' 장치가 무의미.
   // 기존 localStorage(nuri:fav-sections:*) 값은 읽지 않고 방치(마이그레이션 불필요).
@@ -733,10 +761,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 소속 매장 목록(전환기용) — 계정이 바뀌면 고른 매장도 버린다(다른 계정의 매장 id 가 남지 않게).
   const myUidForVenues = user?.id;
   useEffect(() => {
-    setMemberVenues([]); setMemberVenueId(null);
+    setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false);
     if (isAdmin || !myUidForVenues) return;
     let alive = true;
-    listMyMemberVenues().then((vs) => { if (alive) setMemberVenues(vs); }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ });
+    listMyMemberVenues().then((vs) => { if (alive) setMemberVenues(vs); }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ })
+      .finally(() => { if (alive) setMemberVenuesLoaded(true); });
     return () => { alive = false; };
   }, [isAdmin, myUidForVenues]);
 
@@ -746,7 +775,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     let alive = true;
     getAllVenues()
       .then((vs) => { if (alive) { setAdminVenues(vs); setAdminVenueId((cur) => cur ?? vs[0]?.id ?? null); } })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (alive) setAdminVenuesLoaded(true); });
     return () => { alive = false; };
   }, [isAdmin]);
 
@@ -1338,7 +1368,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <>
                   <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined}
-                    canEditKakao={isAdmin || (isOwner && primaryOwner !== false)} />
+                    canEditKakao={isAdmin || manageOk || (isOwner && primaryOwner !== false)} />
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
@@ -3117,7 +3147,9 @@ function StaffManager({ venueId }: { venueId: string }) {
                         상태가 함께 사라지고 옆의 '취소' 버튼만 남았다. 이메일도 가변이라 각자 줄인다. */}
                     <span className="flex flex-1 min-w-0 items-center gap-1">
                       <span className="max-w-[45%] shrink-0 truncate text-sm text-ink-primary">{iv.name}</span>
-                      <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">· {iv.email}</span>
+                      {(iv.email || iv.nickname) && (
+                        <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">· {iv.email || `@${iv.nickname}`}</span>
+                      )}
                       <span className="shrink-0 text-2xs text-amber-400">· 수락 대기</span>
                     </span>
                     <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>

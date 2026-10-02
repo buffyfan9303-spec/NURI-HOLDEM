@@ -390,7 +390,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
             <StatCard label="완납액" value={wonToMan(m.revenue)} unit="만" valueTitle={`${m.revenue.toLocaleString()}원`} icon="wallet" emerald sub={m.addon.count > 0 ? `애드온 ${wonToMan(m.addon.revenue)}만 포함` : undefined} />
             <StatCard label="미수 금액" value={wonToMan(m.unpaid)} unit="만" valueTitle={`${m.unpaid.toLocaleString()}원`} icon="alert" danger={m.unpaid > 0} sub={m.addon.unpaid > 0 ? `애드온 ${wonToMan(m.addon.unpaid)}만 포함` : undefined} />
-            <StatCard label="사용 이용권" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '1T = 1만원'} />
+            <StatCard label="사용 이용권" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '차감된 이용권 장수'} />
           </div>
 
           {/* 보조 지표 */}

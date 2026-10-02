@@ -2122,7 +2122,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
-            {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
+            {/* T = 차감된 이용권 장수(2026-10-01) — 원(아래 대차표 tender.ticket)과 다를 수 있다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
             <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
@@ -3938,7 +3938,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
             <div className="flex justify-between"><dt className="text-ink-muted">현금</dt><dd className="text-emerald-300">{wonToMan(stats.tender.cash)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">카드</dt><dd className="text-emerald-300">{wonToMan(stats.tender.card)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">이체</dt><dd className="text-emerald-300">{wonToMan(stats.tender.transfer)}만원</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : ''} · 1T=1만)</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : ''})</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">가게지원 <span className="text-2xs">({stats.support}건)</span></dt><dd className="text-indigo-300">{wonToMan(stats.tender.support)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">미수</dt><dd className="text-danger-light">{wonToMan(stats.tender.unpaid)}만원</dd></div>
             {(() => {

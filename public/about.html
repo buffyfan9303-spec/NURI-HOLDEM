@@ -5,55 +5,162 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>서비스 소개 | NURI HOLDEM</title>
   <meta name="description" content="NURI HOLDEM 서비스 소개 — 전국 홀덤 대회 일정 정보, 홀덤펍 커뮤니티, GTO 학습 도구, 매장 운영 관리를 한곳에서 제공하는 플랫폼입니다.">
+  <link rel="canonical" href="https://nuriholdem.com/about.html">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <!-- 앱과 같은 글꼴(Pretendard Variable · SIL OFL 1.1 · self-host). 예전엔 이름만 'Pretendard' 로 적고 파일을 안 불러
+       실제로는 맑은 고딕으로 그려졌다(2026-09-30 CDP getPlatformFontsForNode 실측). -->
+  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
+  <!-- 글꼴 한 번에 바꾸기(2026-10-01) — 서브셋 woff2 가 하나씩 도착할 때마다 줄바꿈이 잠깐 달라져
+       히어로 사진이 26px 올라갔다 내려왔다(390 첫 방문 CLS 0.254, 느린 4G 실측). 크기 맞춘 폴백 face 와
+       Pretendard 의 최종 줄 배치는 같으므로, 이 페이지 글자에 필요한 face 를 다 받은 뒤 한 번에 바꾼다. JS 가 없으면 평소대로. -->
+  <script>(function(){var d=document.documentElement,f=document.fonts;if(!f||!f.load)return;d.classList.add('fb');var done=function(){d.classList.remove('fb')};setTimeout(done,6000);addEventListener('DOMContentLoaded',function(){f.load('400 16px "Pretendard Variable"',document.body.textContent).then(done,done)})})();</script>
   <style>
-    :root { --bg:#06080F; --panel:#0E1322; --line:#262D40; --ink:#F4F5F6; --sub:#B2ADCB; --mute:#948EB0; --accent:#805FDA; --gold:#D9B25A; }
-    * { box-sizing:border-box; margin:0; }
-    body { background:var(--bg); color:var(--ink); font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif; line-height:1.7; }
-    .wrap { max-width:720px; margin:0 auto; padding:48px 20px 80px; }
-    h1 { font-size:28px; letter-spacing:-.01em; }
-    h1 small { display:block; font-size:13px; color:var(--gold); font-weight:700; letter-spacing:.2em; margin-bottom:10px; }
-    h2 { font-size:17px; margin:36px 0 10px; color:var(--ink); }
-    p { color:var(--sub); font-size:15px; }
-    ul { margin:8px 0 0; padding-left:0; list-style:none; display:grid; gap:8px; }
-    li { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; font-size:14px; color:var(--sub); }
-    li b { color:var(--ink); display:block; font-size:14.5px; margin-bottom:2px; }
-    .notice { margin-top:36px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; font-size:12.5px; color:var(--mute); }
-    footer { margin-top:40px; border-top:1px solid var(--line); padding-top:16px; font-size:12px; color:var(--mute); }
-    footer b { color:var(--sub); font-weight:500; }
-    a { color:var(--accent); }
+    /* 색은 앱 다크 토큰(src/index.css)과 같은 값 — 대비는 바탕 #06080F 기준 실측: ink 18.5 · sub 8.5 · mute 6.4 · link 9.4 */
+    :root { --bg:#06080F; --card:#0E1322; --card2:#151C30; --line:#29354A; --ink:#F4F6FA; --sub:#9AAAC2; --mute:#8293AD;
+      --link:#B5A6FF; --fill:#6344CE; --gold:#D9B25A; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--ink); line-height:1.65; -webkit-text-size-adjust:100%;
+      font-family:'Pretendard Variable','Pretendard','Pretendard FB Win','Pretendard FB Android',system-ui,sans-serif;
+      word-break:keep-all; overflow-wrap:anywhere; }
+    .fb body { font-family:'Pretendard FB Win','Pretendard FB Android',system-ui,sans-serif; }
+    a { color:var(--link); }
+    /* 타이포 위계(모바일 390 기준): 제목 30/800 · 소제목 20/800 · 항목 16/700 · 본문 15 · 캡션 13 */
+    h1 { font-size:30px; line-height:1.3; font-weight:800; letter-spacing:-.02em; text-wrap:balance; }
+    h2 { font-size:20px; line-height:1.35; font-weight:800; letter-spacing:-.01em; margin-bottom:14px; }
+    h3 { font-size:16px; line-height:1.4; font-weight:700; }
+    p { font-size:15px; color:var(--sub); text-wrap:pretty; }
+    .cap { font-size:13px; line-height:1.5; color:var(--mute); }
+
+    .top { position:sticky; top:0; z-index:2; background:rgba(6,8,15,.92); border-bottom:1px solid var(--line); }
+    .top .in { max-width:720px; margin:0 auto; padding:0 16px; height:52px; display:flex; align-items:center; justify-content:space-between; }
+    .brand { font-size:15px; font-weight:800; letter-spacing:.06em; color:var(--ink); text-decoration:none; }
+    .brand span { color:var(--gold); }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 18px; border-radius:12px;
+      background:var(--fill); color:#fff; font-size:15px; font-weight:700; text-decoration:none; }
+    .btn.sm { min-height:36px; padding:0 14px; font-size:14px; }
+
+    .wrap { max-width:720px; margin:0 auto; padding:28px 20px 56px; }
+    section { margin-top:44px; }
+    .kicker { font-size:12px; font-weight:700; letter-spacing:.16em; color:var(--gold); margin-bottom:10px; }
+    .lead { font-size:16px; margin:12px 0 20px; }
+    .hero { display:grid; gap:24px; }
+    .hero figure { justify-self:center; width:min(240px,70%); }
+
+    /* 폰 캡처 액자 — 이미지 치수는 <img width/height> 로 예약(CLS 0) */
+    .shot { border:1px solid var(--line); border-radius:18px; overflow:hidden; background:#000; }
+    .shot img { display:block; width:100%; height:auto; }
+    figcaption { margin-top:8px; text-align:center; }
+
+    .steps { list-style:none; display:grid; gap:10px; }
+    .steps li { display:flex; gap:14px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+    .n { flex:none; width:28px; height:28px; border-radius:9px; background:var(--fill); color:#fff; font-size:14px; font-weight:800;
+      display:grid; place-items:center; }
+    .steps p { font-size:14px; margin-top:2px; }
+
+    .feats { display:grid; gap:14px; }
+    .feat { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 16px; }
+    .feat p { margin-top:4px; }
+    .feat .shot { margin-top:14px; border-radius:12px; }
+    .feat .more { display:inline-block; margin-top:10px; font-size:14px; font-weight:700; }
+
+    .notice { margin-top:44px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+    .notice p { font-size:13px; color:var(--mute); }
+    .notice b { color:var(--sub); }
+    footer { margin-top:32px; border-top:1px solid var(--line); padding-top:16px; font-size:12.5px; line-height:1.7; color:var(--mute); }
+    footer b { color:var(--sub); font-weight:600; }
+    .nw { white-space:nowrap; }
+
+    @media (min-width:720px) {
+      .hero { grid-template-columns:1fr 240px; align-items:center; }
+      .hero figure { width:240px; }
+      .feats { grid-template-columns:1fr 1fr; }
+      /* 사진 없는 '커뮤니티' 가 사진 있는 칸 옆에 서면 같은 줄 높이로 늘어나 아래 218px 가 비었다(720+ 실측, §2-9).
+         글 칸과 가로 사진(TV 클락) 칸은 한 줄을 통째로 쓴다 — 폰 사진 둘만 나란히. */
+      .feat.wide { grid-column:1 / -1; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1><small>NURI HOLDEM</small>서비스 소개</h1>
-    <p style="margin-top:14px">NURI HOLDEM(누리홀덤)은 마인드 스포츠로 불리는 텍사스 홀덤의
-    <b style="color:var(--ink)">합법 토너먼트 정보 제공 플랫폼</b>입니다. 전국 홀덤펍에서 열리는 대회 일정을 모아 보여주고,
-    참가자와 매장을 연결하며, 학습 도구와 매장 운영 도구를 함께 제공합니다.</p>
+  <header class="top"><div class="in">
+    <a class="brand" href="/">NURI <span>HOLDEM</span></a>
+    <a class="btn sm" href="/">앱 열기</a>
+  </div></header>
 
-    <h2>무엇을 제공하나요</h2>
-    <ul>
-      <li><b>대회 일정</b>전국 홀덤펍의 토너먼트 일정·참가비·보증 상금(GTD)·블라인드 구조를 한곳에서 확인하고 참가 예약을 할 수 있습니다.</li>
-      <li><b>커뮤니티</b>홀덤펍 디렉터리, 게시판, 실시간 라운지, 순위, 중고장터 — 홀덤을 즐기는 사람들의 소통 공간입니다.</li>
-      <li><b>GTO 학습 도구</b>팟 오즈·에퀴티 계산기, 프리플랍 차트, 용어사전, 트레이너 등 전략 학습 도구를 무료로 제공합니다.</li>
-      <li><b>매장 관리</b>홀덤펍 매장 운영자를 위한 대회 클락(타이머), 장부, 순위 관리, 포스터 게시 등 운영 도구를 제공합니다.</li>
-    </ul>
+  <main class="wrap">
+    <section class="hero" style="margin-top:0">
+      <div>
+        <p class="kicker">서비스 소개</p>
+        <h1>전국 홀덤 대회를<br>한 곳에서</h1>
+        <p class="lead">NURI HOLDEM(누리홀덤)은 마인드 스포츠로 불리는 텍사스 홀덤의
+        <b style="color:var(--ink)">합법 토너먼트 정보 제공 플랫폼</b>입니다.
+        대회 일정을 모아 보여주고, 참가자와 매장을 연결합니다.</p>
+        <a class="btn" href="/">대회 일정 보기</a>
+      </div>
+      <figure>
+        <div class="shot"><img src="/guide/img/about-home.webp" width="560" height="919" fetchpriority="high"
+          alt="NURI HOLDEM 홈 화면 — 날짜를 고르면 그날 열리는 대회 목록이 나온다"></div>
+        <figcaption class="cap">앱 홈 화면</figcaption>
+      </figure>
+    </section>
 
-    <h2>본인인증은 왜 필요한가요</h2>
-    <p>커뮤니티 글쓰기·중고장터 등록·대회 예약 등 신뢰가 필요한 기능에 한해 휴대폰 본인인증을 사용합니다.
-    인증 정보는 본인 확인 용도로만 사용하며, 주민등록번호는 수집하지 않습니다.
-    자세한 내용은 서비스 내 <a href="/">개인정보처리방침</a>을 참고해 주세요.</p>
+    <section>
+      <h2>이렇게 씁니다</h2>
+      <ol class="steps">
+        <li><span class="n">1</span><div><h3>대회 찾기</h3><p>날짜, 지역, 참가비로 전국 홀덤펍 대회를 찾습니다.</p></div></li>
+        <li><span class="n">2</span><div><h3>예약하고 방문</h3><p>앱에서 참가를 예약하고, 매장에서는 QR로 출석합니다.</p></div></li>
+        <li><span class="n">3</span><div><h3>기록 확인</h3><p>대회 순위와 내 활동 기록이 쌓입니다.</p></div></li>
+      </ol>
+    </section>
 
-    <p class="notice">NURI HOLDEM은 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
-    상금·이용권은 전액 대회 주최 매장이 제공하며 현금 환전 기능을 제공하지 않습니다.
-    만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)</p>
+    <section>
+      <h2>무엇을 제공하나요</h2>
+      <div class="feats">
+        <article class="feat">
+          <h3>대회 일정</h3>
+          <p>토너먼트 일정, 참가비, 보증 상금(GTD), 블라인드 구조를 한눈에 보고 참가 예약까지 할 수 있습니다.</p>
+          <div class="shot"><img src="/guide/img/about-browse.webp" width="640" height="722" loading="lazy" decoding="async"
+            alt="일정 탐색 화면 — 요일 선택 줄, 지역·GTD·MTT 필터, 날짜별 대회 목록"></div>
+        </article>
+        <article class="feat">
+          <h3>GTO 학습 도구</h3>
+          <p>프리플랍 차트, 푸시폴드, 에퀴티 계산기, 용어 사전 등 전략 도구를 무료로 제공합니다.</p>
+          <div class="shot"><img src="/guide/img/about-tools.webp" width="640" height="722" loading="lazy" decoding="async"
+            alt="GTO 탭 화면 — 누리 스팟, 도구 검색, 자주 쓰는 도구 카드 목록"></div>
+        </article>
+        <article class="feat wide">
+          <h3>커뮤니티</h3>
+          <p>홀덤펍 디렉터리, 게시판, 실시간 라운지, 순위, 중고장터 — 홀덤을 즐기는 사람들의 소통 공간입니다.</p>
+        </article>
+        <article class="feat wide">
+          <h3>매장 운영 도구</h3>
+          <p>홀덤펍 매장 운영자를 위한 포스터 게시, 장부, 대회 클락, 순위, 정산, 매장이용권 전송 도구를 제공합니다.</p>
+          <div class="shot"><img src="/guide/img/about-clock.webp" width="720" height="405" loading="lazy" decoding="async"
+            alt="매장 TV 에 띄우는 대회 클락 화면 — 레벨, 남은 시간, 블라인드, 참가 인원"></div>
+          <a class="more" href="/guide/owner.html">업주 가이드 보기 →</a>
+        </article>
+      </div>
+    </section>
 
-    <footer>
-      <b>상호</b> 엔에이치홀딩스 · <b>사업자등록번호</b> 525-20-02937 · <b>대표자</b> 김윤혜<br>
-      <b>사업장 주소</b> 경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호<br>
-      <b>전화번호</b> 070-8098-1727 · <b>고객센터</b> ace@nuriholdem.com<br>
-      © 2026 엔에이치홀딩스. All rights reserved. · <a href="/">nuriholdem.com으로 이동</a>
+    <section>
+      <h2>본인인증은 왜 필요한가요</h2>
+      <p>커뮤니티 글쓰기, 중고장터 등록, 매장이용권 받기·사용, 이벤트 참여처럼 신뢰가 필요한 기능에만 휴대폰 본인인증을 씁니다.
+      <b style="color:var(--ink)">대회 예약은 로그인만</b> 하면 됩니다.
+      인증 정보는 본인 확인 용도로만 쓰며, 주민등록번호는 수집하지 않습니다.
+      자세한 내용은 <a href="/legal/privacy.html">개인정보처리방침</a>을 참고해 주세요.</p>
+    </section>
+
+    <div class="notice" data-testid="guide-legal-notice">
+      <p>NURI HOLDEM은 마인드 스포츠로 불리는 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
+      상금·이용권은 전액 대회 주최 매장이 제공하며, 현금으로 바꾸는 기능은 제공하지 않습니다.<br>
+      <b>만 19세 미만은 이용할 수 없습니다</b> · 도박문제 상담 <b class="nw">1336(24시간·무료)</b></p>
+    </div>
+
+    <footer data-testid="guide-business-info">
+      <span class="nw"><b>상호</b> 엔에이치홀딩스</span> · <span class="nw"><b>사업자등록번호</b> 525-20-02937</span> · <span class="nw"><b>대표자</b> 김윤혜</span><br>
+      <b>사업장 주소</b> 경기도 남양주시 다산중앙로82번안길 <span class="nw">166-46,</span> <span class="nw">207-본244호</span><br>
+      <span class="nw"><b>전화번호</b> 070-8098-1727</span> · <span class="nw"><b>고객센터</b> ace@nuriholdem.com</span> · <span class="nw"><b>호스팅 제공자</b> Vercel Inc.</span><br>
+      © 2026 엔에이치홀딩스. All rights reserved. · <a href="/legal/privacy.html">개인정보처리방침</a> · <a class="nw" href="/">nuriholdem.com으로 이동</a>
     </footer>
-  </div>
+  </main>
 </body>
 </html>

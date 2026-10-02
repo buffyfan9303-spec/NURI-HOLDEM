@@ -49,7 +49,8 @@ describe('이용권 사용 T — 여섯 소비처가 같은 25T 를 말한다', 
     const r = settlementReport(DAY, [MAIN, SIDE], ROWS, []);
     expect(r.total.tender.ticket).toBe(200_000);          // 대차표(바인만, 원) 불변
     expect(r.total.addon.ticketWon).toBe(50_000);          // 애드온 이용권(원) 불변
-    expect(ticketUsedT({ ticketPaid: r.total.tender.ticket / TICKET_WON }, r.total.addon)).toBe(WANT);
+    expect(r.total.ticketT).toBe(r.total.tender.ticket / TICKET_WON);   // 장수 미기록 행이라 장수 = 원 ÷ 1만
+    expect(ticketUsedT({ ticketPaid: r.total.ticketT }, r.total.addon)).toBe(WANT);
   });
   it('⑤ CRM(customerLedgerTotals)', () => {
     expect(customerLedgerTotals(ROWS, [MAIN, SIDE]).ticket).toBe(WANT);
@@ -58,8 +59,8 @@ describe('이용권 사용 T — 여섯 소비처가 같은 25T 를 말한다', 
     const one = (g: number, s: typeof MAIN) => {
       const bs = byGame(g);
       const ticketPaid = bs.reduce((t, b) => t + buyinFinance(b, s).ticketPaid, 0);
-      const ticketWon = bs.reduce((t, b) => t + addonFinance(b).ticketWon, 0);
-      return ticketUsedT({ ticketPaid }, { ticketWon });
+      const ticketT = bs.reduce((t, b) => t + addonFinance(b).ticketT, 0);
+      return ticketUsedT({ ticketPaid }, { ticketT });
     };
     expect(one(1, MAIN) + one(2, SIDE)).toBe(WANT);
   });

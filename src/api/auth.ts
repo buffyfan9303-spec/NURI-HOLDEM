@@ -330,7 +330,8 @@ export async function getMyVenueInvites(venueId?: string): Promise<VenueInvite[]
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
-    id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined,
+    // 20261001i: email 은 관리자 외에는 null 로 온다(SEC-01) — 빈 값이면 화면이 닉네임을 대신 보인다
+    id: r.id, userId: r.user_id, email: r.email ?? '', nickname: r.nickname ?? undefined,
     name: r.name, createdAt: r.created_at,
     grantLedger: !!r.grant_ledger, grantVoucher: !!r.grant_voucher, grantSchedule: !!r.grant_schedule,
     staffTitle: r.staff_title ?? undefined,
@@ -543,6 +544,17 @@ export async function adminWithdrawUser(userId: string, reason: string): Promise
   throw new Error(missing
     ? '강제 탈퇴 기능이 아직 서버(DB)에 적용되지 않았습니다. 계정은 그대로입니다 — 마이그레이션 20260911k 적용 후 다시 시도해 주세요.'
     : error.message);
+}
+
+// ── 관리자: 가입 심사 거절 ────────────────────────────────────────────────────
+// 오너 결정(2026-10-01): 거절 = 일반 회원으로 되돌리기(영구 정지 아님). 서버 RPC(20261001f admin_reject_signup)가
+// status='pending' 회원만 role=user·status=active·approved=false 로 돌리고 사유는 audit_log 에 남긴다.
+// ⚠ 예전처럼 profiles.status='banned' 로 저장하면 트리거가 그 CI 를 재가입 차단 목록에 올려
+//   본인인증 재가입까지 영구 차단된다 — 거절에 banned 를 쓰지 마라.
+export async function adminRejectSignup(userId: string, reason?: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_reject_signup', { p_user_id: userId, p_reason: reason ?? null });
+  if (error) throw new Error(error.message);
 }
 
 // ── 본인 비밀번호 확인(재인증) ────────────────────────────────────────────────

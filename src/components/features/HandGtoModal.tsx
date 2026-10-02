@@ -13,10 +13,11 @@
 import { useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
-import { cardsToLabel, RANK_PCT } from '../../lib/preflop';
+import { cardsToLabel } from '../../lib/preflop';
 import { buildFreq } from '../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 import SourceBadge from './tools/SourceBadge';
+import { RANK_BASIS_LABEL, STARTING_HAND_BY_HAND } from './tools/startingHandRank';
 
 /** 차트가 덮는 스택 — ranges.data 는 100bb 한 벌뿐이다(파일 상단 주석). */
 const CHART_BB = 100;
@@ -33,8 +34,9 @@ const RFI6 = ['rfi_lj', 'rfi_hj', 'rfi_co', 'rfi_btn', 'rfi_sb'] as const;
 export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClose: () => void }) {
   const [bb, setBb] = useState<number>(CHART_BB);
   const label = hero.length >= 2 ? cardsToLabel(hero[0], hero[1]) : null;
-  // 핸드 강도 순위(169핸드 중 상위 N%) — 전략 권장이 아니라 **정렬용 지표**다. 그대로 둔다.
-  const pctRank = label ? Math.round((RANK_PCT.get(label) ?? 1) * 100) : 0;
+  // 핸드 강도 순위 — 전략 권장이 아니라 **정렬용 지표**다. 순위 화면(스타팅 핸드 순위)과 같은 데이터·같은 계산을 쓴다
+  // (2026-10-01: 예전엔 Chen 공식 RANK_PCT 라 77 이 '상위 23%'·AA 가 '상위 0%' 로 순위 화면과 어긋났다).
+  const strength = label ? STARTING_HAND_BY_HAND.ten.get(label) ?? null : null;
 
   /** 각 포지션에서 이 핸드의 오픈 빈도(0~1). 차트에 없으면 0(=폴드). */
   const rows = useMemo(() => {
@@ -59,7 +61,11 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
           <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3 text-center">
             <p className="text-2xs text-ink-muted">내 핸드</p>
             <p className="text-3xl font-extrabold leading-none text-accent-300">{label}</p>
-            <p className="mt-1 text-xs text-ink-secondary">169핸드 중 <b className="text-ink-primary">상위 {pctRank}%</b> 강도</p>
+            {strength && (
+              <p className="mt-1 text-xs text-ink-secondary" data-testid="hand-strength">
+                {RANK_BASIS_LABEL.ten} 169개 중 <b className="text-ink-primary">{strength.rank}위</b> · <b className="text-ink-primary">상위 {strength.topPct.toFixed(1)}%</b>
+              </p>
+            )}
           </div>
 
           {/* 스택 */}

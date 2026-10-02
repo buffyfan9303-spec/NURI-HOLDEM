@@ -41,7 +41,7 @@ describe('ticketUsedT — 이용권 사용 T 는 한 곳에서만 더한다', ()
     expect(count(D, /label="오늘 사용" value=\{fmtT\(day\.ticket\)\}/), '대시보드 오늘 = KPI 와 같은 범위(day)').toBe(1);
     expect(count(code('components/features/LedgerStatsPanel.tsx'), /ticketPaid: ticketUsedT\(bf, a\) \}/), '통계').toBe(1);
     expect(count(code('components/features/NuriPosLedger.tsx'), /ticketUsedT\(\{ ticketPaid: stats\.ticket \}, stats\.addon\)/), '장부 요약').toBe(1);
-    expect(count(code('components/features/LedgerSettlementPanel.tsx'), /ticketUsedT\(\{ ticketPaid: t\.tender\.ticket \/ TICKET_WON \}, t\.addon\)/), '정산 표시').toBe(1);
+    expect(count(code('components/features/LedgerSettlementPanel.tsx'), /ticketUsedT\(\{ ticketPaid: t\.ticketT \}, t\.addon\)/), '정산 표시').toBe(1);
     expect(count(code('api/reservations.ts'), /customerLedgerTotals\(/), 'CRM 은 customerLedgerTotals 를 거친다').toBeGreaterThanOrEqual(1);
   });
 
@@ -52,17 +52,21 @@ describe('ticketUsedT — 이용권 사용 T 는 한 곳에서만 더한다', ()
       'components/features/LedgerSettlementPanel.tsx': 1,
       'components/features/LedgerStatsPanel.tsx': 2,
       'components/features/NuriPosLedger.tsx': 2,
+      // 2026-10-01: 정산 바인 이용권 장수(g.ticketT += f.ticketPaid) — 원에서 거꾸로 만들지 않으려고 장수를 직접 모은다.
+      'lib/ledgerSettlement.ts': 1,
     });
     expect(perFile(/\bticketWon\b/)).toEqual({
-      'api/ledger.ts': 12,
+      'api/ledger.ts': 10,   // 2026-10-01: ticketUsedT 가 원 대신 장수(ticketT)를 더해 2개 줄었다
       // #9(2026-09-29): 정산 대차표 한 벌(settlementReceipt)이 원 단위 합계를 lib 로 옮겼다 — T 합산이 아니라 돈(원)의 대차다.
-      'components/features/LedgerSettlementPanel.tsx': 4,
+      'components/features/LedgerSettlementPanel.tsx': 1,   // 2026-10-01: 장수 꼬리표는 ticketT 로(원 ÷ 1만 역산 제거)
       'components/features/NuriPosLedger.tsx': 1,
       'lib/ledgerSettlement.ts': 13,
     });
   });
 
   it('🔴 ④ 합산 식 지문은 정본에만 있다', () => {
-    expect(perFile(/ticketPaid\s*\+\s*[\w.]*ticketWon\s*\/\s*TICKET_WON/)).toEqual({ 'api/ledger.ts': 1 });
+    // 2026-10-01: T = 장수 — 애드온도 원(ticketWon ÷ 1만)이 아니라 장수(ticketT)를 더한다. 옛 지문은 어디에도 없어야 한다.
+    expect(perFile(/ticketPaid\s*\+\s*[\w.]*ticketWon\s*\/\s*TICKET_WON/)).toEqual({});
+    expect(perFile(/ticketPaid\s*\+\s*[\w.]*ticketT\b/)).toEqual({ 'api/ledger.ts': 1 });
   });
 });

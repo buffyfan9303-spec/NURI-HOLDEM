@@ -34,7 +34,7 @@ type GateMode = 'initial' | 'required';
 /** 공개 약관 4종 — 개정 내용은 각 문서 끝의 '부칙 — 개정 이력'에 있다. */
 const DOC_LINKS: [string, string][] = [
   ['서비스 이용약관', '/legal/terms.html'],
-  ['개인정보 수집·이용 동의', '/legal/privacy.html'],
+  ['개인정보처리방침', '/legal/privacy.html'],
   ['불법 환전·사행성 행위 금지 서약', '/legal/anti-gambling.html'],
   ['마케팅 정보 수신 동의(선택)', '/legal/marketing.html'],
 ];
