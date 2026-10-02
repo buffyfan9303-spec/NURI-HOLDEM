@@ -125,7 +125,9 @@ describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09
       'components/features/clock/TournamentClock.tsx': 8,  // 설정 폼 · 자동 생성(표시는 ClockStage 로 이동)
       // 2026-09-17: 7→8. presetFromPosterForm 이 clock.regCloseLevel 을 잃던 것을 고치며 regCloseLevelOf 호출이 하나 늘었다.
       //   계산을 다시 구현한 것이 아니라 **같은 판정기(regStatus.ts)를 한 번 더 부른 것**이라 아래 'lib/regStatus.ts': 1 은 그대로다.
-      'lib/gameInherit.ts': 8,                             // 포스터 ↔ 클락 상속 매핑
+      // 2026-10-02: 8→9. L-08(store-link-1002) — applyToClock 이 레지 레벨을 포스터 원문(regCloseLevelOf)에서 먼저 읽고,
+      //   applyToPoster 가 원문이 없을 때 clock.regCloseLevel 을 'NNLV' 로 포스터에 옮긴다. 새 계산이 아니라 같은 판정기 재사용이다.
+      'lib/gameInherit.ts': 9,                             // 포스터 ↔ 클락 상속 매핑
       'lib/regStatus.ts': 1,                               // ← 계산은 여기 하나뿐이다
     };
     const TOKEN = /\bregCloseLevel\b/g;

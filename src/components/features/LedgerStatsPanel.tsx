@@ -18,6 +18,7 @@ import SegmentedTabs from '../atoms/SegmentedTabs';
 import SlidingPill from '../atoms/SlidingPill';
 import { useBusinessDate } from '../../lib/businessDate';
 import { kstToday } from '../../lib/kst';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
@@ -1043,10 +1044,12 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const [saving, setSaving] = useState(false);
   const [mute, setMute] = useState(false); // 매장 알림 수신 거부(본인)
 
+  const run = useVenueScope(venueId); // L-06 부류 — 늦은 A 매장 응답이 B 의 '비밀번호 설정됨'을 덮지 않게
   useEffect(() => {
-    posHasPassword(venueId).then(setHasPw).catch(() => {});
+    setHasPw(false);
+    run('pw', posHasPassword, setHasPw);
     getMyVenueNotifyMute().then(setMute).catch(() => {});
-  }, [venueId]);
+  }, [venueId, run]);
 
   const toggleMute = async () => {
     const next = !mute;

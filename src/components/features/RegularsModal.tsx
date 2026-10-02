@@ -2,7 +2,7 @@
 // 단골 관리(CRM) — 매장 전체 고객을 장부 바인 기록 기준으로 나열 + 행 펼침 시 상세 활동(바인/방문/머니인/예약/누적/객단가).
 // 새 테이블 없이 기존 장부 데이터만 사용. 관계자(직원)는 제외.
 import { Fold } from '../atoms/Fold';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { getVenueRegulars, getCustomerActivity, type VenueRegular, type CustomerActivity } from '../../api/reservations';
 import { wonToMan } from '../../api/ledger';
@@ -11,6 +11,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SkeletonList } from '../atoms/Skeleton';
 import { useToast } from '../atoms/Toast';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 export default function RegularsModal({ open, onClose, venueId, exclude = [], onSendVoucher }: {
   open: boolean; onClose: () => void; venueId: string; exclude?: string[];
@@ -27,11 +28,13 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
   const [loadError, setLoadError] = useState<unknown>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [q, setQ] = useState('');
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — A 단골 목록이 B 로 바꾼 뒤 늦게 와 B 모달에 그려지지 않게
+  const run = useVenueScope(venueId);
   useEffect(() => {
-    if (!open) return;
+    if (!open) { run.cancel('list'); return; }
     setQ(''); setList(null); setLoadError(null);
-    getVenueRegulars(venueId).then((r) => { setList(r); setLoadError(null); }).catch((e) => setLoadError(e));
-  }, [open, venueId, reloadTick]);
+    run('list', getVenueRegulars, (r) => { setList(r); setLoadError(null); }, (e) => setLoadError(e));
+  }, [open, venueId, reloadTick, run]);
 
   const ex = useMemo(() => new Set(exclude.map((s) => s.trim())), [exclude]);
   const searching = q.trim().length > 0;
@@ -112,15 +115,17 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   // 생일·쿠폰 조회 실패는 '빈 생일 + 활성 쿠폰 0장'과 똑같이 보였다 —
   // 그 상태로 저장하면 기존 생일을 지우고, 이미 준 쿠폰을 또 발급한다. 실패는 실패로 말하고 재시도를 준다.
   const [crmError, setCrmError] = useState<unknown>(null);
+  // 요청 매장 = 응답 매장 — A 손님의 생일·쿠폰이 B 행에 붙은 채 저장되면 B 손님 생일을 덮는다(review-store-link-1002b A4)
+  const run = useVenueScope(venueId);
   const loadAct = () => {
     setActError(null);
-    getCustomerActivity(venueId, r.name).then((a) => { setAct(a); setActError(null); }).catch((e) => setActError(e));
+    run('act', (v) => getCustomerActivity(v, r.name), (a) => { setAct(a); setActError(null); }, (e) => setActError(e));
   };
   const loadCrm = () => {
     setCrmError(null);
-    Promise.all([getCustomerProfile(venueId, r.name), getCoupons(venueId, r.name)])
-      .then(([p, c]) => { setBday(p?.birthday ?? ''); setHasProfile(p !== null); setCoupons(c); setCrmLoaded(true); })
-      .catch((e) => setCrmError(e));
+    run('crm', (v) => Promise.all([getCustomerProfile(v, r.name), getCoupons(v, r.name)]),
+      ([p, c]) => { setBday(p?.birthday ?? ''); setHasProfile(p !== null); setCoupons(c); setCrmLoaded(true); },
+      (e) => setCrmError(e));
   };
   const toggle = () => {
     const n = !open; setOpen(n);
@@ -145,9 +150,17 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
     finally { setDeleting(false); }
   };
   // 서버에는 반영됐는데 재조회만 실패한 경우를 '실패'로 말하면 사장님이 같은 쿠폰을 또 발급한다 — 둘을 갈라 말한다.
+  // 발급·사용 버튼은 갱신이 끝날 때까지 잠근다(await) — 그래서 run 대신 같은 매장 확인을 여기서 한다.
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId;
   const refreshCoupons = async (okMsg: string) => {
-    try { setCoupons(await getCoupons(venueId, r.name)); setCrmError(null); toast.show(okMsg, 'success'); }
-    catch { toast.show('처리는 됐지만 쿠폰 목록 갱신에 실패했습니다. 카드를 닫았다 열어 확인해 주세요', 'info'); }
+    const v = venueId;
+    try {
+      const cs = await getCoupons(v, r.name);
+      if (venueNow.current !== v) return; // 그 사이 매장이 바뀌었다 — 앞 매장 쿠폰을 이 행에 그리지 않는다
+      setCoupons(cs); setCrmError(null); toast.show(okMsg, 'success');
+    }
+    catch { if (venueNow.current === v) toast.show('처리는 됐지만 쿠폰 목록 갱신에 실패했습니다. 카드를 닫았다 열어 확인해 주세요', 'info'); }
   };
   const addCoupon = async () => {
     if (couponBusy) return;

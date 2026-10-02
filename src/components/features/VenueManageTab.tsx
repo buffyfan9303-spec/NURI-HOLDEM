@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
-import { waitSettled } from '../../lib/tabCover';
+import { isSettled, waitSettled } from '../../lib/tabCover';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
 import { Fold, onSummaryClick, pinPressed } from '../atoms/Fold';
@@ -12,6 +12,7 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, setInviteGrants } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
+import { useVenueScope } from '../../lib/useVenueScope';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
@@ -58,6 +59,9 @@ import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
 import { loadRankingsEffect } from '../../lib/rankingsLoad';
+
+/** 판 높이 예약의 탈출구(F-2) — 해제 시각이 아니다. 로딩 표시가 영영 안 사라지는 버그에서 rAF 대기를 끊을 뿐이다. */
+const PANE_LOCK_ESCAPE_MS = 10_000;
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
@@ -388,12 +392,26 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   스켈레톤이 예약을 넘긴 그 순간 풀어버리면, 그다음 실제 콘텐츠로 줄어들 때는 이미 예약이 없어
     //   그 낙차가 그대로 보인다. 그래서 "넘겼다"를 본 즉시가 아니라 **잠잠해진 뒤**에만 푼다(디바운스) —
     //   높이가 계속 바뀌는 동안은 아직 파도가 진행 중이라는 뜻이다.
-    const release = () => setLockPx(null);
+    // 🔴 PR #100 CI(2026-10-02) — 해제 뒤에는 올림(ratchet)이 DOM 에 쓰면 안 된다. 해제 커밋(React 가 minHeight 를 지움)과
+    //   이 이펙트 정리(ro.disconnect) 사이에 RO 가 한 번 더 돌면 그 값이 React 모르는 인라인 min-height 로 **영구히** 남았다
+    //   (이용권: 예약 1208 → 해제 → 보유자 판이 열리며 1081 기록, 실측). 그 바닥 때문에 접기에서 문서가 덜 줄어 scrollY 가
+    //   애매하게 깎이고(602→584·539), 다시 열어도 판이 바닥 안에서만 자라 되돌아오지 않았다(e2e/voucher-reason-stats 재열림).
+    let off = false;
+    const release = () => { off = true; setLockPx(null); };
     let debounce: ReturnType<typeof setTimeout> | null = null;
+    const outer = secPanelRef.current;
     const ro = new ResizeObserver(() => {
+      if (off) return;
+      // M-5c(2026-10-02 store-link-1002) — 예약은 로딩 중 '올라가기만' 한다. 새 판의 첫 프레임이 예약보다 커졌다가(장부: 505→671)
+      //   스켈레톤으로 줄면(541) 그 낙차가 로딩 중에 보였다(푸터 932→802). 종전엔 화면 높이 바닥(735)이 이 낙차를 가렸는데,
+      //   바닥을 '정렬에 필요한 최소'로 줄이면서 드러났다. 안쪽이 예약을 넘으면 그 높이로 예약을 올린다(바깥만 바꾸므로 RO 루프 없음).
+      const h = inner.getBoundingClientRect().height;
+      if (outer && h > (parseFloat(outer.style.minHeight) || 0)) outer.style.minHeight = `${Math.ceil(h)}px`;
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
-        if (inner.getBoundingClientRect().height >= lockPx) release();
+        // F-2 — '따라잡음'만으로 풀지 않는다. 스켈레톤이 예약을 넘긴 채 잠잠해도(장부 첫 진입: 스켈레톤 1620 ≥ 예약) 실제 내용이
+        //   오면 더 짧아질 수 있다(1620→1489, 로딩 중 붕괴). 판 안 로딩 표시가 사라졌을 때만 이 경로로도 푼다.
+        if (inner.getBoundingClientRect().height >= lockPx && isSettled(inner, true)) release();
       }, 160);
     });
     ro.observe(inner);
@@ -403,8 +421,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   (첫 방문 늦은 덜컥). 첫 방문 오르내림(매장 설정 533→2954)은 판이 로딩 표시 없이 불러오던 탓이라
     //   그 판(VenueCustomizePanel)이 aria-busy 로 알리게 고쳤다 — 판정은 하나, 알리는 쪽이 제 몫을 한다.
     //   화면 밖 로딩까지 본다(whole) — 덮개는 보이는 곳만 지키지만 예약은 판 전체 높이를 지킨다.
-    const stop = waitSettled(() => secInnerRef.current, release, undefined, true);
-    return () => { ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
+    // 🔴 F-2(2026-10-02 audit-motion-1002) — 상한은 덮개 상한(TAB_COVER_WAIT_MAX_MS 700)을 **쓰지 않는다.**
+    //   정산 첫 진입은 연쇄 조회라 응답이 400ms 면 실제 도착이 ~920ms 인데, 700ms 에 예약이 먼저 풀려
+    //   로딩 중(판 안 aria-busy 그대로)에 문서가 3326→969px 로 무너지고 푸터가 화면 안으로 올라왔다 내려갔다.
+    //   예약은 '로딩 완료'(판 안 스켈레톤·aria-busy 0 + 높이 두 프레임 정지)로만 푼다. PANE_LOCK_ESCAPE_MS 는 타이밍이 아니라
+    //   영영 안 끝나는 로딩 표시(버그)에 rAF 가 무한히 도는 것만 끊는 탈출구다 — 정상 경로는 그 전에 반드시 정착한다.
+    const stop = waitSettled(() => secInnerRef.current, release, undefined, true, PANE_LOCK_ESCAPE_MS);
+    return () => { off = true; ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
@@ -601,6 +624,52 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const top = el.getBoundingClientRect().top;
     if (top < head - 1) window.scrollBy({ top: top - head, behavior: 'instant' as ScrollBehavior });
   }, [pane, tabActive]);
+  // 🔴 M-5 오너 결정(2026-10-02 · review-store-motion-1002) — 판 바닥 = 화면 높이 − 정렬 머리(사이드 메뉴 sticky top) − 판 아래 꼬리(푸터까지).
+  //   0326d1f3 는 바닥을 화면 높이(.pane-reserve)로 잡아 2단 점프는 없앴지만, 빈 출근 관리에서 빈칸이 314→573px 로 늘고 푸터가 첫 화면 밖으로 밀렸다.
+  //   2단 점프를 막는 데 필요한 것은 '판 윗변이 머리에 정렬된 자리에서 문서 끝 ≥ 화면 끝' 뿐이다 — 그 최소값을 실측으로 준다.
+  //   그러면 정렬은 한 번에 끝나고(클램프 없음), 정렬된 화면 맨 아래에 법정 푸터가 보인다. 꼬리(푸터 높이·간격)는 폭마다 줄바꿈이 달라 잰다.
+  //   꼬리 = 푸터 아랫변 − 판 아랫변(뷰포트 좌표라 스크롤과 무관 · 판 높이와도 무관 → 되먹임 없음).
+  useLayoutEffect(() => {
+    const el = secPanelRef.current;
+    if (!el || !tabActive) return;
+    const foot = () => [...document.querySelectorAll<HTMLElement>('[data-testid="business-footer"]')].find((f) => !f.closest('[role="dialog"]') && f.offsetParent !== null);
+    const calc = () => {
+      const f = foot();
+      if (!f || el.offsetParent === null) return;
+      const nav = document.querySelector('[data-mystore-secbar]');
+      const head = nav ? parseFloat(getComputedStyle(nav).top) || 0 : 0;
+      // ⚠ 레이아웃 거리로 잰다(transform 제외) — 푸터를 감싼 .reveal 은 화면에 들기 전 18px 아래로 옮겨져(transform) 있어
+      //   getBoundingClientRect 로 재면 꼬리가 18px 크게 나오고, 들어오며 제자리로 가면 문서가 18px 줄어 한 번 더 깎였다(600→76→58→76 실측).
+      // 🔴 PR #100 CI(2026-10-02) — 단, offsetTop·offsetHeight 는 **정수로 반올림**된다. 판 안 접기 판(Fold)이 높이를 소수로 미는 동안
+      //   반올림이 프레임마다 달라 꼬리가 ±1 흔들렸고(바닥 506↔507), 그때마다 판의 min-height 계산값이 바뀌어
+      //   브라우저 스크롤 앵커링이 그 프레임 보정을 멈췄다(min-height 는 앵커링 억제 조건) — 보유자 현황을 접었다 펴면
+      //   클램프로 깎인 scrollY 가 되돌아오지 않았다(602→584→539, e2e/voucher-reason-stats 재열림).
+      //   → 소수(rect)로 재되, 서로 공유하지 않는 조상의 translate(.reveal)만 빼서 레이아웃 거리를 얻는다. 1/64px(레이아웃 단위)로 맞춘다.
+      const shiftY = (n: HTMLElement, other: HTMLElement) => {
+        let y = 0;
+        for (let a: HTMLElement | null = n; a && !a.contains(other); a = a.parentElement) {
+          const t = getComputedStyle(a).transform;
+          if (t && t !== 'none') y += new DOMMatrixReadOnly(t).m42;
+        }
+        return y;
+      };
+      const raw = (f.getBoundingClientRect().bottom - shiftY(f, el)) - (el.getBoundingClientRect().bottom - shiftY(el, f));
+      const tail = Math.max(0, Math.round(raw * 64) / 64);
+      const v = `${Math.max(0, Math.ceil(window.innerHeight - head - tail))}px`; // 올림 — 내림이면 문서 끝이 화면 끝보다 1px 모자라 75 로 한 번 더 깎였다(실측)
+      if (el.style.getPropertyValue('--pane-floor') !== v) el.style.setProperty('--pane-floor', v);
+    };
+    calc();
+    // 판 교체·푸터 줄바꿈·창 크기에 따라 꼬리·머리가 바뀐다 → 문서(body)·푸터 크기가 바뀔 때마다 다시 잰다.
+    //   잰 값을 RO 콜백 안에서 바로 쓰면 관찰 대상 크기가 그 프레임에 또 바뀌어 'ResizeObserver loop' 오류가 난다 → 다음 프레임에 쓴다(값이 같으면 쓰지 않아 멈춘다).
+    let raf = 0;
+    const later = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(calc); };
+    const ro = new ResizeObserver(later);
+    ro.observe(document.body);
+    const f = foot();
+    if (f) ro.observe(f);
+    window.addEventListener('resize', later);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', later); };
+  }, [tabActive, pane]);
 
   // 시즌 '역대 챔피언' 카드 공유에 찍히는 매장명 — prop 이 비어 있어 카드에서 매장명 줄이 통째로
   // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
@@ -1073,7 +1142,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             </>)}
 
           {/* S6-1: 예약(min-height)은 바깥에, 실측(ResizeObserver)은 안쪽 래퍼에 — 위 lockPane 주석 참고. */}
-          <div data-mystore-secpanel ref={secPanelRef} className="mt-3 min-w-0 flex-1 lg:mt-0"
+          {/* M-5(2026-10-02) — 판 바닥. 600 에서 짧은 판(출근 관리·직원)으로 가면 판 윗변 정렬(76) 뒤 예약이 풀리며 문서가 짧아져
+              scrollY 가 두 번 더 깎였다(600→76→63→45). 바닥 = 정렬된 자리에서 문서 끝이 화면 끝에 닿는 최소 높이(--pane-floor, 위 실측).
+              재기 전 첫 프레임만 종전 .pane-reserve 값으로 둔다. */}
+          <div data-mystore-secpanel ref={secPanelRef} className="min-h-[var(--pane-floor,calc(100svh-3.5rem-var(--tabbar-safe)))] mt-3 min-w-0 flex-1 lg:mt-0"
             style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
           <div ref={secInnerRef} className="space-y-3">
             {dItem?.locked && (
@@ -1287,7 +1359,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
-                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}
+                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'presets'} />)}
                 {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
                     전부 'NURI POS_…' 로 나갔다 — 매장이 여럿인 운영자가 파일만 보고 구분할 수 없었다.
                     비면 컴포넌트 기본값('NURI POS')이 그대로라 회귀 없음. */}
@@ -1873,6 +1945,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   gameSel?: GameSel | null;
 }) {
   const toast = useToast();
+  const vrun = useVenueScope(venueId);
   // B1(2026-09-28) — '오늘'은 매장 영업일(서버 ledger_business_date). 게임 칩이 고른 게임(영업일 장부)과 같은 날짜여야
   //   자정 넘긴 토너의 순위가 달력 오늘(빈 날)로 저장되지 않는다. 예전엔 기기 로컬 날짜였다(해외·시계 오설정 기기에서 하루 어긋남).
   const today = businessDateOf(venueId);
@@ -2100,9 +2173,10 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   const [ledgerPanelOpen, setLedgerPanelOpen] = useState(false);
   // 마감정산에서 넘어온 참가자 명단은 이제 행을 채우지 않는다 — 자동완성 후보로만 합류시킨다.
   const draftNames = draft && draft.date === date ? draft.names : null;
+  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — A 장부 명단이 B 순위 입력의 자동완성·'장부 보기'에 붙지 않게
   useEffect(() => {
-    getLedgerBuyins(venueId, date, currentGameSeq)
-      .then((bs) => {
+    vrun('ledgerNames', (v) => getLedgerBuyins(v, date, currentGameSeq),
+      (bs) => {
         setLedgerNames([...new Set([...bs.map((b) => b.playerName), ...(draftNames ?? [])].filter(Boolean))]);
         const counts = new Map<string, number>();
         for (const b of bs) { const n = (b.playerName ?? '').trim(); if (n) counts.set(n, (counts.get(n) ?? 0) + 1); }
@@ -2111,8 +2185,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         // 자동 채움을 없앴으니 명단은 '펼쳐 두고 골라 넣는' 것이 기본 동선이 된다.
         // 채워 넣지는 않는다 — 보여 주기만 한다(오너 지시: 미리 넣지 말 것).
         if (players.length > 0) setLedgerPanelOpen(true);
-      })
-      .catch(() => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
+      },
+      () => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, date, currentGameSeq, draftNames?.length]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행

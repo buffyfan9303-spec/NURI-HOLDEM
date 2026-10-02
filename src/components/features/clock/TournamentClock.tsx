@@ -42,6 +42,7 @@ import { ambIsolation } from './ambience/ambiencePresets';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
+import { useVenueScope } from '../../../lib/useVenueScope';
 import { createBackoff } from '../../../lib/retryBackoff';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
@@ -126,7 +127,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     reloadAfterSaveRef.current = true;
     saver.push(next, prev);
   }, [saver, bumpClockReq]);
-  const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
+  // L-06(audit-link-1002) — 매장 전환에 다시 마운트되지 않으므로 늦게 온 A 매장 응답은 run 이 버린다(공용 지점 lib/useVenueScope).
+  const run = useVenueScope(venueId);
+  const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
     // 🔴 D3(2026-09-28) — 매장 전환은 이 컴포넌트를 다시 마운트하지 않는다(VenueManageTab 이 같은 자리에서 venueId 만 바꾼다).
@@ -148,10 +151,12 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
 
   // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
   useEffect(() => {
-    if (!seedSessionDate) { setSeedSession(null); return; }
-    getLedgerSession(venueId, seedSessionDate, seedGameSeq).then(setSeedSession).catch(() => {});
+    setSeedSession(null); // 다른 매장·회차의 시드가 새 조회 전까지 설정 폼에 남지 않게(L-06)
+    // review 1b — 회차 S1→S2 로 바뀌면 S1 의 늦은 응답이 S2 설정에 게임명·얼리를 시드하지 않게(같은 key 는 마지막 요청만 반영).
+    if (!seedSessionDate) { run.cancel('seed'); return; }
+    run('seed', (v) => getLedgerSession(v, seedSessionDate, seedGameSeq), setSeedSession);
     setView('settings');
-  }, [venueId, seedSessionDate, seedGameSeq]);
+  }, [venueId, seedSessionDate, seedGameSeq, run]);
 
   // 구독은 **이 판이 보일 때만** 연다. 탭 keep-alive 라 홈으로 가도 컴포넌트가 살아 있어서
   //   예전엔 안 보이는 판이 계속 realtime 을 붙들었다(무료 한도: 동시연결 200·월 200만 메시지).
@@ -287,6 +292,15 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     await startClock(cfg2, sideGameDate(state, main), g);   // C8 — 기기 로컬 오늘 금지
   };
 
+  // F-3 — 게임 슬롯 바 자리표시의 칸 수. 그날 장부 회차(이미 받은 장부 목록)와 지금 클락으로 미리 안다(바의 실제 조회는 그 뒤에 온다).
+  const slotHint = (date?: string | null) => {
+    const d = date || new Date().toLocaleDateString('en-CA'); // getLedgerGames 의 기본 날짜와 같은 기준(기기 로컬)
+    const m = new Map<number, boolean>();
+    for (const s of sessions) if (s.sessionDate === d) m.set(s.gameSeq, false);
+    if (state) m.set(state.gameSeq, true);
+    return [...m].sort((a, b) => a[0] - b[0]).map(([seq, clock]) => ({ seq, clock }));
+  };
+
   if (loading) return <p aria-busy="true" className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
 
   // 불러오기 실패 — 설정폼(=새 클락 시작)으로 절대 넘기지 않는다.
@@ -298,7 +312,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   if (view === 'settings' || !state) {
     return (
       <div className="space-y-2">
-        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
+        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} expect={slotHint(seedSessionDate)} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
         <ClockSettings
           key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
           venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
@@ -313,7 +327,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
 
   return (
     <div className="space-y-2">
-      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
+      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} expect={slotHint(state.sessionDate)} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
       <ClockLive
         venueName={venueName}
         state={state} canManage={canManage} active={active}
@@ -328,20 +342,24 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
 }
 
 // ── 멀티 클락 오버뷰 — 매장 게임별 클락(메인+사이드N) 한눈에 + 탭 전환 + 사이드 클락 추가 ──
-function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch, onAddSide, onQuickStart }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void; onQuickStart: (g: number) => void }) {
+function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expectSlots = [], active = true, onSwitch, onAddSide, onQuickStart }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; expect?: { seq: number; clock: boolean }[]; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void; onQuickStart: (g: number) => void }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
+  // F-3(2026-10-02) — 첫 조회가 끝났는지. 끝나기 전엔 바를 null 로 두지 않고 같은 모양의 자리표시를 그린다(아래).
+  const [loaded, setLoaded] = useState(false);
   // 매장이 바뀌면 앞 매장 슬롯을 즉시 비운다(숨김↔보임 전환에서는 비우지 않는다 — 깜빡임 방지).
-  useEffect(() => { setClocks([]); setGames([]); }, [venueId]);
+  useEffect(() => { setClocks([]); setGames([]); setLoaded(false); }, [venueId]);
   useEffect(() => {
     // E(2026-09-28) — 매장 전환 가드: A 매장으로 나간 응답이 B 로 바꾼 뒤 도착해 B 의 게임 슬롯을 덮지 않게(alive).
     //   구독도 **이 매장** 클락만 듣는다 — 전 매장(subscribeRunningClocks)을 들으면 남의 매장 레벨 전환마다 여기가 다시 읽혔다.
     let alive = true;
     const load = () => {
-      getVenueClocks(venueId).then((c) => { if (alive) setClocks(c); }).catch(() => {});
-      getLedgerGames(venueId, sessionDate || undefined)
-        .then((gs) => { if (alive) setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title }))); })
-        .catch(() => { if (alive) setGames([]); });
+      Promise.allSettled([
+        getVenueClocks(venueId).then((c) => { if (alive) setClocks(c); }),
+        getLedgerGames(venueId, sessionDate || undefined)
+          .then((gs) => { if (alive) setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title }))); })
+          .catch(() => { if (alive) setGames([]); }),
+      ]).then(() => { if (alive) setLoaded(true); });
     };
     if (!active) return () => { alive = false; };   // 안 보이는 동안은 구독을 붙들지 않는다(위와 같은 이유)
     load();
@@ -352,6 +370,31 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
   useClockSecond(clocks.find((c) => c.gameSeq === currentGameSeq), active);
   // 게임 슬롯 = 클락 존재 게임 ∪ 그날 장부 게임
   const seqs = [...new Set([...clocks.map((c) => c.gameSeq), ...games.map((g) => g.gameSeq)])].sort((a, b) => a - b);
+  // F-3(2026-10-02 audit-motion-1002) — 첫 조회 전에 null 이면, 위 설정 폼(부모의 본 로딩이 먼저 끝난다)이 그려진 뒤
+  //   이 바가 +438~907ms 에 끼어들어 폼을 103px 밀었다. 부모가 이미 아는 것(그날 장부 회차·지금 클락)으로 칸 수를 미리 알고,
+  //   진짜 바와 **같은 상자**(머리줄 + 칸 + ＋칸)를 invisible 로 세워 자리를 잡는다. 칸 수를 모르면(0) 종전처럼 비운다.
+  if (!loaded && seqs.length < 1) {
+    if (expectSlots.length < 1) return null;
+    return (
+      <div aria-busy="true" aria-label="게임 클락 불러오는 중" className="rounded-card border border-accent-400/25 bg-surface-low/60 p-2 space-y-1.5">
+        <p className="flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="timer" size={12} className="shrink-0" />게임 클락 {expectSlots.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
+        <div className="invisible grid grid-cols-2 gap-1.5 sm:grid-cols-3" aria-hidden>
+          {expectSlots.map(({ seq, clock }) => (
+            <div key={seq} className="rounded-input border border-border-subtle bg-surface-base p-1.5 text-left">
+              <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold">.</span><span className="text-[9px] font-bold">.</span></div>
+              {clock
+                ? <><p className="mt-0.5 text-base font-extrabold leading-none tabular-nums">00:00</p><p className="truncate text-[9px]">.</p></>
+                : <p className="mt-0.5 text-2xs truncate">.</p>}
+            </div>
+          ))}
+          <div className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed p-1.5 text-center font-bold">
+            <span className="text-lg leading-none">＋</span>
+            <span className="text-2xs leading-tight">사이드 클락</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (seqs.length < 1) return null;
   const nextSide = Math.max(1, ...seqs) + 1;
   const label = (g: number) => (g === 1 ? '메인' : '사이드' + (g - 1));

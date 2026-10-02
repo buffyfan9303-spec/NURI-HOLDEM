@@ -174,6 +174,9 @@ test.describe('보유자 현황 재열림 스크롤(1440 데스크톱)', () => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await open(page, 1440, 900, 'ok');
     const toggle = page.getByRole('button', { name: /보유자 현황·통계/ });
+    // PR #100 CI(2026-10-02) — 판 높이 예약(lockPane)이 풀린 뒤 올림(ratchet)이 남긴 인라인 min-height 가 React 모르게 영구히 남았다
+    //   (1026~1086px 실측). 그 바닥이 접힌 높이(878)와 펼친 높이 사이에 걸리면 재열림 scrollY 가 샌다 — 예약은 풀리면 흔적이 없어야 한다.
+    await expect.poll(() => page.locator('[data-mystore-secpanel]').evaluate((p) => (p as HTMLElement).style.minHeight), { timeout: 5_000, message: '예약이 풀린 판에 인라인 min-height 가 남았다' }).toBe('');
     await toggle.evaluate((b) => b.scrollIntoView({ block: 'center' }));
     await page.waitForTimeout(500);
     await page.evaluate(() => {

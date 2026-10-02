@@ -185,7 +185,11 @@ export function applyToClock(d: GamePresetData): Partial<ClockConfig> {
   const prizes = moneyPrizeRows(d);
   if (prizes.length) p.prizes = prizes;
   const c: PresetClockData = d.clock ?? {};
-  if (c.regCloseLevel) p.regCloseLevel = c.regCloseLevel;
+  // L-08(audit-link-1002) — 프리셋 한 개 안에 레지 마감이 두 칸(poster.regCloseTime 원문 · clock.regCloseLevel)이라
+  //   둘이 다르면 손님에게 광고하는 레벨(포스터)과 클락이 도는 레벨이 갈렸다. 정본은 포스터 원문이다(regCloseLevelOf 와 같은 규칙) —
+  //   원문에 'NNLv' 가 있으면 그것, 없을 때만 클락 칸.
+  const reg = regCloseLevelOf({ regCloseTime: d.poster?.regCloseTime }) ?? c.regCloseLevel;
+  if (reg) p.regCloseLevel = reg;
   if (c.maxLevel) p.maxLevel = c.maxLevel;
   if (c.earlyBonus) p.earlyBonus = c.earlyBonus;
   if (c.doubleEarlyBonus) p.doubleEarlyBonus = c.doubleEarlyBonus;
@@ -228,6 +232,21 @@ export function applyToPoster(d: GamePresetData): Partial<PosterFormData> {
   const ns = d.poster ?? {};
   if (ns.startTime) p.startTime = ns.startTime;
   if (ns.regCloseTime) p.regCloseTime = ns.regCloseTime;
+  // L-08(audit-link-1002) — 프리셋 → 포스터 → 장부 시작 경로에서 프리셋의 클락 몫이 포스터를 못 건너 클락에 오지 않았다
+  //   (장부 시작은 포스터만 읽는다 — clockPatchFromSchedule). 포스터에 칸이 있는 것은 포스터로 옮긴다:
+  //   · 레지 마감 레벨 — 원문이 없을 때만 'NNLV'(포스터 원문이 정본이라 덮지 않는다)
+  //   · 얼리 단계 — 더블(1단)·1얼리(2단) 거울값을 earlyTiers 로. 칩 0·레벨 0 단계는 뺀다.
+  //   maxLevel·미스터리 바운티는 포스터에 칸이 없어 여전히 못 건넌다(리드 결정 대기 — store-link-1002 보고).
+  //   ⚠ 클락 몫'만' 있는 부분 프리셋은 그대로 포스터 폼 불간섭이다(§13-B · gameInherit.test '빈 패치') — 이미 포스터를 채우는 프리셋일 때만 싣는다.
+  const c = d.clock ?? {};
+  if (Object.keys(p).length > 0) {
+    if (!ns.regCloseTime && c.regCloseLevel) p.regCloseTime = `${c.regCloseLevel}LV`;
+    const tiers = [
+      { level: c.earlyDoubleLevel ?? 0, chips: c.doubleEarlyBonus ?? 0 },
+      { level: c.earlySingleLevel ?? 0, chips: c.earlyBonus ?? 0 },
+    ].filter((t) => t.level > 0 && t.chips > 0);
+    if (tiers.length) p.earlyTiers = tiers;
+  }
   if (ns.region) p.region = ns.region;
   if (ns.grade !== undefined) p.grade = ns.grade;
   if (ns.paymentMethods?.length) p.paymentMethods = ns.paymentMethods;

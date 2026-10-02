@@ -1,7 +1,7 @@
 // src/components/features/PresetManager.tsx
 // 게임 프리셋 관리 — 포스터/장부를 만들지 않고도 게임 내용(+듀레이션)을 템플릿으로 생성/수정/삭제.
 // PL3: 기본 생성 경로가 '지난 게임에서 만들기' — 빈 폼은 2차 진입점(§13-B 생성 경로 역전).
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { listGamePresets, saveGamePreset, deleteGamePreset, presetBuyInWon, presetFilledCount, type GamePreset, type GamePresetData } from '../../api/presets';
 import { getSchedules, type Schedule } from '../../api/schedules';
@@ -10,53 +10,82 @@ import { presetFromSchedule, presetFromRound } from '../../lib/gameInherit';
 import { manToWon, presetPrizeWon, wonToMan } from '../../lib/units';
 import BlindLevelsEditor from './clock/BlindLevelsEditor';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 const EMPTY: GamePresetData = {
   title: '', gameType: '', buyIn: 0, startStack: 0, rebuyStack: 0, addonStack: 0, addonCost: 0,
   prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, duration: '', blinds: '', isCompetition: false, memo: '',
 };
 
-export default function PresetManager({ venueId }: { venueId: string }) {
+export default function PresetManager({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const toast = useToast();
   const [presets, setPresets] = useState<GamePreset[] | null>(null);
   const [editing, setEditing] = useState<{ id?: string; name: string; data: GamePresetData } | null>(null);
   const [busy, setBusy] = useState(false);
+  // M-6(2026-10-02 audit-motion-1002) — 편집은 목록 자리에서 제자리 교체다. 목록을 600 쯤 내린 채 '수정'을 누르면
+  //   폼 머리('프리셋 수정'·이름 칸)가 화면 위로 잘린 채 시작했다(판 윗변 −408). 열 때 폼 머리를 헤더 밑(scroll-mt)으로 맞추고,
+  //   닫으면(취소·저장) 목록을 보던 자리로 돌려준다. 폼 머리가 이미 보이면 아무것도 안 움직인다.
+  const listY = useRef<number | null>(null);
+  const editTopRef = useCallback((el: HTMLElement | null) => {
+    if (el) {
+      const m = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      const top = el.getBoundingClientRect().top;
+      if (top < m - 1) { listY.current = window.scrollY; window.scrollBy({ top: top - m, behavior: 'instant' as ScrollBehavior }); }
+    } else if (listY.current != null) {
+      const y = listY.current;
+      listY.current = null;
+      const gen = restoreGen.current;
+      requestAnimationFrame(() => { if (gen === restoreGen.current) window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior }); });
+    }
+  }, []);
+  // 🔴 M-6 회귀(review-store-motion-1002) — 편집을 연 채 다른 메뉴에 다녀와서 ✕ 를 누르면, 떠날 때의 목록 위치(600)로 524px 점프했다.
+  //   그 위치는 '이 판을 보던 그 순간'의 것이다 — 판을 떠나면(비활성) 버린다. 매장이 바뀌어 폼이 닫힐 때도 A 목록 위치로 가지 않게
+  //   예약된 복원을 무효로 한다(레이아웃 이펙트는 ref 해제 뒤·rAF 앞에 돈다).
+  const restoreGen = useRef(0);
+  useLayoutEffect(() => { if (!active) { listY.current = null; restoreGen.current++; } }, [active]);
+  useLayoutEffect(() => { listY.current = null; restoreGen.current++; }, [venueId]);
 
-  const load = () => listGamePresets(venueId).then(setPresets).catch(() => setPresets([]));
+  // 🔴 L-05(audit-link-1002) — 이 판은 매장 A→B 전환에 다시 마운트되지 않는다. 편집 중 상태가 B 로 넘어가
+  //   'A 프리셋 수정 폼'에서 저장하면 A 행의 venue_id 가 B 로 바뀌어 프리셋이 매장을 옮겨 갔다(다매장 운영자·관리자).
+  //   매장이 바뀌는 렌더에서 매장 몫 상태를 전부 비운다(이펙트가 아니라 렌더 중 조정 — 한 프레임도 A 폼이 B 밑에 안 남는다).
+  //   늦게 온 A 응답은 useVenueScope 가 버린다.
+  const run = useVenueScope(venueId);
+  const [recent, setRecent] = useState<Schedule[]>([]);
+  const [allSchedules, setAllSchedules] = useState<Schedule[]>([]); // 장부 회차의 연결 포스터 룩업용
+  const [rounds, setRounds] = useState<LedgerSessionListItem[]>([]);
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const [shownVenue, setShownVenue] = useState(venueId);
+  if (shownVenue !== venueId) {
+    setShownVenue(venueId);
+    setEditing(null); setPresets(null); setLoadErr(null); setRecent([]); setAllSchedules([]); setRounds([]);
+  }
+
+  // L-14 — 목록 조회 실패를 '저장된 프리셋이 없습니다'로 그리지 않는다(못 읽음 ≠ 없음).
+  const load = () => run('list', listGamePresets, (ps) => { setPresets(ps); setLoadErr(null); }, (e) => { setPresets(null); setLoadErr(e); });
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // PL3: 최근 포스터(이 매장) — '지난 게임에서 만들기' 재료. 24필드가 채워진 채 열려 이름만 지으면 된다.
-  const [recent, setRecent] = useState<Schedule[]>([]);
-  const [allSchedules, setAllSchedules] = useState<Schedule[]>([]); // 장부 회차의 연결 포스터 룩업용
   useEffect(() => {
-    getSchedules()
-      .then((all) => {
-        const mine = all.filter((s) => s.venueId === venueId);
-        setAllSchedules(mine);
-        setRecent([...mine].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12));
-      })
-      .catch(() => {});
-  }, [venueId]);
+    run('recent', (v) => getSchedules().then((all) => all.filter((s) => s.venueId === v)), (mine) => {
+      setAllSchedules(mine);
+      setRecent([...mine].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12));
+    });
+  }, [venueId, run]);
   // PL3: 최근 '마감된' 장부 회차 — 운영 중 수정까지 반영된 완성본(스냅샷)이 최우선 재료.
-  const [rounds, setRounds] = useState<LedgerSessionListItem[]>([]);
   useEffect(() => {
-    getLedgerSessionList(venueId, 40)
-      .then((list) => setRounds(list.filter((s) => s.closed).slice(0, 6)))
-      .catch(() => {});
-  }, [venueId]);
+    run('rounds', (v) => getLedgerSessionList(v, 40), (list) => setRounds(list.filter((s) => s.closed).slice(0, 6)));
+  }, [venueId, run]);
 
   const startNew = () => setEditing({ name: '', data: { ...EMPTY } });
   const startFromSchedule = (sc: Schedule) =>
     setEditing({ name: sc.title, data: { ...EMPTY, ...presetFromSchedule(sc) } });
   // 마감 회차 → 프리셋(세션 + 마감 때 캡처한 클락 설정 + 연결 포스터를 한 번에)
-  const startFromRound = async (r: LedgerSessionListItem) => {
-    try {
-      const sess = await getLedgerSession(venueId, r.sessionDate, r.gameSeq);
-      const sched = allSchedules.find((s) => s.id === sess.scheduleId) ?? null;
-      const cfg = sess.clockSnapshot?.gameSnapshot?.clockConfig ?? null;
-      setEditing({ name: sess.title || `${r.sessionDate} 게임`, data: { ...EMPTY, ...presetFromRound(sess, cfg, sched) } });
-    } catch { toast.show('회차를 불러오지 못했습니다', 'error'); }
-  };
+  const startFromRound = (r: LedgerSessionListItem) => run('round', (v) => getLedgerSession(v, r.sessionDate, r.gameSeq), (sess) => {
+    const sched = allSchedules.find((s) => s.id === sess.scheduleId) ?? null;
+    const cfg = sess.clockSnapshot?.gameSnapshot?.clockConfig ?? null;
+    setEditing({ name: sess.title || `${r.sessionDate} 게임`, data: { ...EMPTY, ...presetFromRound(sess, cfg, sched) } });
+  }, () => toast.show('회차를 불러오지 못했습니다', 'error'));
   const startEdit = (p: GamePreset) => setEditing({ id: p.id, name: p.name, data: { ...EMPTY, ...p.data } });
 
   const save = async () => {
@@ -89,7 +118,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   if (editing) {
     const d = editing.data;
     return (
-      <section className="space-y-2.5 rounded-aura border card-aura p-3">
+      <section ref={editTopRef} className="space-y-2.5 rounded-aura border card-aura p-3 scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-ink-primary">{editing.id ? '프리셋 수정' : '새 프리셋'}</h3>
           <button type="button" onClick={() => setEditing(null)} className="text-lg leading-none text-ink-muted">✕</button>
@@ -202,7 +231,8 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           </div>
         </div>
       )}
-      {presets === null ? <p aria-busy="true" className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+      {loadErr ? <LoadErrorCard error={loadErr} what="프리셋" compact onRetry={() => { setLoadErr(null); load(); }} />
+        : presets === null ? <p aria-busy="true" className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
         : presets.length === 0 ? <p className="rounded-aura border card-aura py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다.</p>
           : <ul className="space-y-1.5">{presets.map((p) => (
             <li key={p.id} className="rounded-aura border card-aura px-3 py-2.5">
