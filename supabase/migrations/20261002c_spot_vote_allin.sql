@@ -1,4 +1,5 @@
--- ⏳ 미적용 — 초안(community-team 2026-10-02). 적용은 리드만 한다(nuri-migration). 라이브에는 쓰기 0 — 아래 §R 은 읽기 전용 SELECT 대조만 했다.
+-- ✅ 적용 완료 2026-10-02 (리드, Management API) — 리허설 rollback 자가검사 통과 · md5(prosrc) eb611bc04c0092483c6345450a1816e6 · ACL postgres/service_role 만 · advisors ERROR 0
+-- (원래 머리줄) ⏳ 미적용 — 초안(community-team 2026-10-02). 적용은 리드만 한다(nuri-migration). 라이브에는 쓰기 0 — 아래 §R 은 읽기 전용 SELECT 대조만 했다.
 -- 20261002c — SPOT 공유 투표 보기: 레이즈를 받을 수 없는 자리(상대 올인 · 내 스택을 덮는 벳)면 '폴드·콜' 만.
 --   요구 원천: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\review-share-a3-1002.md §2(투표 보기 FAIL v4~v6).
 --   지금(라이브 20261001o, _spot_vote_choices md5(prosrc) cc4f9b92bccce337cdf00e82ae49f93c): '결정 스트리트에 bet·raise 가 있는가' 만 본다.
