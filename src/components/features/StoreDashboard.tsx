@@ -63,6 +63,8 @@ const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 
 /** 'YYYY-MM-DD' 다음 날(달력 계산만 — 시간대 무관) */
 const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+/** E3 L-1 — 이 기기에서 이 매장의 '순위 미입력' 건수를 마지막으로 본 값(확인 중 자리 예약용). */
+const RANK_N_KEY = (venueId: string) => `nuri:dash-rank-n:${venueId}`;
 const last7 = () => lastN(7);
 const last14 = () => lastN(14);
 const last28 = () => lastN(28);
@@ -357,7 +359,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       // ⚠ src/api/ledger.ts 의 두 함수가 { error } 를 버리고 [] 를 돌려주는 동안은 여기까지 오지 않는다 —
       //   그쪽이 throw 하도록 바뀌면 이 자리가 그 실패를 받는다(같은 계약: getLedgerSession).
       listStaleOpenSessions(venueId).then(guard(setStaleOpen)),
-      getPosterOpsSummaries(venueId).then(guard((sums: Awaited<ReturnType<typeof getPosterOpsSummaries>>) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date))))),
+      getPosterOpsSummaries(venueId).then(guard((sums: Awaited<ReturnType<typeof getPosterOpsSummaries>>) => {
+        const list = Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date));
+        setPendingRanks(list);
+        try { localStorage.setItem(RANK_N_KEY(venueId), String(list.length)); } catch { /* 차단 환경 — 다음 확인 중 예약만 없다 */ }
+      })),
       // 장부 권한이 없는 직원은 애초에 이 3종을 볼 수 없다(RLS 거절이 정상) — 그 거절을
       // 장애로 띄우면 포스터·출근 안내까지 같이 사라진다. 실패 분기는 장부를 보는 사람에게만.
     ]).then(
@@ -1356,7 +1362,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
             ? { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+            // E3 L-2(2026-10-03) — 제목이 390 에서 두 줄이라 카드가 자리표시(91px)보다 21px 커져 아래를 밀었다. 제목을 한 줄로, '진행 중'은 설명으로.
+            : { icon: 'clock', title: '클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 진행 중 · 클락을 켜면 라이브 탭에 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1408,12 +1415,18 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
              목록에 적힌 '08/30 사이드1' 을 보고 눌렀는데 전혀 다른 대회가 열렸다(2026-09-07 추적).
              한 건이면 바로 그 대회로, 여러 건이면 각 행이 자기 대회를 연다 — 대상은 서버가 준
              (date, gameSeq, rankingEvent) 그대로 쓴다(같은 규칙을 클라에서 다시 유도하지 않는다). */}
-      {caps.ledger && pendingRanks.length > 0 && (() => {
-        const go = (p: typeof pendingRanks[number]) => onGoto({ section: 'ranking', date: p.date, gameSeq: p.gameSeq, event: p.rankingEvent });
-        const labelOf = (p: typeof pendingRanks[number]) =>
+      {caps.ledger && (() => {
+        type Row = Pick<PosterOpsSummary, 'date' | 'gameSeq' | 'rankingEvent'>;
+        const go = (p: Row) => onGoto({ section: 'ranking', date: p.date, gameSeq: p.gameSeq, event: p.rankingEvent });
+        const labelOf = (p: Row) =>
           `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}${p.rankingEvent ? ` · ${p.rankingEvent}` : ''}`;
-        if (pendingRanks.length === 1) {
-          const p = pendingRanks[0];
+        // E3 L-1(2026-10-03) — 확인 중엔 이 카드가 없다가 정착 순간 생겨 1280 미만(한 열)에서 아래 격자를 82px 밀었다.
+        //   '지금 할 일'(D1)처럼 확인 중에 같은 틀의 스켈레톤으로 자리를 잡되, 몇 건인지는 응답 전엔 모른다 — 이 매장에서 **지난번에 본 건수**
+        //   (이 기기 localStorage)만큼 잡는다. 0건 매장은 종전대로 아무것도 잡지 않는다(잡았다 접으면 D1 이 막은 반대 방향 이동이 된다).
+        //   처음 보는 매장(기록 없음)도 종전대로다 — 그 한 번의 이동은 남는다.
+        const rankCard = (list: Row[]) => {
+        if (list.length === 1) {
+          const p = list[0];
           return (
             <button type="button" onClick={() => go(p)}
               className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/6 p-3 text-left transition-colors hover:bg-gold-400/10">
@@ -1426,11 +1439,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             </button>
           );
         }
-        const shown = pendingRanks.slice(0, 4);
+        const shown = list.slice(0, 4);
         return (
           <section className="rounded-card border border-gold-400/40 bg-gold-400/6 p-3" aria-label="순위 미입력 대회">
             <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
-              <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {pendingRanks.length}개
+              <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {list.length}개
             </p>
             <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요</p>
             <ul className="mt-2 space-y-1">
@@ -1444,11 +1457,24 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 </li>
               ))}
             </ul>
-            {pendingRanks.length > shown.length && (
-              <p className="mt-1.5 text-2xs text-ink-muted">외 {pendingRanks.length - shown.length}건 — 순위 화면에서 날짜를 골라 이어서 입력할 수 있어요.</p>
+            {list.length > shown.length && (
+              <p className="mt-1.5 text-2xs text-ink-muted">외 {list.length - shown.length}건 — 순위 화면에서 날짜를 골라 이어서 입력할 수 있어요.</p>
             )}
           </section>
         );
+        };
+        if (loading) {
+          let n = 0;
+          try { n = Math.max(0, Number(localStorage.getItem(RANK_N_KEY(venueId))) || 0); } catch { /* 차단 환경 — 예약 없음 */ }
+          if (!n) return null;
+          const ghost: Row[] = Array.from({ length: n }, (_, i) => ({ date: '0000-00-00', gameSeq: MAIN_GAME_SEQ + i, rankingEvent: '' }));
+          return (
+            <div aria-hidden data-testid="rank-reserve" className="skeleton rounded-card">
+              <div style={{ visibility: 'hidden' }}>{rankCard(ghost)}</div>
+            </div>
+          );
+        }
+        return pendingRanks.length > 0 ? rankCard(pendingRanks) : null;
       })()}
 
       {/* 미수·리스크 알림 (장부 권한) */}
@@ -1509,10 +1535,25 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석</span>}>
           {/* 순서가 중요하다 — 실패를 '데이터 없음'보다 **먼저** 판정한다(F14). 조회가 죽으면 range 가
               빈 값이라 weekEntry 가 0 이고, 예전엔 그게 "7일간 손님이 없었다"로 읽혔다. */}
-          {loading ? <Skeleton /> : rangeErr ? (
-            <LoadFailRow what="최근 7일 장부" onRetry={reloadRange} />
-          ) : weekEntry === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
+          {/* E3 L-2(2026-10-03) — 확인 중 뼈대(h-12)가 실제 본문(막대 + 두 줄, 카드 108→171px)보다 63px 짧아, 정착하는 순간
+              PC 3열의 다음 줄 카드 3장이 63px 내려갔다(1440 CLS 0.0179). 뼈대·데이터 없음·실패 줄을 **모두** 실제 본문과 같은 틀
+              (막대 칸 + 두 줄, 보이지 않는 대역)에 겹쳐 세워 상태가 바뀌어도 카드 높이가 그대로다 — 뼈대만 키우면 7일 장부가 없는 매장
+              (매장 전환·새 매장)에서 171→99 로 접히며 반대로 올라갔다(D1 게이트 1440 전환). 문구는 그 칸 세로 가운데. */}
+          {loading || rangeErr || weekEntry === 0 ? (
+            <div className={loading ? 'skeleton grid rounded-input' : 'grid'}>
+              <div aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }}>
+                <div className="mb-2 h-14" />
+                <div className="border-t pt-2 text-2xs">0</div>
+                <div className="mt-1 text-2xs">0</div>
+              </div>
+              <div style={{ gridArea: '1 / 1', alignSelf: 'center' }}>
+                {loading ? null : rangeErr ? (
+                  <LoadFailRow what="최근 7일 장부" onRetry={reloadRange} />
+                ) : (
+                  <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
+                )}
+              </div>
+            </div>
           ) : (
             <>
               <div className="mb-2 flex h-14 items-end justify-between gap-1">

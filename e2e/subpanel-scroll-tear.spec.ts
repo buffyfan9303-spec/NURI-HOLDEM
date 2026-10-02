@@ -6,7 +6,7 @@
 //   startTransition 이라 커밋이 다음 rAF 전에 오면 yLast 가 옛 값이다 → 복제본은 옛 뷰포트(scroll 300) 자리,
 //   판 밖(배너·레벨바·사이드바 열)은 scroll 0 자리 → 페이드 240ms(+첫 방문 대기) 동안 300px 찢김.
 // 이 스펙: 스크롤 300·1500 에서 사이드바 이동을 여러 번 하고, 복제본이 보이는 모든 프레임에서
-//   (a) 판 밖 비고정 표지(판 줄 바로 위 블록)가 **보이면** 그 이동량 == 복제본 이동량(같은 페이지처럼 움직인다)
+//   (a) 판 밖 비고정 표지(판 줄 바로 위 블록 — 없으면 건너뜀, 아래 주석)가 **보이면** 그 이동량 == 복제본 이동량(같은 페이지처럼 움직인다)
 //   (b) 복제본 첫 프레임 윗변 == 직전 **페인트된** 판 윗변(옛 그림이 되돌아가거나 튀지 않는다 — 표본은 ResizeObserver 로 페인트 직전에)
 //   (c) 복제본이 실제로 섰다(페이드가 있다 — 0 프레임이면 측정이 빈 것이라 실패)
 // 클릭은 실제 마우스 down→up(locator.click 은 자동 스크롤로 측정을 오염시킨다).
@@ -48,8 +48,13 @@ for (const scroll of [300, 1500]) {
       await page.evaluate(() => {
         const g = window as unknown as { __f: F[] };
         const t0 = performance.now(); g.__f = [];
+        // 표지 = 셸 줄 바로 위 블록. ⚠ E3 M-1(2026-10-03) — 종전 표지였던 인증 등급 배너는 판 안으로 옮겨 목킹 업주에겐 셸 위 블록이 없다.
+        //   종전 식(`?? row.parentElement.firstElementChild`)은 그때 **셸 줄 자신**을 집는데, 셸 줄의 '윗변'은 그려진 것이 아니라
+        //   (사이드바는 sticky) 판 밖이 움직였는지를 재지 못한다 — 셸 줄을 표지로 쓰면 base 에서도 224~1424px '찢김'으로 거짓 실패한다.
+        //   그래서 셸 위 블록이 없으면 (a) 는 건너뛴다. 기록: origin/main b923842c 에서도 (a) 는 8바퀴 전부 표지가 보이는 페이드 프레임 0
+        //   (배너가 앱 머리 밑에 가려졌다) — 이 변경으로 (a) 가 약해진 것은 없다. (b)·(c) 는 그대로다. 아래 로그로 (a) 표본 수를 남긴다.
         const row = document.querySelector('[data-mystore-secpanel]')!.parentElement!;
-        const anchor = (row.previousElementSibling ?? row.parentElement!.firstElementChild) as HTMLElement;
+        const anchor = (row.previousElementSibling as HTMLElement | null) ?? document.createElement('div');
         const vis = () => { const q = anchor.getBoundingClientRect(); const x = q.left + 20; for (let y = Math.max(0, q.top + 2); y < Math.min(innerHeight, q.bottom - 2); y += 8) { const e = document.elementFromPoint(x, y); if (e && anchor.contains(e)) return true; } return false; };
         const step = () => {
           const t = performance.now() - t0;
@@ -77,6 +82,7 @@ for (const scroll of [300, 1500]) {
       const pre = f[i1 - 1];
       const back = f[i1].clone! - pre.root;
       if (Math.abs(back) > 2) bad.push(`r${round}: 옛 그림 튐 ${Math.round(back)}px`);
+      console.log(`[scroll ${scroll} r${round}] (a) 표지가 보이는 페이드 프레임 ${f.slice(i1).filter((x) => x.o != null && x.o > 0.05 && x.aVis).length}`);
       const torn = f.slice(i1).filter((x) => x.o != null && x.o > 0.05 && x.aVis && Math.abs((x.aTop - pre.aTop) - (x.clone! - pre.root)) > 2);
       if (torn.length) bad.push(`r${round}: 찢김 ${torn.length}프레임 · 판 밖 ${Math.round(torn[0].aTop - pre.aTop)}px vs 복제본 ${Math.round(torn[0].clone! - pre.root)}px`);
     }

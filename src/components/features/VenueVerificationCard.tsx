@@ -9,7 +9,8 @@ import { venueHiddenFromGuests } from '../../lib/venueHidden';
  * 매장이 여럿인 업주는 다른 매장의 등급을 봤다. showVerification=false 면 숨김 안내만(공동 운영자·직원).
  */
 // part — 2026-10-02(감사 H-2): 'hidden' = 숨김 경고만(전 메뉴 상단), 'grade' = 인증 등급만(대시보드 판 안). 기본 'all' 은 종전 그대로.
-export default function VenueVerificationCard({ venueId, showVerification = true, part = 'all' }: { venueId?: string | null; showVerification?: boolean; part?: 'all' | 'hidden' | 'grade' } = {}) {
+/** off — 조회 상태는 들고 있되 아무것도 그리지 않는다(E3 M-1: 메뉴를 오갈 때 다시 마운트·재조회하며 늦게 생기지 않게, DOM 사본도 남기지 않게). */
+export default function VenueVerificationCard({ venueId, showVerification = true, part = 'all', off = false }: { venueId?: string | null; showVerification?: boolean; part?: 'all' | 'hidden' | 'grade'; off?: boolean } = {}) {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +22,7 @@ export default function VenueVerificationCard({ venueId, showVerification = true
     return () => { alive = false; };
   }, [venueId]);
 
-  if (loading || !venue) return null;
+  if (off || loading || !venue) return null;
   const status = venue.verificationStatus ?? 'unverified';
   // S-06(2026-10-01) — 숨김(status ≠ active)이면 서버 RLS 가 손님 화면의 일정·매장·로그인 안 한 TV 클락을 가린다
   //   (venue_is_hidden · schedules_select · clock_states_public_read · venues_select). 업주 화면엔 그 사실이 0곳에 표시돼
