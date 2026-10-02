@@ -103,7 +103,7 @@ export default function SpotPostCard({ postId, isAuthor, expectSpot = false, ini
 
   const { spot } = ps;
   const hidden = !ps.revealVillain || !ps.revealResult;
-  const v = shareView(spot, !hidden);
+  const v = shareView(spot, hidden === false);
 
   const reveal = async () => {
     setRevealing(true);

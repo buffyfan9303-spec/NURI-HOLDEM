@@ -85,9 +85,10 @@ export function shareView(s: SpotReview, revealed: boolean): ShareView {
     heroPos: s.heroPos, hero: s.hero, heroClass: handClass(s.hero), villains, context,
     board: s.board, street: s.street, streetName: streetLabel(s.street), facing, streets,
     note: s.note?.trim() || undefined,
-    heroAction: !hidden && s.heroAction ? { label: actionLabel(s.heroAction), sizeBb: s.heroActionSizeBb } : null,
+    // 조건을 뒤집어 쓴다: 부정 접두사가 붙은 hidden 이 공백 앞에 오면 Tailwind 평문 스캔이 클래스 후보로 읽어 전역 CSS 에 죽은 규칙을 만든다(PR #99 실측).
+    heroAction: hidden || !s.heroAction ? null : { label: actionLabel(s.heroAction), sizeBb: s.heroActionSizeBb },
     // §28: 손익(deltaBb)은 공유 화면에 싣지 않는다 — 이김/짐만.
-    result: !hidden && s.result ? { won: s.result.won } : null,
+    result: hidden || !s.result ? null : { won: s.result.won },
     hidden, tableSize: s.tableSize,
     choices: voteChoices(s),
   };

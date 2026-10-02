@@ -13,6 +13,13 @@ const SUIT_NAME = { s: '스페이드', h: '하트', d: '다이아몬드', c: '�
 const SUIT_HEX = { s: '#111827', h: '#C81E2B', d: '#0369A1', c: '#167247' } as const;
 type SuitKey = keyof typeof SUIT;
 
+// 아래 셋은 Tailwind 임의값 클래스 대신 인라인 style 이다 — 임의값 클래스는 **전역 CSS**(첫 화면이 통째로 받는다)에 규칙을 보태지만
+// 이 파일은 SPOT 글을 여는 사람만 받는 지연 청크라서 인라인이면 첫 화면 예산(bundle-budget entryGzipKb)에 안 닿는다(PR #99 · 267.2/267).
+// 흰 카드 가장자리 = 얇은 테두리 링(검정 10%) + 아래로 살짝 퍼지는 그림자.
+const CARD_EDGE = '0 0 0 1px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.25)';
+// 뒷면 대각 줄무늬.
+const BACK_STRIPES = 'repeating-linear-gradient(45deg, rgb(var(--accent-300) / 0.55) 0 4px, rgb(var(--accent-300) / 0.3) 4px 8px)';
+
 const SIZES = {
   xs: { w: 26, h: 36, rank: 15, suit: 12, r: 5 },
   sm: { w: 32, h: 44, rank: 17, suit: 14, r: 6 },
@@ -27,8 +34,8 @@ export function PlayingCard({ code, size = 'md' }: { code: string; size?: CardSi
   const s = code[1] as SuitKey;
   return (
     <span role="img" aria-label={`${rank} ${SUIT_NAME[s] ?? ''}`} data-card={code}
-      className="inline-flex shrink-0 flex-col items-center justify-center bg-white font-extrabold leading-none shadow-[0_1px_2px_rgb(0_0_0/0.25)] ring-1 ring-black/10"
-      style={{ width: z.w, height: z.h, borderRadius: z.r, color: SUIT_HEX[s] }}>
+      className="inline-flex shrink-0 flex-col items-center justify-center bg-white font-extrabold leading-none"
+      style={{ width: z.w, height: z.h, borderRadius: z.r, color: SUIT_HEX[s], boxShadow: CARD_EDGE }}>
       <span style={{ fontSize: z.rank, letterSpacing: rank === '10' ? '-0.06em' : undefined }} className="tabular-nums">{rank}</span>
       <span aria-hidden style={{ fontSize: z.suit, marginTop: 1 }}>{SUIT[s]}</span>
     </span>
@@ -38,8 +45,8 @@ export function PlayingCard({ code, size = 'md' }: { code: string; size?: CardSi
 export function CardBack({ size = 'md' }: { size?: CardSize }) {
   const z = SIZES[size];
   return (
-    <span aria-hidden className="inline-flex shrink-0 items-center justify-center border border-accent-300/50 bg-[repeating-linear-gradient(45deg,rgb(var(--accent-300)/0.55)_0_4px,rgb(var(--accent-300)/0.3)_4px_8px)]"
-      style={{ width: z.w, height: z.h, borderRadius: z.r }}>
+    <span aria-hidden className="inline-flex shrink-0 items-center justify-center border border-accent-300/50"
+      style={{ width: z.w, height: z.h, borderRadius: z.r, background: BACK_STRIPES }}>
       <Icon name="lock" size={Math.round(z.suit * 0.8)} className="text-white/90" />
     </span>
   );
@@ -57,7 +64,7 @@ export function ContextChips({ v, className = '' }: { v: ShareView; className?: 
     <span className={`inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-ink-secondary ${className}`}>
       {v.context.map((c, i) => (
         <span key={c} className="inline-flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden className="h-1 w-1 rounded-full bg-ink-muted/60" />}
+          {i > 0 && <span aria-hidden className="h-1 w-1 rounded-full bg-ink-muted opacity-60" />}
           <span className="tabular-nums">{c}</span>
         </span>
       ))}

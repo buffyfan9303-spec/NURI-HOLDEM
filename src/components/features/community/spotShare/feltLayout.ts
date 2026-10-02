@@ -45,7 +45,7 @@ export interface FeltOut {
 const GAP = 3;
 const BOARD_GAP = 4.5;    // 좌석–보드 최소 간격 — 피드에서 0.6px 까지 붙었다(독립 검토 10-02). 서브픽셀 여유 0.5
 const CENTER_TOL = 24;    // 보드가 가운데에서 이만큼까지 비켜도 '가운데'(검토 기준 30px 안)
-const OVAL_SIDE = 0.08;   // 타원 면의 좌우 여백(폭 비율) — SpotTable 의 inset-x-[8%] 와 짝
+export const OVAL_SIDE = 0.08;   // 타원 면의 좌우 여백(폭 비율) — SpotTable 이 같은 값을 인라인 style 로 쓴다(둘이 어긋날 수 없다)
 const SEAT_OUT = 16;      // 좌석 가운데가 타원 둘레에서 이만큼 넘게 벗어나면 되돌린다(검토 기준 20px 안)
 const SEAT_FAR = 18;      // 되돌린 뒤에도 이보다 멀면 그 높이는 탈락(rank +4) — 검토 기준 20px 에 2px 여유
 

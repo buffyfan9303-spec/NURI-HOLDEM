@@ -187,7 +187,7 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await openBoard(page);
     // 기본 보기는 한 줄 목록 — 스팟 글은 아이콘 하나로만 알린다(행 높이 = 목록 밀도).
     await expect(page.getByLabel('NURI SPOT').filter({ visible: true }).first(), '한 줄 목록에 스팟 표시가 없다').toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: '카드 보기' }).click();
+    await page.getByTestId('board-view-feed').click();   // 라벨(펼쳐보기)이 아니라 testid — main b8a18dfb 가 '카드 보기' 라벨을 바꿔 이 셀렉터가 30초 시간 초과로 죽어 있었다
     const feed = page.locator('[data-spot-feed]').filter({ visible: true }).first();
     await expect(feed, '피드 카드에 SPOT 미리보기가 없다(목록 select 에 post_spots 가 빠졌나?)').toBeVisible({ timeout: 20_000 });
     await expect(feed.locator('[data-seat="hero"]')).toContainText('나 CO');

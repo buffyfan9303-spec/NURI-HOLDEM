@@ -236,8 +236,8 @@ for (const w of [320, 360, 390, 412]) {
     await tab.click();
     const firstFeed = page.locator('[data-spot-feed]').filter({ visible: true }).first();
     if (!(await firstFeed.isVisible().catch(() => false))) {
-      // 저장된 보기가 한 줄 목록이면 카드 보기로 바꾼다
-      const toggle = page.getByRole('button', { name: '카드 보기' });
+      // 저장된 보기가 한 줄 목록이면 펼쳐보기(카드)로 바꾼다 — 라벨이 아니라 testid(라벨이 바뀌어도 조용히 안 눌리지 않게)
+      const toggle = page.getByTestId('board-view-feed');
       if (await toggle.count()) await toggle.click();
     }
     await expect(firstFeed, '피드에 SPOT 테이블이 없다').toBeVisible({ timeout: 20_000 });
