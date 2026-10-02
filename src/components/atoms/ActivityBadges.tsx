@@ -34,7 +34,8 @@ function Chip({ label, colorVar, earned }: { label: string; colorVar: string; ea
         // 알파는 surface 스케일과 같은 rgb(var(--x) / a) 문법으로 통일한다
         // (color-mix 는 computed 가 color(srgb ...) 로 갈려 다음 회귀가 된다 — TierBadge tierCss 주석).
         ? { color: tierCss(colorVar), borderColor: tierCss(colorVar, 0.4), background: tierCss(colorVar, 0.14) }
-        : { color: 'rgb(var(--ink-muted))', borderColor: 'rgb(var(--border-subtle))', opacity: 0.55 }}
+        // 미획득은 틴트 없음·자물쇠 아이콘으로 구분한다. opacity 로 흐리면 라이트 2.28:1 이라 글자(정보)가 안 읽힌다.
+        : { color: 'rgb(var(--ink-muted))', borderColor: 'rgb(var(--border-subtle))' }}
       title={earned ? `${label} 획득` : `${label} (미획득)`}
     >
       {!earned && (

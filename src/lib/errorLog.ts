@@ -9,8 +9,13 @@ let sessionCount = 0;
 const MAX_PER_SESSION = 20;
 const DEDUP_MS = 60_000;
 
+/** 브라우저가 레이아웃 계산이 한 프레임에 못 끝났다고 알리는 무해한 경고(ResizeObserver 콜백 안에서 크기가 또 바뀔 때).
+ *  앱 오류가 아니다 — 2026-10-03 E3 실측: 장부를 열 때마다 client_errors 에 1건씩 쌓였다.
+ *  Sentry 쪽 기본 필터는 'completed with undelivered notifications' 만 걸러서 구형 문구(limit exceeded)는 monitoring.ts 가 같이 넘긴다. */
+export const BENIGN_RO_WARNING = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)\.?$/;
+
 export function logClientError(message: string, stack?: string | null): void {
-  if (IS_MOCK || !message) return;
+  if (IS_MOCK || !message || BENIGN_RO_WARNING.test(message.trim())) return;
   const key = message.slice(0, 200);
   const now = Date.now();
   if (sessionCount >= MAX_PER_SESSION) return;

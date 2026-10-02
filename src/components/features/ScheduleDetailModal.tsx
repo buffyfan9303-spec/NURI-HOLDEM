@@ -82,6 +82,8 @@ const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const ACCENT_INK = 'text-accent-300 dark:text-accent-200';
 // 진행 신호 — 라이트는 emerald-700(5.39:1, 토큰 주석의 '라이트 텍스트 전용' 단), 다크는 emerald-400(8.03:1).
 const LIVE_INK = 'text-emerald-700 dark:text-emerald-400';
+// 결제수단 칩 — emerald-500/15 틴트 위라 700 은 라이트 4.36:1(AA 미달). 800 은 틴트 위 6.3:1.
+const PAY_CHIP_INK = 'text-emerald-800 dark:text-emerald-400';
 // 임박 신호 — 라이트 danger-deep(6.20:1) / 다크 danger-light(7.64:1)
 const URGENT_INK = 'text-danger-deep dark:text-danger-light';
 
@@ -785,7 +787,7 @@ export default function ScheduleDetailModal({
                   {schedule.paymentMethods.map((m) => (
                     <span
                       key={m}
-                      className={`inline-flex max-w-full items-center break-keep wrap-anywhere px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold ${LIVE_INK}`}
+                      className={`inline-flex max-w-full items-center break-keep wrap-anywhere px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold ${PAY_CHIP_INK}`}
                     >
                       {m}
                     </span>

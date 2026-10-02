@@ -151,7 +151,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                 ? 'border-accent-400/60 bg-accent-300/12 text-accent-200'
                 : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
             {label}
-            <span className="block font-normal text-ink-muted">{hint}</span>
+            <span className="block font-normal text-ink-secondary">{hint}</span>
           </button>
         ))}
       </div>
