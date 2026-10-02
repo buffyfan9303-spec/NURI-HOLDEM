@@ -55,6 +55,8 @@ import { useClockSecond } from '../../lib/clockTick';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
 import LedgerWorkspace from './LedgerWorkspace';
+import { useUncapAncestors } from '../../lib/uncapAncestors';
+import { useIsWide } from '../../lib/responsive';
 import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
@@ -575,6 +577,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const n = ++gameSelN.current;
     setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
   }, []);
+  // F-3 — '고른 게임'·'장부가 마지막으로 본 게임' 은 매장마다다. 매장을 바꾸면 비운다(A 의 사이드 번호로 B 장부를 열지 않게).
+  useEffect(() => { gameChosen.current = false; lastLedgerGame.current = 0; }, [venueId]);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
   const onGotoRankingFromPosters = useCallback((date: string, event?: string) => {
     setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
@@ -976,6 +980,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   장부(NuriPosLedger)가 자기 게임 스위처(날짜 따라감·작성 중 사이드·+ 사이드)를 이 자리로 portal 한다 — 같은 자리·같은 모양이라
   //   단계를 옮겨도 시작선이 그대로고, 장부 판 안의 두 번째 게임 줄(감사 L-3 중복)이 사라진다. 선택 상태의 정본은 장부다.
   const [ledgerGameSlot, setLedgerGameSlot] = useState<HTMLElement | null>(null);
+  // F-2(design-reviewer 2026-10-02, 리드 결정 a) — ≥1440 에서는 내 매장 탭 **전체(모든 단계)** 의 폭 상한을 푼다.
+  //   장부 판만 풀던 때는 단계·매장 전환마다 헤더·사이드바·단계 바가 가로로 105~345px 튀었다. 탭을 떠나면(tabActive=false) 원래대로.
+  const [uncapRoot, setUncapRoot] = useState<HTMLDivElement | null>(null);
+  const isWideVm = useIsWide();
+  useUncapAncestors(uncapRoot, tabActive && isWideVm, { includeSelf: true });
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -1002,7 +1011,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   ⚠ 이 요소 자체는 진입 대상이 **아니다.** 안쪽 `data-mystore-secpanel` 자손에 실재하는
     //     `position:fixed`(`NuriPosLedger.tsx`·`LedgerWorkspace.tsx`)가 있어 여기에 transform 이 걸리면
     //     그 고정 요소가 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 위험 자리 3곳 중 하나).
-    <div data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
+    <div ref={setUncapRoot} data-uncap-root="" data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
       {/* 관리자만 보는 매장 고르개(`isAdmin` 게이트는 그대로 — 기능은 손대지 않는다).
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
@@ -1234,13 +1243,26 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                      effect 는 `if (!seed) return` 이라 아무것도 안 한다 → keep-alive 로 **직전에 보던
                      다른 날짜 보드가 그대로** 남는다. StoreDashboard 쪽에서 날짜를 항상 싣도록 고쳤지만,
                      여기도 같이 막는다 — 한쪽만 고치면 다른 호출부가 생길 때 또 샌다. */
+                  const biz = businessDateOf(venueId);
                   if (fromDash && !(st === 'ledger' && !(typeof fromDash === 'object' && fromDash.date))) {
                     // 데일리 펍(2026-10-02) — 대시보드 목적지의 게임은 '오늘 메인'이다. 게임을 고른 적 없으면 장부가 진행 중 마지막 게임에 착지한다.
-                    return onGotoStore(st === 'ledger' && typeof fromDash === 'object' && !gameChosen.current ? { ...fromDash, autoLand: true } : fromDash);
+                    //   F-3 — 직접 고른 게임이 있으면(오늘) 그 게임을 지킨다. 대시보드를 다녀왔다고 메인(마감)으로 되돌리지 않는다.
+                    if (st === 'ledger' && typeof fromDash === 'object') {
+                      if (!gameChosen.current) return onGotoStore({ ...fromDash, autoLand: true });
+                      if (fromDash.date === biz) return onGotoStore({ ...fromDash, gameSeq: clockSeedGame });
+                    }
+                    return onGotoStore(fromDash);
                   }
-                  return st === 'ledger'
-                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, autoLand: !ledgerSeed && !gameChosen.current })
-                    : gotoSection(st);
+                  if (st !== 'ledger') return gotoSection(st);
+                  // F-3(design-reviewer 2026-10-02) — 단계 바 재진입. 예전엔 첫 진입이 남긴 ledgerSeed(메인)가 늘 이겨
+                  //   클락·순위를 다녀오면 마감된 메인에 섰다(직접 고른 사이드12 도). 오늘 장부는:
+                  //   · 직접 고른 게임이 있으면 그 게임(clockSeedGame — 장부·칩·클락이 함께 쓰는 '지금 게임' 정본)
+                  //   · 없으면 장부가 마지막으로 본 게임(자동 착지 결과)부터 + autoLand(그새 마감됐으면 진행 중 게임으로)
+                  //   지난 날짜 장부를 보던 중이면 그 시드 그대로.
+                  const d = ledgerSeed?.date ?? biz;
+                  if (d !== biz) return onGotoStore({ section: 'ledger', date: d, gameSeq: ledgerSeed?.gameSeq ?? MAIN_GAME_SEQ });
+                  const chosen = gameChosen.current;
+                  return onGotoStore({ section: 'ledger', date: d, gameSeq: chosen ? clockSeedGame : (lastLedgerGame.current || MAIN_GAME_SEQ), autoLand: !chosen });
                 }} />
               </div>
             )}

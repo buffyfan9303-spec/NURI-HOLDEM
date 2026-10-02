@@ -21,20 +21,7 @@ import LedgerVoucherRail from './LedgerVoucherRail';
 import { LedgerToolsContext, LedgerFullscreenContext } from './ledgerTools';
 import { useIsDesktop, useIsMdUp, useIsWide } from '../../lib/responsive';
 
-/** 판 폭 상한을 푸는 자리 — 장부 판이 보이는 동안만, 조상 중 max-width 가 걸린 것(앱 프레임·main·내 매장 판)의 상한을 푼다.
- *  클래스 대신 인라인으로 푸는 이유: 그 상한들은 앱 셸·전역 CSS(공용 파일)에 있다. 여기서 켜고 끄면 장부를 떠나는 즉시 원래대로다. */
-function useUncapAncestors(host: HTMLElement | null, on: boolean) {
-  useLayoutEffect(() => {
-    if (!on || !host) return;
-    const undo: { el: HTMLElement; prev: string }[] = [];
-    for (let e = host.parentElement; e && e !== document.body; e = e.parentElement) {
-      if (getComputedStyle(e).maxWidth === 'none') continue;
-      undo.push({ el: e, prev: e.style.maxWidth });
-      e.style.maxWidth = 'none';
-    }
-    return () => { for (const u of undo) u.el.style.maxWidth = u.prev; };
-  }, [host, on]);
-}
+import { useUncapAncestors } from '../../lib/uncapAncestors';
 
 export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
@@ -68,9 +55,32 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
   const railRef = useRef<HTMLDivElement>(null);
   // 장부를 떠나면(다른 단계·탭) 펼쳐 둔 레일을 접는다 — 돌아왔을 때 표 위를 덮은 채로 남지 않게.
   useEffect(() => { if (!active) setRailOpen(false); }, [active]);
+  // M-1·M-3(design-reviewer 2026-10-02) — 펼친 띠 레일은 표 위를 덮는다([+ 유저 추가]·정렬·총바인·미수 열).
+  //   ① 레일 밖을 누르면 접는다(표로 돌아가는 손이 곧 닫는 손). ② 펼치면 접기 버튼으로, 접히면 띠 버튼으로 포커스를 옮긴다
+  //   (예전엔 펼치는 순간 누른 띠 버튼이 사라져 포커스가 BODY 로 빠졌다). 검색칸이 아니라 접기 버튼인 이유: 터치 태블릿에서 키보드가 뜬다.
+  const stripBoxRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    const box = stripBoxRef.current;
+    if (railOpen) {
+      wasOpen.current = true;
+      // [이용권 확인] 이 검색칸에 준 포커스는 지킨다 — 그쪽 rAF 가 먼저 돌므로 판정도 rAF 안에서 한다.
+      requestAnimationFrame(() => { if (box && !box.contains(document.activeElement)) box.querySelector<HTMLElement>('[data-voucher-collapse]')?.focus({ preventScroll: true }); });
+      const onDown = (e: PointerEvent) => { if (box && !box.contains(e.target as Node)) setRailOpen(false); };
+      document.addEventListener('pointerdown', onDown, true);
+      return () => document.removeEventListener('pointerdown', onDown, true);
+    }
+    if (wasOpen.current) {
+      wasOpen.current = false;
+      // 레일 안에 있던 포커스(또는 갈 곳을 잃은 포커스)만 띠로 돌린다 — 바깥을 눌러 닫았으면 그쪽 포커스를 뺏지 않는다.
+      const a = document.activeElement;
+      if (box && (!a || a === document.body || box.contains(a))) requestAnimationFrame(() => box.querySelector<HTMLElement>('[data-voucher-strip]')?.focus({ preventScroll: true }));
+    }
+  }, [railOpen]);
 
-  // ≥1440 · 장부 판이 보일 때만 판 폭 상한을 푼다(감사 시뮬 B: 1440 바인 9칸 · 1920 10칸).
-  useUncapAncestors(host, active && !full && isWide && side);
+  // ≥1440 · 장부 판이 보일 때 판 폭 상한을 푼다(감사 시뮬 B: 1440 바인 9칸 · 1920 10칸).
+  //   F-2(2026-10-02) — 앱 프레임·main·내 매장 루트는 VenueManageTab 이 탭 단위로 푼다. 여기선 그 루트 **안쪽**만(셸이 튀지 않게).
+  useUncapAncestors(host, active && !full && isWide && side, { stopAtRoot: true });
 
   // 정산바(position:fixed, NuriPosLedger)의 좌우 경계를 **표 칸**에 맞춘다 — 레일이 옆에 서면 바가 레일 밑까지 뻗지 않게.
   //   값은 표 칸의 실제 좌우 끝(뷰포트 기준). 바는 CSS 변수(--ledger-bar-left/right/max)를 읽는다(전체화면은 index.css 가 같은 일을 한다).
@@ -207,7 +217,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       </div>
       {/* 표 옆(≥768) — 펼친 띠는 표 위로 덮는다(표 칸 폭은 그대로라 바인 칸이 다시 접히지 않는다). */}
       {canViewVouchers && side && (
-        <div className={[railBox, strip ? 'relative w-[48px]' : 'w-[18rem]'].join(' ')}>
+        <div ref={stripBoxRef} className={[railBox, strip ? 'relative w-[48px]' : 'w-[18rem]'].join(' ')}>
           <div className={strip && railOpen ? 'absolute inset-y-0 right-0 z-35 w-[20rem] rounded-aura shadow-2xl' : 'h-full'}>
             <LedgerVoucherRail venueId={venueId} active={active} searchRef={searchRef}
               collapsed={strip && !railOpen} onToggle={strip ? () => setRailOpen((v) => !v) : undefined} />

@@ -23,11 +23,13 @@ const sessions = TITLES.map((t, i) => ({
 }));
 const players = (seq: number) => ['김철수', '이영희', '박민수'].map((n, i) => ({ id: `ffffffff-0000-4000-8000-${String(seq * 10 + i).padStart(12, '0')}`, venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: seq, name: n, visitor_type: null, note: null, sort_order: i }));
 
-async function open(page: Page, w: number, h: number) {
+async function open(page: Page, w: number, h: number, o: { vouchers?: boolean } = {}) {
   const seqs: number[] = [];
   page.on('request', (r) => { const m = /ledger_sessions\?.*game_seq=eq\.(\d+)/.exec(r.url()); if (m) seqs.push(Number(m[1])); });
   await bootOwner(page, {
     viewport: { width: w, height: h },
+    // 이용권(본인인증 통합) 스위치가 켜져야 장부 옆 레일이 서고, ≥1440 폭 상한 풀기가 걸린다(⑦)
+    ...(o.vouchers ? { appSettings: { identity_voucher_enabled: 'on' } } : {}),
     extra: async (p) => {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
       await p.route(/\/rest\/v1\/ledger_sessions\?/, (r) => {
@@ -94,4 +96,56 @@ test('1366 — ⑤ 목록: 진행 중이 위 · 마감 10개 접힘 → 펼치�
   expect(rows.filter((t) => /마감/.test(t) && !/보기/.test(t)).length, '마감 10개가 접히지 않았다').toBe(0);
   await today.getByRole('button', { name: /마감 10개 보기/ }).evaluate((b) => (b as HTMLElement).click());
   await expect(today.locator(':scope > li'), '펼쳤는데 15개가 아니다').toHaveCount(15);
+});
+
+// ⑥ F-3(design-reviewer 2026-10-02) — 재진입 착지. 예전엔 첫 진입이 남긴 시드(메인)가 이겨 클락·순위를 다녀오면 마감된 메인에 섰다.
+//   고르지 않았으면 진행 중 게임(사이드14)으로, 직접 고른 게임(사이드12)은 다녀와도 그대로.
+const railStep = async (page: Page, label: string) => {
+  await page.locator(`${RAIL} [role=tab]`).filter({ hasText: label }).first().evaluate((b) => (b as HTMLElement).click());
+  await page.waitForTimeout(600);
+};
+for (const [W, H] of [[1366, 768], [390, 844]] as const) {
+  test(`${W} — ⑥ 재진입: 클락·순위를 다녀와도 진행 게임/고른 게임에 선다`, async ({ page }) => {
+    test.setTimeout(150_000);
+    await open(page, W, H);
+    await expect.poll(() => chipInView(page, /^사이드14/).then((x) => x?.pressed), { message: '첫 진입이 사이드14 가 아니다', timeout: 10_000 }).toBe('true');
+    await railStep(page, '클락'); await railStep(page, '장부');
+    await expect.poll(() => chipInView(page, /^사이드14/).then((x) => x?.pressed), { message: '클락을 다녀오니 진행 게임(사이드14)이 아니다(마감 메인으로 돌아감)', timeout: 10_000 }).toBe('true');
+    await page.getByRole('combobox', { name: /게임으로 이동/ }).selectOption('13');
+    await expect.poll(() => chipInView(page, /^사이드12/).then((x) => x?.pressed), { timeout: 10_000 }).toBe('true');
+    await railStep(page, '클락'); await railStep(page, '장부');
+    await expect.poll(() => chipInView(page, /^사이드12/).then((x) => x?.pressed), { message: '직접 고른 사이드12 가 클락을 다녀오니 사라졌다', timeout: 10_000 }).toBe('true');
+    await railStep(page, '순위'); await railStep(page, '장부');
+    await expect.poll(() => chipInView(page, /^사이드12/).then((x) => x?.pressed), { message: '직접 고른 사이드12 가 순위를 다녀오니 사라졌다', timeout: 10_000 }).toBe('true');
+  });
+}
+
+// ⑦ F-2(design-reviewer 2026-10-02, 리드 결정 a) — ≥1440 에서 단계를 옮길 때 헤더·단계 바가 가로로 튀지 않는다.
+//   예전엔 장부 판이 보일 때만 앱 프레임 상한을 풀어 장부↔클락마다 105px(1440)·345px(1920) 움직였다. 이제 내 매장 탭 단위로 푼다.
+test.describe('마우스 PC', () => {
+  test.use({ isMobile: false, hasTouch: false });
+  for (const [W, H] of [[1440, 900], [1920, 1080]] as const) {
+    test(`${W} — ⑦ 장부↔클락↔순위 이동 중 셸 가로 위치 불변(rAF 표본)`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await open(page, W, H, { vouchers: true });
+      await expect(page.locator('[data-ledger-workspace="rail"]'), '≥1440 인데 레일이 표 옆에 서지 않았다(이 검사의 전제)').toHaveCount(1, { timeout: 15_000 });
+      await page.waitForTimeout(800);
+      const xs = () => page.evaluate(() => {
+        const x = (s: string) => { const e = [...document.querySelectorAll(s)].find((n) => n.getClientRects().length); return e ? Math.round(e.getBoundingClientRect().left) : null; };
+        return { header: x('header'), rail: x('[data-mystore-rail]') };
+      });
+      const base = await xs();
+      expect(base.header, '헤더를 못 쟀다 — 빈 검사').not.toBeNull();
+      expect(base.rail, '단계 바를 못 쟀다 — 빈 검사').not.toBeNull();
+      // 전환 중 매 프레임 — 한 프레임이라도 다른 x 가 나오면 튄 것이다
+      const sample = () => page.evaluate(`new Promise((res) => { const t0 = performance.now(); const f = new Set(); const tick = () => { const x = (s) => { const e = [...document.querySelectorAll(s)].find((n) => n.getClientRects().length); return e ? Math.round(e.getBoundingClientRect().left) : 'none'; }; f.add(x('header') + '|' + x('[data-mystore-rail]')); if (performance.now() - t0 < 900) requestAnimationFrame(tick); else res([...f]); }; requestAnimationFrame(tick); })`) as Promise<string[]>;
+      const want = `${base.header}|${base.rail}`;
+      for (const label of ['클락', '장부', '순위', '장부']) {
+        const p = sample();
+        await page.locator(`${RAIL} [role=tab]`).filter({ hasText: label }).first().evaluate((b) => (b as HTMLElement).click());
+        expect(await p, `'${label}' 로 옮기는 동안 헤더·단계 바가 가로로 움직였다`).toEqual([want]);
+      }
+      expect(await xs(), '단계를 오간 뒤 셸 위치가 처음과 다르다').toEqual(base);
+    });
+  }
 });

@@ -388,9 +388,17 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   }, [run]);
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList, venueId]);
 
-  const openBoard = (d: string, g = MAIN_GAME_SEQ) => { autoLandRef.current = null; userPickRef.current = true; setDate(d); setGameSeq(g); setSelected(null); setMode('board'); };
+  const openBoard = (d: string, g = MAIN_GAME_SEQ) => {
+    autoLandRef.current = null; userPickRef.current = true; setDate(d); setGameSeq(g); setSelected(null); setMode('board');
+    if (d === biz) onTodayGame?.(g, undefined, true);   // F-3 — 고른 순간 알린다(아래 pickGame 주석)
+  };
   // 사이드 게임 추가 — 그 날짜의 다음 game_seq로 전환(새 게임이면 설정 폼이 뜸)
-  const addSide = () => { autoLandRef.current = null; userPickRef.current = true; const maxSeq = games.reduce((m, g) => Math.max(m, g.gameSeq), 0); setGameSeq(Math.max(MAIN_GAME_SEQ + 1, maxSeq + 1)); setSelected(null); };
+  const addSide = () => {
+    autoLandRef.current = null; userPickRef.current = true; const maxSeq = games.reduce((m, g) => Math.max(m, g.gameSeq), 0);
+    const next = Math.max(MAIN_GAME_SEQ + 1, maxSeq + 1);
+    setGameSeq(next); setSelected(null);
+    if (date === biz) onTodayGame?.(next, undefined, true);
+  };
 
   // 게임관리 '장부' 바로가기: 연결 장부로 즉시 이동, 없으면 포스터 정보를 시작 설정에 프리필
   // (ref에 대상 날짜를 묶어 — 세션 fetch 타이밍에 이전 날짜 화면이 잠깐 보여도 오적용/유실 없음)
@@ -415,7 +423,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     }
     setDate(seed.date);
     setGameSeq(seed.gameSeq ?? MAIN_GAME_SEQ); // 연결 장부 목록에서 고른 게임 그대로(새 장부는 메인)
-    autoLandRef.current = seed.autoLand ? `${venueId}|${seed.date}` : null;
+    autoLandRef.current = seed.autoLand ? `${venueId}|${seed.date}|${seed.gameSeq ?? MAIN_GAME_SEQ}` : null;
     setMode('board');
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps -- venueId 는 착지 표식의 주인 표시일 뿐(시드 신호로만 돈다)
   // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.
@@ -555,7 +563,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   //   메인이 진행 중이면 그대로 둔다(메인+사이드 동시 운영 매장이 사이드에 서지 않게). 진행 중이 없으면 그대로.
   //   판이 이미 열려 있던(keep-alive) 재진입은 조회가 다시 안 나가므로 '이 장부를 다 받았는가'(sessionFor)와 시드로 판단한다.
   useEffect(() => {
-    if (autoLandRef.current !== `${venueId}|${date}` || sessionFor !== `${venueId}|${date}|${gameSeq}`) return;
+    // F-3 — 표식에 **시드가 가리킨 게임**까지 묶는다. 예전 표식(매장|날짜)은 시드 effect 와 같은 커밋에서 아직 바뀌기 전 게임
+    //   (keep-alive 판이 서 있던 사이드14, 이미 조회 끝)을 보고 '마감 아님' 으로 표식을 소비했고, 그다음 시드의 메인(마감)에 섰다(e2e ⑥ 390 실측 3/10).
+    if (autoLandRef.current !== `${venueId}|${date}|${gameSeq}` || sessionFor !== `${venueId}|${date}|${gameSeq}`) return;
     autoLandRef.current = null;
     const live = games.filter((g) => !g.closed);
     const target = live.length > 0 ? live[live.length - 1].gameSeq : null;
@@ -1438,7 +1448,12 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   //   셸의 '오늘 게임' 칩 줄 자리(gameSlot)가 있으면 게임 스위처를 거기로 portal 한다. PC(lg+)는 날짜·도구도 같은 한 줄로 올려
   //   판 안의 날짜 줄(42)·게임 줄(34)을 없앤다(첫 화면 표 행 확보). 모바일은 날짜 줄이 판 안에 남고 게임 줄만 올라간다.
   //   자리가 없으면(관리자 탭 등) 종전처럼 판 안에 날짜 줄 + 게임 줄.
-  const pickGame = (g: number) => { autoLandRef.current = null; userPickRef.current = true; setGameSeq(g); setSelected(null); };
+  // F-3 — 고른 순간 셸에 '직접 고름' 을 알린다. 보드 조회가 끝나야 도는 아래 알림(onTodayGame effect)만 믿으면,
+  //   고르자마자 클락으로 가 판이 비활성이 될 때 알림이 안 나가 재진입이 고른 게임을 잃었다(e2e ⑥ 실측).
+  const pickGame = (g: number) => {
+    autoLandRef.current = null; userPickRef.current = true; setGameSeq(g); setSelected(null);
+    if (date === biz) onTodayGame?.(g, games.find((x) => x.gameSeq === g)?.title ?? undefined, true);
+  };
   const switcher = (games.length > 0 || gameSeq > MAIN_GAME_SEQ)
     ? <GameSwitcher games={games} gameSeq={gameSeq} onSelect={pickGame} onAddSide={addSide} canAdd={operatorOk} date={date} today={date === biz} />
     : null;
@@ -1919,10 +1934,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 closed 라 표 쪽이 이미 읽기 전용이다(상태 변경 없음). 마감 해제를 우회로로 쓰게 하지 않는다. */}
             {closed ? (
               <button type="button" data-testid="ledger-table-view" onClick={() => setMobileEdit(true)}
-                className="btn-ghost btn-sm shrink-0 px-3">표 보기</button>
+                className="btn-ghost btn-sm tap-y-44 shrink-0 px-3">표 보기</button>
             ) : (
               <button type="button" data-testid="ledger-edit-mode" onClick={() => setMobileEdit(true)}
-                className="btn-primary btn-sm shrink-0 px-3">편집</button>
+                className="btn-primary btn-sm tap-y-44 shrink-0 px-3">편집</button>
             )}
           </div>
           {rows.length === 0 ? (
@@ -2108,7 +2123,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-16 min-[1440px]:min-w-[94px] max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
                 <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 whitespace-nowrap px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
@@ -2190,7 +2205,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
+                      <td className="min-w-16 min-[1440px]:min-w-[94px] max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
                         {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
