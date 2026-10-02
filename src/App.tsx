@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
+import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -1038,7 +1039,9 @@ export default function App() {
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   // (별점 로드는 loadDeferred 로 이동 — 부팅 임계경로에서 제외)
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
-  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | 'partners' | 'attendance' | null>(null);
+  const [myStoreDeep, setMyStoreDeep] = useState<StoreDeepSection | null>(null);
+  // 알림 link 의 ?venue= — 다매장 운영자가 다른 매장 알림을 누르면 그 매장으로 바꿔 연다(L-04, 20261002b)
+  const [myStoreDeepVenue, setMyStoreDeepVenue] = useState<string | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지(보드)
   /** 이벤트 **목록** — 슬러그 없이 openEvent() 를 부른 진입(PC GNB·홈 칸)의 목적지(오너 2026-09-18:
@@ -3267,27 +3270,26 @@ export default function App() {
     // 🔴 2026-09-25 FULL-ERROR-SWEEP-A ⑥ — 내 매장·출근·승인 목적지는 업주/직원 탭이 있어야 열린다. 탭이 없는 계정이 누르면
     //   changeTab 가드가 홈으로 조용히 튕겨 '무반응' 이었다. 프로필이 온 뒤(user)에도 탭이 없으면 안내하고 끝낸다.
     //   ⚠ 부팅 딥링크(openNotifLink)는 권한이 늦게 올 수 있어 pendingDeepTab 을 걸고 들어온다 — 그 경우는 종전 경로 그대로.
-    const storeDest = link.startsWith('/my-store') || link === '/staff-schedule' || ((link === '/admin' || n.type === 'approval') && !isAdmin);
+    const storeDest = needsStoreAccess({ type: n.type, link }, isAdmin);
     if (storeDest && user && !hasStoreTabs && pendingDeepTab.current !== 'my-store') {
       toast.show('매장 운영자·직원 계정에서만 열 수 있는 알림입니다', 'info');
       return;
     }
-    // /my-store/ledger (📒 장부 시작 알림) → 내 매장 탭 장부 섹션으로 바로
-    if (link === '/my-store/ledger') {
+    // 내 매장 목적지 — 해석은 src/lib/notifLink.ts 한 곳(알림 목록 아이콘과 같은 해석).
+    //   /my-store/ledger(📒 장부 시작·🙋 바인 요청) · /my-store/partners · /staff-schedule(출근 관리) — 종전 링크
+    //   /my-store/{staff|voucher|event}?venue= · /my-store?venue= — 결정 결과 알림(20261002b). ?venue= 면 그 매장으로 바꿔 연다.
+    const store = parseStoreLink(link);
+    if (store) {
       changeTab('my-store');
-      setMyStoreDeep('ledger');
+      if (store.venueId) setMyStoreDeepVenue(store.venueId);
+      setMyStoreDeep(store.section);
       return;
     }
-    // /my-store/partners (파트너 매칭 신청·수락 알림) — 없으면 알림을 눌러도 토스트로 떨어진다.
-    if (link === '/my-store/partners') {
-      changeTab('my-store');
-      setMyStoreDeep('partners');
-      return;
-    }
-    // /staff-schedule (출근 스케줄 확정 — StaffSchedule 이 보낸다) → 내 매장 '출근 관리'. 예전엔 처리기가 없어 제목 토스트로 끝났다.
-    if (link === '/staff-schedule') {
-      changeTab('my-store');
-      setMyStoreDeep('attendance');
+    // /rank (순위 인증 결과) → 커뮤니티 '순위' — 커뮤니티가 아직 안 떠 있으면 sessionStorage 가 도착 후 복원한다(goCommunitySection 과 같은 조리법)
+    if (link === '/rank') {
+      window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'rank' }));
+      try { sessionStorage.setItem('nuri:community-section', 'rank'); } catch { /* noop */ }
+      changeTab('community');
       return;
     }
     // /admin (포스터 승인 알림)
@@ -3581,6 +3583,7 @@ export default function App() {
     if (s) startTransition(() => setPosterFormTarget(s));
   }, [schedules]);
   const handleConsumeMyStoreDeep = useCallback(() => setMyStoreDeep(null), []);
+  const handleConsumeMyStoreDeepVenue = useCallback(() => setMyStoreDeepVenue(null), []);
 
   // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
@@ -4687,6 +4690,8 @@ export default function App() {
             onOpenSchedule={handleScheduleSelect}
             deepSection={myStoreDeep}
             onConsumeDeepSection={handleConsumeMyStoreDeep}
+            deepVenueId={myStoreDeepVenue}
+            onConsumeDeepVenue={handleConsumeMyStoreDeepVenue}
             tabActive={activeTab === 'my-store'}
             homeNonce={myStoreHomeNonce}
             onCreatePoster={handleCreatePosterFromStore}

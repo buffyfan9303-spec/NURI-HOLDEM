@@ -618,10 +618,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
       // S-15 — 남은 이용권 요청 장수를 알린다(목록 자체는 실시간 구독이 맞춘다 — 여기서 덮으면 매장 전환 경합이 생긴다).
       if (r.voucherId) {
-        getPendingBuyinRequests(venueId, r.sessionDate).then((rs) => {
+        // 매장 전환 뒤 도착한 A 손님 안내가 B 화면 토스트로 뜨지 않게 같은 소유자 확인(§9-1 ownerOnly)
+        getPendingBuyinRequests(venueId, r.sessionDate).then(ownerOnly(`${venueId}#${d}`, (rs: BuyinRequest[]) => {
           const n = voucherLeftover(r, rs);
           if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info');
-        }).catch(() => {});
+        })).catch(() => {});
       }
     }
     catch (e) {

@@ -219,9 +219,10 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
   const total = sorted.reduce((sum, o) => sum + o.votes, 0);
 
   const vote = async (optionId: string) => {
-    if (closed) return;
+    if (closed || poll.pending) return;
     if (!user) { promptLogin(); return; } // 비로그인 → 로그인 게이트(앱 공통 문법)
     if (optionId === myOptionId) return;  // 같은 선택지 연타 무시
+    if (options.find((o) => o.id === optionId)?.locked) return; // 표만 남긴 보기(SPOT 옛 글) — 새로 고를 수 없다
     if (inFlightRef.current || !onVote) return;
 
     // 낙관 갱신 — 이전 표 -1, 새 표 +1
@@ -256,7 +257,8 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
         )}
       </div>
 
-      <div className="space-y-1.5" role="group" aria-label="투표 선택지">
+      {/* pending = 목록에 끼워 받은 보기로 자리만 잡은 첫 프레임(pollFromEmbed) — 같은 마크업·같은 높이, 집계가 오면 눌린다 */}
+      <div className="space-y-1.5" role="group" aria-label="투표 선택지" aria-busy={poll.pending || undefined}>
         {sorted.map((o) => {
           const mine = o.id === myOptionId;
           const pct = showResults && total > 0 ? Math.round((o.votes / total) * 100) : 0;
@@ -264,8 +266,9 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
             <button
               key={o.id}
               type="button"
-              disabled={closed}
+              disabled={closed || poll.pending || o.locked}
               aria-pressed={mine}
+              data-poll-locked={o.locked || undefined}
               onClick={() => vote(o.id)}
               className={[
                 'relative w-full overflow-hidden rounded-input border px-3 py-2.5 text-left text-sm font-semibold transition-colors',
@@ -277,7 +280,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
                 // 타일 면 — 패널(surface-high) 위에서 구분되는 유일한 방향:
                 // 다크는 낮추고(surface-low #1D192E) 라이트는 올린다(surface-low #FFFFFF).
                 // 예전 값(surface-high)을 그대로 두면 패널과 같은 색이라 선택지 면이 사라진다.
-                closed
+                closed || o.locked
                   ? 'bg-surface-low/60 opacity-70'
                   : mine
                     ? 'bg-accent-300/10'
@@ -301,6 +304,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
                 <span className="flex min-w-0 items-center gap-1.5">
                   {mine && <span className="shrink-0 text-accent-200"><Icon name="check" size={14} /></span>}
                   <span className="truncate">{o.label}</span>
+                  {o.locked && <span className="shrink-0 text-2xs font-medium text-ink-secondary">지난 보기</span>}
                 </span>
                 {showResults && (
                   <span className="shrink-0 text-xs tabular-nums">

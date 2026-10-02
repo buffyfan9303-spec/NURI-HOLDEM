@@ -10,8 +10,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /** 이번 호출에서 실제로 나간 요청들 — 몇 번, 어디로 나갔는가 */
-const calls: { kind: 'rpc' | 'from'; name: string }[] = [];
+const calls: { kind: 'rpc' | 'from'; name: string; ids?: string[] }[] = [];
 let rpcResult: { data: unknown; error: unknown } = { data: [], error: null };
+/** post_spots 묶음 조회(광고 글 id 들) 응답 */
+let spotsResult: { data: unknown; error: unknown } = { data: [], error: null };
 
 vi.mock('../lib/supabase', () => ({
   IS_MOCK: false,
@@ -21,9 +23,11 @@ vi.mock('../lib/supabase', () => ({
       return Promise.resolve(rpcResult);
     },
     from: (name: string) => {
-      calls.push({ kind: 'from', name });
+      const call: { kind: 'from'; name: string; ids?: string[] } = { kind: 'from', name };
+      calls.push(call);
       const q = {
         select: () => q,
+        in: (_col: string, ids: string[]) => { call.ids = ids; return Promise.resolve(spotsResult); },
         order: () => Promise.resolve({ data: [], error: null }),
         eq: () => q,
         upsert: () => Promise.resolve({ error: null }),
@@ -47,16 +51,43 @@ const row = (slot: number, id: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-beforeEach(() => { calls.length = 0; rpcResult = { data: [], error: null }; });
+beforeEach(() => { calls.length = 0; rpcResult = { data: [], error: null }; spotsResult = { data: [], error: null }; });
 
 describe('getActivePromotedPosts — 광고는 승격된 게시글이다', () => {
-  it('요청은 community_ads_public RPC **한 번**뿐이다 (광고마다 글을 따로 부르지 않는다)', async () => {
+  it('요청은 community_ads_public RPC 한 번 + 스팟 묶음 조회 한 번뿐이다 (광고마다 따로 부르지 않는다)', async () => {
     rpcResult = { data: [row(1, 'p1'), row(3, 'p2'), row(5, 'p3')], error: null };
     const { ads } = await getActivePromotedPosts();
     expect(ads).toHaveLength(3);
-    expect(calls).toEqual([{ kind: 'rpc', name: 'community_ads_public' }]);
+    // 2026-10-01 검토 보완: 승격된 SPOT 글을 테이블로 그리려고 post_spots 를 **id 묶음 한 번**에 받는다.
+    expect(calls).toEqual([
+      { kind: 'rpc', name: 'community_ads_public' },
+      { kind: 'from', name: 'post_spots', ids: ['p1', 'p2', 'p3'] },
+    ]);
     // 게시글 단건 조회(from('community_posts'))가 단 한 번도 나가지 않아야 한다 = N+1 없음
-    expect(calls.filter((c) => c.kind === 'from')).toEqual([]);
+    expect(calls.filter((c) => c.name === 'community_posts')).toEqual([]);
+  });
+
+  it('승격된 SPOT 글에 스팟을 채운다 — 행 있음=스팟 · 없음=null(스팟 글 아님)', async () => {
+    rpcResult = { data: [row(1, 'spot1', { category: 'hand' }), row(2, 'plain')], error: null };
+    const spot = { v: 3, heroPos: 'BTN' };
+    spotsResult = { data: [{ post_id: 'spot1', spot, reveal_villain: false, reveal_result: false }], error: null };
+    const { ads } = await getActivePromotedPosts();
+    expect(ads[0].post.spotEmbed).toEqual({ spot, reveal_villain: false, reveal_result: false });
+    expect(ads[1].post.spotEmbed).toBeNull();
+  });
+
+  it('스팟 조회가 실패하면 모름(undefined) 그대로 — 광고 자체는 그대로 낸다', async () => {
+    rpcResult = { data: [row(1, 'a')], error: null };
+    spotsResult = { data: null, error: { message: 'permission denied' } };
+    const r = await getActivePromotedPosts();
+    expect(r.error).toBeNull();
+    expect(r.ads).toHaveLength(1);
+    expect(r.ads[0].post.spotEmbed).toBeUndefined();
+  });
+
+  it('광고가 0개면 스팟 조회도 하지 않는다', async () => {
+    await getActivePromotedPosts();
+    expect(calls).toEqual([{ kind: 'rpc', name: 'community_ads_public' }]);
   });
 
   it('게시글 필드가 일반 피드와 같은 모양으로 매핑된다', async () => {

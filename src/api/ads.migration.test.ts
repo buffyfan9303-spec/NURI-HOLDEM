@@ -111,6 +111,16 @@ const DECLARED = body
 /** RPC 가 **일부러** 안 싣는 컬럼과 그 이유. 여기 없는 누락은 실패다. */
 const INTENTIONAL: Record<string, string> = {
   blinded: '서버가 where 로 이미 거른다 — 블라인드 글은 애초에 안 온다(rowToPost 가 false 로 접는 것이 맞다)',
+  // 2026-10-01 시안 A: 게시판 목록은 post_spots 를 끼워 받아 SPOT 글을 테이블 그림으로 보인다.
+  //   광고 RPC 는 아직 안 싣는다 → 키가 없으면 rowToPost 가 undefined('모름')로 두고,
+  //   api/ads.ts attachSpots 가 광고 글 id 들로 post_spots 를 **한 번** 받아 채운다(임시 · 검토 보완 2026-10-01).
+  //   그 조회가 실패하면 undefined 그대로 → 카드는 예전 본문 발췌로 그린다(값을 0/빈 값으로 접어 거짓 표시하지 않는다).
+  //   정식은 광고 RPC 에 공개 열 3개(spot·reveal_villain·reveal_result)를 싣는 마이그레이션이다(리드 판단).
+  post_spots: '광고 RPC 미포함 — ads.ts attachSpots 가 한 번 조회로 채운다(임시)',
+  // 2026-10-02: 게시판 목록은 투표 질문·보기 이름(post_polls)도 끼워 받아 상세 투표 자리를 첫 프레임부터 잡는다.
+  //   광고 RPC 는 안 싣는다 → 키가 없으면 pollEmbed = undefined('모름') → 광고에서 연 상세는 예전처럼 응답 뒤에 투표가 선다
+  //   (값을 지어내지 않는다 — 기능 손실 없음, 자리 잡기만 빠진다).
+  post_polls: '광고 RPC 미포함 — 상세 투표 자리 잡기만 빠진다(응답 뒤 그대로 선다)',
 };
 
 describe('20260911a — 광고 행은 일반 피드와 같은 모양이다', () => {

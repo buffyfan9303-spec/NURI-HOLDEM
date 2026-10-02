@@ -19,6 +19,7 @@ import Icon from '../atoms/Icon';
 import { useResyncOnWake } from '../../lib/realtimeResync';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { isVisited, createReqGuard } from '../../lib/ownerReservations';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 interface MyPostersTabProps {
   schedules: Schedule[];
@@ -511,9 +512,11 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
   // '수정' 바로 옆 20px짜리 삭제라 오탭이 잦다 — 실행은 아래 넓은 확인 스트립에서만 한다
   const [ask, setAsk] = useState(false);
   const [act, setAct] = useState<CustomerActivity | null>(null);
+  // 매장 A 손님 활동이 B 로 바꾼 뒤 늦게 와 이 행에 붙지 않게(review-store-link-1002b A4 — 요청 매장 = 응답 매장)
+  const run = useVenueScope(venueId ?? '');
   const openCustomer = () => {
     const next = !showCustomer; setShowCustomer(next);
-    if (next && !act && venueId) getCustomerActivity(venueId, res.displayName).then(setAct).catch(() => {});
+    if (next && !act && venueId) run('act', (v) => getCustomerActivity(v, res.displayName), setAct);
   };
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low">

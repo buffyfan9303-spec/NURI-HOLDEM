@@ -42,7 +42,11 @@ export interface HandAttachment {
   cards?: Card[] | null;  // 1~4장(PLO 지원). null = 카드 미입력(headline 만)
 }
 
-export interface PollOption { id: string; idx: number; label: string; votes: number }
+export interface PollOption {
+  id: string; idx: number; label: string; votes: number;
+  /** 화면 전용 — 표는 남기되 새로 고를 수 없는 보기(SPOT 옛 글: 지금 자리에서 못 하는 액션 · shareView.fitPollOptions). 서버 값 아님. */
+  locked?: boolean;
+}
 
 export interface PollAttachment {
   kind: 'poll';
@@ -51,6 +55,8 @@ export interface PollAttachment {
   options: PollOption[];      // idx 오름차순
   myOptionId: string | null;  // 내가 기표한 보기(비로그인/미기표 = null)
   closesAt?: string;          // ISO. 없으면 무기한
+  /** 목록에 끼워 받은 보기로 자리만 잡은 상태 — 집계·내 표는 아직이라 누를 수 없다(pollFromEmbed) */
+  pending?: boolean;
 }
 
 export type Attachment = HandAttachment | PollAttachment;
@@ -91,6 +97,25 @@ async function fetchMyVote(pollId: string): Promise<string | null> {
     .eq('poll_id', pollId).eq('user_id', user.id).maybeSingle();
   if (error || !data) return null;
   return (data.option_id as string) ?? null;
+}
+
+/**
+ * 게시판 목록에 끼워 받은 post_polls 행(CommunityPost.pollEmbed) → 자리 잡기용 투표.
+ * 🔴 2026-10-02 독립 검토: 상세의 투표 블록이 첫 프레임 뒤(fetchAttachment 응답)에 228px 로 들어와 아래를 밀었다
+ *   (스팟 글·일반 투표 글 모두, 응답 300ms 지연이면 630ms 동안 없다가 뜸). 질문·보기 이름은 목록이 이미 알므로
+ *   같은 마크업으로 먼저 그린다 — 높이가 같아 밀림이 없다. 표 수·내 표는 응답이 오면 채워진다.
+ * 형식이 다르면 null(자리를 잡지 않는다 — 예전과 같다).
+ */
+export function pollFromEmbed(raw: unknown): PollAttachment | null {
+  const r = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown> | null | undefined;
+  if (!r || typeof r.id !== 'string' || typeof r.question !== 'string' || !Array.isArray(r.post_poll_options)) return null;
+  const options = (r.post_poll_options as Record<string, unknown>[])
+    .filter((o) => typeof o?.id === 'string' && typeof o.label === 'string')
+    .map((o) => ({ id: o.id as string, idx: Number(o.idx), label: o.label as string, votes: 0 }))
+    .sort((a, b) => a.idx - b.idx);
+  if (options.length < 2) return null;
+  return { kind: 'poll', id: r.id, question: r.question, options, myOptionId: null,
+    closesAt: typeof r.closes_at === 'string' ? r.closes_at : undefined, pending: true };
 }
 
 // ── 조회 ─────────────────────────────────────────────────────────────────────
