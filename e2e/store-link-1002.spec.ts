@@ -34,7 +34,8 @@ const preset = (venue: string, i: number, name: string) => ({
 const CLOSED_A = { session_date: '2026-09-30', game_seq: 1, title: 'A매장-지난회차', buyin_amount: 77000, card_amount: null, game_type: 'gtd', target_entries: 20, max_entries: 0, is_addon: false, addon_stack: 0, discounts: [], early_double_min: 0, early_single_min: 0, reg_closed: true, closed: true, closed_at: '2026-09-30T15:00:00Z', created_at: '2026-09-30T09:00:00Z' };
 const PRESETS: Record<string, unknown[]> = { [A]: [preset(A, 1, 'A-딥스택'), preset(A, 2, 'A-터보')], [B]: [preset(B, 3, 'B-데일리')] };
 
-interface Opts { presetDelayA?: number; presetError?: boolean; presetsB?: unknown[]; prefillDelayA?: number; lastRoundDelayB?: number }
+interface Opts { presetDelayA?: number; presetError?: boolean; presetsB?: unknown[]; prefillDelayA?: number; lastRoundDelayB?: number; listDelayA?: number; deletes?: string[] }
+const LIST_A = [{ session_date: '2026-09-29', game_seq: 1, title: 'A매장-목록게임', opened_at: '2026-09-29T09:00:00Z', reg_closed: true, closed: true, buyin_amount: 77000, operators: [] }];
 
 async function boot(page: Page, o: Opts = {}) {
   await bootOwner(page, {
@@ -59,6 +60,14 @@ async function boot(page: Page, o: Opts = {}) {
         if (r.request().method() !== 'GET') return r.fallback();
         const u = decodeURIComponent(r.request().url());
         const last = /select=buyin_amount/.test(u) && /session_date=lt\./.test(u);
+        // 장부 목록(getLedgerSessionList: limit=90) — A 만 1행, listDelayA 만큼 늦게. B 는 바로 빈 목록.
+        if (/select=session_date,game_seq,title,opened_at/.test(u) && /limit=90/.test(u)) {
+          if (venueOf(r) === A) {
+            if (o.listDelayA) await sleep(o.listDelayA);
+            return r.fulfill(json(LIST_A)).catch(() => {});
+          }
+          return r.fulfill(json([]));
+        }
         // 마지막 마감 회차(getLastClosedRound: closed=eq.true + session_date=lt) — A 만 있다. B 는 lastRoundDelayB 만큼 늦게 '없음'.
         if (/closed=eq\.true/.test(u) && /session_date=lt\./.test(u)) {
           if (venueOf(r) === A) return r.fulfill(json({ ...CLOSED_A, venue_id: A }));
@@ -70,6 +79,12 @@ async function boot(page: Page, o: Opts = {}) {
           return r.fulfill(json({ buyin_amount: 77000, card_amount: null, target_entries: 0, title: 'A매장-직전게임', dealers: null, event_memo: null, discounts: [] })).catch(() => {});
         }
         return r.fulfill(json(single(r) ? null : []));
+      });
+      await p.route(/\/rest\/v1\/rpc\/pos_has_password/, (r) => r.fulfill(json(false)));
+      // 장부 삭제(하드 삭제 RPC) — 운영으로 나가지 않게 여기서 받아 어느 매장으로 나갔는지만 적는다.
+      await p.route(/\/rest\/v1\/rpc\/delete_ledger_session/, (r) => {
+        o.deletes?.push(String((r.request().postDataJSON() as { p_venue_id?: string } | null)?.p_venue_id ?? ''));
+        return r.fulfill({ status: 204, body: '' });
       });
     },
   });
@@ -157,3 +172,42 @@ test('L-06 늦게 온 A 직전 설정·A 프리셋 목록이 B 새 게임 폼에
   await expect(page.getByTestId('preset-picker-ledger'), '늦게 온 A 프리셋 목록이 B 폼의 고르개로 떴다(B 는 0개)').toHaveCount(0);
 });
 
+
+// ── review-store-link-1002 2a — 장부 목록 ────────────────────────────────────
+// 늦게 온 A 장부 목록이 B 화면에 그려지면 그 행의 🗑 → deleteLedgerSession(지금 매장=B, A 의 날짜·회차) 로 **B 장부가 하드 삭제**됐다.
+// 음성 대조: 수정 전 빌드(f6b7bc87)에서 A 행이 B 화면에 그려지고 삭제 요청이 B 로 나가 FAIL — store-link-1002b-report.md.
+test('2a 늦게 온 A 장부 목록이 B 화면에 그려지지 않고, 🗑 삭제 요청이 B 매장으로 나가지 않는다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const deletes: string[] = [];
+  await boot(page, { listDelayA: 3000, deletes });
+  await press(page, '[role=tablist][aria-label="매장 단계 이동"] [role=tab]', /장부/);
+  await expect(page.getByRole('button', { name: '목록으로' }), '장부 보드가 안 열렸다').toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: '목록으로' }).click(); // A 목록 요청이 나간다(3s 뒤 도착)
+  await page.waitForTimeout(300);
+  await switchTo(page, B);
+  await expect(page.locator('[data-pane="ledger"]').getByText('아직 작성한 장부가 없습니다'), 'B 빈 목록이 안 떴다 — 이 검사가 아무것도 재지 않았다').toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(4000); // A 의 늦은 응답이 도착하고도 남을 시간
+
+  // 결함이 있으면 A 행의 🗑 가 B 화면에 있다 — 실제로 눌러 꾹 확정까지 해 본다(삭제 RPC 는 위 route 가 받는다).
+  const trash = page.getByRole('button', { name: '2026-09-29 메인 장부 삭제' });
+  if (await trash.count()) {
+    await trash.click();
+    const confirm = page.getByRole('button', { name: '꾹 눌러 영구 삭제' });
+    await expect(confirm).toBeEnabled({ timeout: 5_000 });
+    await confirm.hover(); await page.mouse.down(); await page.waitForTimeout(1000); await page.mouse.up();
+    await page.waitForTimeout(800);
+  }
+  expect(deletes.filter((v) => v === B), `B 매장 장부 삭제 요청이 나갔다(${deletes.join(',')}) — A 목록 행으로 B 장부를 지웠다`).toEqual([]);
+  await expect(page.locator('[data-pane="ledger"]').getByText('A매장-목록게임'), '늦게 온 A 장부 목록이 B 화면에 그려졌다').toHaveCount(0);
+});
+
+// ── F-1 — 직전 게임 설정이 폼보다 늦게 도착해도 칸이 채워진다 ────────────────────
+// 음성 대조: 수정 전 빌드에서 '직전 게임 설정을 불러왔습니다' 는 보이는데 게임명 칸이 '' 라 FAIL.
+test('F-1 늦게 온 직전 게임 설정이 새 게임 폼의 빈 칸을 채운다', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, { prefillDelayA: 1500 });
+  await press(page, '[role=tablist][aria-label="매장 단계 이동"] [role=tab]', /장부/);
+  await expect(titleInput(page), 'A 새 게임 폼이 안 열렸다').toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-pane="ledger"]').getByText('직전 게임 설정을 불러왔습니다'), '직전 설정이 도착하지 않았다 — 이 검사가 아무것도 재지 않았다').toBeVisible({ timeout: 10_000 });
+  await expect(titleInput(page), '"불러왔습니다" 문구만 뜨고 게임명 칸이 비었다').toHaveValue('A매장-직전게임');
+});

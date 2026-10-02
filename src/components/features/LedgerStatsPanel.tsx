@@ -1047,7 +1047,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const run = useVenueScope(venueId); // L-06 부류 — 늦은 A 매장 응답이 B 의 '비밀번호 설정됨'을 덮지 않게
   useEffect(() => {
     setHasPw(false);
-    run(posHasPassword, setHasPw);
+    run('pw', posHasPassword, setHasPw);
     getMyVenueNotifyMute().then(setMute).catch(() => {});
   }, [venueId, run]);
 

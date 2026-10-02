@@ -52,7 +52,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
   const run = useVenueScope(venueId); // L-06 부류 — 매장 전환 뒤 늦게 온 A 신청 목록이 B 화면에 그려지지 않게
   const load = useCallback(() => {
     setLoadErr(null);
-    run(myVenueEventRequests, setMine, setLoadErr);
+    run('mine', myVenueEventRequests, setMine, setLoadErr);
   }, [run]);
   useEffect(() => { load(); }, [venueId, load]);
 

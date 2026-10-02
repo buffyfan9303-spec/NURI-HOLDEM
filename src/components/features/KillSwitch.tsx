@@ -56,7 +56,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   const run = useVenueScope(venueId);
   const refreshStatus = () => {
     setStatusErr(null);
-    run(killSwitchIsSet, setPwIsSet, (e) => { setStatusErr(e); setPwIsSet(null); });
+    run('pwSet', killSwitchIsSet, setPwIsSet, (e) => { setStatusErr(e); setPwIsSet(null); });
   };
   useEffect(() => { setPwIsSet(null); refreshStatus(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 

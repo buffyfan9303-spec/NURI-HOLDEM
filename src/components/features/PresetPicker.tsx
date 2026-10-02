@@ -58,7 +58,7 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
   const run = useVenueScope(venueId);
   const [shownVenue, setShownVenue] = useState(venueId);
   if (shownVenue !== venueId) { setShownVenue(venueId); setPresets(null); setErr(false); setOpen(false); setQ(''); }
-  const load = () => run(listGamePresets, (ps) => { setPresets(ps); setErr(false); }, () => { setPresets(null); setErr(true); });
+  const load = () => run('list', listGamePresets, (ps) => { setPresets(ps); setErr(false); }, () => { setPresets(null); setErr(true); });
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // L-14 — 못 읽음을 '프리셋 없음'(숨김)으로 위장하지 않는다.

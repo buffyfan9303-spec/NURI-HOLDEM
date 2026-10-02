@@ -10,6 +10,7 @@ import { getMyVenueStaff } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { josa } from '../../lib/josa';
+import { useVenueScope } from '../../lib/useVenueScope';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -65,7 +66,12 @@ export default function StaffSchedule({ venueId, active = true }: { venueId: str
   useEffect(() => { if (!active) return; reload(); return subscribeStaffSchedule(venueId, reload); }, [venueId, from, to, active]); // eslint-disable-line react-hooks/exhaustive-deps
   // venueId 를 반드시 넘긴다 — 생략하면 서버가 '내가 소유한 첫 매장'으로 폴백해서
   // 운영자(admin)가 매장을 골라 들어오면 구성원 목록엔 직원이 보이는데 이 명부만 0명이 된다.
-  useEffect(() => { getMyVenueStaff(venueId).then((s) => setVenueStaff(s.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}); }, [venueId]);
+  // 🔴 review-store-link-1002 2a — 늦게 온 A 직원 명부로 staffIdByName 이 만들어지면 addStaffShift(B, …, A 직원 id) 가
+  //   B 시프트 행에 A 직원 user_id 를 박았다(서버는 그 id 의 소속을 보지 않는다). 명부는 run 으로 받고, 매장이 바뀌는 렌더에서 비운다.
+  const run = useVenueScope(venueId);
+  const [rosterVenue, setRosterVenue] = useState(venueId);
+  if (rosterVenue !== venueId) { setRosterVenue(venueId); setVenueStaff([]); setWageNames([]); }
+  useEffect(() => { run('staff', getMyVenueStaff, (s) => setVenueStaff(s.map((x) => ({ id: x.id, name: x.name })))); }, [venueId, run]);
 
   // 이름 → 계정 id. 동명이인이면 **일부러 비운다** — 잘못된 주인을 행에 못박는 것보다
   // 이름만으로 두는 편이 안전하다(서버 판정이 동명이인을 페일클로즈로 처리한다, 20260829a).
@@ -83,7 +89,7 @@ export default function StaffSchedule({ venueId, active = true }: { venueId: str
     for (const [k, n] of count) if (n === 1) m.set(k, id.get(k)!);
     return m;
   }, [venueStaff, user]);
-  useEffect(() => { getStaffWages(venueId).then((ws) => setWageNames(ws.map((w) => w.name))).catch(() => {}); }, [venueId, tick]);
+  useEffect(() => { run('wages', getStaffWages, (ws) => setWageNames(ws.map((w) => w.name))); }, [venueId, tick, run]);
 
   const roster = useMemo(() => {
     const set = new Set<string>();

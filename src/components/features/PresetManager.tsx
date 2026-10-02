@@ -62,26 +62,26 @@ export default function PresetManager({ venueId, active = true }: { venueId: str
   }
 
   // L-14 — 목록 조회 실패를 '저장된 프리셋이 없습니다'로 그리지 않는다(못 읽음 ≠ 없음).
-  const load = () => run(listGamePresets, (ps) => { setPresets(ps); setLoadErr(null); }, (e) => { setPresets(null); setLoadErr(e); });
+  const load = () => run('list', listGamePresets, (ps) => { setPresets(ps); setLoadErr(null); }, (e) => { setPresets(null); setLoadErr(e); });
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // PL3: 최근 포스터(이 매장) — '지난 게임에서 만들기' 재료. 24필드가 채워진 채 열려 이름만 지으면 된다.
   useEffect(() => {
-    run((v) => getSchedules().then((all) => all.filter((s) => s.venueId === v)), (mine) => {
+    run('recent', (v) => getSchedules().then((all) => all.filter((s) => s.venueId === v)), (mine) => {
       setAllSchedules(mine);
       setRecent([...mine].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12));
     });
   }, [venueId, run]);
   // PL3: 최근 '마감된' 장부 회차 — 운영 중 수정까지 반영된 완성본(스냅샷)이 최우선 재료.
   useEffect(() => {
-    run((v) => getLedgerSessionList(v, 40), (list) => setRounds(list.filter((s) => s.closed).slice(0, 6)));
+    run('rounds', (v) => getLedgerSessionList(v, 40), (list) => setRounds(list.filter((s) => s.closed).slice(0, 6)));
   }, [venueId, run]);
 
   const startNew = () => setEditing({ name: '', data: { ...EMPTY } });
   const startFromSchedule = (sc: Schedule) =>
     setEditing({ name: sc.title, data: { ...EMPTY, ...presetFromSchedule(sc) } });
   // 마감 회차 → 프리셋(세션 + 마감 때 캡처한 클락 설정 + 연결 포스터를 한 번에)
-  const startFromRound = (r: LedgerSessionListItem) => run((v) => getLedgerSession(v, r.sessionDate, r.gameSeq), (sess) => {
+  const startFromRound = (r: LedgerSessionListItem) => run('round', (v) => getLedgerSession(v, r.sessionDate, r.gameSeq), (sess) => {
     const sched = allSchedules.find((s) => s.id === sess.scheduleId) ?? null;
     const cfg = sess.clockSnapshot?.gameSnapshot?.clockConfig ?? null;
     setEditing({ name: sess.title || `${r.sessionDate} 게임`, data: { ...EMPTY, ...presetFromRound(sess, cfg, sched) } });

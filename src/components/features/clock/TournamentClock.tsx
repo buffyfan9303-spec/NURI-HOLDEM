@@ -129,7 +129,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   }, [saver, bumpClockReq]);
   // L-06(audit-link-1002) — 매장 전환에 다시 마운트되지 않으므로 늦게 온 A 매장 응답은 run 이 버린다(공용 지점 lib/useVenueScope).
   const run = useVenueScope(venueId);
-  const reloadPresets = useCallback(() => run(getClockPresets, setPresets), [run]);
+  const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
     // 🔴 D3(2026-09-28) — 매장 전환은 이 컴포넌트를 다시 마운트하지 않는다(VenueManageTab 이 같은 자리에서 venueId 만 바꾼다).
@@ -152,8 +152,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
   useEffect(() => {
     setSeedSession(null); // 다른 매장·회차의 시드가 새 조회 전까지 설정 폼에 남지 않게(L-06)
-    if (!seedSessionDate) return;
-    run((v) => getLedgerSession(v, seedSessionDate, seedGameSeq), setSeedSession);
+    // review 1b — 회차 S1→S2 로 바뀌면 S1 의 늦은 응답이 S2 설정에 게임명·얼리를 시드하지 않게(같은 key 는 마지막 요청만 반영).
+    if (!seedSessionDate) { run.cancel('seed'); return; }
+    run('seed', (v) => getLedgerSession(v, seedSessionDate, seedGameSeq), setSeedSession);
     setView('settings');
   }, [venueId, seedSessionDate, seedGameSeq, run]);
 

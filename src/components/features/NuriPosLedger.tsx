@@ -50,6 +50,7 @@ import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscount
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { fillEmptyFromPrefill } from '../../lib/ledgerPrefill';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -159,8 +160,8 @@ function pageFirstDelta(box: HTMLElement, bar: HTMLElement | null, dy: number): 
 }
 const isLgUp = () => window.matchMedia('(min-width: 1024px)').matches;
 
-// venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
-export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
+// venueName — 장부 삭제 확인에 '어느 매장의' 장부인지 보인다(review-store-link-1002 2a: 날짜·메인만으로는 매장을 구별할 수 없었다).
+export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   /** 세션 요약의 '대회 …' → 손님이 보는 대회 상세. 없으면 글자로만 남는다(AdminTab 등). */
@@ -344,16 +345,19 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   }, [user, staff]);
   const operFull = (id?: string | null) => (id ? (staffNameById.get(id) ?? '직원') : '미지정');
 
+  // 🔴 review-store-link-1002 2a — 늦게 온 A 매장 장부 목록이 B 화면에 그려지면 그 행의 🗑 가 **B 매장의 같은 날짜·회차 장부를
+  //   하드 삭제**했다(deleteLedgerSession 은 지금 venueId 를 쓴다). 목록은 run 으로 받고, 매장이 바뀌는 렌더에서 목록·삭제 대상을 비운다.
   const loadList = useCallback(() => {
     setListLoading(true);
     setListError(null);
-    getLedgerSessionList(venueId).then((list) => {
+    run('list', getLedgerSessionList, (list) => {
       setSessionList(list);
       const ds = [...new Set(list.map((s) => s.sessionDate))]; // 최신순(날짜 desc)
       setCollapsedDates(new Set(ds.slice(1))); // 최신 날짜만 펼침, 과거 날짜는 접어 목록 단축
-    }).catch((e) => setListError(e)).finally(() => setListLoading(false));
-  }, [venueId]);
-  useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
+      setListLoading(false);
+    }, (e) => { setListError(e); setListLoading(false); });
+  }, [run]);
+  useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList, venueId]);
 
   const openBoard = (d: string, g = MAIN_GAME_SEQ) => { setDate(d); setGameSeq(g); setSelected(null); setMode('board'); };
   // 사이드 게임 추가 — 그 날짜의 다음 game_seq로 전환(새 게임이면 설정 폼이 뜸)
@@ -381,29 +385,36 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.
   // 그런데 정작 '되돌릴 수 있는' 정산 마감은 꾹-누르기로 막혀 있어 위험도와 확인 강도가 역전돼 있었다.
   // → confirm 1회를 없애고, 무엇을 잃는지(바인·인원·매출·미수)를 실수치로 먼저 보여준 뒤 마감과 같은 꾹-누르기로 통일한다.
-  const [delTarget, setDelTarget] = useState<{ date: string; gameSeq: number; label: string } | null>(null);
+  // venueId — 누른 그 순간의 매장. 지울 때 이 값을 쓴다(지금 매장과 다르면 지우지 않는다).
+  const [delTarget, setDelTarget] = useState<{ venueId: string; date: string; gameSeq: number; label: string } | null>(null);
   const [delLoss, setDelLoss] = useState<LedgerLossSummary | null>(null);
   const [delLossErr, setDelLossErr] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
+  const [listVenue, setListVenue] = useState(venueId);
+  if (listVenue !== venueId) {
+    setListVenue(venueId);
+    setSessionList([]); setListLoading(true); setListError(null); setDelTarget(null);
+  }
   const [delPw, setDelPw] = useState('');   // 20260925g N19 — 비밀번호 설정 매장에서 바인 있는 장부를 지울 때 서버가 취소 비밀번호를 본다
   const delSeq = useRef(0); // (reload 와 같은 관행) 다른 장부의 늦은 응답이 현재 수치를 덮지 않게
   // 목록 API는 단가·담당만 들고 있어 '잃는 양'을 모른다. 목록 로드를 무겁게 만들지 않으려고
   // 삭제를 누른 그 장부 하나만 이 시점에 조회한다(보드의 buyins/players 는 다른 날짜 것이라 못 씀).
   const askDeleteSession = useCallback((d: string, g = MAIN_GAME_SEQ) => {
     const my = ++delSeq.current;
-    setDelTarget({ date: d, gameSeq: g, label: `${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
+    setDelTarget({ venueId, date: d, gameSeq: g, label: `${venueName ? `${venueName} · ` : ''}${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
     setDelLoss(null); setDelLossErr(false); setDelPw('');
     // 목록 화면은 보드를 안 거쳐 hasPw 가 옛 값일 수 있다 — 비밀번호 칸을 낼지 지금 다시 묻는다(실패하면 직전 값 유지).
-    run(posHasPassword, setHasPw); // 실패하면 직전 값 유지
+    run('pw', posHasPassword, setHasPw); // 실패하면 직전 값 유지
     Promise.all([getLedgerSession(venueId, d, g), getLedgerBuyins(venueId, d, g), getLedgerPlayers(venueId, d, g)])
       .then(([s, bs, ps]) => { if (my === delSeq.current) setDelLoss(ledgerLossSummary(bs, ps, s)); })
       .catch(() => { if (my === delSeq.current) setDelLossErr(true); });
-  }, [venueId, run]);
+  }, [venueId, venueName, run]);
   const doDeleteSession = useCallback(async () => {
     if (!delTarget || delBusy) return; // 홀드 재진입/연타로 두 번 실행되지 않게
+    if (delTarget.venueId !== venueId) { setDelTarget(null); return; } // 누른 뒤 매장이 바뀌었다 — 다른 매장 장부를 지우지 않는다
     setDelBusy(true);
     try {
-      await deleteLedgerSession(venueId, delTarget.date, delTarget.gameSeq, hasPw ? delPw : null);
+      await deleteLedgerSession(delTarget.venueId, delTarget.date, delTarget.gameSeq, hasPw ? delPw : null);
       toast.show(`${delTarget.label} 장부를 삭제했습니다`, 'info'); // 어느 장부였는지 남긴다(오삭제 사후 추적)
       setDelTarget(null); setDelPw(''); loadList();
     }
@@ -432,7 +443,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 🔴 D3(2026-09-25) — hasPw 는 보드를 열 때 **한 번** 읽은 값이었다(그것도 조회 실패를 '없음'으로 삼킨 값).
   //   그 사이 다른 기기에서 비밀번호를 설정하면 업주 화면은 '비밀번호 없이 취소' 버튼만 내밀고 서버는 매번 거절 →
   //   입력칸이 끝내 안 나왔다. ① 다시 보일 때 재조회 ② 서버가 비밀번호 문구로 거절하면 그 사실로 바로 고친다.
-  const refreshPw = useCallback(() => { run(posHasPassword, setHasPw); }, [run]); // 실패하면 직전 값 유지 · 늦은 A 매장 응답은 버린다(L-06)
+  const refreshPw = useCallback(() => { run('pw', posHasPassword, setHasPw); }, [run]); // 실패하면 직전 값 유지 · 늦은 A 매장 응답은 버린다(L-06)
   const notePwFromError = (e: unknown) => {
     const st = cancelPwStateFromError(ledgerErrorText(e, ''));   // msgOf 는 42501 문구를 뭉개 '비밀번호가 올바르지 않습니다' 를 못 본다(20260925g)
     if (st !== null) setHasPw(st);
@@ -611,9 +622,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // S-15 — 이용권 승인 뒤 같은 손님 이용권 요청이 남았으면 알린다(다음 승인에 바인 1회로 묶이는 것을 막을 기회).
   const warnVoucherLeftover = (r: BuyinRequest) => {
     if (!r.voucherId) return;
-    getPendingBuyinRequests(venueId, date)
-      .then((rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); })
-      .catch(() => {});
+    run('leftover', (v) => getPendingBuyinRequests(v, date),
+      (rs) => { const n = voucherLeftover(r, rs); if (n > 0) toast.show(voucherLeftoverText(r.playerName, n), 'info'); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
@@ -904,10 +914,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return () => { on = false; };
   }, [closed, venueId, date, gameSeq, session.title]);
 
+  // 매장·날짜·회차가 바뀌면 앞 칸의 직전 설정을 렌더 중에 비운다 — 새 폼의 첫 렌더가 앞 칸 값으로 시작하지 않게.
+  //   새 값은 아래 이펙트가 받아 오고, 폼은 도착한 값을 **빈 칸에만** 채운다(SessionForm · lib/ledgerPrefill).
+  const prefillKey = `${venueId}|${date}|${gameSeq}`;
+  const [prefillFor, setPrefillFor] = useState(prefillKey);
+  if (prefillFor !== prefillKey) { setPrefillFor(prefillKey); setPrefill(null); }
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
   // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
   useEffect(() => {
     if (loading) return; // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지
+    run.cancel('prefill'); // 앞 날짜·회차의 늦은 직전 설정이 아래 어느 갈래의 결과도 덮지 않게(review 1b)
     const sf = seedFillRef.current;
     if (!showSetup) {
       setPrefill(null);
@@ -932,7 +948,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       seedFillRef.current = null;
       return;
     }
-    run((v) => getLastLedgerSettings(v, date), setPrefill);
+    run('prefill', (v) => getLastLedgerSettings(v, date), setPrefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, showSetup, venueId, date, gameSeq]);
 
@@ -965,10 +981,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 사이드 시작 설정일 때 — 그날 메인 게임 설정을 '복사' 버튼으로 제공(반복 입력 제거)
   useEffect(() => {
     if (showSetup && gameSeq !== MAIN_GAME_SEQ) {
-      run((v) => getLedgerSession(v, date, MAIN_GAME_SEQ),
+      run('copyMain', (v) => getLedgerSession(v, date, MAIN_GAME_SEQ),
         (s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null),
         () => setCopyMain(null));
-    } else setCopyMain(null);
+    } else { run.cancel('copyMain'); setCopyMain(null); }
   }, [showSetup, gameSeq, venueId, date, run]);
 
   // 정산바(하단 고정)가 --tabbar-safe(탭바 예약)보다 커지면(실측 ~166px, SettleFilter 펼침·
@@ -1307,9 +1323,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   //   종전엔 여기에 search_members_for_ranking 을 병합했는데, 그건 매장과 무관한 전 회원 실명을
   //   부분 일치로 긁어오는 경로라 걷어냈다. 회원이 아니면 아래 '입력값 그대로 등록'이 받는다.
   useEffect(() => {
-    if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
+    if (!addOpen || newName.trim().length < 1) { run.cancel('search'); setSuggest([]); return; }
     const t = window.setTimeout(() => {
-      run((v) => searchRegisteredPlayers(v, newName), setSuggest, () => setSuggest([]));
+      run('search', (v) => searchRegisteredPlayers(v, newName), setSuggest, () => setSuggest([]));
     }, 250);
     return () => window.clearTimeout(t);
   }, [newName, addOpen, venueId, run]);
@@ -2686,6 +2702,22 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
   const [startISO, setStartISO] = useState<string | null>(base.tournamentStart ?? null);
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
+  // F-1(store-link-1002) — 직전 게임 설정은 폼이 그려진 뒤 도착한다. 도착하면 **빈 칸만** 채운다(업주가 이미 친 칸은 덮지 않는다).
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (mode !== 'open' || !prefilled) { prefillDone.current = false; return; }
+    if (prefillDone.current) return;
+    prefillDone.current = true;
+    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base);
+    if (f.title !== undefined) setTitle(f.title);
+    if (f.cash !== undefined) setCash(f.cash);
+    if (f.card !== undefined) setCard(f.card);
+    if (f.target !== undefined) setTarget(f.target);
+    if (f.dealers !== undefined) setDealers(f.dealers);
+    if (f.event !== undefined) setEvent(f.event);
+    if (f.discs !== undefined) setDiscs(f.discs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, prefilled]);
   const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
 
   // PL1a: 포스터 상속을 3필드(제목·바인·유형) → 전체(스택·애드온, 제출 시 클락 구조·레지레벨·상금)로 확대.
