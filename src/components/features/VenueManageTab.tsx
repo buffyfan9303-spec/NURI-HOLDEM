@@ -1103,7 +1103,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           <StaffPunchBar venueId={venueId} active={tabActive} onFix={() => startTransition(() => gotoSection('attendance'))} />
         )}
         {venueId && (
-          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} busy={shellBusy} />
+          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} navKey={`${section}:${gameStep}:${settingsTab}`} />
         )}
         {/* B1 — 매장 전환 중(shellBusy)엔 셸이 앞 매장 권한으로 그려져 있다. 보이기만 하고 누를 수 없게(inert) — 메뉴·단계는 B 권한이 온 뒤에 연다. */}
         {/* C1 c(2026-10-02) — 잠긴 셸은 흐리게(0.55) + 대기 커서로 '지금은 못 누른다'를 보인다. 150ms 늦게 흐려져 빠른 전환에선 깜빡이지 않고,
@@ -1569,10 +1569,10 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
 // ── ST1: 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다(§13-C).
 // 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
 // (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
-const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, busy = false }: {
+const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKey }: {
   venueId: string; active: boolean;
-  /** C1 b — 매장 전환 대기(셸 잠김) 중이면 앞 매장 바 자리를 계속 붙잡는다(본문이 B 로 바뀌는 순간에 한 번에 바뀌게). */
-  busy?: boolean;
+  /** C1 b — 지금 판(섹션·단계·하위탭). 매장 전환 때 붙잡은 앞 매장 바 자리는 이 값이 바뀌는(사용자 이동) 순간 접힌다. */
+  navKey: string;
   /** 🔴 2026-09-20 — 종전에는 `(s: Section | GameStep)` 이라 **문맥을 실을 수 없었다**.
    *  '바인 대기 N건' 이 그 N 건이 있는 날짜로 가야 해서 대시보드가 이미 쓰는 `StoreGoto` 로 넓힌다. */
   onGoto: StoreGoto;
@@ -1587,21 +1587,21 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, busy 
   //   같은 파일의 이용권 레일과 **같은 계약**(staleResponse seq+owner)을 쓴다 — 새 방식을 만들지 않는다.
   const stampRef = useRef<RequestStamp<string>>({ seq: 0, owner: venueId });
   // C1 b(2026-10-02, review-mystore-b1-1002 §3-1) — 매장 A→B 전환 순간 A 의 바(바인 대기 등)가 비워지며 사라져 아래 셸 전체가
-  //   47px(390: 63px) 위로 튀었다. 비우는 것은 그대로(A 데이터를 B 에 남기지 않는다) 하되, 바가 있던 자리 높이를 B 의 첫 응답이 올 때까지
-  //   빈 자리로 붙잡는다. B 응답 뒤 B 에 바가 없으면 그때 한 번 접힌다(내용이 바뀐 것이라 정상).
+  //   47px(390: 63px) 위로 튀었다. 비우는 것은 그대로(A 데이터를 B 에 남기지 않는다) 하되, 바가 있던 자리 높이를 빈 자리로 붙잡는다.
+  //   C1 후속(review-mystore-c1-1002 §2-b) — 붙잡은 자리를 'B 응답이 왔을 때' 접었더니 이동이 정착 시점(입력 500ms 밖)으로 밀려
+  //   CLS 로 잡혔다(본문이 이미 보인 뒤 1.3초에 셸 전체가 올라가기도 했다). 그래서 B 에 바가 없으면 **다음 이동(navKey 변경 =
+  //   사용자가 섹션·단계·하위탭을 고름)** 때 접는다. 높이 전환(①)은 프레임마다 이동이 쌓여 여전히 CLS 이고, 본문 대기를 바 응답까지
+  //   묶기(③)는 권한이 늦은 순서에서 그대로 정착 순간에 튄다 — 둘 다 이동을 입력 밖에 남긴다. B 에 바가 오면 같은 자리에 들어선다.
   const barRef = useRef<HTMLDivElement>(null);
-  const [hold, setHold] = useState<{ venueId: string; h: number } | null>(null);
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [hold, setHold] = useState<{ venueId: string; nav: string; h: number } | null>(null);
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
-    void Promise.allSettled([
-      getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
-        .catch(() => { if (!stale()) setClocks([]); }),
-      getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
-        .catch(() => { if (!stale()) setPending(0); }),
-    ]).then(() => { if (!stale()) setLoadedFor(venueId); });
+    getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
+      .catch(() => { if (!stale()) setClocks([]); });
+    getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+      .catch(() => { if (!stale()) setPending(0); });
   }, [venueId, biz]);
   // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
   const prevVenue = useRef(venueId);
@@ -1609,7 +1609,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, busy 
     if (prevVenue.current === venueId) return;
     prevVenue.current = venueId;
     const h = barRef.current?.offsetHeight ?? 0;
-    setHold(h > 0 ? { venueId, h } : null);
+    setHold(h > 0 ? { venueId, nav: navKey, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
     setClocks([]); setPending(0);
   }, [venueId]);
@@ -1622,7 +1622,10 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, busy 
   // 남은 시간 초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나).
   //   K9 — 공용 틱(lib/clockTick): TV·보드와 같은 순간에 초가 넘어간다(자체 1초 인터벌은 마운트 시점마다 위상이 달랐다).
   useClockSecond(main, active && mainRunning);
-  if (!main && pending === 0) return hold?.venueId === venueId && (busy || loadedFor !== venueId) ? <div aria-hidden data-livebar-hold="" style={{ height: hold.h }} /> : null;
+  const shown = !!main || pending > 0;
+  // 바가 한 번 들어서면 붙잡기는 끝이다 — 나중에 그 바가 사라질 때는 종전대로 접힌다.
+  useEffect(() => { if (shown) setHold(null); }, [shown]);
+  if (!shown) return hold?.venueId === venueId && hold.nav === navKey ? <div aria-hidden data-livebar-hold="" style={{ height: hold.h }} /> : null;
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
   const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;

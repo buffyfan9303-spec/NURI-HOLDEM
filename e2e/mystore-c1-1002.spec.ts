@@ -36,7 +36,7 @@ const buyinsOf = (seq: number) => NAMES.map((n, i) => ({
   ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: 0, early_override: null,
 }));
 
-interface Opts { vouchers?: boolean; twoVenues?: boolean; permDelayB?: number }
+interface Opts { vouchers?: boolean; twoVenues?: boolean; permDelayB?: number; barDelayB?: number }
 async function boot(page: Page, w: number, h: number, o: Opts = {}) {
   const writes: string[] = [];
   // client_errors(오류 보고) 는 _fixtures 가드가 끊는다 — 목 업주 화면의 기존 보고(수정 전·후 같음)라 쓰기 집계에서 뺀다.
@@ -66,11 +66,18 @@ async function boot(page: Page, w: number, h: number, o: Opts = {}) {
           return r.fulfill(json(true)).catch(() => {});
         });
         // A 매장만 '바인 대기' 3건 — B 는 0건(바가 없다)
-        await p.route(/\/rest\/v1\/ledger_buyin_requests\?/, (r) => {
+        //   barDelayB — B 의 라이브 바 응답(바인 대기·클락)을 늦춘다(권한보다 늦게 오는 순서).
+        await p.route(/\/rest\/v1\/ledger_buyin_requests\?/, async (r) => {
           if (r.request().method() !== 'GET') return r.fallback();
-          if (!r.request().url().includes(`venue_id=eq.${MOCK_VENUE}`)) return r.fulfill(json([]));
+          if (r.request().url().includes(`venue_id=eq.${VENUE_B}`) && o.barDelayB) await sleep(o.barDelayB);
+          if (!r.request().url().includes(`venue_id=eq.${MOCK_VENUE}`)) return r.fulfill(json([])).catch(() => {});
           const rows = [1, 2, 3].map((i) => ({ id: `aaaaaaaa-0000-4000-8000-00000000000${i}`, venue_id: MOCK_VENUE, session_date: MOCK_DAY, player_name: `대기${i}`, user_id: null, note: null, status: 'pending', created_at: `${MOCK_DAY}T02:00:00Z`, requested_game_seq: null, voucher_id: null }));
           return r.fulfill(json(rows));
+        });
+        if (o.barDelayB) await p.route(/\/rest\/v1\/clock_states\?/, async (r) => {
+          if (r.request().method() !== 'GET' || !r.request().url().includes(`venue_id=eq.${VENUE_B}`)) return r.fallback();
+          await sleep(o.barDelayB!);
+          return r.fulfill(json(single(r) ? null : [])).catch(() => {});
         });
       }
     },
@@ -155,6 +162,62 @@ for (const [W, H] of [[1440, 900], [390, 844]] as const) {
   });
 }
 
+// ── b 후속) 정착 순간에도 셸이 튀지 않는다 — 두 지연 순서(권한 늦음 · 바 응답 늦음) ─────────────────
+//   review-mystore-c1-1002 §2-b: 대기 중 이동은 없앴지만 앞 매장 바 자리를 'B 본문이 나오는 순간'(권한 늦음) 또는
+//   '본문이 보인 지 1.3초 뒤'(바 늦음)에 접어서, 이동이 입력 500ms 밖으로 밀려 CLS 로 잡혔다(1440 0.024 · 390 0.059).
+//   매장 고르개는 실제 키 입력(ArrowDown)으로 바꾼다 — selectOption 은 사용자 입력이 아니라 입력 직후 이동까지 CLS 로 센다.
+for (const [W, H] of [[1440, 900], [390, 844]] as const) for (const [nm, o] of [['권한 늦음', { permDelayB: 1500 }], ['바 늦음', { permDelayB: 250, barDelayB: 1600 }]] as const) {
+  test(`${W} — b) 매장 A→B 전환이 정착할 때(${nm}) 셸이 튀지 않는다(CLS 0), 비운 바 자리는 다음 이동 때 접힌다`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const { writes } = await boot(page, W, H, { twoVenues: true, ...o });
+    const pick = page.getByLabel('관리할 매장 선택');
+    await expect(pick, '매장 고르개가 없다(이 검사의 전제)').toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/바인 대기/).first(), 'A 매장 바인 대기가 먼저 보여야 한다(이 검사의 전제)').toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      const W8 = window as unknown as { __f: unknown[]; __stop: boolean; __ls: unknown[] };
+      W8.__f = []; W8.__stop = false; W8.__ls = [];
+      new PerformanceObserver((l) => { for (const e of l.getEntries()) { const s = e as PerformanceEntry & { value: number; hadRecentInput: boolean; sources?: { node?: Node }[] };
+        const el = (n?: Node) => (n?.nodeType === 1 ? n as Element : n?.parentElement ?? null);
+        // body: 이동한 요소가 전부 판 본문 안(B 대시보드가 제 데이터로 자라는 것) — 셸 이동과 따로 센다.
+        W8.__ls.push({ t: Math.round(s.startTime), v: s.value, input: s.hadRecentInput, body: (s.sources ?? []).length > 0 && (s.sources ?? []).every((x) => !!el(x.node)?.closest('[data-mystore-secpanel]')),
+          src: (s.sources ?? []).map((x) => el(x.node)?.outerHTML?.slice(0, 80) ?? '?').join(' | ') }); } }).observe({ type: 'layout-shift' });
+      const tick = () => {
+        const shell = document.querySelector<HTMLElement>('[data-mystore-rail]') ?? document.querySelector<HTMLElement>('[data-testid=mystore-menu-toggle]');
+        const busy = !!document.querySelector('main[data-tab=my-store] [aria-busy="true"][inert]');
+        const loading = !!document.querySelector('[data-mystore-secpanel] .pane-reserve[aria-busy="true"]');
+        W8.__f.push({ t: Math.round(performance.now()), busy, loading, top: shell ? Math.round(shell.getBoundingClientRect().top + scrollY) : null });
+        if (!W8.__stop) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await pick.focus();
+    const t0 = await page.evaluate(() => performance.now());
+    await page.keyboard.press('ArrowDown');
+    await expect(pick, '키 입력으로 B 매장을 못 골랐다(이 검사의 전제)').toHaveValue(VENUE_B);
+    await page.waitForTimeout(3200);
+    await page.evaluate(() => { (window as unknown as { __stop: boolean }).__stop = true; });
+    const { f, ls } = await page.evaluate(() => { const w = window as unknown as { __f: { t: number; busy: boolean; loading: boolean; top: number | null }[]; __ls: { t: number; v: number; input: boolean; body: boolean; src: string }[] }; return { f: w.__f, ls: w.__ls }; });
+    const before = f[0].top!;
+    const settled = f.slice(Math.max(0, f.findIndex((x) => x.busy))).filter((x) => !x.busy && !x.loading);
+    const late = ls.filter((x) => x.t > t0 && !x.input);
+    // ⚠ 본문 안 이동(B 대시보드 '오늘 장부' 확인 중 107px → 미시작 48px)은 전환과 무관한 대시보드 자체 로딩이라 따로 기록만 한다(기준 빌드에도 같은 값).
+    const cls = late.filter((x) => !x.body).reduce((s, x) => s + x.v, 0);
+    console.log(`[b ${W} ${nm}] frames=${f.length} 정착 프레임=${settled.length}(첫 ${settled[0] ? settled[0].t - Math.round(t0) : '-'}ms) top 전=${before} 끝=${f[f.length - 1].top} 셸 CLS=${cls.toFixed(4)} 입력 밖 이동=${JSON.stringify(late.map((x) => ({ t: x.t - Math.round(t0), v: +x.v.toFixed(4), body: x.body, src: x.src })))}`);
+    expect(f.length, '프레임을 못 쟀다 — 빈 검사').toBeGreaterThan(60);
+    expect(f.some((x) => x.busy), '전환 대기 프레임을 못 봤다 — 빈 검사').toBe(true);
+    expect(settled.length, 'B 본문이 정착한 프레임을 못 봤다 — 빈 검사').toBeGreaterThan(30);
+    expect(Math.max(...f.map((x) => Math.abs((x.top ?? before) - before))), 'b) 전환~정착 사이 셸이 세로로 튀었다').toBeLessThanOrEqual(1);
+    expect(cls, 'b) 입력 500ms 밖 셸 레이아웃 이동(CLS)이 생겼다 — 앞 매장 바 자리를 정착 시점에 접음').toBe(0);
+    // 붙잡은 자리는 영원히 남지 않는다 — 다음 섹션 이동(사용자 입력)에서 접힌다.
+    await expect(page.locator('[data-livebar-hold]'), 'B 에는 바가 없는데 붙잡은 자리를 못 봤다(이 검사의 전제)').toHaveCount(1);
+    if (W < 1024) { await page.getByTestId('mystore-menu-toggle').click(); await page.waitForTimeout(450); }
+    await page.evaluate(() => { [...document.querySelectorAll<HTMLElement>('[data-mystore-secbar] button, [data-main-enter] button')].find((b) => b.getClientRects().length && /매장 설정/.test(b.textContent ?? ''))?.click(); });
+    await expect(page.locator('[data-livebar-hold]'), '섹션을 옮겨도 비운 바 자리가 남아 있다').toHaveCount(0, { timeout: 5_000 });
+    expect(writes).toEqual([]);
+  });
+}
+
 // ── d) 펼친 레일 밖 + 칸: 첫 클릭은 닫기만 ─────────────────────────────────────────────────────
 test('1280 — d) 레일을 펼친 채 표의 빈 + 칸을 누르면 레일만 닫히고 결제창은 안 열린다', async ({ page }) => {
   test.setTimeout(120_000);
@@ -185,6 +248,61 @@ test('1280 — d) 레일을 펼친 채 표의 빈 + 칸을 누르면 레일만 �
   await page.mouse.click(p2!.x, p2!.y);
   await expect(page.locator('[role=dialog]:visible').first(), '레일이 닫힌 뒤 + 칸이 결제창을 못 연다').toBeVisible({ timeout: 5_000 });
   expect(writes).toEqual([]);
+});
+
+// ── d 후속) 터치 태블릿: 레일 펼친 채 표를 스와이프한 직후의 탭은 먹히지 않는다 ─────────────────────
+//   review-mystore-c1-1002 §2-d: 스와이프는 pointerdown 만 있고 click 이 없어서, '첫 클릭 삼키기' 리스너가 800ms 남아
+//   바로 다음 탭(+ 칸)을 먹었다(0/3 열림). Playwright tap 은 누름 0ms 라 CDP 터치로 실제 손가락 순서를 보낸다.
+test.describe(() => {
+  test.use({ hasTouch: true });
+  test('1280 터치 — d) 레일 펼친 채 표를 스와이프하면 레일만 닫히고, 바로 다음 탭은 결제창을 연다', async ({ page }) => {
+    test.setTimeout(120_000);
+    const { writes } = await boot(page, 1280, 800, { vouchers: true });
+    await railStep(page, '장부');
+    await expect(page.locator('[data-ledger-workspace="strip"]'), '접힌 띠 구간이 아니다(이 검사의 전제)').toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('[data-pane="ledger"] table').first()).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1200);
+    const aside = page.locator('aside[aria-label="매장이용권 실시간 내역"]');
+    const dlg = () => page.locator('[role=dialog]:visible').count();
+    const plusAt = () => page.evaluate(() => {
+      const a = document.querySelector('aside[aria-label="매장이용권 실시간 내역"]')?.getBoundingClientRect();
+      const c = [...document.querySelectorAll<HTMLElement>('[data-pane="ledger"] table button')].filter((b) => b.getClientRects().length && !(b as HTMLButtonElement).disabled && /^\+$/.test((b.textContent ?? '').trim()))
+        .map((b) => b.getBoundingClientRect()).find((r) => r.top > 80 && r.bottom < innerHeight - 160 && (!a || a.width === 0 || r.right < a.left - 4));
+      return c ? { x: c.left + c.width / 2, y: c.top + c.height / 2 } : null;
+    });
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    const tap = async (x: number, y: number) => { await touch('touchStart', x, y); await sleep(90); await touch('touchEnd'); };
+    const openRail = async () => { await page.locator('[data-voucher-strip]').first().evaluate((b) => (b as HTMLElement).click()); await expect(aside, '레일이 펼쳐지지 않았다').toBeVisible(); await page.waitForTimeout(400); };
+
+    // 대조(터치 탭): 레일 펼친 채 + 칸을 탭하면 레일만 닫히고 결제창은 안 열린다 — 마우스와 같은 '첫 탭은 닫기만'.
+    await openRail();
+    const p0 = await plusAt();
+    expect(p0, '레일 밖 빈 + 칸을 못 찾았다 — 빈 검사').not.toBeNull();
+    await tap(p0!.x, p0!.y);
+    await page.waitForTimeout(600);
+    await expect(aside, '탭으로 레일이 닫히지 않았다').toBeHidden();
+    expect(await dlg(), 'd) 레일을 닫는 탭이 결제창까지 열었다(관통)').toBe(0);
+
+    // 본 검사: 레일 펼친 채 표 위를 세로로 스와이프(click 이 생기지 않는 누름) → 250ms 뒤 + 칸 탭
+    await openRail();
+    const p = await plusAt();
+    expect(p, '스와이프할 표 위치를 못 찾았다 — 빈 검사').not.toBeNull();
+    await touch('touchStart', p!.x + 60, p!.y);
+    for (let i = 1; i <= 6; i++) { await touch('touchMove', p!.x + 60, p!.y - i * 25); await sleep(16); }
+    await touch('touchEnd');
+    await expect(aside, '스와이프로 레일이 닫히지 않았다(이 검사의 전제)').toBeHidden();
+    expect(await dlg(), '스와이프가 결제창을 열었다').toBe(0);
+    await sleep(250);
+    const q = await plusAt();
+    expect(q, '스와이프 뒤 + 칸을 못 찾았다 — 빈 검사').not.toBeNull();
+    await tap(q!.x, q!.y);
+    await page.waitForTimeout(600);
+    const n = await dlg();
+    console.log('[d 터치 1280] 스와이프 250ms 뒤 탭 → 결제창', n);
+    expect(n, 'd) 스와이프 직후 탭이 삼켜졌다(결제창이 안 열림)').toBeGreaterThan(0);
+    expect(writes).toEqual([]);
+  });
 });
 
 // ── e·D-3·D-4) PC 대시보드 ────────────────────────────────────────────────────────────────────
