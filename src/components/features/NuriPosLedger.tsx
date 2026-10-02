@@ -1,7 +1,7 @@
 // src/components/features/NuriPosLedger.tsx
 import { Fold } from '../atoms/Fold';
 import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
-import { useIsDesktop } from '../../lib/responsive';
+import { useIsDesktop, useIsMdUp } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
@@ -241,6 +241,16 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   // 0 = 할인 없음 고정, 1~5 = 그 프리셋 고정. 결제창·QR 승인이 모두 이 값을 기본으로 받는다.
   const [discPick, setDiscPick] = useState<number | null>(null);
   const [discHelp, setDiscHelp] = useState(false); // 할인 안내 ⓘ 펼침
+  // 1d(오너 2026-10-02) — 모바일(<768) 장부는 진입하면 **요약**이 기본이다: 게임 합계 + 손님별 한 줄. '편집' 을 누르면 지금의 체크 화면.
+  //   숫자는 새로 계산하지 않는다 — 합계는 정산바와 같은 stats, 손님 줄은 표의 '총바인·미수' 열과 같은 playerTotals·countOf 다.
+  //   판에 다시 들어올 때마다(active 상승) 요약으로 돌아간다. PC(≥768)는 종전 그대로(이 상태를 보지 않는다).
+  const isMdUpLedger = useIsMdUp();
+  const [mobileEdit, setMobileEdit] = useState(false);
+  const wasActiveForSummary = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveForSummary.current) { setMobileEdit(false); setQuery(''); }
+    wasActiveForSummary.current = active;
+  }, [active]);
   const [exOpen, setExOpen] = useState(false);     // 정산 제외 펼침(PC 는 접힘 줄·내용이 갈라져 있어 위로 올렸다)
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -537,14 +547,16 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     return () => { alive = false; };
   }, [venueId, date, gameSeq]); // eslint-disable-line react-hooks/exhaustive-deps -- bumpSessionReq 는 같은 세 값에서 파생
 
-  // 데일리 펍(하루 장부 10건+) — 게임을 고르지 않고 들어왔으면 그날 진행 중(마감 전)인 가장 나중 회차로 한 번 옮긴다. 진행 중이 없으면 그대로.
+  // 데일리 펍(하루 장부 10건+) — 게임을 고르지 않고 들어왔는데 지금 보드(기본 메인)가 **마감**이면 그날 진행 중(마감 전)인 가장 나중 회차로 한 번 옮긴다.
+  //   메인이 진행 중이면 그대로 둔다(메인+사이드 동시 운영 매장이 사이드에 서지 않게). 진행 중이 없으면 그대로.
   //   판이 이미 열려 있던(keep-alive) 재진입은 조회가 다시 안 나가므로 '이 장부를 다 받았는가'(sessionFor)와 시드로 판단한다.
   useEffect(() => {
     if (autoLandRef.current !== `${venueId}|${date}` || sessionFor !== `${venueId}|${date}|${gameSeq}`) return;
     autoLandRef.current = null;
     const live = games.filter((g) => !g.closed);
     const target = live.length > 0 ? live[live.length - 1].gameSeq : null;
-    if (target != null && target !== gameSeq) setGameSeq(target);
+    const curClosed = games.find((g) => g.gameSeq === gameSeq)?.closed ?? false;
+    if (curClosed && target != null && target !== gameSeq) setGameSeq(target);
   }, [seed, venueId, date, gameSeq, sessionFor, games]);
 
   // 영업일(오늘) 장부에서 보는 게임 → 셸에 알린다(문맥 줄 '매장 › 날짜 › 게임'·클락 시드·순위가 같은 게임). 게임 줄이 하나가 된 뒤(2026-10-02)
@@ -1880,6 +1892,51 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
         </div>
       )}
 
+      {/* 1d 모바일 요약 — 게임 합계 + 손님별 한 줄. 손님 줄을 누르면 그 손님만 걸러 편집 화면으로. */}
+      {!isMdUpLedger && !mobileEdit && (
+        <section data-ledger-summary="" aria-label="이 게임 장부 요약" className="space-y-2">
+          <div className="flex items-center gap-2 rounded-aura border card-aura px-3 py-2">
+            <dl className="grid min-w-0 flex-1 grid-cols-3 gap-2 text-center">
+              <div><dt className="text-2xs text-ink-muted">바인</dt><dd data-sum="buyins" className="text-sm font-bold tabular-nums text-ink-primary">{stats.totalBuyins.toLocaleString()}회</dd></div>
+              <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>
+              <div><dt className="text-2xs text-ink-muted">미수</dt><dd data-sum="unpaid" className={['text-sm font-bold tabular-nums', stats.unpaid + stats.addon.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{wonToMan(stats.unpaid + stats.addon.unpaid)}만</dd></div>
+            </dl>
+            {!closed && (
+              <button type="button" data-testid="ledger-edit-mode" onClick={() => setMobileEdit(true)}
+                className="btn-primary btn-sm shrink-0 px-3">편집</button>
+            )}
+          </div>
+          {rows.length === 0 ? (
+            <p className="py-6 text-center text-xs text-ink-muted">아직 손님이 없습니다{closed ? '' : ' — 편집에서 추가하세요'}.</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle rounded-card border border-border-default bg-surface-low">
+              {rows.map((r) => {
+                const tot = playerTotals(r.name);
+                return (
+                  <li key={r.name}>
+                    <button type="button" disabled={closed} onClick={() => { setQuery(r.name); setMobileEdit(true); }}
+                      className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left disabled:cursor-default">
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary" title={r.name}>{r.name}</span>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-secondary">바인 {countOf(r.name)}회</span>
+                      <span className="w-14 shrink-0 text-right text-xs font-bold tabular-nums text-ink-primary">{wonToMan(tot.value)}만</span>
+                      <span className={['w-14 shrink-0 text-right text-2xs tabular-nums', tot.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>
+                        {tot.unpaid > 0 ? `미수 ${wonToMan(tot.unpaid)}만` : '—'}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+      {!isMdUpLedger && mobileEdit && (
+        <button type="button" data-testid="ledger-summary-mode" onClick={() => { setMobileEdit(false); setQuery(''); }}
+          className="btn-ghost btn-sm tap-y-44 inline-flex items-center gap-1 px-3 text-xs font-bold">
+          <Icon name="chevron-left" size={13} className="shrink-0" />요약 보기
+        </button>
+      )}
+      {(isMdUpLedger || mobileEdit) && (<>
       {/* 검색 + 유저 추가 */}
       {!closed && (
         <div className="space-y-1.5">
@@ -2151,6 +2208,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           </table>
         </div>
       )}
+      </>)}
 
       {/* 정산 바 (고정) */}
       {/* 정산바 오프셋 = --tabbar-safe − 0.75rem (탭바에 딱 붙이는 의도적 파생값, TB1a) */}
@@ -2186,7 +2244,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
             <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
-              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · ${aliveLive != null ? '생존' : '생존(추정)'} ${aliveLive != null ? aliveLive : aliveEst}` : ''}`} />
+              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · 생존${aliveLive != null ? ` ${aliveLive}` : `≈${aliveEst}`}` : ''}`} />
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
@@ -2707,7 +2765,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
           <button key={g.gameSeq} type="button" aria-pressed={g.gameSeq === gameSeq} onClick={() => onSelect(g.gameSeq)} className={chip(g.gameSeq === gameSeq)}>
             <span className="max-w-48 truncate max-sm:max-w-28">{label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}</span>
             {/* '마감' 은 그 게임에 더 못 넣는다는 운영 상태 — 흐리지 않고 의미 토큰으로(셸 칩과 같은 규칙) */}
-            {g.closed && <span className="text-2xs font-semibold text-ink-secondary">마감</span>}
+            {g.closed ? <span className="text-2xs font-semibold text-ink-secondary">마감</span> : <span className="sr-only">진행 중</span>}
           </button>
         ))}
         {showPending && (

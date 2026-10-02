@@ -1028,8 +1028,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       {/* S-06 — 인증 등급은 대표 업주만, 숨김 안내는 이 매장을 다루는 모두에게(지금 고른 매장 기준). */}
       {/* 2026-10-02 감사 H-2 — 인증 등급 배너(62px)가 모든 메뉴 맨 위에 상시라 장부 첫 화면에 표가 0행이었다. 등급 배너는 대시보드 판 **안**으로
           옮겼다(여기 두고 대시보드에서만 그리면 단계 바가 요약↔포스터 사이에서 62px 오르내린다). '숨김 상태' 경고(S-06)는 포스터·장부
-          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다. */}
-      {venueId && <VenueVerificationCard venueId={venueId} part="hidden" />}
+          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다. 레일 밖 메뉴(설정·직원 등)는 단계 바가 없어 종전대로 등급 배너도 맨 위
+          (그 메뉴들의 판 이동 계약 e2e/subpanel-scroll-tear 가 판 줄 위 블록을 표지로 쓴다). */}
+      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner}
+        part={renderSection === 'dashboard' || renderSection === 'game' || renderSection === 'voucher' ? 'hidden' : 'all'} />}
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
