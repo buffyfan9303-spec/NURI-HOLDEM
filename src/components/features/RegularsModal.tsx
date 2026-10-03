@@ -14,8 +14,10 @@ import { useToast } from '../atoms/Toast';
 import { useVenueScope } from '../../lib/useVenueScope';
 import { msgOf } from '../../lib/dbError';
 
-export default function RegularsModal({ open, onClose, venueId, exclude = [], onSendVoucher }: {
+export default function RegularsModal({ open, onClose, venueId, exclude = [], onSendVoucher, money = true }: {
   open: boolean; onClose: () => void; venueId: string; exclude?: string[];
+  /** 금액을 보여도 되는가 = can_manage_pos. false(직원)면 손님 누적액·객단가·미수·이용권·가게지원 칸을 뺀다(오너 2026-10-03 Q3). */
+  money?: boolean;
   /**
    * '매장이용권 보내기' — **넘어오면 권한이 있다는 뜻**이다(호출부가 caps.voucher 로 게이트한다).
    * 왜 여기 필요한가: 이용권 보내기가 대시보드 '고객·단골' 카드의 **TOP 5 행에만** 있었다.
@@ -84,13 +86,13 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
               )}
             </div>
             <ul className="space-y-1.5">
-              {rows.map(({ r, rank }) => <RegularRow key={r.name} idx={rank} r={r} venueId={venueId} onSendVoucher={onSendVoucher} />)}
+              {rows.map(({ r, rank }) => <RegularRow key={r.name} idx={rank} r={r} venueId={venueId} onSendVoucher={onSendVoucher} money={money} />)}
             </ul>
           </>
         )}
         <div className="space-y-0.5 text-2xs leading-relaxed text-ink-muted">
           <p>장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
-          <p>완납 누적은 실제 수납된 참가비입니다(미수·이용권·가게지원 제외) · 통계와 같은 기준</p>
+          {money && <p>완납 누적은 실제 수납된 참가비입니다(미수·이용권·가게지원 제외) · 통계와 같은 기준</p>}
         </div>
       </div>
     </Modal>
@@ -100,7 +102,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
 // 행의 '이용권' 버튼과 열 머리의 보이지 않는 자리표가 **같은 클래스**를 써야 숫자 열이 머리와 맞는다(#2).
 const VOUCHER_BTN_CLS = 'mr-2 inline-flex min-h-10 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300';
 
-function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueRegular; venueId: string; onSendVoucher?: (name: string) => void }) {
+function RegularRow({ idx, r, venueId, onSendVoucher, money = true }: { idx: number; r: VenueRegular; venueId: string; onSendVoucher?: (name: string) => void; money?: boolean }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [act, setAct] = useState<CustomerActivity | null>(null);
@@ -120,7 +122,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   const run = useVenueScope(venueId);
   const loadAct = () => {
     setActError(null);
-    run('act', (v) => getCustomerActivity(v, r.name), (a) => { setAct(a); setActError(null); }, (e) => setActError(e));
+    run('act', (v) => getCustomerActivity(v, r.name, { money }), (a) => { setAct(a); setActError(null); }, (e) => setActError(e));
   };
   const loadCrm = () => {
     setCrmError(null);
@@ -215,19 +217,22 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
             // grid-cols-3 에 셀 9개라 실제는 3행인데 예전엔 2행으로 예약해 -55px 밀렸다(2026-09-20 실측,
             // 프로덕션 프리뷰 4273 에 합성 DOM 삽입·getBoundingClientRect: 실제 149.8125px vs 예전 예약 94.75px).
             // 2.6875rem = (149.8125 − 갭 2×0.375rem) ÷ 3행 — 실측값 역산.
-            <SkeletonList rows={3} rowClassName="h-10.75" />
+            <SkeletonList rows={money ? 3 : 2} rowClassName="h-10.75" />
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
               <Cell label="바인" v={`${act.buyins}회`} />
               <Cell label="방문" v={`${act.visits}회`} />
               <Cell label="머니인" v={`${act.moneyIn}회`} />
               <Cell label="예약" v={`${act.reservations}회`} />
-              {/* '누적'만 쓰면 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다 */}
-              <Cell label="완납 누적" v={`${wonToMan(act.amount)}만`} gold />
-              <Cell label="완납 객단가" v={act.buyins ? `${wonToMan(Math.round(act.amount / act.buyins))}만` : '-'} />
-              <Cell label="미수" v={`${wonToMan(act.unpaid)}만`} />
-              <Cell label="사용 이용권" v={`${Math.round(act.ticket * 10) / 10}T`} />
-              <Cell label="가게지원" v={`${act.support}회`} />
+              {/* '누적'만 쓰면 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다.
+                  직원(moneyHidden, 오너 Q3)은 금액 칸 자체가 없다 — 0만으로 그리지 않는다. */}
+              {!act.moneyHidden && <>
+                <Cell label="완납 누적" v={`${wonToMan(act.amount)}만`} gold />
+                <Cell label="완납 객단가" v={act.buyins ? `${wonToMan(Math.round(act.amount / act.buyins))}만` : '-'} />
+                <Cell label="미수" v={`${wonToMan(act.unpaid)}만`} />
+                <Cell label="사용 이용권" v={`${Math.round(act.ticket * 10) / 10}T`} />
+                <Cell label="가게지원" v={`${act.support}회`} />
+              </>}
             </div>
           )}
           <div className="mt-2 space-y-1.5 border-t border-border-subtle pt-2">

@@ -159,20 +159,12 @@ export async function getVenueReserverCounts(venueId: string): Promise<Record<st
 export interface VenueRegular { name: string; buyins: number; visits: number }
 export async function getVenueRegulars(venueId: string): Promise<VenueRegular[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('ledger_buyins').select('player_name, session_date').eq('venue_id', venueId);
-  const map = new Map<string, { buyins: number; dates: Set<string> }>();
+  // 20261003h(오너 Q3) — 서버 집계 RPC. 직원에게 바인 행은 영업일·미수 행만 보이므로(lb_select) 테이블을 직접 세면 단골이 오늘 손님뿐이 된다.
+  //   venue_regulars 는 금액 없이 이름·바인 횟수·방문일만 준다(정렬 = 바인 많은 순 → 방문 많은 순, 종전과 같다).
+  const { data, error } = await supabase.rpc('venue_regulars', { p_venue_id: venueId });
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (data ?? []).forEach((b: any) => {
-    const n = (b.player_name ?? '').trim();
-    if (!n) return;
-    const e = map.get(n) ?? { buyins: 0, dates: new Set<string>() };
-    e.buyins += 1;
-    if (b.session_date) e.dates.add(b.session_date);
-    map.set(n, e);
-  });
-  return [...map.entries()]
-    .map(([name, e]) => ({ name, buyins: e.buyins, visits: e.dates.size }))
-    .sort((a, b) => (b.buyins - a.buyins) || (b.visits - a.visits));
+  return ((data ?? []) as any[]).map((r) => ({ name: String(r.name ?? ''), buyins: Number(r.buyins) || 0, visits: Number(r.visits) || 0 }));
 }
 
 /** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약.
@@ -184,10 +176,31 @@ export interface CustomerActivity {
   amount: number;
   unpaid: number; ticket: number; support: number;
   moneyIn: number; reservations: number;
+  /** 직원 조회(매출 숨김) — 금액 칸(amount·unpaid·ticket·support)을 **그리지 않는다**(0 으로도 그리지 않는다). */
+  moneyHidden?: true;
 }
-export async function getCustomerActivity(venueId: string, name: string): Promise<CustomerActivity> {
+/** 입상 횟수 — venue_rankings 에는 name 칸이 없어 닉네임·실명 둘 다 맞춘다. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const moneyInOf = (rk: any[] | null, name: string) => {
+  const nameKey = name.trim().toLowerCase();
+  return (rk ?? []).filter(
+    (r) => String(r.nickname ?? '').trim().toLowerCase() === nameKey || String(r.real_name ?? '').trim().toLowerCase() === nameKey,
+  ).length;
+};
+/** opts.money=false — 직원(can_manage_pos 아님) 조회(오너 2026-10-03 Q3 '직원에게 매출 합계는 숨겨').
+ *  금액을 계산하지 않고, 횟수는 서버 집계(venue_regulars)로 받는다 — 직원에게 바인 행은 영업일·미수 행만 보여 직접 세면 틀린다. */
+export async function getCustomerActivity(venueId: string, name: string, opts: { money?: boolean } = {}): Promise<CustomerActivity> {
   const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, unpaid: 0, ticket: 0, support: 0, moneyIn: 0, reservations: 0 };
-  if (IS_MOCK) return base;
+  if (IS_MOCK) return opts.money === false ? { ...base, moneyHidden: true } : base;
+  if (opts.money === false) {
+    const [regs, { data: rk }, resCounts] = await Promise.all([
+      getVenueRegulars(venueId),
+      supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }),
+      getVenueReserverCounts(venueId),
+    ]);
+    const reg = regs.find((r) => r.name === name.trim());
+    return { ...base, buyins: reg?.buyins ?? 0, visits: reg?.visits ?? 0, moneyIn: moneyInOf(rk, name), reservations: resCounts[name] ?? 0, moneyHidden: true };
+  }
   // 금액 정본(buyinFinance 계열)은 여기서 처음 필요해진다 — 다른 조회와 함께 병렬로 받는다.
   const ledger = ledgerMod();
   // 1000행 절단 방지(F05) — 아래 ledger_sessions 조회는 **기간 필터가 아예 없다**(매장 전 영업일).
@@ -207,11 +220,7 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
     supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }),
     getVenueReserverCounts(venueId),
   ]);
-  const nameKey = name.trim().toLowerCase();
-  const moneyInCnt = (rk ?? []).filter(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (r: any) => String(r.nickname ?? '').trim().toLowerCase() === nameKey || String(r.real_name ?? '').trim().toLowerCase() === nameKey,
-  ).length;
+  const moneyInCnt = moneyInOf(rk, name);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (bs ?? []) as any[];
   const dates = new Set<string>();

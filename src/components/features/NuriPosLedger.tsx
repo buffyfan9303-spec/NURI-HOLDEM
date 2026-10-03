@@ -34,6 +34,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
   LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
 } from '../../api/ledger';
+import UnpaidCollectList, { unpaidItemsOf } from './UnpaidCollect';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
@@ -1873,7 +1874,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 같은 마감 메모('정산 제외: 관계자') 옆에 제외 전 숫자가 선다. 조건은 마감 모달의 제외 배너와 같다. */}
             {stats.removed.count > 0 ? <span className="text-danger-light">제외 적용 · </span>
               : session.closeMemo?.includes('정산 제외') ? <span className="text-ink-muted">제외 전 전체 기록 · </span> : null}
-            바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue + stats.addon.revenue)}만</b>
+            바인 <b className="text-ink-primary">{stats.totalBuyins}</b>
+            {/* 오너 2026-10-03 Q3 — 직원에게 마감 장부의 매출은 없다(지난 마감 장부는 서버가 미수 행만 준다 — 세면 틀린다). */}
+            {canManage && <> · 매출 <b data-testid="ledger-closed-revenue" className="text-ink-primary">{wonToMan(stats.revenue + stats.addon.revenue)}만</b></>}
             {stats.addon.count > 0 ? <> · 애드온 <b className="text-ink-primary">{stats.addon.count}</b></> : null}
             {stats.unpaid + stats.addon.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid + stats.addon.unpaid)}만</b></> : ' · 미수 없음'}
             {session.clockSnapshot && (() => {
@@ -1884,6 +1887,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 : <span className="text-emerald-400"> · 클락 대조 일치 ✓</span>;
             })()}
           </p>
+          {/* Q2(오너 2026-10-03) — 마감을 풀지 않고 미수를 받는다. 직원도 받되 취소 비밀번호(서버 settle_unpaid_after_close).
+              성공하면 이 장부를 직접 다시 읽는다 — 직원에게 지난 날짜 회수 행은 RLS 로 사라져 Realtime UPDATE 가 오지 않는다. */}
+          <UnpaidCollectList items={unpaidItemsOf(buyins, () => session)} hasPw={hasPw} canManage={canManage}
+            onDone={reload} onPwState={setHasPw} />
         </div>
       )}
 
@@ -1938,9 +1945,9 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             {stats.removed.count > 0 && <span className="text-danger-light"> · 제외 적용</span>}
           </p>
           <div className="flex items-center gap-2 rounded-aura border card-aura px-3 py-2">
-            <dl className="grid min-w-0 flex-1 grid-cols-3 gap-2 text-center">
+            <dl className={`grid min-w-0 flex-1 ${closed && !canManage ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-center`}>
               <div><dt className="text-2xs text-ink-muted">{exKeys.size > 0 ? '바인(제외 적용)' : '바인'}</dt><dd data-sum="buyins" className="text-sm font-bold tabular-nums text-ink-primary">{stats.totalBuyins.toLocaleString()}회</dd></div>
-              <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>
+              {!(closed && !canManage) && <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>}
               <div><dt className="text-2xs text-ink-muted">미수</dt><dd data-sum="unpaid" className={['text-sm font-bold tabular-nums', stats.unpaid + stats.addon.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{wonToMan(stats.unpaid + stats.addon.unpaid)}만</dd></div>
             </dl>
             {/* 3d — 마감 장부도 표(엔트리별 결제수단·얼리·할인·방문 유형·비고)를 볼 수 있어야 한다. 같은 표를 띄우되
@@ -2305,7 +2312,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             {/* T = 차감된 이용권 장수(2026-10-01) — 원(아래 대차표 tender.ticket)과 다를 수 있다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
             <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
-            <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
+            {!(closed && !canManage) && <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />}
             <Metric label="미수금" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone="danger" />
           </div>
           <div className="flex flex-col gap-1 shrink-0">

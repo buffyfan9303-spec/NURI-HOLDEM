@@ -260,13 +260,13 @@ export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConf
 // 'prize'(상금 합산 보드)는 2026-09-05 폐지 — 저장된 page_config 에 남아 있어도 화면이 걸러 낸다(데이터는 그대로).
 export type RankMetric = 'score' | 'moneyin_count' | 'moneyin_rate' | 'buyin_count' | 'visit_count';
 export const RANK_METRIC_LABEL: Record<RankMetric, string> = {
-  score: '매장 포인트', moneyin_count: '머니인 횟수', moneyin_rate: '머니인 비율',
+  score: '매장 포인트', moneyin_count: '입상 횟수', moneyin_rate: '입상 비율',
   buyin_count: '바인왕(참여)', visit_count: '출석왕(방문)',
 };
 export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   score: '등수 점수(설정 가능) + 수동 지급 포인트 합산',
   moneyin_count: '순위(입상) 등록 횟수',
-  moneyin_rate: '머니인 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
+  moneyin_rate: '입상 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
   buyin_count: '장부 바인 횟수 누적 · 가장 많이 참여한 플레이어',
   // 375px 에서 3줄(76.6px)로 접혔다 — 보드 설명은 한 줄이어야 카드 높이가 안 튄다(2026-09-17 실측).
   visit_count: 'QR 출석 누적 · 기록 없으면 장부 방문일 기준',

@@ -16,9 +16,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
-  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT,
+  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT, posHasPassword,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
+import UnpaidCollectList, { unpaidItemsOf } from './UnpaidCollect';
 import { businessDateOf } from '../../lib/businessDate';
 import { settlementReport, settlementReceipt, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 import { msgOf } from '../../lib/dbError';
@@ -29,11 +30,15 @@ const ent = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 
 /** 이용권 **장수** 표시(2026-10-01 Fable 판정 ①: T = 차감된 장수). 원에서 거꾸로 만들지 않는다 — 12만·N=10 게임 10장은 '12만 · 10장'. */
 const jang = (n: number) => `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })}장`;
 
-export default function LedgerSettlementPanel({ venueId, date, active = true }: {
+export default function LedgerSettlementPanel({ venueId, date, active = true, canManage = true }: {
   venueId: string;
   /** 정산할 날짜(YYYY-MM-DD). 없으면 오늘. */
   date?: string | null;
   active?: boolean;
+  /** can_manage_pos(업주·공동운영자·관리자). false(장부 권한 직원)면 매출 보고서 대신 **받을 미수 목록**만 —
+   *  오너 2026-10-03 Q3 '직원에게 매출 합계는 숨겨' + Q2 '마감 뒤 미수는 직원도 비밀번호로 받는다'.
+   *  서버(20261003h lb_select)도 직원에게 지난 날짜는 미수 행만 준다 — 그 행으로 매출을 그리면 작은 숫자가 정상처럼 보인다. */
+  canManage?: boolean;
 }) {
   const [day, setDay] = useState<string>(date ?? businessDateOf(venueId));   // B1 — 기본은 영업일
   // 부모(단계 바)가 다른 날짜를 실어 보내면 따라간다 — 사용자가 여기서 바꾼 날짜는 그대로 둔다.
@@ -67,6 +72,14 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
       .catch((e) => { if (reqKey.current === key) setErr(msgOf(e, '정산 자료를 불러오지 못했습니다')); });
   }, [venueId, day, key]);
   useEffect(() => { if (active) load(); }, [active, load]);
+  // 직원 판의 '미수 받기'는 비밀번호 칸을 낼지 알아야 한다(바인 취소와 같은 규칙). 실패하면 '있음'으로 두고 서버 문구가 고친다.
+  const [hasPw, setHasPw] = useState(true);
+  useEffect(() => {
+    if (!active || canManage || !venueId) return;
+    let live = true;
+    posHasPassword(venueId).then((v) => { if (live) setHasPw(v); }).catch(() => {});
+    return () => { live = false; };
+  }, [active, canManage, venueId]);
 
   const r: SettlementReport | null = useMemo(
     () => (data && data.key === key ? settlementReport(day, data.sessions, data.buyins, data.players) : null),
@@ -111,7 +124,17 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
         </div>
       )}
 
-      {!err && r && r.games.length > 0 && <Report r={r} />}
+      {!err && r && r.games.length > 0 && data && (canManage ? <Report r={r} /> : (
+        <div data-testid="settle-staff" className="space-y-3 rounded-aura border card-aura p-3">
+          <p className="text-xs text-ink-secondary">매출·결제 합계는 업주만 볼 수 있어요. 여기서는 <b className="text-ink-primary">받을 미수</b>만 보여 드려요.</p>
+          {(() => {
+            const items = unpaidItemsOf(data.buyins, (b) => data.sessions.find((s) => s.gameSeq === b.gameSeq));
+            return items.length === 0
+              ? <p className="py-4 text-center text-2xs text-ink-muted">이 날짜에 받을 미수가 없어요.</p>
+              : <UnpaidCollectList items={items} hasPw={hasPw} canManage={false} showGame onDone={load} onPwState={setHasPw} />;
+          })()}
+        </div>
+      ))}
     </section>
   );
 }

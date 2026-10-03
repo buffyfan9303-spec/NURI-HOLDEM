@@ -1,0 +1,295 @@
+// 오너 2026-10-03 Q2·Q3 화면 + settle-fix 검토 후속 ①~④ 회귀 게이트. 전부 목킹(운영 쓰기 0).
+//   Q2  마감된 장부의 미수는 직원도 받는다 — 비밀번호 필수(서버 settle_unpaid_after_close, 20261003h). 성공 뒤 장부를 직접 다시 읽는다.
+//   Q3  직원(can_manage_pos 거짓)에게 매출 칸 자체가 없다 — 대시보드 KPI·오늘 게임 표·정산 탭·마감 장부 띠. 0 으로도 그리지 않는다.
+//   후속(review-settle-fix-1003.md 비차단 1~4):
+//     ① 1280 미만에서 Tab 순서 = 화면 순서(CTA → 다음 줄 순위 칩)  ② 라이브 위젯 높이 기억은 오늘 것만
+//     ③ 할 일이 '미수 회수'면 빨간 미수 배너를 숨긴다  ④ '오늘 장부' 배지도 하루 정산 판정(daySettled)을 쓴다
+//   음성 대조: 수정 전 빌드(origin/main e5cd044c)에서 Q3·Q2·①~④ FAIL, 수정 빌드에서 PASS(보고서 참조).
+import { test, expect } from './_fixtures';
+import type { Page, Route } from '@playwright/test';
+import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+
+test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+
+type R = Record<string, unknown>;
+const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+const single = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
+const dayAgo = (n: number) => new Date(Date.parse(`${MOCK_DAY}T12:00:00+09:00`) - n * 86_400_000 + 9 * 3_600_000).toISOString().slice(0, 10);
+const SID = (i: number) => `99999999-9999-4999-8999-${String(i).padStart(12, '0')}`;
+const PW = '4826';
+
+const sess = (date: string, o: R = {}): R => ({
+  venue_id: MOCK_VENUE, session_date: date, game_seq: 1, title: '메인', buyin_amount: 30_000, card_amount: null, game_type: 'gtd',
+  target_entries: 20, max_entries: 0, is_addon: false, addon_stack: 0, discounts: [], early_double_min: 0, early_single_min: 0,
+  opened_at: `${date}T10:00:00+09:00`, operators: [], reg_closed: true, closed: true, closed_at: `${date}T22:00:00+09:00`,
+  schedule_id: null, tournament_start: null, voucher_issued: 0, created_at: `${date}T01:00:00Z`, clock_snapshot: null, ...o,
+});
+/** 현금 완납 n건. unpaid 를 주면 마지막 1건을 '미수 unpaid 원' 분납 행으로(현금 30000 − unpaid + 미수 unpaid). */
+const buys = (date: string, seq: number, n: number, unpaid = 0): R[] => Array.from({ length: n }, (_, i) => {
+  const last = unpaid > 0 && i === n - 1;
+  return {
+    id: `eeeeeeee-${String(seq).padStart(4, '0')}-4000-8000-${date.replace(/-/g, '')}${String(i).padStart(4, '0')}`, venue_id: MOCK_VENUE, session_date: date, game_seq: seq,
+    player_name: `손님${i}`, entry_no: 1, payment_method: 'cash', is_unpaid: last, buyin_at: `${date}T11:00:00+09:00`, is_split: last,
+    cash_amount: last ? 30_000 - unpaid : 30_000, card_amount: 0, transfer_amount: 0, ticket_count: 0, unpaid_amount: last ? unpaid : 0, discount_level: 0, discount_index: 0, early_override: null,
+  };
+});
+const schedRow = (id: string, date: string, title: string): R => ({
+  id, title, venue_id: MOCK_VENUE, pub_name: '테스트 홀덤펍', region: '서울', address: '서울 강남구 1', date, start_time: '19:00:00',
+  duration: '', format: 'tournament', guaranteed: 1_000_000, prize_pool: null, buy_in: { amount: 30_000 }, seats: 40, structure: null, description: '',
+  side_events: [], ranking_prizes: [], partners: [], promotions: [], payment_methods: [], rules: [], poster_url: null, poster_color: null, display_order: 1,
+  is_premium: false, premium_until: null, owner_id: '00000000-0000-4000-8000-0000000000ee', unread_qna_count: 0, approved: true, view_count: 0,
+});
+function pick(rows: R[], url: string) {
+  const q = new URL(url).searchParams;
+  let out = rows;
+  for (const k of ['venue_id', 'session_date', 'game_seq', 'closed', 'schedule_id']) {
+    for (const v of q.getAll(k)) {
+      if (v === 'not.is.null') { out = out.filter((r) => r[k] != null); continue; }
+      if (v === 'is.null') { out = out.filter((r) => r[k] == null); continue; }
+      const m = /^(eq|lt|lte|gt|gte)\.(.*)$/.exec(v); if (!m) continue;
+      const [, op, b] = m;
+      out = out.filter((r) => { const a = String(r[k]); return op === 'eq' ? a === b : op === 'lt' ? a < b : op === 'lte' ? a <= b : op === 'gt' ? a > b : a >= b; });
+    }
+  }
+  const lim = Number(q.get('limit') ?? 0);
+  return lim > 0 ? out.slice(0, lim) : out;
+}
+interface World { sessions: R[]; buyins: R[]; schedules?: R[]; clock?: unknown }
+const merge = (...ws: World[]): World => ({ sessions: ws.flatMap((w) => w.sessions), buyins: ws.flatMap((w) => w.buyins), schedules: ws.flatMap((w) => w.schedules ?? []), clock: ws.find((w) => w.clock)?.clock });
+const hist = (days: number, n = 15): World => {
+  const s: R[] = []; const b: R[] = [];
+  for (let i = 1; i <= days; i++) { s.push(sess(dayAgo(i))); b.push(...buys(dayAgo(i), 1, n)); }
+  return { sessions: s, buyins: b };
+};
+const today = (games: { seq: number; closed: boolean; unpaid?: number }[]): World => ({
+  sessions: games.map((g) => sess(MOCK_DAY, { game_seq: g.seq, title: g.seq === 1 ? '메인' : `사이드${g.seq - 1}`,
+    ...(g.closed ? {} : { closed: false, reg_closed: false, closed_at: null }) })),
+  buyins: games.flatMap((g) => buys(MOCK_DAY, g.seq, 4, g.unpaid ?? 0)),
+});
+const pend = (n: number): World => ({
+  sessions: Array.from({ length: n }, (_, i) => sess(dayAgo(1 + i * 2), { title: `밀린 메인${i + 1}`, schedule_id: SID(i) })),
+  buyins: [],
+  schedules: Array.from({ length: n }, (_, i) => schedRow(SID(i), dayAgo(1 + i * 2), `밀린 메인${i + 1}`)),
+});
+
+interface Probe { settleCalls: { pw: unknown; method: unknown; id: unknown }[]; buyinGets: number }
+/** staff=true 면 장부 권한 직원(can_manage_pos 거짓 · venue_staff). 서버 settle RPC 는 상태를 가진 가짜다(비밀번호 PW). */
+async function boot(page: Page, W: number, H: number, world: World, o: { staff?: boolean; hasPw?: boolean; delay?: number } = {}): Promise<Probe> {
+  const probe: Probe = { settleCalls: [], buyinGets: 0 };
+  const sorted = () => [...world.sessions].sort((a, b) => String(b.session_date).localeCompare(String(a.session_date)) || Number(a.game_seq) - Number(b.game_seq));
+  await bootOwner(page, {
+    viewport: { width: W, height: H }, goto: false, clock: world.clock,
+    ...(o.staff ? {
+      perms: { can_manage_pos: false, can_access_ledger: true, can_view_vouchers: false, can_manage_venue_staff: false, can_manage_venue_schedules: false },
+      profile: { role: 'venue_staff', name: '직원', nickname: '직원' },
+    } : {}),
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
+      await p.route(/\/rest\/v1\/rpc\/pos_has_password/, (r) => r.fulfill(json(o.hasPw !== false)));
+      await p.route(/\/rest\/v1\/rpc\/venue_regulars/, (r) => r.fulfill(json([])));
+      await p.route(/\/rest\/v1\/rpc\/ledger_dow_avg_buyins/, (r) => r.fulfill(json(null)));
+      await p.route(/\/rest\/v1\/rpc\/settle_unpaid_after_close/, async (r) => {
+        const b = JSON.parse(r.request().postData() || '{}');
+        probe.settleCalls.push({ pw: b.p_password, method: b.p_method, id: b.p_id });
+        if (b.p_password !== PW) return r.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: '42501', message: '비밀번호가 올바르지 않습니다 (4번 더 틀리면 10분 동안 잠깁니다)', details: null, hint: null }) });
+        const row = world.buyins.find((x) => x.id === b.p_id)!;
+        const won = Number(row.unpaid_amount);
+        Object.assign(row, { unpaid_amount: 0, is_unpaid: false, [`${b.p_method}_amount`]: Number(row[`${b.p_method}_amount`]) + won });
+        return r.fulfill(json({ id: b.p_id, buyin_won: won, addon_won: 0, method: b.p_method }));
+      });
+      const serve = (rows: () => R[], count = false) => async (r: Route) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        if (count) probe.buyinGets++;
+        if (o.delay) await new Promise((z) => setTimeout(z, o.delay));
+        const got = pick(rows(), r.request().url());
+        return r.fulfill(json(single(r) ? (got[0] ?? null) : got)).catch(() => {});
+      };
+      await p.route(/\/rest\/v1\/ledger_sessions\?/, serve(sorted));
+      await p.route(/\/rest\/v1\/ledger_buyins\?/, serve(() => world.buyins, true));
+      await p.route(/\/rest\/v1\/ledger_players\?/, serve(() => []));
+      await p.route(/\/rest\/v1\/schedules\?/, (r) => r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(single(r) ? (world.schedules?.[0] ?? null) : (world.schedules ?? []))));
+      await p.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([
+        { id: 'r1', venue_id: MOCK_VENUE, ranking_date: MOCK_DAY, position: 1, nickname: '손님0', real_name: null, prize: null, event_name: '메인' }])));
+    },
+  });
+  await page.addInitScript(() => { Date.prototype.getHours = function () { return 14; }; });   // '지금 할 일' 정오 분기 고정
+  return probe;
+}
+const dash = (page: Page) => page.locator('[data-pane="dashboard"]');
+const settledDash = (page: Page) => expect(dash(page).getByTestId('todo-cta')).toBeVisible({ timeout: 25_000 });
+const owedWorld = () => merge(hist(3), today([{ seq: 1, closed: true, unpaid: 20_000 }]));
+
+// ── Q3: 직원에게 매출 칸이 없다(양성 대조 = 업주는 그대로) ─────────────────────────────────────────────
+for (const staff of [true, false]) {
+  test(`Q3 1440 ${staff ? '직원' : '업주(양성)'} — 대시보드 완납 매출·머니인 가치 ${staff ? '칸 없음' : '보임'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, 1440, 900, owedWorld(), { staff });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    const grid = dash(page).getByTestId('dash-kpi-grid');
+    await expect(grid).toBeVisible();
+    const labels = (await grid.locator(':scope > span > span:first-child').allTextContents()).map((s) => s.trim());
+    console.log(`[Q3 ${staff ? 'staff' : 'owner'}] KPI 라벨=${JSON.stringify(labels)}`);
+    expect(labels.length, 'KPI 칸을 못 읽었다 — 빈 검사').toBeGreaterThanOrEqual(3);
+    expect(labels.includes('완납 매출'), '완납 매출 칸').toBe(!staff);
+    await expect(dash(page).locator('#today-games-h'), '오늘 게임 표(전제)').toBeVisible();
+    await expect(dash(page).locator('th', { hasText: '머니인 가치' })).toHaveCount(staff ? 0 : 1);
+    await expect(dash(page).locator('th', { hasText: '미수' }).first(), '미수 열은 직원에게도 남는다').toBeVisible();
+  });
+  test(`Q3 1440 ${staff ? '직원' : '업주(양성)'} — 정산 탭 ${staff ? '매출 KPI 없음 · 받을 미수 목록' : '매출 KPI 보임'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, 1440, 900, owedWorld(), { staff });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    await page.getByRole('tab', { name: /정산/ }).first().click();
+    const pane = page.locator('[data-pane="settle"]');
+    if (staff) {
+      await expect(pane.getByTestId('settle-staff'), '직원 정산 판').toBeVisible({ timeout: 15_000 });
+      await expect(pane.getByTestId('unpaid-collect-btn')).toHaveCount(1);
+    } else {
+      await expect(pane.getByTestId('kpi-revenue'), '업주 매출 KPI').toBeVisible({ timeout: 15_000 });
+    }
+    await expect(pane.getByTestId('kpi-revenue')).toHaveCount(staff ? 0 : 1);
+  });
+}
+
+// ── Q2: 마감된 장부의 미수 받기 — 비밀번호 없음(버튼 잠김)·틀림(서버 거절, 창 유지)·맞음(받음 → 직접 재조회) ─────────
+test('Q2 1440 직원 — 마감 장부 미수 받기: 비번 없음/틀림/맞음 · 성공 뒤 장부 재조회 · 마감 띠에 매출 없음', async ({ page }) => {
+  test.setTimeout(120_000);
+  const world = owedWorld();
+  const probe = await boot(page, 1440, 900, world, { staff: true });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await expect(dash(page).getByTestId('todo-cta')).toHaveText('미수 회수');
+  await dash(page).getByTestId('todo-cta').click();
+  const led = page.locator('[data-pane="ledger"]');
+  await expect(led.getByText('마감됨 (읽기전용)').first(), '마감 장부로 가지 않았다(전제)').toBeVisible({ timeout: 15_000 });
+  await expect(led.getByTestId('ledger-closed-revenue'), '직원에게 마감 장부 매출이 보인다').toHaveCount(0);
+  const list = led.getByTestId('unpaid-collect');
+  await expect(list, '받을 미수 목록이 없다').toBeVisible();
+  await list.getByTestId('unpaid-collect-btn').click();
+  const dlg = page.getByRole('dialog', { name: '미수 받기' });
+  await expect(dlg).toBeVisible();
+  const confirm = dlg.getByTestId('unpaid-collect-confirm');
+  await expect(confirm, '비밀번호 없이 확정할 수 있다').toBeDisabled();
+  await dlg.getByRole('radio', { name: '카드' }).click();
+  await dlg.getByTestId('unpaid-collect-pw').fill('0000');
+  await confirm.click();
+  await expect(dlg.getByRole('alert'), '틀린 비밀번호 문구').toContainText('비밀번호가 올바르지 않습니다');
+  await expect(dlg, '틀렸는데 창이 닫혔다').toBeVisible();
+  const before = probe.buyinGets;
+  await dlg.getByTestId('unpaid-collect-pw').fill(PW);
+  await confirm.click();
+  await expect(dlg, '맞는 비밀번호인데 창이 남았다').toBeHidden({ timeout: 10_000 });
+  await expect(led.getByTestId('unpaid-collect'), '받은 뒤에도 미수 목록이 남았다(재조회 안 됨)').toHaveCount(0, { timeout: 10_000 });
+  console.log(`[Q2] settle 호출=${JSON.stringify(probe.settleCalls)} · 장부 GET ${before}→${probe.buyinGets}`);
+  expect(probe.settleCalls.map((c) => c.pw)).toEqual(['0000', PW]);
+  expect(probe.settleCalls[1].method).toBe('card');
+  expect(probe.buyinGets, '성공 뒤 장부를 직접 다시 읽지 않았다').toBeGreaterThan(before);
+});
+test('Q2 1440 직원 · 비밀번호 미설정 매장 — 받을 수 없다는 안내 · 확정 잠김(서버 호출 0)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const probe = await boot(page, 1440, 900, owedWorld(), { staff: true, hasPw: false });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await page.getByRole('tab', { name: /정산/ }).first().click();
+  const pane = page.locator('[data-pane="settle"]');
+  await pane.getByTestId('unpaid-collect-btn').click({ timeout: 15_000 });
+  const dlg = page.getByRole('dialog', { name: '미수 받기' });
+  await expect(dlg.getByRole('note')).toContainText('업주·공동운영자만');
+  await expect(dlg.getByTestId('unpaid-collect-confirm')).toBeDisabled();
+  expect(probe.settleCalls.length).toBe(0);
+});
+
+// ── 후속 ① 1280 미만 Tab 순서 = 화면 순서(CTA → 다음 줄 순위 칩) ───────────────────────────────────────
+const W_PEND = merge(hist(13), pend(1), { sessions: [], buyins: [], schedules: [schedRow(SID(90), MOCK_DAY, '오늘 메인 포스터')] });
+test('① 1024 — CTA 다음 Tab 이 아래 줄 순위 칩(시각 순서와 같다)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, 1024, 768, W_PEND);
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  const rank = dash(page).getByTestId('todo-rank');
+  await expect(rank, '순위 칩(전제)').toBeVisible();
+  const cta = dash(page).getByTestId('todo-cta');
+  const [cb, rb] = [await cta.boundingBox(), await rank.boundingBox()];
+  expect(rb!.y, '1024 에서 칩이 CTA 아래 줄이 아니다(전제)').toBeGreaterThanOrEqual(cb!.y + cb!.height - 1);
+  await cta.focus();
+  await page.keyboard.press('Tab');
+  const inRank = await rank.evaluate((el) => el.contains(document.activeElement));
+  expect(inRank, 'CTA 다음 Tab 이 순위 칩이 아니다(DOM 순서가 화면 순서와 거꾸로)').toBe(true);
+});
+
+// ── 후속 ② 라이브 위젯 높이 기억 — 오늘 적은 것만 예약 ───────────────────────────────────────────────
+for (const [name, stored, expectRes] of [
+  ['날짜 없는 옛 기억(어제 저장분)', '175', false],
+  ['어제 날짜 기억', JSON.stringify({ h: 175, d: dayAgo(1) }), false],
+  ['오늘 날짜 기억(양성 대조 — 검출기가 산다)', JSON.stringify({ h: 175, d: MOCK_DAY }), true],
+] as const) {
+  test(`② 1440 ${name} — ${expectRes ? '오늘 적은 높이는 확인 중에 예약한다' : '클락 꺼진 아침 첫 방문에 빈 위젯 자리를 잡지 않는다'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.addInitScript(([k, v]) => {
+      try { localStorage.setItem(k, v); } catch { /* noop */ }
+      const w = window as unknown as { __res: number; __n: number }; w.__res = 0; w.__n = 0;
+      const tick = () => { w.__n++; if (document.querySelector('[data-testid="live-reserve"]')) w.__res++; requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    }, [`nuri:dash-live-h:${MOCK_VENUE}`, stored] as [string, string]);
+    await boot(page, 1440, 900, merge(hist(13), today([{ seq: 1, closed: true }])), { delay: 1500 });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    const m = await page.evaluate(() => { const w = window as unknown as { __res: number; __n: number }; return { __res: w.__res, __n: w.__n }; });
+    console.log(`[② ${name}] 예약 프레임 ${m.__res}/${m.__n}`);
+    expect(m.__n, '프레임을 못 봤다 — 빈 검사').toBeGreaterThan(10);
+    expect(m.__res > 0, '오늘 것이 아닌 높이로 자리를 잡았다').toBe(expectRes);
+  });
+}
+
+// ── 후속 ③ 할 일이 '미수 회수'면 빨간 미수 배너를 숨긴다 · 1280 설명이 잘리지 않는다 ─────────────────────────
+for (const W of [1280, 1440] as const) {
+  test(`③ ${W} — 할 일 '미수 회수'일 때 미수 배너 없음${W === 1280 ? ' · 설명 한 줄 안에 다 보임' : ''}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, W, 900, merge(hist(3), today([{ seq: 1, closed: true, unpaid: 80_000 }, { seq: 2, closed: true, unpaid: 30_000 }])));
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    await expect(dash(page).getByTestId('todo-cta')).toHaveText('미수 회수');
+    await expect(dash(page).getByTestId('unpaid-cta'), '같은 미수를 배너가 한 번 더 말한다').toHaveCount(0);
+    if (W === 1280) {
+      const clip = await dash(page).getByTestId('todo-card').locator('p').nth(1).evaluate((p) => ({ sw: p.scrollWidth, cw: p.clientWidth, sh: p.scrollHeight, ch: p.clientHeight }));
+      console.log(`[③ 1280] 설명 ${JSON.stringify(clip)}`);
+      expect(clip.cw, '빈 검사').toBeGreaterThan(50);
+      expect(clip.sh, '1280 에서 미수 설명이 잘린다').toBeLessThanOrEqual(clip.ch + 1);
+    }
+  });
+}
+test('③ 1440 양성 대조 — 할 일이 미수가 아니면(진행 중) 미수 배너는 그대로', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, 1440, 900, merge(hist(3), today([{ seq: 1, closed: false, unpaid: 20_000 }])));
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await expect(dash(page).getByTestId('todo-cta')).not.toHaveText('미수 회수');
+  await expect(dash(page).getByTestId('unpaid-cta')).toBeVisible();
+});
+
+// ── 후속 ④ '오늘 장부' 배지 — 하루 정산 판정(daySettled) ──────────────────────────────────────────────
+for (const [name, games, badge] of [
+  ['메인 마감 · 사이드 열림', [{ seq: 1, closed: true }, { seq: 2, closed: false }], '마감 · 열린 게임'],
+  ['전부 마감 · 미수 남음', [{ seq: 1, closed: true, unpaid: 30_000 }], '마감 · 미수'],
+  ['전부 마감 · 미수 0(양성)', [{ seq: 1, closed: true }], '정산 마감'],
+] as const) {
+  test(`④ 1440 ${name} — 배지 '${badge}'`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, 1440, 900, merge(hist(3), today(games.map((g) => ({ ...g })))));
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    const band = dash(page).locator('button', { hasText: '오늘 장부' }).first();
+    await expect(band.locator('span > span').nth(1)).toHaveText(badge);
+  });
+}

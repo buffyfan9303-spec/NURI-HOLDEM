@@ -1458,6 +1458,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
+                  canSeeMoney={manageOk}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
@@ -1485,7 +1486,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* 5단계 정산 — 그날 하루의 결산(게임 전부 합산 + 게임별 내역). 장부 하단 정산바는
                     '이 게임 하나를 닫는' 도구로 그대로 남는다. */}
                 {visited.includes('settle') && ledgerOk && box('settle',
-                  <LedgerSettlementPanelM venueId={venueId} date={settleDate}
+                  <LedgerSettlementPanelM venueId={venueId} date={settleDate} canManage={manageOk}
                     active={tabActive && renderSection === 'game' && renderGameStep === 'settle'} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은

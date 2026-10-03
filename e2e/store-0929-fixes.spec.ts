@@ -7,7 +7,7 @@
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/store-0929-fixes.spec.ts --project=mobile-chromium
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_DAY, MOCK_VENUE } from './_mockOwner';
+import { bootOwner, openMyStore, regularsOf, MOCK_DAY, MOCK_VENUE } from './_mockOwner';
 
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -41,6 +41,7 @@ async function boot(page: Page, o: Opts) {
       await p.route(/\/rest\/v1\/rpc\/get_my_venue_invites/, (r) => late(r, inviteRows));
       await p.route(/\/rest\/v1\/rpc\/(get_ledger_access_user_ids|get_voucher_viewer_ids|get_schedule_manager_ids)/, (r) => late(r, []));
       await p.route(/\/rest\/v1\/rpc\/pos_has_password/, (r) => r.fulfill(json(false)));
+      await p.route(/\/rest\/v1\/rpc\/venue_regulars/, (r) => late(r, regularsOf(regRows)));
       await p.route(/\/rest\/v1\/dealer_shifts\?/, (r) => (r.request().method() === 'GET' ? late(r, dealerRows) : r.fallback()));
       await p.route(/\/rest\/v1\/ledger_sessions\?/, (r) => {
         if (r.request().method() !== 'GET') return r.fallback();
