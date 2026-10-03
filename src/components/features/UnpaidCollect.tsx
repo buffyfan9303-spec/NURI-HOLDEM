@@ -4,7 +4,7 @@
 // 장부(마감 띠)와 정산 탭(직원 판)이 같이 쓴다 — 미수 판정·금액·비밀번호·오류 처리를 한 벌로.
 // 서버 settle_unpaid_after_close(20261003h)가 정본이다: 마감 그대로 · 결제 수단만 바꿈 · 총액 불변 검사 · 감사 기록.
 // 비밀번호 규칙은 바인 취소와 같다 — 설정 매장은 업주도 넣고, 미설정 매장은 업주·공동운영자만 비밀번호 없이(직원은 불가).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import {
@@ -29,8 +29,10 @@ export function unpaidItemsOf(buyins: readonly LedgerBuyin[], sessionOf: (b: Led
 
 const METHODS: { v: SettleMethod; label: string }[] = [{ v: 'cash', label: '현금' }, { v: 'card', label: '카드' }, { v: 'transfer', label: '이체' }];
 
-export default function UnpaidCollectList({ items, hasPw, canManage, showGame = false, onDone, onPwState }: {
+export default function UnpaidCollectList({ items, hasPw, canManage, showGame = false, onDone, onPwState, emptyText }: {
   items: UnpaidItem[];
+  /** 받을 미수가 처음부터 없을 때 보일 문구(없으면 아무것도 그리지 않는다). */
+  emptyText?: string;
   /** 매장에 취소 비밀번호가 설정됐는가(posHasPassword). */
   hasPw: boolean;
   /** can_manage_pos — 미설정 매장에서 비밀번호 없이 받을 수 있는가. */
@@ -49,7 +51,21 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  if (items.length === 0) return null;
+  // 키보드(design-reviewer 2026-10-03 비차단 2) — 창의 첫 포커스는 비밀번호 칸(없으면 첫 선택). Modal 의 공용 첫 포커스(50ms, 헤더 '닫기')
+  //   뒤에 옮긴다. 성공하면 창을 연 버튼이 목록과 함께 사라지므로 목록 머리로 돌려준다(BODY 로 떨어지지 않게).
+  const formRef = useRef<HTMLFormElement>(null);
+  const headRef = useRef<HTMLParagraphElement>(null);
+  const [done, setDone] = useState(false);
+  const tid = target?.b.id;
+  useEffect(() => {
+    if (!tid) return;
+    const t = window.setTimeout(() => {
+      const f = formRef.current;
+      (f?.querySelector<HTMLElement>('[data-first-focus]') ?? f?.querySelector<HTMLElement>('[role="radio"]'))?.focus({ preventScroll: true });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [tid]);
+  if (items.length === 0 && !done) return emptyText ? <p className="py-4 text-center text-2xs text-ink-muted">{emptyText}</p> : null;
   const open = (it: UnpaidItem) => { setTarget(it); setMethod('cash'); setPart('all'); setPw(''); setErr(''); };
   const both = !!target && target.buyinWon > 0 && target.addonWon > 0;
   const won = !target ? 0 : part === 'buyin' ? target.buyinWon : part === 'addon' ? target.addonWon : target.buyinWon + target.addonWon;
@@ -61,8 +77,10 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
     try {
       await settleUnpaidAfterClose(target.b.id, method, noPwOk ? null : pw, both ? part : 'all');
       toast.show(`${target.b.playerName} 미수 ${wonToMan(won)}만원 받음 · ${METHODS.find((m) => m.v === method)?.label}`, 'success');
+      setDone(true);
       setTarget(null);
       onDone();
+      window.setTimeout(() => headRef.current?.focus({ preventScroll: true }), 200);
     } catch (e) {
       const text = ledgerErrorText(e, '미수를 받지 못했습니다');
       const st = cancelPwStateFromError(text);
@@ -73,8 +91,10 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
   };
   return (
     <div data-testid="unpaid-collect" className="space-y-1.5">
-      <p className="text-2xs font-bold text-danger-light">받을 미수 {items.length}건</p>
-      <ul className="divide-y divide-border-subtle rounded-input border border-danger/30 bg-danger/5">
+      <p ref={headRef} tabIndex={-1} data-testid="unpaid-collect-head" className={`text-2xs font-bold outline-none ${items.length ? 'text-danger-light' : 'text-emerald-400'}`}>
+        {items.length ? `받을 미수 ${items.length}건` : '받을 미수를 모두 받았어요'}
+      </p>
+      {items.length > 0 && <ul className="divide-y divide-border-subtle rounded-input border border-danger/30 bg-danger/5">
         {items.map((it) => (
           <li key={it.b.id} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
             <span className="min-w-0 flex-1 truncate text-ink-primary">
@@ -87,10 +107,10 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
               className="btn-ghost tap-y-44 shrink-0 px-2.5 text-2xs font-bold text-accent-300">미수 받기</button>
           </li>
         ))}
-      </ul>
+      </ul>}
       <Modal open={!!target} onClose={() => !busy && setTarget(null)} title="미수 받기" variant="center" maxWidth="sm">
         {target && (
-          <div className="space-y-3 p-1">
+          <form ref={formRef} onSubmit={(e) => { e.preventDefault(); if (!(busy || blocked || (!noPwOk && !pw))) void submit(); }} className="space-y-3 p-4">
             <p className="text-sm text-ink-primary"><b>{target.b.playerName}</b> · {ledgerGameLabel(target.b.gameSeq)} · <b className="tabular-nums text-danger-light">{wonToMan(won)}만원</b></p>
             {both && (
               <div role="radiogroup" aria-label="받을 항목" className="flex gap-1.5">
@@ -112,16 +132,16 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
               <p className="text-2xs text-ink-muted">취소 비밀번호가 설정되지 않은 매장이라 비밀번호 없이 받습니다.</p>
             ) : (
               <input type="password" inputMode="numeric" autoComplete="off" value={pw} onChange={(e) => setPw(e.target.value)}
-                placeholder="취소 비밀번호" aria-label="취소 비밀번호" data-testid="unpaid-collect-pw" className="input w-full text-sm" autoFocus />
+                placeholder="취소 비밀번호" aria-label="취소 비밀번호" data-testid="unpaid-collect-pw" data-first-focus className="input min-h-[44px] w-full text-sm" />
             )}
             {err && <p role="alert" className="text-2xs text-danger-light">{err}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setTarget(null)} disabled={busy} className="btn-ghost flex-1 text-xs">닫기</button>
-              <button type="button" data-testid="unpaid-collect-confirm" onClick={submit} disabled={busy || blocked || (!noPwOk && !pw)}
-                className="btn-primary flex-1 text-xs disabled:opacity-50">{busy ? '처리 중…' : '받음으로 기록'}</button>
+              <button type="button" onClick={() => setTarget(null)} disabled={busy} className="btn-ghost min-h-[44px] flex-1 text-xs">닫기</button>
+              <button type="submit" data-testid="unpaid-collect-confirm" disabled={busy || blocked || (!noPwOk && !pw)}
+                className="btn-primary min-h-[44px] flex-1 text-xs disabled:opacity-50">{busy ? '처리 중…' : '받음으로 기록'}</button>
             </div>
             <p className="text-2xs text-ink-muted">마감은 그대로이고 결제 수단만 바뀝니다. 누가 언제 받았는지 기록이 남습니다.</p>
-          </div>
+          </form>
         )}
       </Modal>
     </div>

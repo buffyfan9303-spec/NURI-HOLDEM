@@ -554,10 +554,10 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
       {showCustomer && (
         <div className="border-t border-border-subtle px-2.5 py-2">
           {!act ? <p className="text-2xs text-ink-muted text-center py-1">불러오는 중…</p> : (
-            <div className="grid grid-cols-3 gap-1.5 text-center">
+            <div className={`grid ${act.moneyHidden ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5 text-center`}>
               <Cell label="바인" value={`${act.buyins}회`} />
               <Cell label="방문" value={`${act.visits}회`} />
-              <Cell label="머니인" value={`${act.moneyIn}회`} />
+              <Cell label="입상" value={`${act.moneyIn}회`} />
               <Cell label="예약" value={`${act.reservations}회`} />
               {/* '누적금액'만으론 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다.
                   직원 조회(moneyHidden, 오너 Q3)는 금액 칸 자체를 뺀다 — 0 으로 그리면 '안 낸 손님'으로 읽힌다. */}

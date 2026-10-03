@@ -1,6 +1,6 @@
 -- 20261003h — 마감 뒤 미수 회수(Q2) · 직원 매출 합계 서버 차단(Q3)
--- ⏳ 적용 전 — 리드 적용 예정(화면 PR 병합 직전). 라이브 미적용. (store-team 2026-10-03 v2, critical-reviewer F1·F2 반영)
--- 리허설: Documents\누리홀덤_영상분석_0930\settle-auth-1003 — node rehearse.mjs R0_helpers_baseline.sql <이 파일> R1_tests.sql → REHEARSAL_OK(56항목), 음성 변형 8종 전부 실패 확인.
+-- ⏳ 적용 전 — 리드 적용 예정(화면 PR 병합 직전). 라이브 미적용. (store-team 2026-10-03 v3, critical-reviewer F1·F2 · verifier 반영)
+-- 리허설: Documents\누리홀덤_영상분석_0930\settle-auth-1003 — node rehearse.mjs R0_helpers_baseline.sql <이 파일> R1_tests.sql → REHEARSAL_OK(55항목), 음성 변형 8종 전부 실패 확인.
 -- 요구: 오너 2026-10-03
 --   Q2 "게임이 완전히 마감된 뒤의 손님 미수는 직원도 받을 수 있지만 비밀번호를 입력해야 한다."
 --   Q3 "직원에게 매출 합계는 숨겨." (서버까지)
@@ -9,8 +9,9 @@
 -- 새로 만드는 것만 있다 — 기존 함수 본문은 건드리지 않는다(라이브 정의가 정본: pg_get_functiondef 패치 불필요).
 --   A. settle_unpaid_after_close(p_id, p_method, p_password, p_part)   — 신규 RPC
 --   B. ledger_buyins 정책 lb_select 교체                                 — 직원 행 범위 축소
---   C. ledger_buyin_counts(p_venue_id, p_from, p_to) · ledger_dow_avg_buyins(p_venue_id) · venue_regulars(p_venue_id) — 신규 읽기 RPC(금액 없음)
+--   C. ledger_dow_avg_buyins(p_venue_id) · venue_regulars(p_venue_id) — 신규 읽기 RPC(금액 없음)
 --   개정 2026-10-03 오후: critical-reviewer F1(정책 to authenticated · SELECT 정책 1개 단언) · F2 리드 결정(직원 횟수 응답 축소) · 애드온 오류 문구
+--   v3 2026-10-03 저녁: 직원 범위에 '마감 18시간 이내 게임' 추가(자정 넘겨 마감한 게임의 순위 입력 등) · ledger_buyin_counts 삭제(화면 호출부 0 — verifier)
 --
 -- 비밀번호 규칙은 기존 _ledger_require_cancel_auth 를 그대로 부른다(20260925e/f D4 — 취소·감액·플레이어 삭제와 한 규칙):
 --   관리자 통과 · 비밀번호 미설정 매장은 can_manage_pos(업주·승인 공동운영자)만 비밀번호 없이 · 설정 매장은 업주 포함 누구나 비밀번호.
@@ -18,7 +19,7 @@
 --   5회 오입력 10분 잠금도 같은 카운터를 쓴다.
 --
 -- 적용 전 확인(쓰기 없음):
---   select count(*) from pg_proc where proname in ('settle_unpaid_after_close','ledger_buyin_counts','venue_regulars')
+--   select count(*) from pg_proc where proname in ('settle_unpaid_after_close','ledger_dow_avg_buyins','venue_regulars')
 --     and pronamespace = 'public'::regnamespace;                                   -- 기대 0
 --   select qual from pg_policies where tablename='ledger_buyins' and policyname='lb_select';  -- 기대 'can_access_ledger(venue_id)'
 
@@ -134,7 +135,8 @@ grant execute on function public.settle_unpaid_after_close(uuid, text, text, tex
 -- B. 직원(장부 권한만)이 읽을 수 있는 바인 행을 좁힌다
 --    업주·공동운영자·관리자(can_manage_pos)는 그대로 전부.
 --    직원은 ① 영업일(ledger_business_date — 자정 넘긴 미마감 게임이면 어제) 이후 행
---          ② 아직 마감 안 된 게임의 행(묵은 미마감 게임에서 계속 기록할 수 있게 — 마감하면 사라진다)
+--          ② 아직 마감 안 된 게임 · **마감 18시간 이내 게임**의 행(묵은 미마감 게임에서 계속 기록할 수 있게.
+--             v3: 자정 넘겨 마감한 게임을 그 영업 마무리(순위 입력 등) 동안 계속 본다 — 그날 밤 직원이 직접 입력한 행이라 새 노출이 아니다)
 --          ③ 미수가 남은 행(마감 뒤 회수 — Q2)
 --    한계: ①은 오늘 행이라 직원이 더하면 오늘 합계는 계산된다(장부 작업에 필요한 행이라 서버로 못 막는다).
 --    to authenticated (critical F1): anon 은 ledger_business_date·ledger_is_closed 실행권이 없어 정책이 anon 에 걸리면
@@ -148,35 +150,20 @@ create policy lb_select on public.ledger_buyins for select to authenticated usin
        and ( coalesce(is_unpaid, false) or coalesce(unpaid_amount, 0) > 0 or coalesce(addon_unpaid, false)
              or session_date >= (now() at time zone 'Asia/Seoul')::date
              or session_date >= public.ledger_business_date(venue_id)
-             or not public.ledger_is_closed(venue_id, session_date, game_seq) ) )
+             or exists (select 1 from public.ledger_sessions s
+                         where s.venue_id = ledger_buyins.venue_id and s.session_date = ledger_buyins.session_date
+                           and s.game_seq = ledger_buyins.game_seq
+                           and (not s.closed or s.closed_at > now() - interval '18 hours')) ) )
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- C. 금액 없는 집계 — B 때문에 직원 화면에서 사라질 기능을 보존한다.
 --    리드 결정(F2, 2026-10-03): 직원이 '지난 날짜 바인 수 × 단가'로 날짜별 매출을 복원하지 못하게 직원 응답을 좁힌다.
---    · ledger_buyin_counts: 업주·공동운영자·관리자(can_manage_pos)는 날짜·게임별 전부(포스터 바인 수·업주 대시보드).
---                           직원은 lb_select 와 같은 범위(영업일 이후 · 미마감 게임)만. 지난 포스터 바인 수는 직원에게 숨김.
+--    · (v3) 날짜·게임별 횟수 RPC(ledger_buyin_counts)는 뺐다 — 화면 호출부가 없었다(권한 표면만 늘림). 지난 포스터 바인 수는 직원에게 숨긴다(화면).
 --    · ledger_dow_avg_buyins: 요일 평소 엔트리(StoreDashboard 위젯)용 — 같은 요일 지난 3주(오늘 제외 — 화면 last28 창의 같은 요일과 같다) 중 기록 있는 날의
 --                           바인 횟수 평균(반올림)만. 창 고정(인자 없음 — 창을 바꿔 부르는 차분으로 날짜별 값이 새지 않게),
 --                           기록 있는 날이 2일 미만이면 null(1일이면 평균 = 그날 정확한 횟수라).
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.ledger_buyin_counts(p_venue_id uuid, p_from date, p_to date)
- returns table(session_date date, game_seq smallint, buyins bigint)
- language sql stable security definer
- set search_path = public, pg_temp
-as $function$
-  select b.session_date, b.game_seq, count(*)::bigint
-    from public.ledger_buyins b
-   where b.venue_id = p_venue_id and b.session_date between p_from and p_to
-     and coalesce(public.can_access_ledger(p_venue_id), false)
-     and ( coalesce(public.can_manage_pos(p_venue_id), false)
-           or b.session_date >= public.ledger_business_date(p_venue_id)
-           or not public.ledger_is_closed(p_venue_id, b.session_date, b.game_seq) )
-   group by 1, 2 order by 1, 2
-$function$;
-revoke all on function public.ledger_buyin_counts(uuid, date, date) from public, anon;
-grant execute on function public.ledger_buyin_counts(uuid, date, date) to authenticated, service_role;
-
 create or replace function public.ledger_dow_avg_buyins(p_venue_id uuid)
  returns integer
  language sql stable security definer
@@ -220,7 +207,7 @@ begin
     select p.oid, p.proname, p.prosecdef, p.proconfig
       from pg_proc p
      where p.pronamespace = 'public'::regnamespace
-       and p.proname in ('settle_unpaid_after_close', 'ledger_buyin_counts', 'ledger_dow_avg_buyins', 'venue_regulars')
+       and p.proname in ('settle_unpaid_after_close', 'ledger_dow_avg_buyins', 'venue_regulars')
   loop
     if not f.prosecdef then raise exception '20261003h: % 가 SECURITY DEFINER 가 아니다', f.proname; end if;
     if not (f.proconfig @> array['search_path=public, pg_temp']) then raise exception '20261003h: % search_path 미고정', f.proname; end if;
@@ -228,8 +215,8 @@ begin
     if not has_function_privilege('authenticated', f.oid, 'execute') then raise exception '20261003h: % 를 authenticated 가 실행할 수 없다', f.proname; end if;
   end loop;
   if (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
-        and proname in ('settle_unpaid_after_close', 'ledger_buyin_counts', 'ledger_dow_avg_buyins', 'venue_regulars')) <> 4 then
-    raise exception '20261003h: 새 함수 4개가 아니다';
+        and proname in ('settle_unpaid_after_close', 'ledger_dow_avg_buyins', 'venue_regulars')) <> 3 then
+    raise exception '20261003h: 새 함수 3개가 아니다';
   end if;
   -- 허용 정책은 OR 로 묶인다 — SELECT 를 허용하는 정책이 하나라도 더 붙으면 범위가 조용히 다시 열린다(critical F1-2).
   if (select count(*) from pg_policy where polrelid = 'public.ledger_buyins'::regclass
@@ -243,6 +230,12 @@ begin
   end if;
   select pg_get_expr(polqual, polrelid) into q from pg_policy
    where polrelid = 'public.ledger_buyins'::regclass and polname = 'lb_select';
+  if to_regprocedure('public.ledger_buyin_counts(uuid,date,date)') is not null then
+    raise exception '20261003h: ledger_buyin_counts 가 남아 있다(v3 에서 뺐다)';
+  end if;
+  if q is null or position('18:00:00' in q) = 0 and position('18 hours' in q) = 0 then
+    raise exception '20261003h: lb_select 에 마감 18시간 창이 없다: %', q;
+  end if;
   if q is null or position('can_manage_pos' in q) = 0 or position('ledger_business_date' in q) = 0 or position('unpaid_amount' in q) = 0 then
     raise exception '20261003h: lb_select 정책이 예상과 다르다: %', q;
   end if;

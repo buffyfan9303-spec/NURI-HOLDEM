@@ -238,13 +238,17 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     // 오너 2026-10-03 Q3 · 리드 F2 — 직원(can_manage_pos 아님)은 날짜별 횟수를 받지 않는다(횟수 × 단가 = 그날 매출).
     //   서버가 평균 하나만 준다(ledger_dow_avg_buyins). 주차별 막대는 업주만 — 직원 위젯은 '오늘 vs 평소' 한 줄.
     //   (직원에게 바인 행은 영업일·미수 행만 보이므로 아래 28일 range 로 세면 평소가 0 에 가깝게 틀린다.)
+    // verifier 2026-10-03 경고 2 — 권한 확인 중(caps.manage 거짓)에 나간 평균 응답이 업주 경로(주차별 막대)보다 늦게 오면
+    //   같은 owner 키라 ownerOnly 가 못 거르고 weeks 를 [] 로 덮었다. 권한이 바뀌면 앞 갈래 응답은 버린다.
+    let alive = true;
     if (!caps.manage) {
-      getDowAvgBuyins(venueId).then(ownerOnly(owner, (avg: number | null) => setDowStats({ avg, weeks: [] }))).catch(() => {});
-      return;
+      getDowAvgBuyins(venueId).then(ownerOnly(owner, (avg: number | null) => { if (alive) setDowStats({ avg, weeks: [] }); })).catch(() => {});
+      return () => { alive = false; };
     }
     const d28 = last28();
     const todayDow = new Date(d + 'T00:00:00').getDay();
     getLedgerRange(venueId, d28[0], d28[27]).then(ownerOnly(owner, ({ sessions, buyins: bs }: Awaited<ReturnType<typeof getLedgerRange>>) => {
+      if (!alive) return;
       // ⚠ 세션은 (날짜 + 게임)이 키다. 날짜만으로 매핑하면 사이드 게임이 있는 날
       //   메인 바인이 사이드 단가로 계산돼 엔트리·매출이 통째로 틀어진다(통계 화면과 값이 갈림).
       const byGame = new Map<string, LedgerSession>();
@@ -266,6 +270,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
       setDowStats({ avg, weeks });
     })).catch(() => {});
+    return () => { alive = false; };
   }, [venueId, d, caps.ledger, caps.manage]);
   // 결제수단 기본값 학습 — 매장이 자주 쓰는 결제수단을 팝오버 첫 버튼으로(localStorage 카운트 기반)
   useEffect(() => {
@@ -1754,7 +1759,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <>
               {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
                   오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {/* 직원은 '7일 사용' 칸이 없다(아래) — 3칸을 한 줄로. */}
+              <div className={`grid ${caps.manage ? 'grid-cols-2' : 'grid-cols-3'} gap-x-3 gap-y-2`}>
                 {/* 2026-09-18 오너 결정: "이용권은 T 단위로" — 발행도 T 로 맞춘다.
                     이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
                     ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
@@ -1763,7 +1769,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
-                <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
+                {/* verifier 2026-10-03 — 7일 사용 T 는 14일 장부 행에서 센다. 직원(can_manage_pos 아님)에게는 지난 날의 바인 행이 미수 행만 와서(20261003h)
+                    작은 숫자가 정상처럼 보였다 → 직원에게는 칸을 뺀다(이용권 전송 수·오늘 사용은 온전한 원천이라 남긴다). */}
+                {caps.manage && <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />}
                 {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
                 <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
               </div>

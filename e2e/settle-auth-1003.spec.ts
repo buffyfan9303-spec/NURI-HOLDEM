@@ -74,15 +74,16 @@ const pend = (n: number): World => ({
 
 interface Probe { settleCalls: { pw: unknown; method: unknown; id: unknown }[]; buyinGets: number }
 /** staff=true 면 장부 권한 직원(can_manage_pos 거짓 · venue_staff). 서버 settle RPC 는 상태를 가진 가짜다(비밀번호 PW). */
-async function boot(page: Page, W: number, H: number, world: World, o: { staff?: boolean; hasPw?: boolean; delay?: number } = {}): Promise<Probe> {
+async function boot(page: Page, W: number, H: number, world: World, o: { staff?: boolean; hasPw?: boolean; delay?: number; players?: R[]; voucher?: boolean } = {}): Promise<Probe> {
   const probe: Probe = { settleCalls: [], buyinGets: 0 };
   const sorted = () => [...world.sessions].sort((a, b) => String(b.session_date).localeCompare(String(a.session_date)) || Number(a.game_seq) - Number(b.game_seq));
   await bootOwner(page, {
     viewport: { width: W, height: H }, goto: false, clock: world.clock,
     ...(o.staff ? {
-      perms: { can_manage_pos: false, can_access_ledger: true, can_view_vouchers: false, can_manage_venue_staff: false, can_manage_venue_schedules: false },
+      perms: { can_manage_pos: false, can_access_ledger: true, can_view_vouchers: !!o.voucher, can_manage_venue_staff: false, can_manage_venue_schedules: false },
       profile: { role: 'venue_staff', name: '직원', nickname: '직원' },
     } : {}),
+    ...(o.voucher ? { appSettings: { identity_voucher_enabled: 'on' } } : {}),
     extra: async (p) => {
       await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
       await p.route(/\/rest\/v1\/rpc\/pos_has_password/, (r) => r.fulfill(json(o.hasPw !== false)));
@@ -106,7 +107,7 @@ async function boot(page: Page, W: number, H: number, world: World, o: { staff?:
       };
       await p.route(/\/rest\/v1\/ledger_sessions\?/, serve(sorted));
       await p.route(/\/rest\/v1\/ledger_buyins\?/, serve(() => world.buyins, true));
-      await p.route(/\/rest\/v1\/ledger_players\?/, serve(() => []));
+      await p.route(/\/rest\/v1\/ledger_players\?/, serve(() => o.players ?? []));
       await p.route(/\/rest\/v1\/schedules\?/, (r) => r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(single(r) ? (world.schedules?.[0] ?? null) : (world.schedules ?? []))));
       await p.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([
         { id: 'r1', venue_id: MOCK_VENUE, ranking_date: MOCK_DAY, position: 1, nickname: '손님0', real_name: null, prize: null, event_name: '메인' }])));
@@ -173,6 +174,12 @@ test('Q2 1440 직원 — 마감 장부 미수 받기: 비번 없음/틀림/맞�
   await list.getByTestId('unpaid-collect-btn').click();
   const dlg = page.getByRole('dialog', { name: '미수 받기' });
   await expect(dlg).toBeVisible();
+  // 첫 포커스 = 비밀번호 칸(헤더 '닫기'가 아니라) — design-reviewer 비차단 2
+  await expect(dlg.getByTestId('unpaid-collect-pw'), '창의 첫 포커스가 비밀번호 칸이 아니다').toBeFocused({ timeout: 3_000 });
+  const pad = await dlg.locator('form').evaluate((f) => parseFloat(getComputedStyle(f).paddingLeft));
+  expect(pad, 'B1 — 창 본문 좌우 여백이 제목(17px)과 맞지 않는다').toBeGreaterThanOrEqual(16);
+  const hs = await dlg.locator('[data-testid="unpaid-collect-pw"], [data-testid="unpaid-collect-confirm"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  expect(Math.min(...hs), '비밀번호 칸·확정 버튼 높이 44px 미만').toBeGreaterThanOrEqual(44);
   const confirm = dlg.getByTestId('unpaid-collect-confirm');
   await expect(confirm, '비밀번호 없이 확정할 수 있다').toBeDisabled();
   await dlg.getByRole('radio', { name: '카드' }).click();
@@ -182,9 +189,11 @@ test('Q2 1440 직원 — 마감 장부 미수 받기: 비번 없음/틀림/맞�
   await expect(dlg, '틀렸는데 창이 닫혔다').toBeVisible();
   const before = probe.buyinGets;
   await dlg.getByTestId('unpaid-collect-pw').fill(PW);
-  await confirm.click();
-  await expect(dlg, '맞는 비밀번호인데 창이 남았다').toBeHidden({ timeout: 10_000 });
-  await expect(led.getByTestId('unpaid-collect'), '받은 뒤에도 미수 목록이 남았다(재조회 안 됨)').toHaveCount(0, { timeout: 10_000 });
+  await dlg.getByTestId('unpaid-collect-pw').press('Enter');   // Enter 로 제출(비차단 2)
+  await expect(dlg, '맞는 비밀번호(Enter)인데 창이 남았다').toBeHidden({ timeout: 10_000 });
+  await expect(led.getByTestId('unpaid-collect-btn'), '받은 뒤에도 미수 목록이 남았다(재조회 안 됨)').toHaveCount(0, { timeout: 10_000 });
+  await expect(led.getByTestId('unpaid-collect-head')).toHaveText('받을 미수를 모두 받았어요');
+  await expect(led.getByTestId('unpaid-collect-head'), '성공 뒤 포커스가 목록 머리로 돌아오지 않았다').toBeFocused({ timeout: 3_000 });
   console.log(`[Q2] settle 호출=${JSON.stringify(probe.settleCalls)} · 장부 GET ${before}→${probe.buyinGets}`);
   expect(probe.settleCalls.map((c) => c.pw)).toEqual(['0000', PW]);
   expect(probe.settleCalls[1].method).toBe('card');
@@ -203,6 +212,124 @@ test('Q2 1440 직원 · 비밀번호 미설정 매장 — 받을 수 없다는 �
   await expect(dlg.getByRole('note')).toContainText('업주·공동운영자만');
   await expect(dlg.getByTestId('unpaid-collect-confirm')).toBeDisabled();
   expect(probe.settleCalls.length).toBe(0);
+});
+
+// ── 재수정(verifier FAIL) — 직원에게 부분 행이 오는 소비처 · 직원 '완납 매출' 0 ─────────────────────────
+const RAIL = '[data-mystore-rail]';
+async function openLedgerAt(page: Page, date: string) {
+  await page.locator(`${RAIL} [role=tab]`).filter({ hasText: '장부' }).first().evaluate((b) => (b as HTMLElement).click());
+  // PC 장부는 날짜 줄을 셸 칩 줄 자리로 옮긴다(판 밖) — 보이는 것 하나를 잡는다.
+  const d = page.locator('[data-testid="ledger-date"]:visible').first();
+  await expect(d, '장부 보드(전제)').toBeVisible({ timeout: 20_000 });
+  if (date !== MOCK_DAY) await d.fill(date);
+}
+// 서버(20261003h)가 직원에게 주는 모양 그대로 — 마감 18시간 지난 장부는 미수 행만.
+const oldClosed = (staff: boolean): World => {
+  const date = dayAgo(2);
+  const all = buys(date, 1, 4, 20_000);
+  return { sessions: [sess(date, { clock_snapshot: { entries: 4 } })], buyins: staff ? all.filter((b) => b.is_unpaid) : all };
+};
+for (const staff of [true, false]) {
+  test(`B1 1440 ${staff ? '직원' : '업주(양성)'} — 지난 마감 장부: ${staff ? '바인 수·티켓·클락 대조 없음(부분 행) · 미수만' : '바인 수·클락 대조 그대로'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    // ⚠ hist(n) 은 dayAgo(1..n) 에 장부를 깐다 — 같은 날짜를 또 깔면 행 id 가 겹쳐 보드가 '불러오지 못했습니다'로 떨어진다.
+    await boot(page, 1440, 900, merge(hist(1), oldClosed(staff)), { staff });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    await openLedgerAt(page, dayAgo(2));
+    const led = page.locator('[data-pane="ledger"]');
+    await expect(led.getByText('마감됨 (읽기전용)').first(), '마감 장부(전제)').toBeVisible({ timeout: 15_000 });
+    await expect(led.getByTestId('unpaid-collect-btn'), '미수 받기(전제)').toHaveCount(1);
+    await expect(led.getByTestId('ledger-closed-buyins'), '마감 띠 바인 수').toHaveCount(staff ? 0 : 1);
+    await expect(led.getByText(/클락 \d+명 vs 장부/), "부분 행으로 '클락 N명 vs 장부 M명' 거짓 경보").toHaveCount(0);
+    const m = led.getByTestId('ledger-metrics');
+    await expect(m).toBeVisible();
+    const txt = (await m.textContent()) ?? '';
+    console.log(`[B1 ${staff ? 'staff' : 'owner'}] 정산 바=${txt.replace(/\s+/g, ' ')}`);
+    expect(txt.includes('총 바인'), '정산 바 총 바인').toBe(!staff);
+    expect(txt.includes('완납 매출'), '정산 바 완납 매출').toBe(!staff);
+    expect(txt, '미수는 직원에게도 남는다').toContain('미수금');
+    if (staff) await expect(led.getByTestId('ledger-staff-partial')).toBeVisible();
+  });
+}
+test('B1 1440 직원 양성 — 자정 넘겨 마감한 지 15시간 된 장부는 바인 수가 그대로 보인다(18시간 창)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const date = dayAgo(1);
+  const closedAt = new Date(Date.now() - 15 * 3_600_000).toISOString();
+  await boot(page, 1440, 900, { sessions: [sess(date, { closed_at: closedAt })], buyins: buys(date, 1, 4, 20_000) }, { staff: true });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await openLedgerAt(page, date);
+  const led = page.locator('[data-pane="ledger"]');
+  await expect(led.getByTestId('ledger-closed-buyins'), '18시간 안인데 바인 수가 숨었다').toHaveText('4', { timeout: 15_000 });
+  await expect(led.getByTestId('ledger-staff-partial')).toHaveCount(0);
+});
+for (const [W, H] of [[1440, 900], [390, 844]] as const) {
+  test(`B3 ${W} 직원 — 열린 오늘 장부 정산 바·모바일 요약에 '완납 매출' 0개(미수·바인은 남는다)`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, W, H, merge(hist(3), today([{ seq: 1, closed: false, unpaid: 20_000 }])), { staff: true });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    await openLedgerAt(page, MOCK_DAY);
+    const led = page.locator('[data-pane="ledger"]');
+    await expect(led.getByText('미수').first(), '장부(전제)').toBeVisible({ timeout: 15_000 });
+    const n = await led.evaluate((el) => [...el.querySelectorAll('*')].filter((e) => e.getClientRects().length && e.children.length === 0 && (e.textContent ?? '').trim() === '완납 매출').length);
+    console.log(`[B3 ${W}] 보이는 '완납 매출' ${n}`);
+    expect(n, "직원 장부에 '완납 매출'이 보인다").toBe(0);
+    if (W === 390) await expect(led.locator('[data-sum="buyins"]'), '모바일 요약 바인(전제 — 빈 검사 아님)').toBeVisible();
+  });
+}
+test('B1 1440 직원 — 지난 장부 순위 입력 명단이 완전하다(ledger_players) · 바인 수는 그리지 않는다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const date = dayAgo(1);
+  const all = buys(date, 1, 4, 20_000);
+  const roster = all.map((b, i) => ({ id: `ffffffff-0000-4000-8000-${String(i).padStart(12, '0')}`, venue_id: MOCK_VENUE, session_date: date, game_seq: 1, name: b.player_name, visitor_type: 'regular', note: null, sort_order: i }));
+  const w: World = { sessions: [sess(date, { title: '밀린 메인1', schedule_id: SID(0) })], buyins: all.filter((b) => b.is_unpaid), schedules: [schedRow(SID(0), date, '밀린 메인1')] };
+  await boot(page, 1440, 900, w, { staff: true, players: roster });
+  await page.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([])));
+  await page.goto('/');
+  await openMyStore(page);
+  // 밀린 순위는 할 일 갈래(주 카드) 또는 보조 칩으로 뜬다 — 어느 쪽이든 그 대회 순위 입력으로 간다.
+  await settledDash(page);
+  const chip = dash(page).getByTestId('todo-rank').getByRole('button', { name: '순위 입력' });
+  if (await chip.count()) await chip.click(); else await dash(page).getByTestId('todo-cta').click();
+  const rk = page.locator('[data-pane="ranking"]');
+  await expect(rk.locator('input[type="date"]').first()).toHaveValue(date, { timeout: 10_000 });
+  await expect(rk.getByText('그날 장부 명단'), '명단 줄(전제)').toBeVisible();
+  await expect(rk.getByText('(4명)'), '직원 순위 입력 명단이 4명이 아니다(부분 행만 셌다)').toBeVisible({ timeout: 10_000 });
+  await expect(rk.getByText(/\d+바인/), '직원 명단에 부분 바인 수가 보인다').toHaveCount(0);
+});
+for (const staff of [true, false]) {
+  test(`B1 1440 ${staff ? '직원(이용권 열람)' : '업주(양성)'} — 매장이용권 카드 7일 사용 T ${staff ? '없음' : '그대로'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, 1440, 900, merge(hist(6), today([{ seq: 1, closed: false }])), { staff, voucher: true });
+    await page.goto('/');
+    await openMyStore(page);
+    await settledDash(page);
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll<HTMLElement>('[data-pane="dashboard"] button[aria-expanded]')].find((x) => /^더 보기/.test((x.textContent ?? '').trim()));
+      if (b && b.getAttribute('aria-expanded') !== 'true') b.click();
+    });
+    const card = dash(page).locator('section', { hasText: '매장이용권' }).first();
+    await expect(card, '이용권 카드(전제)').toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText('오늘 전송'), '이용권 칸(전제)').toBeVisible();
+    await expect(card.getByText('7일 사용')).toHaveCount(staff ? 0 : 1);
+  });
+}
+test('B4 1440 직원 — 정산 탭: 마감 전 게임의 미수에는 미수 받기 버튼이 없다(안내만)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, 1440, 900, merge(hist(3), today([{ seq: 1, closed: true, unpaid: 20_000 }, { seq: 2, closed: false, unpaid: 10_000 }])), { staff: true });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await page.getByRole('tab', { name: /정산/ }).first().click();
+  const pane = page.locator('[data-pane="settle"]');
+  await expect(pane.getByTestId('settle-staff')).toBeVisible({ timeout: 15_000 });
+  await expect(pane.getByTestId('unpaid-collect-btn'), '마감 게임 미수 1건만 받기 버튼').toHaveCount(1);
+  await expect(pane.getByText('아직 마감 전 게임의 미수는 장부에서')).toBeVisible();
 });
 
 // ── 후속 ① 1280 미만 Tab 순서 = 화면 순서(CTA → 다음 줄 순위 칩) ───────────────────────────────────────
@@ -227,7 +354,8 @@ test('① 1024 — CTA 다음 Tab 이 아래 줄 순위 칩(시각 순서와 같
 // ── 후속 ② 라이브 위젯 높이 기억 — 오늘 적은 것만 예약 ───────────────────────────────────────────────
 for (const [name, stored, expectRes] of [
   ['날짜 없는 옛 기억(어제 저장분)', '175', false],
-  ['어제 날짜 기억', JSON.stringify({ h: 175, d: dayAgo(1) }), false],
+  // 보조 — 기준 빌드도 이 형식을 못 읽어 통과한다(수정 판별력 없음, design-reviewer 2026-10-03). 판별은 위 '옛 기억'·아래 양성 대조가 한다.
+  ['어제 날짜 기억(보조)', JSON.stringify({ h: 175, d: dayAgo(1) }), false],
   ['오늘 날짜 기억(양성 대조 — 검출기가 산다)', JSON.stringify({ h: 175, d: MOCK_DAY }), true],
 ] as const) {
   test(`② 1440 ${name} — ${expectRes ? '오늘 적은 높이는 확인 중에 예약한다' : '클락 꺼진 아침 첫 방문에 빈 위젯 자리를 잡지 않는다'}`, async ({ page }) => {

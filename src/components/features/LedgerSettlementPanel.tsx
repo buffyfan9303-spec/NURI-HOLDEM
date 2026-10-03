@@ -128,10 +128,16 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
         <div data-testid="settle-staff" className="space-y-3 rounded-aura border card-aura p-3">
           <p className="text-xs text-ink-secondary">매출·결제 합계는 업주만 볼 수 있어요. 여기서는 <b className="text-ink-primary">받을 미수</b>만 보여 드려요.</p>
           {(() => {
-            const items = unpaidItemsOf(data.buyins, (b) => data.sessions.find((s) => s.gameSeq === b.gameSeq));
-            return items.length === 0
-              ? <p className="py-4 text-center text-2xs text-ink-muted">이 날짜에 받을 미수가 없어요.</p>
-              : <UnpaidCollectList items={items} hasPw={hasPw} canManage={false} showGame onDone={load} onPwState={setHasPw} />;
+            // 마감 전 게임의 미수는 여기서 받지 않는다(verifier 2026-10-03 경고 — 비밀번호를 넣은 뒤에야 '마감 전' 안내가 나왔다).
+            //   열린 게임은 장부 칸에서 결제 수단을 바로 바꾼다.
+            const sessOf = (b: LedgerBuyin) => data.sessions.find((s) => s.gameSeq === b.gameSeq);
+            const items = unpaidItemsOf(data.buyins.filter((b) => sessOf(b)?.closed), sessOf);
+            const openOwed = data.buyins.some((b) => !sessOf(b)?.closed && unpaidItemsOf([b], sessOf).length > 0);
+            return <>
+              <UnpaidCollectList items={items} hasPw={hasPw} canManage={false} showGame onDone={load} onPwState={setHasPw}
+                emptyText="이 날짜 마감 장부에 받을 미수가 없어요." />
+              {openOwed && <p className="text-2xs text-ink-muted">아직 마감 전 게임의 미수는 장부에서 결제 수단을 바로 바꿔 주세요.</p>}
+            </>;
           })()}
         </div>
       ))}

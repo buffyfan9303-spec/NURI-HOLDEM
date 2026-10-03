@@ -217,12 +217,14 @@ function RegularRow({ idx, r, venueId, onSendVoucher, money = true }: { idx: num
             // grid-cols-3 에 셀 9개라 실제는 3행인데 예전엔 2행으로 예약해 -55px 밀렸다(2026-09-20 실측,
             // 프로덕션 프리뷰 4273 에 합성 DOM 삽입·getBoundingClientRect: 실제 149.8125px vs 예전 예약 94.75px).
             // 2.6875rem = (149.8125 − 갭 2×0.375rem) ÷ 3행 — 실측값 역산.
-            <SkeletonList rows={money ? 3 : 2} rowClassName="h-10.75" />
+            <SkeletonList rows={money ? 3 : 1} rowClassName="h-10.75" />
           ) : (
-            <div className="grid grid-cols-3 gap-1.5">
+            // 직원(금액 칸 없음)은 4칸 — 3열이면 '예약'이 혼자 둘째 줄에 남는다(design-reviewer 비차단 3).
+            <div className={`grid ${act.moneyHidden ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5`}>
               <Cell label="바인" v={`${act.buyins}회`} />
               <Cell label="방문" v={`${act.visits}회`} />
-              <Cell label="머니인" v={`${act.moneyIn}회`} />
+              {/* '입상' = 순위 등재 횟수(dummy-1003 O4) — 정산의 '머니인 가치'(금액)와 다른 말을 쓴다. */}
+              <Cell label="입상" v={`${act.moneyIn}회`} />
               <Cell label="예약" v={`${act.reservations}회`} />
               {/* '누적'만 쓰면 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다.
                   직원(moneyHidden, 오너 Q3)은 금액 칸 자체가 없다 — 0만으로 그리지 않는다. */}

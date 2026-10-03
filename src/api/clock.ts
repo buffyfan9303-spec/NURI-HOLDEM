@@ -1053,9 +1053,13 @@ export function sameLedgerPart(a: ClockLiveStats | null | undefined, b: ClockLiv
 
 /** 장부 몫 작성기 — live_stats 를 쓰는 **유일한** 자리(시작 upsert 제외). 이미 같으면 쓰지 않고 false. */
 export async function writeLedgerStats(
-  s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null }) | null,
+  s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null; closed?: boolean }) | null,
 ): Promise<boolean> {
   if (!s.sessionDate) return false;
+  // 20261003h(verifier 2026-10-03) — 마감된 장부의 몫은 굳었다(마감 뒤 바뀌는 것은 결제 수단뿐 — 횟수·얼리·애드온은 그대로).
+  //   그리고 직원 화면이 읽는 마감 장부의 바인 행은 미수 행만일 수 있다(lb_select). 그 부분 행으로 클락 통계를 덮지 않게
+  //   마감 장부에는 어떤 화면도 쓰지 않는다 — 서버 트리거(20260929t)가 장부 변경 때 몫을 맞춘다.
+  if (session?.closed) return false;
   const next = ledgerLiveStats(s, buyins, session);
   if (sameLedgerPart(next, s.liveStats)) return false;
   await saveClockLiveStats(s.venueId, s.gameSeq, next);
