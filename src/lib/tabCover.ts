@@ -448,8 +448,9 @@ type SubSnap = {
   clipBelow: (railBottom: number | null) => void;
   /** 판을 세로로 자르는 가장 가까운 그릇(뜨는 카드·시트)과 이벤트 시점 높이 — 없으면 null(지면 위 판). */
   frame: { el: HTMLElement; h: number } | null;
-  /** 보이는 첫 복제 요소와 그 원본의 이벤트 시점 윗변 — 붙인 뒤 내용이 원본 자리인지 잰다. */
-  anchor: { c: Element; top: number } | null;
+  /** 보이는 글자 칸(제 글자를 가진 요소, 최대 ANCHOR_MAX)의 복제 요소와 그 원본의 이벤트 시점 윗변 — 붙인 뒤 내용이 원본 자리인지 잰다.
+   *  글자 칸이 적으면 보이는 첫 요소가 하나 더 든다(아이콘뿐인 판). 한 요소가 아니라 여럿의 차 중앙값으로 판단한다(contentShift). */
+  anchors: { c: Element; top: number }[];
   /** 복제본을 d 만큼 위로 옮겼을 때 자르는 선은 화면에 그대로 둔다. */
   nudge: (d: number) => void;
 };
@@ -459,6 +460,22 @@ const railBottomOver = (rail: Element | null, box: { left: number; width: number
   const q = rail.getBoundingClientRect();
   return q.height > 0 && q.right > box.left && q.left < box.left + box.width ? q.bottom : null;
 };
+/** 기준점으로 모으는 글자 칸 상한 · 이보다 적으면 보이는 첫 요소를 더한다(contentShift 가 과반 합의를 요구한다). */
+const ANCHOR_MAX = 12;
+const ANCHOR_MIN = 3;
+/** 제 글자를 가진 요소인가(자식 요소의 글자는 안 센다) — 칸 하나가 곧 글자 한 덩이. */
+const hasOwnText = (e: Element): boolean => { for (const n of e.childNodes) if (n.nodeType === 3 && n.textContent?.trim()) return true; return false; };
+/**
+ * 붙인 복제본의 내용이 원본 자리에서 벗어난 거리 — 기준점들의 (복제본 윗변 − 원본 윗변) **중앙값**.
+ * 과반(60%)이 중앙값 1px 안에 모이지 않으면 0 이다: 요소 하나만 다른 것(인라인 배지·세로 가운데 정렬 칸의 반 픽셀)은 판 전체가 어긋난 게 아니다.
+ * 종전엔 첫 요소 하나로 판 전체를 옮겨, 그 요소만 3px(질문 배지)·1.5px(CI 의 글자 폭 차) 어긋나 있으면 멀쩡한 판을 끌어올렸다(2026-10-03).
+ */
+function contentShift(pts: SubSnap['anchors'], dy: number): number {
+  const ds = pts.map((p) => p.c.getBoundingClientRect().top - (p.top - dy)).sort((a, b) => a - b);
+  if (!ds.length) return 0;
+  const med = ds[ds.length >> 1];
+  return ds.filter((d) => Math.abs(d - med) <= 1).length >= Math.ceil(ds.length * 0.6) ? med : 0;
+}
 /** 떠나는 하위 판의 복제본을 만든다(아직 붙이지 않는다) — 이벤트 시점에 잰다. 화면에 안 걸치면 null. */
 function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   const r = root.getBoundingClientRect();
@@ -541,7 +558,12 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
         c.appendChild(s);
       } else {
         const cc = cut(ch, depth + 1);
-        if (!anchor && q.height > 0 && q.bottom > top && q.top < bottom && !stuck(ch)) anchor = { c: cc as Element, top: q.top };
+        // 기준점 수집 — sticky·fixed 판정(조상 스타일 읽기)은 필요할 때만 한다(탭 응답 비용).
+        if (q.height > 0 && q.bottom > top && q.top < bottom && (!firsts.length || (anchors.length < ANCHOR_MAX && hasOwnText(ch))) && !stuck(ch)) {
+          const pt = { c: cc as Element, top: q.top };
+          if (!firsts.length) firsts.push(pt);
+          if (anchors.length < ANCHOR_MAX && hasOwnText(ch)) anchors.push(pt);
+        }
         c.appendChild(cc);
       }
     }
@@ -550,7 +572,8 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   // 위 껍데기는 제 상자(높이·display·마진)만 지킨다 — 자손이 껍데기 경계로 넘기던 마진 겹침(-my-2.5 등)은 사라져 그 아래 내용이 통째로 밀린다(2026-10-03 커뮤니티
   //   홀덤펍 → 게시판 +10.6px). 겹침 규칙을 다시 짜지 않고, 붙인 뒤 보이는 첫 요소의 자리를 재서 판을 그만큼 되돌린다(아래 handOffSubPanel).
   //   sticky·fixed 안의 요소는 복제본에서 자리가 달라 기준점으로 쓰지 않는다.
-  let anchor: SubSnap['anchor'] = null;
+  const anchors: SubSnap['anchors'] = [];
+  const firsts: SubSnap['anchors'] = []; // 보이는 첫 요소(최대 1개) — 글자 칸이 적은 판의 대비책
   const stuck = (e: Element): boolean => {
     for (let n: Element | null = e; n && n !== root; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'sticky' || p === 'fixed') return true; }
     return false;
@@ -561,6 +584,10 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   // 복제본은 그림일 뿐이다 — 판 찾기·id·testid·표식 검색에 걸리지 않게 식별 속성을 모두 뗀다(stripIdentity). 모양에 쓰이는 것(CSS 선택자가 읽는
   //   data-·aria-·role)만 남긴다 — 떼면 그 순간 복제본 모양이 원본과 달라진다(아우라·알약 등).
   stripIdentity(el);
+  // content-visibility:auto 행(.cv-row-* · .cv-card-*)은 갓 붙은 복제본에서 '건너뜀' 상태로 먼저 배치된다 — 행 높이가 contain-intrinsic-size 라
+  //   세로 가운데 정렬 칸이 실제 높이와의 차 절반만큼(0.5~1.5px) 어긋나 보이고, 그 값으로 판 전체를 옮기면 화면이 정말 어긋난다(2026-10-03 CI 게시판→실시간
+  //   1.5px). 복제본은 보이는 행만 든 그림이라 건너뛸 이유가 없다 — 처음부터 펼친다(자리가 첫 프레임부터 원본과 같다).
+  for (const x of [el, ...el.querySelectorAll<HTMLElement>('[class*="cv-"]')]) x.style.setProperty('content-visibility', 'visible', 'important');
   // 판 표식은 CSS 가 읽어도 뗀다 — 남으면 판 찾기(subPanelOf)가 보이는 복제본을 판으로 잡는다.
   for (const x of [el, ...el.querySelectorAll(SUB_MARK_SEL)]) SUB_MARKS.forEach((m) => x.removeAttribute(m));
 
@@ -588,7 +615,9 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     el.style.backgroundAttachment = 'scroll';
   }
   place(el, { top: r.top, left: r.left, width: r.width });
-  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow, frame, anchor, nudge };
+  // 글자 칸이 3개 미만이면 보이는 첫 요소를 더한다 — 그래도 한 요소만 다르면 contentShift 가 보정을 하지 않는다.
+  if (anchors.length < ANCHOR_MIN && firsts.length && !anchors.includes(firsts[0])) anchors.push(firsts[0]);
+  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow, frame, anchors, nudge };
 }
 
 // ── 커밋 판정(2026-09-27 COMMIT-SIGNAL) ─────────────────────────────────────────
@@ -715,8 +744,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     // 내용이 원본 자리인가(snapSubPanel 의 껍데기 마진 겹침) — 어긋난 만큼 판을 옮기고 자르는 선은 화면에 둔다.
     //   스크롤 복원·애니 정지 **뒤**에 잰다 — 판 자신이 스크롤 상자(내 정보)면 복원 전 기준점은 scrollTop 만큼 아래에 있고(앞에 두면 −200px 로
     //   끌려 올라갔다), 다시 돈 진입 애니(translate)가 기준점을 잠깐 옮겨 둔다.
-    const ax = s.anchor ? s.anchor.c.getBoundingClientRect().top - (s.anchor.top - dy) : 0;
-    if (Math.abs(ax) > 0.5) { el.style.setProperty('--leave-top', `${s.box.top - dy - oy - ax}px`); s.nudge(ax); }
+    const ax = contentShift(s.anchors, dy);    if (Math.abs(ax) > 0.5) { el.style.setProperty('--leave-top', `${s.box.top - dy - oy - ax}px`); s.nudge(ax); }
     // 푸터 복제본은 메인 탭과 같은 자리(앱 셸 = 판(.tab-pane)의 부모)에 넣는다 — 푸터의 부모(.reveal)는 스크롤 리빌 transform 이라
     //   fixed 의 기준·쌓임 맥락이 바뀌어 복제본이 엉뚱한 자리·판 복제본 **아래**에 섰다(실측: 545 → 1120).
     const pane = root.closest('.tab-pane');

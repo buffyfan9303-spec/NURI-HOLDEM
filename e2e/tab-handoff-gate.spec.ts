@@ -310,8 +310,10 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
       const n = await page.evaluate((s) => [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length).length, sc.rail);
       expect(n, `${sc.nav}: 하위 탭 버튼을 못 찾았다`).toBeGreaterThan(2);
       const K = Math.min(n, 5);
-      for (let i = 0; i < K; i++) {
-        const idx = (i + 1) % K;
+      // 순방향 K칸 + **역방향 2칸**(#1 → #0): 2026-10-03 design-reviewer — 게시판 → 홀덤펍이 −3px(기준점으로 뽑힌 인라인 배지 하나가 판 전체를 끌어올림)였는데
+      //   순방향만 돌던 이 게이트는 그 방향을 재지 않았다. 마지막 두 걸음이 (… → #1 → #0) 역방향이다.
+      for (let i = 0; i < K + 2; i++) {
+        const idx = i < K ? (i + 1) % K : i === K ? 1 : 0;
         // 판 위쪽(커뮤니티 홀덤펍의 필터 칩 줄)이 화면 위로 나가야 복제본에 위 껍데기가 생긴다(자리 판정 A·B 의 대상). 운영 데이터가 짧은 날엔
         //   끝까지 스크롤해도 그 줄이 화면 안에 남아 결함이 가려졌다(2026-10-03 오후 실측: 문서 1244px · scrollY 255 · 칩 줄 y=49) — 문서 끝에 300px 여유를 준다.
         await page.evaluate((lim) => {
