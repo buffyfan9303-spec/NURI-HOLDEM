@@ -41,7 +41,16 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
     // 부모가 "밖으로 샜다"고 보고 자식의 첫 포커스·Tab·Space 를 매번 빼앗아 가면 안 된다.
     openDialogs.push(el);
     const isTop = () => openDialogs[openDialogs.length - 1] === el;
-    const t = window.setTimeout(() => { if (isTop()) (focusables()[0] ?? el).focus({ preventScroll: true }); }, 50);
+    // ⚠ 50ms 사이에 사용자가 이미 창 안을 눌러 포커스를 옮겼으면 첫 포커스를 다시 걸지 않는다(2026-10-03 F1).
+    //   안 그러면 방금 누른 `…` 메뉴(summary)에서 포커스를 '닫기'로 뺏고, 그 blur 가 메뉴를 곧바로 닫았다
+    //   (실측: click → 18ms 뒤 focusout rel=닫기 → open=false). `opener` 와 같은 요소(autoFocus 로 먼저 잡힌 칸)는
+    //   사용자 동작이 아니므로 종전대로 첫 포커스로 옮긴다 — 그 동작 변경은 이 수정의 범위가 아니다.
+    const t = window.setTimeout(() => {
+      if (!isTop()) return;
+      const a = document.activeElement;
+      if (a && a !== opener && el.contains(a)) return;
+      (focusables()[0] ?? el).focus({ preventScroll: true });
+    }, 50);
 
     // Tab 순환의 first/last.focus() 에는 preventScroll 을 일부러 안 쓴다 — 사용자가 직접 Tab 을 눌러 이동한 결과라,
     //   새 포커스 위치가 화면 밖이면 스크롤해서 보여주는 게 키보드 접근성 기본값이다.
