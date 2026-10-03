@@ -79,8 +79,9 @@ async function installDashSampler(page: Page) {
           cards: Object.fromEntries([...pane.querySelectorAll<HTMLElement>('section.card-aura')].filter((s) => s.getClientRects().length)
             .map((s) => [(s.querySelector('button > span')?.textContent ?? '').trim(), Math.round(s.getBoundingClientRect().top + scrollY)])),
           vh: innerHeight,
-          rank: [...pane.querySelectorAll('button, section')].some((e) => /순위 미입력/.test(e.textContent ?? '') && e.getClientRects().length > 0),
-          rankRes: !!pane.querySelector('[data-testid="rank-reserve"]'),
+          // 2026-10-03 후속 — '순위 미입력'은 별도 카드가 아니라 '지금 할 일' 칸의 한 갈래다(자리 예약도 그 칸의 todo-reserve).
+          rank: /순위 미입력/.test(pane.querySelector('[data-testid="todo-cta"]')?.parentElement?.textContent ?? ''),
+          rankRes: !!pane.querySelector('[data-testid="todo-reserve"]'),
           todo: pane.querySelector('[data-testid="todo-cta"]')?.textContent?.trim() ?? null,
         });
       }
@@ -97,7 +98,7 @@ for (const [W, H] of [[1024, 768], [390, 844], [360, 780]] as const) {
   test(`L-1 ${W} — 다시 연 대시보드: '순위 미입력' 카드가 정착하며 아래 격자를 밀지 않는다`, async ({ page }) => {
     test.setTimeout(90_000);
     // 지난번 방문에서 이 매장의 순위 미입력 1건을 봤다(이 기기 기록) — 업주가 매일 여는 실제 경로.
-    //   처음 보는 매장(기록 없음)은 몇 건인지 몰라 예약하지 않는다(0건 매장의 반대 방향 이동을 만들지 않게 — D1 게이트가 지킨다).
+    //   2026-10-03 후속부터는 이 기록을 읽지 않는다('지금 할 일' 칸이 건수와 무관하게 자리를 잡는다) — 건수 변화 경우는 mystore-followup-1003 R.
     await page.addInitScript((k) => { try { localStorage.setItem(k, '1'); } catch { /* */ } }, `nuri:dash-rank-n:${MOCK_VENUE}`);
     await installDashSampler(page);
     await bootOwner(page, { viewport: { width: W, height: H }, goto: false, extra: (p) => routeWorld(p, 'rank', FIRST_DELAY) });

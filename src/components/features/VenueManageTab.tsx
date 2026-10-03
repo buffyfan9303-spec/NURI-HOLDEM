@@ -32,8 +32,6 @@ import LedgerSettlementPanel from './LedgerSettlementPanel';
 import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
 import SeasonPanel from './SeasonPanel';
-import PresetManager from './PresetManager';
-import KillSwitch from './KillSwitch';
 import StaffPunchBar from './StaffPunchBar';
 import StoreDashboard, { MyStaffCard } from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
@@ -43,7 +41,6 @@ import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVo
 import MyPostersTab from './MyPostersTab';
 import { type LedgerLinkTarget } from '../../lib/ledgerLink';
 import { rankingEventOf, gameSeqOfEvent, mainEventChip } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
-import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import SlidingPill from '../atoms/SlidingPill';
@@ -208,13 +205,21 @@ const LedgerStatsPanelM = memo(LedgerStatsPanel);
 const LedgerSettlementPanelM = memo(LedgerSettlementPanel);
 const TournamentClockM = memo(TournamentClock);
 const MyPostersTabM = memo(MyPostersTab);
-const PresetManagerM = memo(PresetManager);
 const SeasonPanelM = memo(SeasonPanel);
-const VenueCustomizePanelM = memo(VenueCustomizePanel);
 const VoucherManagePanelM = memo(VoucherManagePanel);
 const AnnouncePanelM = memo(AnnouncePanel);
-const VenueRankHubM = memo(VenueRankHub);
 const PosSettingsPanelM = memo(PosSettingsPanel);
+// 2026-10-03 — 매장 설정의 '매장 페이지'(꾸미기·랭킹 허브)·'게임 프리셋'·'위험 구역'을 지연 청크로 뺐다.
+//   이 청크가 청크별 상한 119KB gz 에 여유 0(118.8)이었다 — 예산을 올리지 않고 레일 밖·설정 하위탭(누르기 전엔 안 보이는 판)을 뺀 것이다.
+//   매장이 정해지면 바로 미리 받는다(아래 F6 효과) — 받은 뒤엔 lazyWithReload 가 동기로 그려 폴백 스로틀이 없다. 받기 전 클릭은 지역 LazyBox 가 받는다.
+const venueCustomize = () => import('./VenueCustomizePanel');
+const VenueCustomizePanelL = lazyWithReload(venueCustomize);
+const VenueRankHubL = lazyWithReload(() => venueCustomize().then((m) => ({ default: m.VenueRankHub })));
+const PresetManagerL = lazyWithReload(() => import('./PresetManager'));
+const KillSwitchL = lazyWithReload(() => import('./KillSwitch'));
+const VenueCustomizePanelM = memo(VenueCustomizePanelL);
+const VenueRankHubM = memo(VenueRankHubL);
+const PresetManagerM = memo(PresetManagerL);
 // 2026-09-30 — 인건비·정산·출근일지·출근 관리(StaffPayroll)를 지연 청크로 뺐다(청크 예산 여유 1.5KB+ — 리드 지시, 예산 불변).
 //   네 판 모두 첫 화면이 아니라 사이드바/아코디언을 눌러야 열린다. 한가할 때 미리 받아(아래 F6 효과) 받은 뒤에는 동기로 그린다.
 const staffPayroll = () => import('./StaffPayroll');
@@ -888,6 +893,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   lazy 를 건너뛰고 동기로 그려, 첫 방문의 '불러오는 중…'(Suspense 폴백 스로틀 ~300ms, 1280 실측 280ms)이 사라진다.
   //   받기 전에 누르면 종전처럼 지역 Suspense 폴백이 안전망이다.
   // F5(2026-09-29) — 같은 틈에 '오늘 게임' 칩 목록도 데운다(GameChipBar 는 게임 단계에서만 마운트돼 매번 [] 에서 시작했다).
+  // 설정 하위탭 3종(위 지연 청크)은 한가함을 기다리지 않고 매장이 정해지는 즉시 받는다 — 이전엔 같은 청크에 있어 늘 준비돼
+  //   있던 판이라, 대시보드에서 곧장 '매장 설정'을 눌러도 폴백 없이 동기로 그려지게 하려는 것이다(전환 동작 불변).
+  useEffect(() => {
+    if (!tabActive || !venueId) return;
+    // ⚠ 같은 모듈이라도 lazyWithReload 인스턴스마다 '받았음' 표시가 따로다 — VenueRankHubL 도 따로 불러야 동기로 그린다.
+    void VenueCustomizePanelL.preload(); void VenueRankHubL.preload(); void PresetManagerL.preload(); void KillSwitchL.preload();
+  }, [tabActive, venueId]);
   useEffect(() => {
     if (!tabActive || !venueId) return;
     const run = () => {
@@ -1450,7 +1462,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
-                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'presets'} />)}
+                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <LazyBox><PresetManagerM venueId={venueId} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'presets'} /></LazyBox>)}
                 {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
                     전부 'NURI POS_…' 로 나갔다 — 매장이 여럿인 운영자가 파일만 보고 구분할 수 없었다.
                     비면 컴포넌트 기본값('NURI POS')이 그대로라 회귀 없음. */}
@@ -1478,12 +1490,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
-                {visited.includes('page') && canSettingsTab('page') && box('page', <>
+                {visited.includes('page') && canSettingsTab('page') && box('page', <LazyBox>
                   <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined}
                     canEditKakao={isAdmin || manageOk || (isOwner && primaryOwner !== false)} />
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
-                </>)}
+                </LazyBox>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {/* 🔴 2026-09-28 오너 "마스터 계정에 직원 탭" — 관리자는 직원 본인 화면(내 근무 정보 + 출퇴근)을 **보기만** 한다.
                     서버(my_staff_wage·set_my_shift_time·_is_active_venue_staff)에 관리자 분기를 만들지 않는다 — 접근표·인건비 조작면이 생긴다. */}
@@ -1510,7 +1522,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
                 {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
-                {visited.includes('danger') && canSettingsTab('danger') && venueId && box('danger', <KillSwitch venueId={venueId} />)}
+                {visited.includes('danger') && canSettingsTab('danger') && venueId && box('danger', <LazyBox><KillSwitchL venueId={venueId} /></LazyBox>)}
               </>);
             })()}
           </div>
