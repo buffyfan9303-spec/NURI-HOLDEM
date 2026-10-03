@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * 대화상자(다이얼로그) 공용 focus 계약 — Modal.tsx 의 sheet/center/page 변형이 쓰던 로직을
@@ -6,7 +6,8 @@ import { useEffect } from 'react';
  * 풀스크린 오버레이도 **같은 계약**을 쓰게 하려고 공유 훅으로 옮겼다 — 새로 만들지 않는다.
  *
  * 계약(불변):
- *  ① 열릴 때 콘텐츠 안 첫 포커스 가능 요소(없으면 컨테이너 자체)로 포커스 이동
+ *  ① 열릴 때 콘텐츠 안 첫 포커스 가능 요소(없으면 컨테이너 자체)로 포커스 이동 —
+ *     단 포커스가 이미 창 안에 있으면(autoFocus 칸 · 사용자가 먼저 누른 요소) 덮지 않는다
  *  ② Tab/Shift+Tab 은 콘텐츠 안에서만 순환(트랩)
  *  ③ Tab 이 아닌 경로로 포커스가 밖으로 새면(배경 클릭·프로그램 focus() 등) 즉시 되잡는다 —
  *     '탭 순서'가 아니라 '실제로 포커스가 어디 있는가'를 본다.
@@ -23,14 +24,24 @@ const openDialogs: HTMLElement[] = [];
  * @param contentRef 트랩 대상 컨테이너(다이얼로그 루트 또는 그 안쪽 스크롤 영역).
  */
 export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTMLElement | null>) {
+  // 열기 직전에 포커스가 있던 곳(opener)을 기억한다. 닫을 때 여기로 돌려보내지 않으면
+  // 포커스가 문서 맨 앞(BODY)으로 튀어, 방금 누른 카드로 못 돌아간다.
+  // ⚠ effect 가 아니라 **렌더 중에**(active 가 켜지는 그 렌더) 읽는다 — effect 시점에는 창 안 autoFocus 칸이
+  //   이미 커밋돼 포커스를 잡고 있어서 opener 가 그 칸(창 안)으로 기록됐고, 닫아도 연 버튼으로 안 돌아왔다
+  //   (2026-10-03 실측: 글쓰기 시트를 닫으면 포커스가 BODY). 렌더 중에는 자식이 아직 커밋 전이라 진짜 opener 가 남아 있다.
+  //   '이전 값과 비교해 렌더 중 상태 조정' 패턴이라 추가 커밋 없이 같은 렌더 패스에서 다시 그린다.
+  const [prevActive, setPrevActive] = useState(false);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
+  if (active !== prevActive) {
+    setPrevActive(active);
+    // typeof 가드: 서버 렌더(renderToStaticMarkup 계약 테스트)에는 document 가 없다.
+    if (active && typeof document !== 'undefined') setOpener(document.activeElement as HTMLElement | null);
+  }
+
   useEffect(() => {
     if (!active) return;
     const el = contentRef.current;
     if (!el) return;
-
-    // 열기 직전에 포커스가 있던 곳을 기억한다. 닫을 때 여기로 돌려보내지 않으면
-    // 포커스가 문서 맨 앞(BODY)으로 튀어, 방금 누른 카드로 못 돌아간다.
-    const opener = document.activeElement as HTMLElement | null;
 
     const focusables = () => Array.from(
       el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
@@ -41,14 +52,13 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
     // 부모가 "밖으로 샜다"고 보고 자식의 첫 포커스·Tab·Space 를 매번 빼앗아 가면 안 된다.
     openDialogs.push(el);
     const isTop = () => openDialogs[openDialogs.length - 1] === el;
-    // ⚠ 50ms 사이에 사용자가 이미 창 안을 눌러 포커스를 옮겼으면 첫 포커스를 다시 걸지 않는다(2026-10-03 F1).
-    //   안 그러면 방금 누른 `…` 메뉴(summary)에서 포커스를 '닫기'로 뺏고, 그 blur 가 메뉴를 곧바로 닫았다
-    //   (실측: click → 18ms 뒤 focusout rel=닫기 → open=false). `opener` 와 같은 요소(autoFocus 로 먼저 잡힌 칸)는
-    //   사용자 동작이 아니므로 종전대로 첫 포커스로 옮긴다 — 그 동작 변경은 이 수정의 범위가 아니다.
+    // ⚠ 포커스가 이미 창 안에 있으면 첫 포커스를 다시 걸지 않는다 — 창 안 autoFocus 칸(작성자가 고른 첫 칸,
+    //   예: 글쓰기 '내용')이든, 50ms 안에 사용자가 누른 요소든 그쪽이 이긴다.
+    //   · F1(2026-10-03): 방금 누른 `…` 메뉴(summary)에서 포커스를 '닫기'로 뺏어 그 blur 가 메뉴를 곧바로 닫았다.
+    //   · autoFocus(2026-10-03 리드 결정): 글쓰기 '내용' 칸이 ~58ms 뒤 '닫기'로 뺏겨 열자마자 쓸 수 없었다.
+    //   ⚠ dev 서버(StrictMode)에서는 effect 이중 실행의 정리가 포커스를 opener 로 돌려 autoFocus 존중이 안 보인다 — 판정은 프로덕션 빌드로.
     const t = window.setTimeout(() => {
-      if (!isTop()) return;
-      const a = document.activeElement;
-      if (a && a !== opener && el.contains(a)) return;
+      if (!isTop() || el.contains(document.activeElement)) return;
       (focusables()[0] ?? el).focus({ preventScroll: true });
     }, 50);
 
@@ -73,6 +83,13 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
       const target = e.target as Node | null;
       if (!target || el.contains(target)) return;
       if (!isTop()) return; // 위에 다른 다이얼로그가 열려 있으면 그쪽 포커스다 — 뺏지 않는다
+      // ⚠ 막 뜬 위 창의 autoFocus 는 그 창이 스택에 올라가기(effect) **전**, 커밋 중에 포커스를 잡는다 —
+      //   그 순간엔 아직 이 창이 '맨 위'라서 위 창의 첫 칸을 끌어왔다(2026-10-03 실측: 상세 위 글쓰기 '내용' → 상세 버튼).
+      //   포커스가 들어간 곳이 **아직 스택에 안 올라간 다른 모달 대화상자** 안이면 그 창의 몫으로 둔다.
+      //   ⚠ 이미 스택에 있는 창(= 아래 창) 안으로의 포커스는 양보하지 않는다 — 위 창이 떠 있는 동안 아래 창 요소에
+      //     프로그램 focus() 가 걸려도 위 창이 되잡아야 한다(verifier 2026-10-03 회귀 지적).
+      const host = (target as Element).closest?.('[aria-modal="true"]');
+      if (host && !host.contains(el) && !openDialogs.some((d) => host.contains(d))) return;
       (focusables()[0] ?? el).focus({ preventScroll: true });
     };
     document.addEventListener('focusin', onFocusIn);
