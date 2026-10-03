@@ -11,6 +11,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { josa } from '../../lib/josa';
 import { useVenueScope } from '../../lib/useVenueScope';
+import { usePayRules } from '../../api/payrollRules';
+import { hoursText, shiftHoursNote, shiftMinutes } from '../../lib/staffPay';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -24,14 +26,8 @@ function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split('-').map(Number);
   return ymOf(new Date(y, m - 1 + delta, 1));
 }
-// HH:mm → 분. 퇴근<출근이면 익일로 간주(+24h) — 새벽 마감 대응.
-function hoursBetween(inHm?: string | null, outHm?: string | null): number {
-  if (!inHm || !outHm) return 0;
-  const [ih, im] = inHm.split(':').map(Number); const [oh, om] = outHm.split(':').map(Number);
-  let mins = (oh * 60 + om) - (ih * 60 + im);
-  if (mins < 0) mins += 24 * 60;
-  return mins / 60;
-}
+// 근무 시간은 급여 표와 같은 식(staffPay.shiftMinutes)·같은 매장 설정으로 센다 — 예전 hoursBetween 은 출근~퇴근을 그대로 빼서
+// 급여 표 8.0h 인 근무를 9.5h 로 말했다(R3-03).
 
 /** bare — C1 T-1(2026-10-02): 직원 관리 아코디언 안에서는 아코디언이 이미 상자이자 제목('딜러 출근 스케줄')이다.
  *  안쪽 카드 테두리와 같은 제목을 한 번 더 그리지 않는다(박스 안 박스·제목 두 겹). 스케줄만 보는 직원 화면은 종전 카드 그대로. */
@@ -50,6 +46,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
   const [tick, setTick] = useState(0); // 명부 저장 후 재조회
 
   const days = useMemo(() => monthDays(month), [month]);
+  const { rules } = usePayRules(venueId);
   const from = days[0], to = days[days.length - 1];
 
   // E(2026-09-28) — 매장·달 전환 가드: 앞 매장(앞 달) 스케줄이 늦게 와서 지금 달력을 덮지 않게.
@@ -112,10 +109,10 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
   const operatingDays = useMemo(() => new Set(shifts.map((s) => s.date)).size, [shifts]);
   const summary = useMemo(() => {
     const work = new Map<string, number>(), hrs = new Map<string, number>();
-    for (const s of shifts) { work.set(s.name, (work.get(s.name) ?? 0) + 1); hrs.set(s.name, (hrs.get(s.name) ?? 0) + hoursBetween(s.checkIn, s.checkOut)); }
-    return roster.map((n) => ({ name: n, work: work.get(n) ?? 0, off: Math.max(0, operatingDays - (work.get(n) ?? 0)), hours: hrs.get(n) ?? 0 }))
+    for (const s of shifts) { work.set(s.name, (work.get(s.name) ?? 0) + 1); hrs.set(s.name, (hrs.get(s.name) ?? 0) + (shiftMinutes(s.date, s, rules)?.net ?? 0)); }
+    return roster.map((n) => ({ name: n, work: work.get(n) ?? 0, off: Math.max(0, operatingDays - (work.get(n) ?? 0)), min: hrs.get(n) ?? 0 }))
       .sort((a, b) => b.work - a.work);
-  }, [shifts, roster, operatingDays]);
+  }, [shifts, roster, operatingDays, rules]);
 
   // '등록' 은 저장까지 간다 — 예전엔 state 에만 넣어서 배정 전에 새로고침하면 이름이 사라졌다.
   const addName = async () => {
@@ -176,7 +173,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
 
   const firstDow = new Date(`${month}-01T00:00:00`).getDay();
   const todayStr = new Date().toLocaleDateString('en-CA');
-  const totalHours = summary.reduce((s, r) => s + r.hours, 0);
+  const totalMin = summary.reduce((s, r) => s + r.min, 0);
 
   return (
     <section className={bare ? 'space-y-3' : 'rounded-aura border card-aura p-3 space-y-3'}>
@@ -260,6 +257,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
           ) : roster.map((n) => {
             const sh = shiftOf(selDay, n);
             const on = !!sh;
+            const m = sh ? shiftMinutes(selDay, sh, rules) : null;
             return (
               <div key={n} className="flex items-center gap-1.5 flex-wrap">
                 <button type="button" onClick={() => toggle(selDay, n)}
@@ -269,7 +267,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
                   <>
                     <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-22" /></label>
                     <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-22" /></label>
-                    {sh?.checkIn && sh?.checkOut && <span className="text-2xs text-emerald-700 dark:text-emerald-400 tabular-nums">{hoursBetween(sh.checkIn, sh.checkOut).toFixed(1)}h</span>}
+                    {m && <span data-testid="schedule-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-emerald-700 dark:text-emerald-400 tabular-nums">{hoursText(m.net)}</span>}
                   </>
                 )}
               </div>
@@ -286,7 +284,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
 
       {/* 직원별 출근/휴무/근무시간 집계 */}
       <div>
-        <p className="text-2xs font-semibold text-ink-secondary mb-1">직원별 집계 · {month} (영업 {operatingDays}일 · 총 {totalHours.toFixed(1)}h)</p>
+        <p className="text-2xs font-semibold text-ink-secondary mb-1">직원별 집계 · {month} (영업 {operatingDays}일 · 총 {hoursText(totalMin)})</p>
         {shifts.length === 0 ? (
           <p className="text-2xs text-ink-muted text-center py-2">아직 스케줄이 없습니다. 날짜를 눌러 직원을 배정하세요.</p>
         ) : (
@@ -296,7 +294,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
                 <span className="flex-1 font-semibold text-ink-primary truncate">{r.name}</span>
                 <span className="text-emerald-700 dark:text-emerald-400 tabular-nums font-bold">출근 {r.work}일</span>
                 <span className="text-ink-muted tabular-nums">휴무 {r.off}일</span>
-                <span className="text-accent-300 dark:text-accent-200 tabular-nums">{r.hours.toFixed(1)}h</span>
+                <span className="text-accent-300 dark:text-accent-200 tabular-nums">{hoursText(r.min)}</span>
               </div>
             ))}
           </div>

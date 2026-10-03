@@ -22,6 +22,8 @@
 //                 계획 종료가 없거나 주가 안 끝났으면 **확인 필요**로 세고 지급·미지급을 정하지 않는다.
 // 가산·주휴는 시급제(WageShift)에만 계산한다 — 일급·주급·월급의 통상시급 환산은 하지 않는다.
 
+import { PUNCH_YESTERDAY_UNTIL_MIN } from './staffPunch'; // 00:00~01:59 출근 = 어제 근무(오너 2026-09-30) — 출근 버튼·서버 punch_my_shift 와 같은 경계 한 벌
+
 export type PayType = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
 export interface PayShift {
@@ -82,7 +84,8 @@ export function weekStartOf(day: string): string {
 }
 
 /** HH:mm 문자열 기록(운영 staff_schedule·dealer_shifts) → PayShift.
- *  출근은 계획 시작 기준 ±12h 안으로 맞춘다(계획 23:00·출근 00:10 → 다음 날 00:10). 계획이 없으면 그날.
+ *  출근은 계획 시작 기준 ±12h 안으로 맞춘다(계획 23:00·출근 00:10 → 다음 날 00:10).
+ *  계획이 없으면 그날 — 단 00:00~01:59 출근은 그 행(workDate)의 **다음 날 새벽**이다(어제 근무 규칙).
  *  퇴근·계획 종료가 시작 이하이면 다음 날(자정 넘김). */
 export function shiftFromHm(workDate: string, t: { startHm?: string | null; endHm?: string | null; checkIn?: string | null; checkOut?: string | null }): PayShift {
   const startAt = t.startHm ? kstAt(workDate, t.startHm) : null;
@@ -92,6 +95,10 @@ export function shiftFromHm(workDate: string, t: { startHm?: string | null; endH
   if (checkInAt != null && startAt != null) {
     if (startAt - checkInAt > 12 * H) checkInAt += DAY;
     else if (checkInAt - startAt > 12 * H) checkInAt -= DAY;
+  } else if (checkInAt != null && checkInAt - kstAt(workDate, '00:00') < PUNCH_YESTERDAY_UNTIL_MIN * MIN) {
+    // ponytail: 계획 없는 행의 새벽 출근은 전부 '어제 근무' 로 본다 — 서버가 어제 행이 없어 **오늘 행**에 01:xx 를 찍은 드문 경우는
+    //   하루 늦게 놓인다(근무 분은 같고 공휴일 귀속 날짜만 다르다). 구별하려면 행에 출근 epoch 를 저장해야 한다.
+    checkInAt += DAY;
   }
   let checkOutAt = t.checkOut ? kstAt(workDate, t.checkOut) : null;
   if (checkOutAt != null && checkInAt != null) {
@@ -128,6 +135,27 @@ export function netMinutes(s: PayShift, rules: PayRules): { stay: number; brk: n
   const brk = s.breakMinutes != null ? Math.min(stay, Math.max(0, Math.floor(s.breakMinutes)))
     : rules.autoBreak ? autoBreakMinutes(stay) : 0;
   return { stay, brk, net: stay - brk };
+}
+
+// ── 화면 공용: 한 교대의 시간 표시(R3-03) ─────────────────────────────────────
+/** HH:mm 기록 한 줄의 근무 분 — **급여 표(computePay)와 같은 식**(shiftFromHm → netMinutes).
+ *  출근일지·내 출근 관리·딜러 스케줄·딜러 근무 행의 'Xh' 는 이것만 쓴다(직접 빼서 세면 급여 표와 갈린다 — R3-03).
+ *  raw = 출근~퇴근 그대로(계획 전 출근·휴게 포함). 출·퇴근 중 하나라도 없으면 null. */
+export function shiftMinutes(workDate: string, t: { startHm?: string | null; endHm?: string | null; checkIn?: string | null; checkOut?: string | null },
+  rules: PayRules): { raw: number; stay: number; brk: number; net: number } | null {
+  if (!t.checkIn || !t.checkOut) return null;
+  const s = shiftFromHm(workDate, t);
+  return { raw: workedMinutes(s, true), ...netMinutes(s, rules) };
+}
+/** 분 → '8.0h'. 급여 표·집계·행이 같은 자릿수로 말한다. */
+export const hoursText = (min: number) => `${(min / 60).toFixed(1)}h`;
+/** 'Xh' 가 출근~퇴근과 다를 때 그 이유(마우스를 올리면 보이는 설명). 같으면 undefined. */
+export function shiftHoursNote(m: { raw: number; stay: number; brk: number; net: number } | null): string | undefined {
+  if (!m || m.raw === m.net) return undefined;
+  const parts = [`출근~퇴근 ${hoursText(m.raw)}`];
+  if (m.raw > m.stay) parts.push(`계획 시작 전 ${hoursText(m.raw - m.stay)} 제외`);
+  if (m.brk) parts.push(`휴게 −${hoursText(m.brk)}`);
+  return `급여 기준 ${hoursText(m.net)} (${parts.join(' · ')})`;
 }
 
 export function plannedMinutes(s: PayShift): number | null {
