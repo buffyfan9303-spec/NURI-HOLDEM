@@ -291,7 +291,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
               <>
                 <Seg label="크기" testid="clk-bg-size" value={curDisp.size} disabled={busy} onPick={(size) => pickDisplay({ size })}
                   options={[[1, '작게'], [2, '보통'], [3, '크게']] as const} />
-                <p className="t-desc text-ink-muted">가로 TV 는 상단 매장 이름 옆(세로로 긴 로고는 타이머 위), 세로 TV 는 타이머 위 빈 자리에 들어가요 — 글자와 겹치지 않아요.</p>
+                <p className="t-desc text-ink-muted">가로 TV 는 상단 매장 이름 옆(세로로 긴 로고는 타이머 옆 오른쪽 위), 세로 TV 는 타이머 위 빈 자리에 들어가요 — 글자와 겹치지 않아요.</p>
               </>
             )}
             {curDisp.fit !== 'cover' && curPlate !== 'none' && (
