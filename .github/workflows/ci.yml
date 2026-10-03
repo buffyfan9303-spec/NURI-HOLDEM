@@ -218,7 +218,8 @@ jobs:
           test "$bad" -eq 0
 
   # ── 보안 게이트(2026-09-02) — 빌드 잡과 병렬. 실패 = 배포 차단 ─────────────────
-  #   ① gitleaks: 커밋 이력 전체의 비밀 유출(공개 저장소라 한 번 새면 즉시 공개)
+  #   ① gitleaks: **이벤트 범위(푸시·PR 의 커밋)만** 본다 — main 푸시에서 '0 commits scanned' 가 나온다
+  #      (2026-10-03). 전체 이력 스캔은 secret-history-scan.yml(주 1회 + 수동)이 맡는다.
   #   ② secretlint: 작업 트리(.secretlintrc.json 의 공개 키 allow 목록 적용)
   #   ③ semgrep: TypeScript/React/secrets 규칙(윈도우 로컬은 네이티브 미지원이라 CI 에서만)
   #   ④ npm audit: 런타임 의존성 high 이상
@@ -228,8 +229,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0   # gitleaks 가 이력을 본다
-      - name: gitleaks (이력)
+          fetch-depth: 0   # 이벤트 범위의 커밋 목록을 계산하는 데 필요
+      - name: gitleaks (이벤트 범위)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
