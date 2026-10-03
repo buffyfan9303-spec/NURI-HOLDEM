@@ -101,3 +101,25 @@ export function summarizeFor(vs: Voucher[], query: string, now = Date.now()) {
     held: mine.filter((v) => isHeldVoucher(v, now) && !v.usedAt).length,
   };
 }
+
+/** 이용권 관리 창의 '이용 내역' 줄 — 전송(created_at)·사용(used_at)을 최신순으로, 같은 분·종류·대상·제목·용도는 한 줄 ×N.
+ *  전송 취소(revoked)는 위 규칙 ②와 같다 — 시각 컬럼이 없어 따로 줄을 만들지 않고 **그 전송 줄에 장수(revoked)** 로 붙인다.
+ *  종전엔 이 장수를 버려 유형별 표('전송 취소 1')와 내역이 맞지 않았다(dummy-1003 D2).
+ *  항등: Σ전송 줄 n = 전송 장수(취소 포함) · Σ revoked = 전송 취소 장수 · Σ사용 줄 n = 사용 장수. */
+export interface ManageFeedRow { t: 'issued' | 'used'; at: string; title: string; who: string; addon?: boolean; n: number; revoked: number }
+export function manageFeedRows(list: readonly Voucher[], whoOf: (v: Voucher) => string): ManageFeedRow[] {
+  const ev: Omit<ManageFeedRow, 'n'>[] = [];
+  for (const v of list) {
+    if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: whoOf(v) || '매장 보관', revoked: v.status === 'revoked' ? 1 : 0 });
+    if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: whoOf(v), addon: v.usedFor === 'addon', revoked: 0 });
+  }
+  ev.sort((a, b) => b.at.localeCompare(a.at));
+  const out: ManageFeedRow[] = [];
+  for (const e of ev) {
+    const last = out[out.length - 1];
+    if (last && last.t === e.t && last.title === e.title && last.who === e.who && !!last.addon === !!e.addon && last.at.slice(0, 16) === e.at.slice(0, 16)) {
+      last.n += 1; last.revoked += e.revoked;
+    } else out.push({ ...e, n: 1 });
+  }
+  return out;
+}

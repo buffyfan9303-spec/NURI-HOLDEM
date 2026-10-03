@@ -15,7 +15,9 @@ const RANGE_ORDER: Range[] = ['all', '7', '30', '90'];
 
 /**
  * 고객 분석 — 방문 손님 전체 리스트(장부 기준).
- * 바인 횟수 · 방문 · 머니인(입상) · 머니인 비율 · 미수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문.
+ * 바인 횟수 · 방문 · 입상(순위 등재 횟수) · 입상 비율 · 미수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문.
+ * ⚠ 이 화면의 '입상'은 venue_rankings 등재 **횟수**다(CustomerStat.moneyIn). 정산 판의 '머니인'은 넣은 **금액**이라
+ *   같은 단어를 쓰면 두 화면이 다른 뜻이 된다(dummy-1003 O4, 리드 결정) — 여기서는 '머니인'이라 부르지 않는다.
  * 기간(전체/7/30/90일) + 이름 검색. 파일 반출(CSV)은 오너 지시(2026-09-09)로 뺐다 — 화면 안에서만 본다.
  */
 export default function CustomerAnalytics({ venueId }: { venueId: string }) {
@@ -109,7 +111,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
         <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="input w-auto shrink-0 text-2xs py-1.5">
           <option value="buyins">바인순</option>
           <option value="visits">방문순</option>
-          <option value="rate">머니인 비율순</option>
+          <option value="rate">입상 비율순</option>
           <option value="unpaid">미수순</option>
           <option value="recent">최근 방문순</option>
         </select>
@@ -139,7 +141,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                 <span>바인 <b className="tabular-nums text-ink-secondary">{r.buyins}</b>회</span>
                 <span>방문 <b className="tabular-nums text-ink-secondary">{r.visits}</b>회</span>
-                <span>머니인 <b className="tabular-nums text-ink-secondary">{r.moneyIn}</b>회</span>
+                <span data-testid="crm-rank-count">입상 <b className="tabular-nums text-ink-secondary">{r.moneyIn}</b>회</span>
                 <span>비율 <b className={['tabular-nums', (r.rate ?? 0) >= 30 ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{r.rate !== null ? `${r.rate}%` : '-'}</b></span>
                 <span>결제 <b className="text-ink-secondary">{paymentLabel(r.topPayment)}</b></span>
                 {r.peakHour !== null && <span>주 방문 <b className="tabular-nums text-ink-secondary">{r.peakHour}시</b></span>}

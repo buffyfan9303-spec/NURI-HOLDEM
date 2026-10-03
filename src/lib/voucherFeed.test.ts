@@ -1,6 +1,6 @@
 // 장부 옆 이용권 레일의 계약 — 업주가 손님과 다툴 때 근거로 보는 화면이라 값이 틀리면 안 된다.
 import { describe, it, expect } from 'vitest';
-import { toFeedRows, summarizeFor } from './voucherFeed';
+import { toFeedRows, summarizeFor, manageFeedRows } from './voucherFeed';
 import type { Voucher } from '../api/vouchers';
 
 const NOW = Date.parse('2026-09-06T12:00:00+09:00');
@@ -142,5 +142,38 @@ describe("'보냈는지' 한 줄 요약", () => {
 
   it('빈 검색어는 요약하지 않는다(전체를 요약하면 오해를 부른다)', () => {
     expect(summarizeFor(rows, '   ', NOW)).toBeNull();
+  });
+});
+
+// dummy-1003 D2 — 이용권 관리 창 '이용 내역'에 전송 취소가 없었다(유형별 표는 '전송 취소 1'). 표와 내역의 수가 맞아야 한다.
+describe('이용권 관리 이용 내역 — 전송 취소도 전송 줄에 장수로 남는다', () => {
+  // 더미 정산 실측: 전송 9 · 사용 8 · 취소 1 (세 손님, 한 손님은 3장 받아 1장 취소)
+  const at = (m: number) => `2026-10-03T0${m}:00:00Z`;
+  const list: Voucher[] = [
+    ...Array.from({ length: 3 }, (_, i) => v({ id: 'a' + i, holderName: '강도윤', createdAt: at(1), status: i === 0 ? 'revoked' : 'used', usedAt: i === 0 ? null : at(5) })),
+    ...Array.from({ length: 3 }, (_, i) => v({ id: 'b' + i, holderName: '서하린', createdAt: at(2), status: 'used', usedAt: at(6) })),
+    ...Array.from({ length: 3 }, (_, i) => v({ id: 'c' + i, holderName: '오지후', createdAt: at(3), status: 'used', usedAt: at(7), usedFor: i === 2 ? 'addon' : 'buyin' })),
+  ];
+  const rows = manageFeedRows(list, (x) => x.holderName ?? '');
+  const sum = (t: 'issued' | 'used', k: 'n' | 'revoked') => rows.filter((r) => r.t === t).reduce((s, r) => s + r[k], 0);
+
+  it('🔴 Σ전송 9 · Σ전송 취소 1 · Σ사용 8 — 유형별 표(전송·전송 취소·사용)와 같다', () => {
+    expect(sum('issued', 'n')).toBe(9);
+    expect(sum('issued', 'revoked')).toBe(1);
+    expect(sum('used', 'n')).toBe(8);
+  });
+  it('🔴 취소는 그 손님의 전송 줄에 붙는다(3장 중 1장)', () => {
+    const r = rows.find((x) => x.t === 'issued' && x.who === '강도윤');
+    expect(r).toMatchObject({ n: 3, revoked: 1 });
+    expect(rows.filter((x) => x.t === 'issued' && x.who !== '강도윤').every((x) => x.revoked === 0)).toBe(true);
+  });
+  it('전량 취소면 revoked === n (화면은 "전송 취소" 배지)', () => {
+    const all = manageFeedRows([v({ id: 'z0', createdAt: at(1), status: 'revoked' }), v({ id: 'z1', createdAt: at(1), status: 'revoked' })], () => '홍길동');
+    expect(all).toEqual([expect.objectContaining({ t: 'issued', n: 2, revoked: 2 })]);
+  });
+  it('최신순 · 애드온 사용은 바인 사용과 다른 줄 · 받는 사람 없으면 "매장 보관"', () => {
+    expect(rows[0].at >= rows[rows.length - 1].at).toBe(true);
+    expect(rows.filter((r) => r.t === 'used' && r.who === '오지후').map((r) => [r.n, !!r.addon]).sort()).toEqual([[1, true], [2, false]]);
+    expect(manageFeedRows([v({ id: 'k', createdAt: at(1) })], () => '')[0].who).toBe('매장 보관');
   });
 });

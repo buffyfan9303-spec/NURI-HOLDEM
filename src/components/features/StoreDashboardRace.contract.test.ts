@@ -175,17 +175,26 @@ describe('F12 · 정산 칩만 하루 전체 범위로 판정한다', () => {
     return m![1];
   };
 
-  it('settle.done 이 오늘 **전 게임**의 마감·미수를 본다', () => {
-    expect(stepInfo()).toMatch(/done: closed && fin\.unpaid === 0 && todayGames\.every\(\(g\) => g\.sx\.closed && g\.unpaid === 0\)/);
+  // dummy-1003 D3 — 하루 판정은 lib/ledgerSettlement.isDaySettled 한 벌(값 시험은 ledgerSettlement.test.ts)이고,
+  //   '정산' 칩과 '지금 할 일'의 '오늘 운영 완료'가 **같은 daySettled** 를 본다(종전엔 할 일 카드만 메인 마감을 봤다).
+  it('settle.done 이 오늘 **전 게임**의 마감·미수를 본다 — daySettled = isDaySettled(메인, todayGames)', () => {
+    expect(stepInfo()).toMatch(/done: daySettled,/);
+    expect(code).toMatch(/const daySettled = isDaySettled\(session \? \{ closed: !!session\.closed, unpaid: fin\.unpaid \} : null,\s*todayGames\.map\(\(g\) => \(\{ closed: !!g\.sx\.closed, unpaid: g\.unpaid \}\)\)\);/);
+    expect(code.indexOf('const daySettled = ')).toBeLessThan(code.indexOf('const stepInfo = useMemo<')); // TDZ
   });
 
-  it('나머지 네 단계는 단일(메인) 세션 기준 그대로다 — todayGames 는 settle 줄에만 등장한다', () => {
-    const lines = stepInfo().split('\n').filter((l) => l.includes('todayGames'));
+  it("'오늘 운영 완료' 갈래도 같은 daySettled 로 연다(칩과 할 일 카드가 갈라지지 않는다)", () => {
+    expect(code).toMatch(/\} else if \(caps\.manage && daySettled\) \{\s*todo = \{ icon: 'check-circle', title: '오늘 운영 완료'/);
+    expect(code).not.toMatch(/caps\.manage && session\?\.closed\) \{\s*todo = \{ icon: 'check-circle'/);
+  });
+
+  it('나머지 네 단계는 단일(메인) 세션 기준 그대로다 — 하루 범위는 settle 줄에만 등장한다', () => {
+    const lines = stepInfo().split('\n').filter((l) => /todayGames|daySettled/.test(l));
     expect(lines.length).toBe(1);
     for (const key of ['posters:', 'ledger:', 'clock:', 'ranking:']) {
       const line = stepInfo().split('\n').find((l) => l.trim().startsWith(key));
       expect(line, `${key} 줄을 찾지 못했다`).toBeTruthy();
-      expect(line!).not.toContain('todayGames');
+      expect(line!).not.toMatch(/todayGames|daySettled/);
     }
   });
 

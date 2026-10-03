@@ -21,6 +21,7 @@ import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; //
 import { buildQrForVenue } from './venueQrPrint'; // FINAL-QR#PRINT-A-B — `await` 뒤 '지금 매장' 판정의 단일 출처
 import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로컬이 아니라 KST — 서버 판정과 같은 기준
 import { msgOf } from '../../lib/dbError';
+import { manageFeedRows } from '../../lib/voucherFeed';
 
 /** 발급 근거 픽 — 오너 지시(2026-09-19): '첫 방문 환영'·'방문 감사' 픽을 빼고 '이용권 지급'을 맨 앞에 둔다.
  *  2026-09-19 2차(마이그레이션 20260919a, 오너 결정 "내역도 '이용권 지급'으로 보이게 해라") — 처음엔
@@ -242,22 +243,10 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
       return label === '-' ? '' : label;
     };
     // #8(2026-09-29) — addon: 접수대가 이 사용을 '애드온'으로 승인했다(store_vouchers.used_for). 줄 끝에 '애드온' 을 붙인다.
-    const ev: { t: 'issued' | 'used'; at: string; title: string; who: string; addon?: boolean }[] = [];
-    for (const v of list) {
-      if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: whoOf(v) || '매장 보관' });
-      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: whoOf(v), addon: v.usedFor === 'addon' });
-    }
-    ev.sort((a, b) => b.at.localeCompare(a.at));
-    // 같은 분(分)·종류·대상·제목은 한 줄로 묶고 ×N — 10장 발급이 10줄로 도배되지 않게
-    const grouped: { t: 'issued' | 'used'; at: string; title: string; who: string; addon?: boolean; n: number }[] = [];
-    for (const e of ev) {
-      const last = grouped[grouped.length - 1];
-      if (last && last.t === e.t && last.title === e.title && last.who === e.who && !!last.addon === !!e.addon && last.at.slice(0, 16) === e.at.slice(0, 16)) last.n += 1;
-      else grouped.push({ ...e, n: 1 });
-    }
+    // 같은 분(分)·종류·대상·제목은 한 줄로 묶고 ×N — 10장 발급이 10줄로 도배되지 않게. 전송 취소 장수는 그 전송 줄에 붙는다(manageFeedRows).
     // 🔴 2026-09-24 오너: 목록은 20줄 높이까지만 보이고 그 안에서 스크롤 — 종전 `slice(0, 30)` 은 31번째 줄부터 **화면에서 사라졌다**.
     //   자르지 않고 전부 그린다(스크롤로 모두 닿는다). 원천 목록 자체의 상한(listVenueVouchers 1000행 · max_rows)은 별개 문제다.
-    return grouped;
+    return manageFeedRows(list, whoOf);
   }, [list, profileMap]);
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
@@ -522,6 +511,12 @@ ${cards}
                 <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
                   <span className="min-w-0 truncate"><b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}{e.addon ? ' · 애드온' : ''}</span>
                   {e.n > 1 && <b className="shrink-0 text-accent-300">×{e.n}</b>}
+                  {/* 전송 취소 — 시각이 없어 따로 줄을 만들지 않고 그 전송 줄에 장수로 붙인다(유형별 표 '전송 취소'와 같은 수). */}
+                  {e.revoked > 0 && (
+                    <span data-testid="voucher-feed-revoked" className="shrink-0 rounded-badge bg-danger/15 px-1.5 py-0.5 font-bold leading-none text-danger-light">
+                      {e.revoked === e.n ? '전송 취소' : `취소 ${e.revoked}`}
+                    </span>
+                  )}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>
               </li>

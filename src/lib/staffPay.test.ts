@@ -2,7 +2,7 @@
 // 서버 쪽 대응 줄은 rehearsal.sql 의 P5·P6·P7(시급 96,000 · 일급 93,750 · 월급 2,100,000).
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_PAY_RULES, RAW_PAY_RULES, autoBreakMinutes, belowMinWage, computePay, daysInMonth, laborSummary, lateMinutes, netMinutes,
+  DEFAULT_PAY_RULES, RAW_PAY_RULES, autoBreakMinutes, avgClockHm, belowMinWage, computePay, daysInMonth, laborSummary, lateMinutes, netMinutes,
   nightMinutes, payForPeriod, plannedMinutes, shiftFromHm, weekStartOf, workedMinutes, type PayRules, type PayShift, type WageShift,
 } from './staffPay';
 
@@ -332,5 +332,22 @@ describe('반례③ 주휴 단가 = 그 주 소정근로 시간 가중 평균 �
     const days = ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14'];
     const ws = days.map((d, i) => W(shift(d, ['18:00', '21:00'], '18:00', '21:00', false), i < 4 ? 20000 : 10320));
     expect(computePay(ws, R({ weeklyHoliday: true }), AUG).weeklyHoliday).toBe(54192);
+  });
+});
+
+// dummy-1003 D1 — 인건비 정산의 '평균 출근/퇴근'(전체 타일·직원별 칸) 둘 다 이 함수 하나를 쓴다(StaffPayroll.tsx avgHm).
+describe('평균 출퇴근 시각 — 자정을 넘긴 퇴근도 그 사이로 (원형 평균)', () => {
+  it.each([
+    ['🔴 자정 넘김 퇴근 두 건 01:10 · 23:30 → 00:20 (산술이면 12:20)', ['01:10', '23:30'], '00:20'],
+    ['🔴 한 달 퇴근 23:50 · 00:30 · 01:10 → 00:30', ['23:50', '00:30', '01:10'], '00:30'],
+    ['저녁 출근은 종전과 같다 18:00 · 18:30 → 18:15', ['18:00', '18:30'], '18:15'],
+    ['빈 값은 건너뛴다', [null, '02:00', undefined, ''], '02:00'],
+    ['기록 없음', [], '—'],
+    ['정반대 두 시각은 평균이 없다', ['00:00', '12:00'], '—'],
+  ] as [string, (string | null | undefined)[], string][])('%s', (_n, list, want) => {
+    expect(avgClockHm(list)).toBe(want);
+  });
+  it('🔴 더미 정산 실측값 01:10 · 23:35 → 00:22~00:23 (참값 00:22:30, 화면 12:23 이던 결함)', () => {
+    expect(['00:22', '00:23']).toContain(avgClockHm(['01:10', '23:35']));
   });
 });
