@@ -1029,6 +1029,20 @@ const snapScroll = () => ({ y: window.scrollY, headerH: (document.querySelector(
 export default function App() {
   const { user, isAdmin, isOwner, loading: authLoading, refreshProfile } = useAuth();
   const toast = useToast();
+  /** 지금 로그인한 사람의 id — **늦게 도착한 이전 계정 응답을 버리기 위한 대조값**이다(N01 · R3-01).
+   *  ⚠ 렌더 본문에서 **동기로** 갱신한다. 예전엔 알림 이펙트 안에서 채워서, 그보다 먼저 선언된 이펙트(QR 딥링크)의
+   *    첫 실행에서는 아직 null 이었고(2026-09-24 출석 시트 미표시) 그 때문에 같은 뜻의 ref 가 하나 더(checkinUidRef) 생겼다. */
+  const uidRef = useRef<string | null>(null);
+  uidRef.current = user?.id ?? null;
+  /** 🔴 R3-01(2026-10-04) — **계정 범위 응답 setter 의 유일한 관문.**
+   *  감싸는 순간(= 요청을 내는 그 틱)의 계정을 찍어 두고, 응답이 왔을 때 계정이 바뀌었으면(로그아웃 · 다른 계정) 버린다.
+   *  로그아웃은 페이지를 다시 불러오지 않으므로(AuthContext 는 세대만 올린다) 가드가 없으면 A 의 늦은 응답이 B 화면에 그대로 그려진다.
+   *  N01 은 이 비교를 호출부마다 손으로 달아서 알림 5곳 중 3곳만 막혔다(online·창 복귀가 샜다) — 이제 여기 한 곳만 지난다.
+   *  계약: src/appAccountGuard.contract.test.ts(벌거벗은 `.then(set…)` 0개) · e2e/account-isolation.spec.ts 'R3-01'. */
+  const forAccount = useCallback(<T,>(set: (v: T) => void) => {
+    const owner = uidRef.current;
+    return (v: T) => { if (uidRef.current === owner) set(v); };
+  }, []);
 
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
@@ -1360,7 +1374,7 @@ export default function App() {
     const onOn = () => {
       setOffline(false);
       reloadSchedules(); reloadVenues(); reloadNotices();
-      if (user) getMyNotifications().then(setNotifications).catch(() => {});
+      if (user) getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
     };
     window.addEventListener('offline', onOff);
     window.addEventListener('online', onOn);
@@ -1525,12 +1539,9 @@ export default function App() {
   /** CHECKIN-GEO 재시도 시트 — 위치를 못 얻은 출석(CheckinGeoError)만 여기로 온다. 서버 거부는 종전대로 토스트.
    *  venueId 를 시트가 들고 있는다(보류 의도는 이미 소비됐다). uid 는 **요청 시점** 계정 — 다른 계정이면 그리지 않는다. */
   const [geoRetry, setGeoRetry] = useState<{ venueId: string; code: CheckinGeoErrorCode; uid: string | null; open: boolean } | null>(null);
-  // ⚠ uidRef(아래 [user?.id] effect 가 채운다)를 쓰지 않는다 — QR 딥링크 effect 가 **그 effect 보다 먼저 선언**돼 있어
-  //   로그인 직후 첫 runCheckin 에서 uidRef 가 아직 null 이다(2026-09-24 e2e 실측: 시트가 안 떴다). 렌더 시점 값을 쓴다.
-  const checkinUidRef = useRef<string | null>(null);
-  checkinUidRef.current = user?.id ?? null;
+  // uidRef 는 렌더 본문에서 동기로 채워진다(위 선언부) — 로그인 직후 첫 runCheckin 에서도 이미 지금 계정이다.
   const runCheckin = useCallback((venueId: string) => {
-    const forUid = checkinUidRef.current; // 늦은 응답 가드 — 응답이 올 때 계정이 바뀌었으면 시트를 그리지 않는다(아래 렌더 조건)
+    const forUid = uidRef.current; // 늦은 응답 가드 — 응답이 올 때 계정이 바뀌었으면 시트를 그리지 않는다(아래 렌더 조건)
     checkIn(venueId)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
@@ -1557,7 +1568,7 @@ export default function App() {
    *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
   const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
     const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다. 매장 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다. 매장 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(forAccount(setMyBuyinReqs)).catch(() => {}); })
       .catch((e) => toast.show(msgOf(e, '요청 전송 실패'), 'error'));
     if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
     (async () => {
@@ -1565,7 +1576,7 @@ export default function App() {
       if (games.length > 1) { setBuyinPick({ venueId, games }); return; }
       submit(games[0]?.gameSeq ?? null);
     })();
-  }, [toast]);
+  }, [toast, forAccount]);
 
   // ── 🔴 Q6(2026-09-21) QR 딥링크 — **한 번 파싱, 한 갈래만 실행** ───────────────────
   //
@@ -1660,7 +1671,7 @@ export default function App() {
   // 손님: 오늘 내가 보낸 바인 요청 상태(배너) — 로그인 시 로드 + 창 포커스 시 갱신(운영자 승인 반영)
   useEffect(() => {
     if (!user) { setMyBuyinReqs([]); return; }
-    const load = () => ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {});
+    const load = () => ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(forAccount(setMyBuyinReqs)).catch(() => {});
     load();
     window.addEventListener('focus', load);
     // 모듈이 지연 로드라 구독 해제 함수가 **나중에** 온다. 그 사이 언마운트되면 구독이 미아로 남으므로
@@ -2021,14 +2032,9 @@ export default function App() {
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  /** 지금 로그인한 사람의 id — **늦게 도착한 이전 계정 응답을 버리기 위한 대조값**이다(N01).
-   *
-   *  알림 최초 조회(`[user?.id]` 이펙트)와 쪽지 카운트 폴링에는 이미 `alive` 가드가 있는데,
-   *  **Realtime 수신 재조회와 읽음 처리 실패 재조회 두 곳에만 없었다.**
-   *  A 로그인 → 재조회 시작 → 로그아웃 → B 로그인 → A 응답 도착 순서에서
-   *  B 의 알림 목록·배지가 A 의 알림으로 덮인다. 서버는 각자 제 데이터만 주므로 RLS 우회는 아니지만,
-   *  **남의 알림이 내 화면에 보이는 것** 자체가 사고다. */
-  const uidRef = useRef<string | null>(null);
+  // 알림·바인 요청·가 본 매장 등 계정 범위 응답은 전부 위 `forAccount`(uidRef 대조)를 지난다 — N01 · R3-01.
+  //   A 로그인 → 재조회 시작 → 로그아웃 → B 로그인 → A 응답 도착 순서에서 B 의 목록·배지가 A 의 것으로 덮였다.
+  //   서버는 각자 제 데이터만 주므로 RLS 우회는 아니지만, **남의 알림이 내 화면에 보이는 것** 자체가 사고다.
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
@@ -2050,8 +2056,8 @@ export default function App() {
   const [usersErr,      setUsersErr]      = useState<unknown>(null);
   const loadUsers = useCallback(() => {
     setUsersErr(null);
-    listAllUsers().then(setUsers).catch(setUsersErr);
-  }, []);
+    listAllUsers().then(forAccount(setUsers)).catch(forAccount(setUsersErr));
+  }, [forAccount]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
   /** 포스터 폼 — null: 닫힘 / undefined: 신규 / Schedule: 수정 */
@@ -2431,7 +2437,7 @@ export default function App() {
   const recentVenue = visitedVenues[0] ?? null;
   useEffect(() => {
     if (!user) { setVisitedVenues([]); return; }
-    const load = () => { vouchersMod().then((m) => m.myVisitedVenues()).then(setVisitedVenues).catch(() => {}); };
+    const load = () => { vouchersMod().then((m) => m.myVisitedVenues()).then(forAccount(setVisitedVenues)).catch(() => {}); };
     load();
     // 체크인 성공(QR 딥링크 2경로 · 매장 페이지 스캐너)마다 다시 읽는다 — 첫 방문 매장에서 찍어도
     // 홈 '이어서 하기'·추천 레일 '가 본 매장' 이 옛 값이던 것(연결 감사 E, 2026-09-17).
@@ -2549,14 +2555,10 @@ export default function App() {
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {
-    // alive 가드: A 세션으로 나간 조회가 로그아웃→B 로그인 뒤에 도착하면 B 의 목록(배지·패널·내 정보 미리보기)을
-    // A 의 알림 50건으로 덮었다. 계정 전환은 이 이펙트만 다시 돌리므로 여기가 그 레이스의 정본이다.
-    let alive = true;
-    // 계정이 바뀌는 즉시 갱신한다 — Realtime 재조회·읽음 실패 재조회가 이 값으로 늦은 응답을 거른다.
-    uidRef.current = user?.id ?? null;
-    if (user) getMyNotifications().then((ns) => { if (alive) setNotifications(ns); }).catch(() => {});
+    // 계정 가드(forAccount): A 세션으로 나간 조회가 로그아웃→B 로그인 뒤에 도착하면 B 의 목록(배지·패널·내 정보 미리보기)을
+    // A 의 알림 50건으로 덮었다.
+    if (user) getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
     else setNotifications([]);
-    return () => { alive = false; };
     // ⚠ [user] 객체 의존이면 일일 출석점수 반영(setUser 참조 교체)에도 재실행돼 fetch·리렌더가 2배였다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -2565,9 +2567,8 @@ export default function App() {
   // 패널을 열면 NotificationPanel 이 스레드 로드로 즉시 재계산해 콜백으로 덮어쓴다.
   useEffect(() => {
     if (!user) { setUnreadMsgs(0); return; }
-    // alive 가드: A 세션으로 나간 카운트가 로그아웃→B 로그인 뒤 도착하면 B 의 배지에 A 의 수가 실린다(다음 폴링까지).
-    let alive = true;
-    const load = () => myUnreadMessageCount().then((n) => { if (alive) setUnreadMsgs(n); }).catch(() => {});
+    // 계정 가드: A 세션으로 나간 카운트가 로그아웃→B 로그인 뒤 도착하면 B 의 배지에 A 의 수가 실린다(다음 폴링까지).
+    const load = () => myUnreadMessageCount().then(forAccount(setUnreadMsgs)).catch(() => {});
     load();
     // [§5-B] 숨은 탭에서는 폴링을 돌리지 않는다 — 게이트가 없을 때 사용자당 시간당 40요청이 백그라운드에서 나갔다.
     //
@@ -2591,7 +2592,7 @@ export default function App() {
       load();
     };
     document.addEventListener('visibilitychange', onShow);
-    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -2609,7 +2610,7 @@ export default function App() {
   useVisibilityRefresh(() => {
     // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
     if (user) {
-      getMyNotifications().then(setNotifications).catch(() => {});
+      getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
       // ⚠ 쪽지 미읽음 카운트는 **여기서 받지 않는다.** 한때 여기 있었는데 독립 검증에서 반증됐다 —
       //   이 훅의 20초 스로틀이 복귀 재조회를 삼켜 배지가 최대 180초까지 낡았다(HEAD 는 90초).
       //   지금은 위 폴링 이펙트가 '건너뛴 틱'을 기억했다가 복귀 때 스로틀 없이 한 번 메운다.
@@ -2652,16 +2653,14 @@ export default function App() {
       default:
         break;
     }
-  }, [activeTab, user, isAdmin, refreshClocks, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+  }, [activeTab, user, isAdmin, refreshClocks, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices, forAccount]);
 
   // 알림 실시간 수신(신규/읽음)
   useEffect(() => {
     if (!user) return;
-    let alive = true;
-    const forUid = user.id;
-    // ⚠ N01: 늦게 도착한 A 의 알림이 B 화면을 덮지 않게 한다. 구독 해제(alive)와 계정 대조를 함께 본다.
+    // ⚠ N01: 늦게 도착한 A 의 알림이 B 화면을 덮지 않게 한다 — 계정 대조는 forAccount 한 곳에서.
     const reload = () => getMyNotifications()
-      .then((ns) => { if (alive && uidRef.current === forUid) setNotifications(ns); })
+      .then(forAccount(setNotifications))
       .catch(() => {});
     const ch = supabase
       .channel(`notif:${user.id}`)
@@ -2669,7 +2668,7 @@ export default function App() {
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         reload)
       .subscribe();
-    return () => { alive = false; supabase.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); };
     // ⚠ [user] 객체 의존이면 포인트·출석 반영으로 `user` 참조가 갈릴 때마다 채널이 teardown→재연결되고
     //   그때마다 getMyNotifications() 가 한 번씩 더 나갔다. 위 `:1209` 의 바인요청 구독이 같은 churn 을
     //   `user?.id` 로 이미 고쳐 뒀는데 여기만 남아 있었다. 재구독이 필요한 조건은 **계정이 바뀔 때**뿐이다.
@@ -2891,9 +2890,10 @@ export default function App() {
     if (!user) { setMyTodayRes([]); setMyTodayResErr(null); return; }
     setMyTodayResErr(null);
     const today = new Date().toLocaleDateString('en-CA');
+    // R3-01 — then·catch 둘 다 계정 가드: A 의 늦은 예약 목록·오류 배너가 B 의 홈에 남지 않게.
     reservationsMod().then((m) => m.getMyReservations(30))
-      .then((list) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); })
-      .catch((e) => setMyTodayResErr(e)); // 직전 성공 목록은 지우지 않는다
+      .then(forAccount((list: MyReservationRow[]) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); }))
+      .catch(forAccount((e: unknown) => setMyTodayResErr(e))); // 직전 성공 목록은 지우지 않는다
     // resVersion: 상세 모달·'내 정보' 어느 쪽에서 예약/취소해도 홈 '오늘 예약한 대회'가 따라온다(F06)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, resVersion]);
@@ -3233,13 +3233,13 @@ export default function App() {
     );
     // 실패 시 서버 상태로 재동기화 — 배지가 사라졌다 되살아나는 왕복 방지.
     // ⚠ N01: 재조회가 늦게 도착하는 사이 계정이 바뀌었으면 그 목록은 남의 것이다. 대조하고 버린다.
-    const forUid = uidRef.current;
+    //   계정은 **재조회를 낼 때** 찍는다 — 읽음 처리 실패를 기다리는 사이 계정이 바뀌었으면 그 재조회는 새 세션으로 나가 새 계정 것이 맞다.
     markNotificationsRead(ids).catch(() => {
       getMyNotifications()
-        .then((ns) => { if (uidRef.current === forUid) setNotifications(ns); })
+        .then(forAccount(setNotifications))
         .catch(() => {});
     });
-  }, []);
+  }, [forAccount]);
 
   // 알림 클릭 → 해당 페이지로 이동
   const handleNavigateNotification = useCallback((n: AppNotification, opts?: { returnToMe?: boolean }) => {
@@ -4581,7 +4581,7 @@ export default function App() {
                             usedVoucher 가 아닐 때는 그 문장을 아예 안 붙인다(추측을 말하지 않는다). */}
                         {r.status === 'pending' && <button type="button" onClick={() => ledgerMod()
                           .then((m) => m.cancelBuyinRequest(r.id)
-                            .then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))
+                            .then(() => m.getMyBuyinRequestsToday().then(forAccount(setMyBuyinReqs)))
                             .then(() => toast.show(r.usedVoucher ? '요청을 취소했습니다 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했습니다', 'success')))
                           .catch((e) => toast.show(msgOf(e, '취소 실패'), 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
@@ -4778,7 +4778,7 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(msgOf(e, '요청 실패'), 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(forAccount(setMyBuyinReqs)).catch(() => {}); })).catch((e) => toast.show(msgOf(e, '요청 실패'), 'error'));
         };
         return (
           <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>

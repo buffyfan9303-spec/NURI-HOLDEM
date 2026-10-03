@@ -52,8 +52,11 @@ describe('③ App.tsx 배선 — runCheckin 이 이 분기를 쓰고, 시트는 
     expect(body).toContain('checkIn(venueId)');
   });
   it('catch 가 checkinFailureAction 으로 갈라 CheckinGeoError 는 시트 상태로 보낸다', () => {
-    // 렌더 시점 계정 — uidRef 는 QR effect 보다 늦게 선언된 effect 가 채워 첫 호출에서 null 이었다(e2e G1 실측)
-    expect(body).toMatch(/const forUid = checkinUidRef\.current;/);
+    // 렌더 시점 계정 — uidRef 는 QR effect 보다 늦게 선언된 effect 가 채워 첫 호출에서 null 이었다(e2e G1 실측).
+    //   R3-01(2026-10-04): uidRef 를 렌더 본문 동기 갱신으로 옮겨 checkinUidRef 와 하나로 합쳤다 — 그 동기 갱신까지 잠근다.
+    expect(body).toMatch(/const forUid = uidRef\.current;/);
+    expect(app).toMatch(/\n\s*uidRef\.current = user\?\.id \?\? null;/);
+    expect(app.match(/uidRef\.current =[^=]/g)?.length, 'uidRef 를 이펙트 안에서 다시 채우면 첫 runCheckin 에서 null 이 돌아온다').toBe(1);
     expect(body).toMatch(/checkinFailureAction\(e\)/);
     expect(body).toMatch(/setGeoRetry\(\{ venueId, code: act\.code, uid: forUid, open: true \}\)/);
     expect(body).toMatch(/else toast\.show\(act\.message, 'error'\)/);
