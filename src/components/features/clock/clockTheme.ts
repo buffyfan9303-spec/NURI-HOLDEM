@@ -16,7 +16,77 @@ export interface ClockTheme {
   version: 1;
   palette?: { preset: string; accent?: string };
   /** image: 매장이 올린 배경 사진(우리 스토리지 공개 URL만 — sanitize 가 호스트·버킷·경로를 대조) */
-  background?: { kind: 'solid' | 'gradient' | 'felt'; preset: string; image?: string };
+  background?: { kind: 'solid' | 'gradient' | 'felt'; preset: string; image?: string } & ClockBgDisplay;
+}
+
+/**
+ * N-2(2026-10-03 오너 결정) — 매장이 올린 이미지(사진·자기 로고)를 **어떻게 놓을지**.
+ *  · fit  cover(기본 — 종전 그대로, 사진용) · contain(잘림 없이 맞추기 — 남는 곳은 이미지 대표색) · center('로고로 넣기' — 투명 PNG 그대로)
+ *  · pos  center(기본) · top · bottom — contain 에서만 의미가 있다(로고는 자리가 정해져 있다)
+ *  · size 1·2·3 — 로고 크기 단계. 가로 보드는 머리줄 로고 칸 높이(짧은 변 5·6·7%), 세로 보드는 타이머 위 빈 자리 상한(20·32·44%)
+ *  · plate 0 — 어두운 로고의 자동 밝은 받침 끄기(기본 = 자동)
+ *  · shade 0·1·2 — cover 의 어둡게 단계. 0 = 업로드 때 잰 밝기 상한 그대로(종전), 1·2 는 그보다 더 어둡게만(상한을 풀지 않는다)
+ * 저장 값은 enum 문자열·작은 정수뿐이다(URL 아님). **기본값은 저장하지 않는다** — 옛 매장의 테마 객체는 한 글자도 안 바뀐다.
+ */
+export type ClockBgFit = 'cover' | 'contain' | 'center';
+export type ClockBgPos = 'center' | 'top' | 'bottom';
+export interface ClockBgDisplay { fit?: ClockBgFit; pos?: ClockBgPos; size?: 1 | 2 | 3; shade?: 0 | 1 | 2; plate?: 0 | 1 }
+export const CLOCK_BG_FITS: readonly ClockBgFit[] = ['cover', 'contain', 'center'];
+export const CLOCK_BG_POSES: readonly ClockBgPos[] = ['center', 'top', 'bottom'];
+/** 로고 크기 단계(짧은 변 대비 %). head = 가로 보드 머리줄 로고 칸 높이(머리줄 8), tall = 세로 보드 타이머 위 자리의 높이 상한.
+ *  리뷰(2026-10-03 중-2): 보드 한가운데 겹쳐 깔면 타이머 판 뒤에 65~96% 가려졌다 → 글자 판과 겹치지 않는 **자기 자리**(흐름 안의 칸)에만 그린다. */
+export const CLOCK_LOGO_SIZE = { head: { 1: 5, 2: 6, 3: 7 }, tall: { 1: 20, 2: 32, 3: 44 } } as const;
+/** 어두운 로고 받침(중-3) — 로고 뒤에만 까는 은은한 밝은 둥근 판. '맞추기' 의 남는 칸은 밝은 중립색. */
+export const CLOCK_LOGO_PLATE = 'rgba(236,239,245,0.9)';
+export const CLOCK_LIGHT_NEUTRAL = '#D9DDE5';
+/** 평균 상대휘도가 이 값 아래면 '어두운 로고' — 테마 바탕(#06080F 근처)과 대비 3:1 이 안 나오는 밝기((L+.05)/(.0025+.05) < 3). */
+export const CLOCK_DARK_LUM = 0.1075;
+/** cover 의 어둡게 단계 → 상한 위에 더하는 비율(남은 밝기의 몇 %를 더 누르나). 0 은 종전과 같다. */
+export const CLOCK_BG_SHADE_EXTRA = [0, 0.3, 0.55] as const;
+/** contain·center 에서 글자 뒤에만 까는 판. 전체를 누르지 않으므로 로고 색이 산다.
+ *  알파 0.88 — 판 뒤가 **순백**이어도 합성 상대휘도가 상한(0.0233) 근처라 가장 어두운 강조색(인디고)까지 3:1·본문 4.5:1 을 지킨다(clockTheme.test 계산 · e2e 픽셀 실측). */
+export const CLOCK_PLATE_ALPHA = 0.88;
+export const CLOCK_PLATE = `rgba(6,8,15,${CLOCK_PLATE_ALPHA})`;
+
+const isFit = (v: unknown): v is ClockBgFit => typeof v === 'string' && (CLOCK_BG_FITS as readonly string[]).includes(v);
+const isPos = (v: unknown): v is ClockBgPos => typeof v === 'string' && (CLOCK_BG_POSES as readonly string[]).includes(v);
+const isSize = (v: unknown): v is 1 | 2 | 3 => v === 1 || v === 2 || v === 3;
+const isShade = (v: unknown): v is 0 | 1 | 2 => v === 0 || v === 1 || v === 2;
+type DispFull = Required<ClockBgDisplay>;
+
+/** 표시 설정 정규화 — 화이트리스트 밖·기본값은 버린다(저장 객체에 기본값을 남기지 않는다). */
+export function normalizeClockBgDisplay(d: unknown): ClockBgDisplay {
+  const r = (d && typeof d === 'object' ? d : {}) as Record<string, unknown>;
+  const out: ClockBgDisplay = {};
+  if (isFit(r.fit) && r.fit !== 'cover') out.fit = r.fit;
+  if (isPos(r.pos) && r.pos !== 'center') out.pos = r.pos;
+  if (isSize(r.size) && r.size !== 2) out.size = r.size;
+  if (isShade(r.shade) && r.shade !== 0) out.shade = r.shade;
+  if (r.plate === 0) out.plate = 0;
+  return out;
+}
+
+/** 테마 → 표시 설정(기본값까지 채운 꼴). */
+export function clockBgDisplayOf(theme: ClockTheme | null | undefined): DispFull {
+  const n = normalizeClockBgDisplay(theme?.background);
+  return { fit: n.fit ?? 'cover', pos: n.pos ?? 'center', size: n.size ?? 2, shade: n.shade ?? 0, plate: n.plate ?? 1 };
+}
+
+/**
+ * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>-d37-t1a2b3c[-k].webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고).
+ * 왜 테마 키가 아니라 이름인가: 이름은 URL 과 한 몸이라 옛 번들이 테마를 다시 저장해도(모르는 키는 버린다) 떨어지지 않는다.
+ * 이름표가 없는 옛 파일은 업로드 때 이미 밝기를 구워 둔 것이라 d = 0 이 정답이다(종전 렌더와 같다).
+ */
+export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; dark: boolean } {
+  const m = url ? /-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
+  if (!m) return { dim: 0, tint: null, dark: false };
+  return { dim: Math.min(95, Number(m[1])) / 100, tint: m[2] ? `#${m[2]}` : null, dark: !!m[3] };
+}
+
+/** 이 테마의 이미지가 '어두운 로고' 인가(받침을 끄지 않았을 때만 참) — 설정 화면 안내·렌더 공용. */
+export function clockLogoDark(theme: ClockTheme | null | undefined): boolean {
+  const img = clockBgImageOf(theme);
+  return !!img && clockBgMetaOf(img).dark;
 }
 
 /** 아우라 골드(기본 테마 v2, 2026-09-02 오너 지시) — 순흑 + 금빛 보케(정적 radial-gradient 9겹 · 이미지·애니 없음).
@@ -146,6 +216,8 @@ export const CLOCK_DEFAULTS = {
 // 배경 사진이 밝으면 그 위 텍스트가 곧바로 안 보이는 화면이 된다. 밝기를 **두 단계**로 잠근다.
 //   ① 업로드 시(clockBgImage.ts): 리사이즈본을 32×18 셀로 요약해 **가장 밝은 셀**을 찾고,
 //      "그 셀이 스크림까지 통과한 뒤의 상대휘도 ≤ LUM_CAP"이 되는 배율을 이분탐색해 검은색을 구워 넣는다.
+//      (2026-10-03 N-2 부터는 굽지 않고 그 비율을 파일 이름표 `-d<n>` 로 남겨, '꽉 채우기' 렌더 때 같은 알파의 검은 층으로 얹는다 — 합성은 같다.
+//       로고를 올려도 원본 색이 남아 '맞추기'·'가운데 크게' 에서 그대로 보인다. clockBgMetaOf · clockThemeVars.)
 //      → 밝은 사진일수록 더 눌리고, 이미 어두운 사진은 손대지 않는다(자동 노출 고정과 같은 원리).
 //   ② 렌더 시: SCRIM(고정 스크림)을 이미지 위에 깔아 중앙 밴드 투과율 SCRIM_MID 로 한 번 더 낮춘다.
 //
@@ -291,7 +363,7 @@ const isPresetId = (v: unknown): v is string => typeof v === 'string' && /^[a-z0
  *  왜: 새 프리셋을 배포하는 창에서 매장 TV·다른 운영자 세션은 며칠째 열린 옛 번들이다. 예전엔 미지 id 를 만나면
  *  테마 전체를 버려 업주가 올린 배경 사진·강조색까지 사라졌고, 옛 관리자 패널은 다음 클릭에 DB 를 기본 프리셋으로
  *  덮어써 새 테마를 조용히 되돌렸다. id 를 그대로 왕복시키면 룩만 기본으로 그리고(clockThemeVars 의 `p?.`) 데이터는 산다. */
-export function makeClockTheme(presetId: string, accent?: string, image?: string | null): ClockTheme {
+export function makeClockTheme(presetId: string, accent?: string, image?: string | null, display?: ClockBgDisplay | null): ClockTheme {
   const p = clockPresetById(presetId);
   const id = p?.id ?? (isPresetId(presetId) ? presetId : CLOCK_THEME_PRESETS[0].id);
   const kind = p?.kind ?? 'gradient';
@@ -301,7 +373,7 @@ export function makeClockTheme(presetId: string, accent?: string, image?: string
     background: { kind, preset: id },
   };
   if (isAllowedAccent(accent)) t.palette = { preset: id, accent };
-  if (isAllowedClockBgUrl(image)) t.background = { kind, preset: id, image };
+  if (isAllowedClockBgUrl(image)) t.background = { kind, preset: id, image, ...normalizeClockBgDisplay(display) };
   return t;
 }
 
@@ -316,7 +388,7 @@ export function makeClockTheme(presetId: string, accent?: string, image?: string
  * 왜 배경 이미지는 남기나: 사진은 색이 아니라 매장이 올린 자산이라, 테마를 옮겨도 살아 있어야 한다.
  */
 export function themeForPresetChange(presetId: string, prev: ClockTheme | null | undefined): ClockTheme {
-  return makeClockTheme(presetId, undefined, clockBgImageOf(prev));
+  return makeClockTheme(presetId, undefined, clockBgImageOf(prev), prev?.background);
 }
 
 /** DB 에서 온 미지의 값 검증 — 버전·프리셋 id 모양·accent·배경 URL 전부 대조. 불합격 = null(기본 룩).
@@ -333,6 +405,7 @@ export function sanitizeClockTheme(raw: unknown): ClockTheme | null {
     pid,
     isAllowedAccent(accent) ? accent : undefined,
     isAllowedClockBgUrl(image) ? image : null,
+    r.background,
   );
 }
 
@@ -385,11 +458,37 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
   const frameSoft = `color-mix(in srgb, ${accent} 38%, transparent)`;
   const base = p?.bg ?? CLOCK_DEFAULTS.bg;
   const img = clockBgImageOf(t);
+  const disp = clockBgDisplayOf(t);
+  const meta = clockBgMetaOf(img);
   // 배경 이미지: 스크림(맨 위) → 사진 → 프리셋 배경(맨 아래) 3층 합성.
   // background 단축 속성은 색을 **마지막 레이어**에만 허용하므로 프리셋 색/그라디언트가 항상 끝에 온다.
   // 애니메이션·filter·will-change 없음(상시 표출 TV — 1회 디코드 후 정적).
+  // N-2 — cover 는 종전 그대로(+ 이름표의 밝기 상한 · 어둡게 단계를 검은 층으로). contain·center 는 사진을 누르지 않고 글자 판(--clk-plate)을 깐다.
+  let bg = base;
+  let logo: Record<string, string> | null = null;
+  if (img && disp.fit === 'cover') {
+    const a = 1 - (1 - meta.dim) * (1 - CLOCK_BG_SHADE_EXTRA[disp.shade]);
+    const shade = a > 0.0005 ? `linear-gradient(rgba(0,0,0,${a.toFixed(3)}), rgba(0,0,0,${a.toFixed(3)})), ` : '';
+    bg = `${CLOCK_BG_SCRIM}, ${shade}url("${img}") center/cover no-repeat, ${base}`;
+  } else if (img && disp.fit === 'contain') {
+    const at = disp.pos === 'center' ? 'center' : `center ${disp.pos}`;
+    // 중-3 — 어두운 로고를 어두운 대표색 위에 두면 1:1 로 사라졌다. 받침이 켜져 있으면 남는 칸을 밝은 중립색으로.
+    const fill = meta.dark && disp.plate ? CLOCK_LIGHT_NEUTRAL : (meta.tint ?? CLOCK_DEFAULTS.bg);
+    bg = `url("${img}") ${at}/contain no-repeat, ${fill}`;
+  } else if (img) {
+    // '로고로 넣기' — 루트 배경은 테마 그대로. 로고는 ClockStage 의 로고 칸(가로: 머리줄, 세로: 타이머 위)이 그린다.
+    logo = {
+      '--clk-logo': img,
+      '--clk-logo-head': `${CLOCK_LOGO_SIZE.head[disp.size]}cqmin`,
+      '--clk-logo-tall': `${CLOCK_LOGO_SIZE.tall[disp.size]}cqmin`,
+      ...(meta.dark && disp.plate ? { '--clk-logo-plate': CLOCK_LOGO_PLATE } : null),
+    };
+  }
   return {
-    '--clk-bg': img ? `${CLOCK_BG_SCRIM}, url("${img}") center/cover no-repeat, ${base}` : base,
+    '--clk-bg': bg,
+    // 글자 판은 '맞추기' 에서만 — 로고는 이제 글자와 겹치지 않는 자기 칸에 있어 판이 필요 없다.
+    ...(img && disp.fit === 'contain' ? { '--clk-plate': CLOCK_PLATE, '--clk-plate-r': '1.2cqmin', '--clk-plate-align': 'center' } : null),
+    ...logo,
     // ── 강조색이 바꿀 수 있는 것 ──────────────────────────────────────────────
     '--clk-accent': accent,                           // 레벨·현재 블라인드·진행률
     '--clk-frame': frame,                             // 중앙 기하 프레임 바깥 선

@@ -23,14 +23,14 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, type ClockState } from '../../../api/clock';
 import ClockStage from './ClockStage';
+import { clockStageDecor } from './clockStageDecor';
 import { gameLabel } from '../../../lib/clockLevel';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
-import { fetchVenuePageConfig } from '../../../api/rankings';
-import { readSnap, writeSnap } from '../../../lib/snapshot';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, clockAmbienceOf, type ClockTheme } from './clockTheme';
-import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
+import { subscribeClockAd, clockAmbienceOf } from './clockTheme';
+import { useClockThemeVars } from './useClockThemeVars';
 import { ambIsolation } from './ambience/ambiencePresets';
+import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import Icon from '../../atoms/Icon';
 import { BIZ_REQUIRED, AGE_HELPLINE } from '../BusinessFooter';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
@@ -48,25 +48,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   // 클락 테마 — page_config.clockTheme → 루트 CSS 변수(기본 = 아우라).
   // 배경 이미지가 설정돼 있으면 --clk-bg 가 '스크림 + 사진 + 프리셋색' 3층 합성으로 바뀌고 보조 라벨 2단이 함께 올라간다.
   // 캐시 퍼스트(readSnap) + 실패 시 keep-last: 네트워크 블립에 기본 테마로 깜빡이면 안 되는 매장 TV 화면.
-  const [clkVars, setClkVars] = useState<Record<string, string>>(
-    () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))),
-  );
-  useEffect(() => {
-    let alive = true;
-    setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))));
-    fetchVenuePageConfig(venueId)
-      .then((c) => {
-        if (!alive) return;
-        const t = sanitizeClockTheme(c?.clockTheme);
-        writeSnap(clockThemeSnapKey(venueId), t);
-        setClkVars(clockThemeVars(t));
-      })
-      .catch(() => { /* keep-last */ });
-    // 운영자가 설정에서 테마를 바꾸면 **이 창을 다시 열지 않아도** 반영된다.
-    //   TV 는 보통 window.open 으로 띄운 별도 창이라, 여기가 없으면 업주는 바꾼 걸 확인할 방법이 없다.
-    const off = subscribeClockTheme(venueId, (t) => setClkVars(clockThemeVars(t)));
-    return () => { alive = false; off(); };
-  }, [venueId]);
+  const clkVars = useClockThemeVars(venueId);   // 캐시 퍼스트 · keep-last · 같은 브라우저 즉시 · 다른 기기 30초(N-3)
 
   const [fs, setFs] = useState(false);
   // 멀티게임 자동 순환 — ?auto=0 이면 URL 의 게임에 고정(운영자가 특정 게임만 송출할 때 · e2e 결정성)
@@ -230,7 +212,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           )}
         </>
       ) : (
-        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} ads={slideAds} headerRight={tvControls} />
+        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} ads={slideAds} headerRight={tvControls} decor={clockStageDecor(clkVars)} />
       )}
     </div>
       {/* 사업자 정보는 요약(상호·사업자등록번호)만 — 5항목 전부는 앱 푸터가 싣는다. 좁으면 줄바꿈한다(잘라내지 않는다).

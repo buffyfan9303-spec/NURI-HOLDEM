@@ -56,7 +56,7 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
       </p>
       {/* 서버가 준 이유가 있으면 그대로 — '저장 실패' 한 문장으로 뭉개면 원인 추적이 끊긴다 */}
       {detail && <p className="text-2xs leading-relaxed text-ink-secondary">{detail}</p>}
-      <p className="text-2xs text-ink-muted">
+      <p className="text-2xs text-ink-secondary">
         {denied ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : (hint ?? '아직 등록된 내용이 없는 것과는 다릅니다.')}
       </p>
       {onRetry && (

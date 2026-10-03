@@ -129,7 +129,7 @@ export const AMBIENCE_AVOID_DEFAULT = [
   '[data-amb-avoid]', 'header',
   '[data-testid="clk-timer"]', '[data-testid="clk-level"]', '[data-testid="clk-paused"]',
   '[data-testid="clk-cur-blinds"]', '[data-testid="clk-next-blinds"]',
-  '[data-testid="clk-prizes"]', '[data-testid="clk-rails"]', '[data-testid="clk-rails-band"]',
+  '[data-testid="clk-prizes"]', '[data-testid="clk-prizes-band"]', '[data-testid="clk-rails"]', '[data-testid="clk-rails-band"]',
 ].join(', ');
 
 export const insideZone = (x: number, y: number, zones: readonly Zone[]) =>
