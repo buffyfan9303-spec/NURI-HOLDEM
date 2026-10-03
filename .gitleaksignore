@@ -1,3 +1,5 @@
 # 테스트용 가짜 JWT(sub=1234567890, role=anon, 예제 서명) — 실제 비밀 아님. 2026-10-02 리드 확인(헤더·페이로드 디코드).
 # 이후 커밋에서는 소스에서 문자열을 없애고 실행 시 조립한다. 이력에 남은 이 한 줄만 예외로 둔다.
 eb9da9aa142d262696ce5aa8f6c3bcb4fb293244:src/lib/monitoring.pii.test.ts:jwt:13
+# .env.example 의 자리표시자(JWT 헤더 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" + "...") — 값이 없다. 2026-10-03 이력 전체 스캔(1800 커밋)에서 유일한 발견, 원문 확인.
+e3fa504b38e5b9e3add2112d37c801adec1cbe37:.env.example:generic-api-key:4
