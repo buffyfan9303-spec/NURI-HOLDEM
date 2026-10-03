@@ -7,7 +7,7 @@
 // 버튼 글자는 한 줄이어야 한다(오너: 버튼 줄바꿈 0) — 글자 줄 수를 Range.getClientRects 로 잰다.
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { bootOwner, openMyStore, regularsOf, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const GUEST = '홍길동';
@@ -31,6 +31,7 @@ test('CRM — 손님 정보 삭제는 확인 후 customer_profiles 를 지우고
     extra: async (p) => {
       await p.route(/\/rest\/v1\/ledger_buyins\?/, (r) => r.request().method() === 'GET'
         ? r.fulfill(json([{ player_name: GUEST, session_date: MOCK_DAY }])) : r.fallback());
+      await p.route(/\/rest\/v1\/rpc\/venue_regulars/, (r) => r.fulfill(json(regularsOf([{ player_name: GUEST, session_date: MOCK_DAY }]))));
       await p.route(/\/rest\/v1\/coupons\?/, (r) => r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback());
       await p.route(/\/rest\/v1\/customer_profiles\?/, (r) => {
         const m = r.request().method();

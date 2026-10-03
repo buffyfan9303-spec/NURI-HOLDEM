@@ -8,6 +8,7 @@ import { resubscribeStatus } from '../lib/realtimeResync';
 import { msgOf } from '../lib/dbError';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 import { earlyTierIndexAt, type EarlyTierWindow } from '../lib/chipRules';
+import { businessDateOf } from '../lib/businessDate';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
 export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
@@ -455,7 +456,13 @@ const BUYIN_WRITE_HINTS = new Set([REDUCE_NEEDS_PW, LEDGER_SPLIT_MISMATCH, LEDGE
 export const LEDGER_PW_LOCKED = 'LEDGER_PW_LOCKED';
 export const LEDGER_DATE_NOT_ALLOWED = 'LEDGER_DATE_NOT_ALLOWED';
 export const LEDGER_OPERATOR_INVALID = 'LEDGER_OPERATOR_INVALID';
+/** 20261003h — 마감 뒤 미수 회수 RPC 의 hint. NOT_CLOSED: 마감 전(장부에서 바로 고친다) · NOTHING_UNPAID: 이미 누가 받았다(다시 읽는다).
+ *  LEDGER_SETTLE_AMOUNT_CHANGED 는 23514 + 한글 문장이라 ledgerErrorText 가 원문을 그대로 낸다. */
+export const LEDGER_NOT_CLOSED = 'LEDGER_NOT_CLOSED';
+export const LEDGER_NOTHING_UNPAID = 'LEDGER_NOTHING_UNPAID';
 export const LEDGER_HINT_TEXT: Readonly<Record<string, string>> = {
+  [LEDGER_NOT_CLOSED]: '아직 마감 전 장부입니다. 미수는 장부 칸에서 결제 수단을 바로 바꿔 주세요',
+  [LEDGER_NOTHING_UNPAID]: '이미 받은 미수입니다. 장부를 새로 불러왔어요',
   [LEDGER_PW_LOCKED]: '취소 비밀번호를 5번 틀려 10분 동안 잠겼습니다. 그동안은 맞는 비밀번호를 넣어도 풀리지 않으니 10분 뒤에 다시 시도해 주세요',
   [LEDGER_DATE_NOT_ALLOWED]: '직원 계정은 오늘(또는 진행 중인 영업일) 장부만 새로 열 수 있습니다. 지난 날짜 장부는 업주에게 요청해 주세요',
   [LEDGER_OPERATOR_INVALID]: '담당자는 이 매장의 장부 권한이 있는 사람(업주·승인된 공동운영자·장부 권한 직원)만 지정할 수 있습니다. 담당을 다시 골라 주세요',
@@ -988,13 +995,25 @@ export interface LedgerSessionListItem {
   closed: boolean;
   buyinAmount: number;
   operators: string[];
+  /** 마감 시각(서버 now() — 20261003h v4). 직원이 이 장부의 바인 행을 다 보는 창(마감 18시간)을 가르는 데 쓴다. */
+  closedAt?: string | null;
+}
+
+/** 20261003h·20261003i — 직원(can_manage_pos 아님)에게 서버가 이 장부의 바인 행을 **다** 주는가, 그리고 클락을 연결할 수 있는가.
+ *  서버 경계(lb_select v4 · _clock_states_ledger_stats): 미마감 · 영업일(biz) 이후 · KST 오늘 · 마감 18시간 이내이면서 KST 어제 이후.
+ *  화면은 1시간 당겨(17시간) 숨기는 쪽으로 판정한다 — 기기 시계가 앞서 서버는 이미 막았는데 화면이 열려 있다고 믿지 않게.
+ *  ⚠ 서버 정책을 바꾸면 이 함수도 같이 바꾼다(20261003h lb_select · 20261003i 트리거). */
+export function staffSeesSession(s: { sessionDate: string; closed: boolean; closedAt?: string | null }, biz: string, kstToday: string, nowMs: number = Date.now()): boolean {
+  if (!s.closed || s.sessionDate >= kstToday || s.sessionDate >= biz) return true;
+  const kstYesterday = new Date(Date.parse(`${kstToday}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  return !!s.closedAt && nowMs - Date.parse(s.closedAt) < 17 * 3_600_000 && s.sessionDate >= kstYesterday;
 }
 
 /** 매장의 게임(세션) 목록 — 최신 날짜순(같은 날은 game_seq 오름차순). 장부 진입 시 리스트업 용. */
 export async function getLedgerSessionList(venueId: string, limit = 90): Promise<LedgerSessionListItem[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_sessions')
-    .select('session_date, game_seq, title, opened_at, reg_closed, closed, buyin_amount, operators')
+    .select('session_date, game_seq, title, opened_at, reg_closed, closed, closed_at, buyin_amount, operators')
     .eq('venue_id', venueId).order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1003,6 +1022,7 @@ export async function getLedgerSessionList(venueId: string, limit = 90): Promise
     openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed,
     buyinAmount: d.buyin_amount ?? 0,
     operators: Array.isArray(d.operators) ? d.operators : [],
+    closedAt: d.closed_at ?? null,
   }));
 }
 
@@ -1046,11 +1066,15 @@ export interface PosterOpsSummary {
   /** 그 장부의 게임 이름(순위 event 이름과 대조·이동에 쓰는 값). */
   rankingEvent: string;
   closed: boolean;
-  buyinCount: number;
-  revenueMan: number;   // 실수금 합(만원 환산) — 통계와 동일한 buyinFinance 규칙(DB 금액은 원 단위)
+  /** null = 이 조회자에게 숨김(직원의 지난 마감 장부 — 20261003h 로 행이 안 보여 세면 틀린다). 화면은 칩을 빼고 0 으로 그리지 않는다. */
+  buyinCount: number | null;
+  /** 실수금 합(만원 환산) — 통계와 동일한 buyinFinance 규칙(DB 금액은 원 단위). null = 업주(can_manage_pos)가 아니라 숨김(오너 Q3). */
+  revenueMan: number | null;
   hasRankings: boolean; // 그 **게임**의 순위가 입력됐는지(F02 — 날짜 Set 으로 뭉치면 사이드가 거짓 ✓ 가 된다)
 }
-export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
+/** opts.money=false — 직원(오너 2026-10-03 Q3). 매출은 늘 숨기고, 바인 수는 직원이 행을 다 볼 수 있는 장부(영업일 이후·미마감)만 낸다.
+ *  서버 lb_select 와 같은 경계 — 그 밖의 장부는 미수 행만 보여 세면 작은 숫자가 '정상처럼' 나온다. */
+export async function getPosterOpsSummaries(venueId: string, opts: { money?: boolean } = {}): Promise<Record<string, PosterOpsSummary>> {
   if (IS_MOCK) return {};
   const { data: ss } = await supabase.from('ledger_sessions')
     // title 은 순위 event 이름과 대조하는 유일한 키다(venue_rankings 에 game_seq 가 없다 — rankingGame.ts)
@@ -1089,6 +1113,8 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
     agg.set(k, cur);
   }
   const out: Record<string, PosterOpsSummary> = {};
+  const money = opts.money !== false;
+  const biz = money ? '' : businessDateOf(venueId);
   for (const s of sessions) {
     if (out[s.schedule_id]) continue; // 최신 날짜의 메인 장부가 대표(위 정렬)
     const seq = (s.game_seq ?? MAIN_GAME_SEQ) as number;
@@ -1096,7 +1122,8 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
     const a = agg.get(gkey(s.session_date as string, seq)) ?? { cnt: 0, rev: 0 };
     out[s.schedule_id] = {
       date: s.session_date, gameSeq: seq, rankingEvent: rankingEventOf(game), closed: !!s.closed,
-      buyinCount: a.cnt, revenueMan: Math.round(a.rev / WON_PER_MAN),
+      buyinCount: money || !s.closed || (s.session_date as string) >= biz ? a.cnt : null,
+      revenueMan: money ? Math.round(a.rev / WON_PER_MAN) : null,
       hasRankings: hasRankingForGame(game, rankedEvents.get(s.session_date as string) ?? []),
     };
   }
@@ -1436,6 +1463,15 @@ export async function fetchAllPaged<T>(build: () => any): Promise<T[]> {
   throw new Error('기간이 너무 넓어 장부를 다 불러오지 못했습니다. 기간을 좁혀 주세요.');
 }
 
+/** 같은 요일 평소 바인 횟수 — 지난 3주 같은 요일 중 기록 있는 날의 평균(반올림). 기록 2일 미만이면 null(20261003h ledger_dow_avg_buyins).
+ *  직원 대시보드 위젯용 — 날짜별 횟수(× 단가 = 그날 매출)를 직원에게 주지 않으려고 서버가 평균 하나만 준다(오너 Q3 · 리드 F2 결정). */
+export async function getDowAvgBuyins(venueId: string): Promise<number | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('ledger_dow_avg_buyins', { p_venue_id: venueId });
+  if (error) throw error;
+  return data == null ? null : Number(data);
+}
+
 /** 기간 통계용 — 날짜 범위의 세션 + 바인 일괄 조회 */
 export async function getLedgerRange(venueId: string, from: string, to: string): Promise<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }> {
   if (IS_MOCK) return { sessions: [], buyins: [] };
@@ -1578,6 +1614,24 @@ export async function cancelBuyin(id: string, password: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('cancel_ledger_buyin', { p_id: id, p_password: password });
   if (error) throw error;
+}
+
+/** 마감된 장부의 미수 → 완납(오너 2026-10-03 Q2, 20261003h settle_unpaid_after_close).
+ *  직원·업주 모두 이 길로 받는다 — 마감을 풀지 않는다. 비밀번호 규칙은 바인 취소와 같다(설정 매장은 업주도 비밀번호).
+ *  서버가 총액·이용권 몫 불변을 검사하고 감사 기록을 남긴다. 성공 뒤엔 호출부가 장부를 **직접** 다시 읽는다 —
+ *  직원에게는 회수한 지난 날짜 행이 RLS 로 사라져 Realtime UPDATE 가 오지 않는다(critical-reviewer 2026-10-03). */
+export type SettleMethod = 'cash' | 'card' | 'transfer';
+export type SettlePart = 'buyin' | 'addon' | 'all';
+export async function settleUnpaidAfterClose(id: string, method: SettleMethod, password: string | null, part: SettlePart = 'all'): Promise<{ buyinWon: number; addonWon: number }> {
+  if (IS_MOCK) return { buyinWon: 0, addonWon: 0 };
+  const { data, error } = await supabase.rpc('settle_unpaid_after_close', { p_id: id, p_method: method, p_password: password || null, p_part: part });
+  if (error) throw error;
+  const d = (data ?? {}) as { buyin_won?: unknown; addon_won?: unknown };
+  return { buyinWon: Number(d.buyin_won) || 0, addonWon: Number(d.addon_won) || 0 };
+}
+/** 이 행에 받을 미수가 있는가 — 서버 settle_unpaid_after_close 의 판정과 같다(바인 미수·분납 미수 몫·애드온 미수). */
+export function hasUnpaid(b: Pick<LedgerBuyin, 'isUnpaid' | 'isSplit' | 'unpaidAmount' | 'addonMethod' | 'addonUnpaid'>): boolean {
+  return !!b.isUnpaid || (!!b.isSplit && b.unpaidAmount > 0) || (!!b.addonMethod && !!b.addonUnpaid);
 }
 
 // ── 실시간 동기화 (바이인 + 명단) ─────────────────────────────────────────────

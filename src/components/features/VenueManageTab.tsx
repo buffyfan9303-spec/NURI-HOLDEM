@@ -45,7 +45,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, canManageVenueSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
+import { getLedgerBuyins, getLedgerPlayers, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { formatCountdown } from '../../lib/clockLevel';
 import { useClockSecond } from '../../lib/clockTick';
@@ -1458,6 +1458,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
+                  canSeeMoney={manageOk}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
@@ -1485,9 +1486,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* 5단계 정산 — 그날 하루의 결산(게임 전부 합산 + 게임별 내역). 장부 하단 정산바는
                     '이 게임 하나를 닫는' 도구로 그대로 남는다. */}
                 {visited.includes('settle') && ledgerOk && box('settle',
-                  <LedgerSettlementPanelM venueId={venueId} date={settleDate}
+                  <LedgerSettlementPanelM venueId={venueId} date={settleDate} canManage={manageOk}
                     active={tabActive && renderSection === 'game' && renderGameStep === 'settle'} />)}
-                {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
+                {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} canSeeAll={manageOk} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <LazyBox>
@@ -1496,7 +1497,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </LazyBox>)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} canSeeAll={manageOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {/* 🔴 2026-09-28 오너 "마스터 계정에 직원 탭" — 관리자는 직원 본인 화면(내 근무 정보 + 출퇴근)을 **보기만** 한다.
                     서버(my_staff_wage·set_my_shift_time·_is_active_venue_staff)에 관리자 분기를 만들지 않는다 — 접근표·인건비 조작면이 생긴다. */}
                 {visited.includes('attendance') && box('attendance', <div className="space-y-3">
@@ -2067,8 +2068,11 @@ const emptyRow = (): Row => ({ nickname: '', realName: '' });
 // 그날 열린 게임 후보 — 메인(포스터 제목) · 사이드(포스터 sideEvents) · 장부(장부만 있는 게임)
 type GameOpt = { name: string; kind: 'main' | 'side' | 'ledger' };
 
-function RankingEditor({ venueId, canEdit, draft, gameSel }: {
+function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   venueId: string; canEdit: boolean; draft?: { date: string; names: string[]; event?: string } | null;
+  /** can_manage_pos. false(장부 권한 직원)면 그날 바인 행이 미수 행만 올 수 있다(20261003h — 마감 18시간 지난 지난 장부).
+   *  명단은 금액 없는 ledger_players 와 합쳐 완전하게, 바인 수는 그리지 않는다(부분값이 정상처럼 보이지 않게). */
+  canSeeAll?: boolean;
   /** 게임 선택 칩 바(게임 단계 상단)의 오늘 게임 픽 — 날짜·게임칩만 따라가고 명단은 건드리지 않는다 */
   gameSel?: GameSel | null;
 }) {
@@ -2297,18 +2301,21 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 자동완성: ①그날 장부 명단 ②비회원 등록 ③회원 검색(닉네임/실명 — 동명이인은 실명으로 구분)
   const [ledgerNames, setLedgerNames] = useState<string[]>([]);
   // 그날 장부 명단(인원·바인 수) — 순위입력에서 '장부 보기'로 펼쳐 참고/추가
-  const [ledgerPlayers, setLedgerPlayers] = useState<{ name: string; buyins: number }[]>([]);
+  const [ledgerPlayers, setLedgerPlayers] = useState<{ name: string; buyins: number | null }[]>([]);
   const [ledgerPanelOpen, setLedgerPanelOpen] = useState(false);
   // 마감정산에서 넘어온 참가자 명단은 이제 행을 채우지 않는다 — 자동완성 후보로만 합류시킨다.
   const draftNames = draft && draft.date === date ? draft.names : null;
   // 요청 매장 = 응답 매장(review-store-link-1002b A4) — A 장부 명단이 B 순위 입력의 자동완성·'장부 보기'에 붙지 않게
   useEffect(() => {
-    vrun('ledgerNames', (v) => getLedgerBuyins(v, date, currentGameSeq),
-      (bs) => {
-        setLedgerNames([...new Set([...bs.map((b) => b.playerName), ...(draftNames ?? [])].filter(Boolean))]);
+    // 직원은 명단(ledger_players — 금액 없음, 직원에게 전부 보인다)을 같이 읽어 합친다. 업주는 종전 그대로(바인 행이 전부 온다).
+    vrun('ledgerNames', (v) => Promise.all([getLedgerBuyins(v, date, currentGameSeq), canSeeAll ? Promise.resolve([]) : getLedgerPlayers(v, date, currentGameSeq)]),
+      ([bs, roster]) => {
+        const rosterNames = roster.map((p) => p.name.trim()).filter(Boolean);
+        setLedgerNames([...new Set([...rosterNames, ...bs.map((b) => b.playerName), ...(draftNames ?? [])].filter(Boolean))]);
         const counts = new Map<string, number>();
+        for (const n of rosterNames) counts.set(n, 0);
         for (const b of bs) { const n = (b.playerName ?? '').trim(); if (n) counts.set(n, (counts.get(n) ?? 0) + 1); }
-        const players = [...counts.entries()].map(([name, buyins]) => ({ name, buyins }));
+        const players = [...counts.entries()].map(([name, buyins]) => ({ name, buyins: canSeeAll ? buyins : null }));
         setLedgerPlayers(players);
         // 자동 채움을 없앴으니 명단은 '펼쳐 두고 골라 넣는' 것이 기본 동선이 된다.
         // 채워 넣지는 않는다 — 보여 주기만 한다(오너 지시: 미리 넣지 말 것).
@@ -2316,7 +2323,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       },
       () => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, date, currentGameSeq, draftNames?.length]);
+  }, [venueId, date, currentGameSeq, draftNames?.length, canSeeAll]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
   const [memCands, setMemCands] = useState<RankMember[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2626,7 +2633,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                           className={['flex items-center gap-1 rounded-input border px-2 py-1 text-2xs font-semibold transition-colors',
                             added ? 'border-border-subtle bg-surface-high/40 text-ink-muted' : 'border-emerald-500/40 text-ink-secondary hover:bg-emerald-500/10 hover:text-ink-primary'].join(' ')}>
                           <span>{p.name}</span>
-                          <span className="tabular-nums text-ink-muted">{p.buyins}바인</span>
+                          {p.buyins != null && <span className="tabular-nums text-ink-muted">{p.buyins}바인</span>}
                           <span className={added ? 'text-emerald-400' : 'text-emerald-300'}>{added ? '✓' : '＋'}</span>
                         </button>
                       </li>

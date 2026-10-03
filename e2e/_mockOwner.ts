@@ -192,6 +192,19 @@ export function applyClockCounts(row: Record<string, unknown>, body: Record<stri
   return { status: 200, body: [{ eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons }] };
 }
 
+/** 서버 venue_regulars(20261003h) 응답 흉내 — 바인 행에서 이름·바인 횟수·방문일(고유 날짜)을 센다. 정렬 = 바인 많은 순 → 방문 많은 순.
+ *  단골 목록은 이제 테이블이 아니라 이 RPC 로 온다(직원에게 바인 행은 영업일·미수 행만 보이므로). 바인 행을 목킹하던 스펙은 이것도 건다. */
+export function regularsOf(rows: { player_name?: unknown; session_date?: unknown }[]) {
+  const m = new Map<string, { buyins: number; d: Set<string> }>();
+  for (const r of rows) {
+    const n = String(r.player_name ?? '').trim();
+    if (!n) continue;
+    const e = m.get(n) ?? { buyins: 0, d: new Set<string>() };
+    e.buyins++; e.d.add(String(r.session_date ?? '')); m.set(n, e);
+  }
+  return [...m].map(([name, e]) => ({ name, buyins: e.buyins, visits: e.d.size })).sort((a, b) => b.buyins - a.buyins || b.visits - a.visits);
+}
+
 /** '내 매장' 은 ≥lg 에서 role=tab, 모바일에서 button — 폭과 무관하게 보이는 button 으로 잡는다. */
 export const openMyStore = (page: Page) =>
   page.locator('button:visible').filter({ hasText: '내 매장' }).first().click({ timeout: 15_000 });

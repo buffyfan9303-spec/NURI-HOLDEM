@@ -11,7 +11,7 @@ import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '.
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats,
+  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats, composeLiveStats,
   countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
@@ -21,8 +21,11 @@ import {
 import LiveLevelsEditor, { LEVEL_NUM, LEVEL_ROW } from './LiveLevelsEditor';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
+  staffSeesSession, ledgerErrorText,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
+import { businessDateOf } from '../../../lib/businessDate';
+import { kstToday } from '../../../lib/kst';
 import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '../../../lib/clockLevel';
 // msToRegClose 는 이 파일에서 더 쓰지 않는다 — 상류 03cd8bb 가 등록 마감 표시를 ClockStage 로 옮겼다.
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
@@ -68,7 +71,10 @@ const computeRemaining = (s: ClockState): number =>
 // clockLevel.contract.test.ts 가 복제를 막는다). 상류 03cd8bb 가 이 파일에 다시 넣은 로컬 복제본은 취하지 않는다.
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
-export default function TournamentClock({ venueId, canManage, venueName, seedSessionDate, seedGameSeq = 1, active = true }: { venueId: string; canManage: boolean; venueName?: string; seedSessionDate?: string | null; seedGameSeq?: number; active?: boolean }) {
+export default function TournamentClock({ venueId, canManage, venueName, seedSessionDate, seedGameSeq = 1, active = true, canSeeAll = true }: { venueId: string; canManage: boolean; venueName?: string; seedSessionDate?: string | null; seedGameSeq?: number; active?: boolean;
+  /** can_manage_pos(업주·공동운영자·관리자). false(장부 권한 직원)면 '장부 연동' 목록에서 직원 창 밖의 지난 마감 장부를 뺀다 —
+   *  서버(20261003i)가 그 연결을 42501 로 막는다(클락 몫으로 지난 날 바인 수가 직원에게 나가던 경로, recheck1 R1). */
+  canSeeAll?: boolean }) {
   const toast = useToast();
   const [state, setState] = useState<ClockState | null>(null);
   const [presets, setPresets] = useState<ClockPreset[]>([]);
@@ -233,7 +239,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       }
       toast.show('클락을 시작 준비했습니다', 'success');
     }
-    catch (e) { toast.show(msgOf(e, '시작 실패'), 'error'); }
+    // 서버가 한글 문장으로 거절한 것(20261003i '마감된 지난 장부에는 업주만 클락을 연결할 수 있습니다' 등)은 그 문장 그대로 —
+    //   msgOf 는 42501 을 '권한이 없습니다' 한 줄로 뭉갠다.
+    catch (e) { toast.show(ledgerErrorText(e, '시작 실패'), 'error'); }
   };
 
   const endClock = async () => {
@@ -324,7 +332,10 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
         <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} expect={slotHint(seedSessionDate)} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
         <ClockSettings
           key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
-          venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
+          venueId={venueId} canManage={canManage} presets={presets}
+          sessions={canSeeAll ? sessions : sessions.filter((s) => staffSeesSession(s, businessDateOf(venueId), kstToday()))}
+          hiddenOld={canSeeAll ? 0 : sessions.filter((s) => !staffSeesSession(s, businessDateOf(venueId), kstToday())).length}
+          initial={seededInitial}
           hasLive={!!state} seedSessionDate={seedSessionDate} seedGameSeq={seedGameSeq} seededFromLedger={!!seedSession}
           onReloadPresets={reloadPresets}
           onStart={startClock}
@@ -606,9 +617,15 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const phase = clockPhase(state);
   // K4(2026-09-29) — 얼리 창은 earlyWindowOf 한 벌(장부 세션 기준 · 세션이 없을 때만 클락 설정). 예전엔 여기만 `설정 || 세션` 이라
   //   같은 바인을 장부 화면과 다른 얼리·총칩으로 썼다(4D 실측: 8/240,000 vs 0/200,000, 나중 쓴 쪽이 이김).
-  const derived = useMemo(() => deriveClockCounts(buyins, earlyWindowOf(cfg, linkedSession)), [buyins, linkedSession, cfg]);
+  // 20261003h(verifier 재검증 2026-10-03 · 리드 결정) — 연결 장부가 **마감**이면 로컬 바인 행으로 다시 세지 않고
+  //   서버 트리거(20260929t)가 맞춰 둔 저장 몫(clock_states.live_stats.ledger)을 표시·보정 하한 모두에 쓴다.
+  //   마감 장부의 바인 행은 직원에게 미수 행만 올 수 있어(마감 18시간 뒤) 로컬로 세면 엔트리가 작게 나왔다.
+  //   마감 몫은 굳어 있어 업주·직원 같은 값이다. 저장 몫이 없는 옛 클락만 로컬 계산으로 떨어진다. 열린 장부는 종전 그대로 로컬.
+  const storedLedger = linkedSession?.closed ? (state.liveStats?.ledger ?? null) : null;
+  const derived = useMemo(() => storedLedger ?? deriveClockCounts(buyins, earlyWindowOf(cfg, linkedSession)), [storedLedger, buyins, linkedSession, cfg]);
   // 표시값 = 저장하는 스냅샷과 **같은 함수**(ledgerLiveStats). 장부 미연동이면 장부 몫 0.
-  const liveStats = useMemo(() => ledgerLiveStats(state, state.sessionDate ? buyins : [], linkedSession), [state, buyins, linkedSession]);
+  const liveStats = useMemo(() => (storedLedger && composeLiveStats(state)) || ledgerLiveStats(state, state.sessionDate ? buyins : [], linkedSession),
+    [storedLedger, state, buyins, linkedSession]);
 
   // ⚠ 낙관적 반영에는 **롤백이 있어야 한다**(2026-09-17). 예전엔 실패해도 로컬 state 가 next 로 남아,
   //   예컨대 [일시정지] 저장이 실패하면 PC 만 '정지'로 보이고 서버·TV·장부는 계속 진행했다.
@@ -1393,8 +1410,10 @@ function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v
 }
 
 // ── 설정/프리셋 ─────────────────────────────────────────────────────────────────
-function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive, seedSessionDate, seedGameSeq = 1, seededFromLedger, onReloadPresets, onStart, onBackToLive }: {
+function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, initial, hasLive, seedSessionDate, seedGameSeq = 1, seededFromLedger, onReloadPresets, onStart, onBackToLive }: {
   venueId: string; canManage: boolean; presets: ClockPreset[]; sessions: LedgerSessionListItem[]; initial: ClockConfig; hasLive: boolean;
+  /** 직원에게 숨긴 지난 마감 장부 수 — 0 보다 크면 '업주만 연결할 수 있어요' 안내를 붙인다. */
+  hiddenOld?: number;
   seedSessionDate?: string | null; seedGameSeq?: number; seededFromLedger?: boolean;
   onReloadPresets: () => void; onStart: (c: ClockConfig, linkDate: string | null, linkGameSeq?: number) => void; onBackToLive?: () => void;
 }) {
@@ -1549,6 +1568,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               </button>
             );})}
           </div>
+          {hiddenOld > 0 && (
+            <p data-testid="clk-link-staff-note" className="mt-1 text-2xs text-ink-muted">마감한 지 오래된 지난 장부 {hiddenOld}개는 업주만 클락에 연결할 수 있어요.</p>
+          )}
         </div>
         {seededFromLedger && linkDate && (
           <p className="text-[11px] text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
