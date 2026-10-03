@@ -235,17 +235,21 @@ function Shell({ venueName, game, onClose, children }: { venueName?: string; gam
   const land = useLand();
   return (
     <div className="fixed inset-0 z-80 flex flex-col bg-surface-base text-ink-primary" data-scroll-lock>
-      <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2" style={SIDE_SAFE}>
         <Icon name="smartphone" size={16} className="text-aura-300" />
         <p className="min-w-0 flex-1 truncate text-sm font-bold">클락 리모컨 <span className="font-normal text-ink-muted">· {venueName || '매장'}{game ? ` · ${game}` : ''}</span></p>
         {/* hit: 시각 크기 40px 그대로, 실효 터치 영역만 44px 로 — 플로어에서 폰으로 누르는 화면이라 빗나가면 안 된다 */}
         <button type="button" onClick={onClose} aria-label="닫기" className="hit grid h-10 w-10 place-items-center rounded-input text-ink-secondary hover:bg-surface-high"><Icon name="close" size={18} /></button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
-        style={land ? { paddingTop: '0.5rem', paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' } : undefined}>{children}</div>
+        style={land ? { ...SIDE_SAFE, paddingTop: '0.5rem', paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' } : SIDE_SAFE}>{children}</div>
     </div>
   );
 }
+
+/** 재점검 2회차 하-5 — 가로로 눕히면 노치·펀치홀(왼쪽 47px 등)이 '이전 레벨'·'−1분' 을 덮었다. 좌우 여백 = max(1rem, 안전 영역).
+ *  세로에서는 좌우 inset 이 0 이라 종전 px-4 와 같다. 인라인인 이유: CSS 예산 여유가 0 이다. */
+const SIDE_SAFE = { paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' } as const;
 
 function Big({ label, icon, onClick, disabled, land }: { label: string; icon: 'chevron-left' | 'chevron-right'; onClick: () => void; disabled?: boolean; land?: boolean }) {
   return (

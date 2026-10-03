@@ -13,7 +13,7 @@ import { getVenuePageConfig, setVenuePageConfig, type VenuePageConfig } from '..
 import {
   CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
   clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf,
-  publishClockTheme, subscribeClockTheme, clockAmbienceOf, clockBgDisplayOf, clockLogoDark, type ClockTheme, type ClockThemePreset, type ClockBgDisplay,
+  publishClockTheme, subscribeClockTheme, clockAmbienceOf, clockBgDisplayOf, clockLogoPlateOf, type ClockTheme, type ClockThemePreset, type ClockBgDisplay,
 } from './clockTheme';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { ambIsolation } from './ambience/ambiencePresets';
@@ -153,7 +153,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const curAccent = curAccentSel ?? curPreset.accent;
   const curImage = clockBgImageOf(cur);
   const curDisp = clockBgDisplayOf(cur);
-  const curDark = clockLogoDark(cur);
+  const curPlate = clockLogoPlateOf(cur);
 
   /** clockTheme 키만 교체 저장. 성공 시 남은 옛 배경 파일을 정리(저장 성공 후에만 — 순서가 계약이다) */
   const persist = async (next: ClockTheme | null, orphan?: string | null) => {
@@ -291,13 +291,15 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
               <>
                 <Seg label="크기" testid="clk-bg-size" value={curDisp.size} disabled={busy} onPick={(size) => pickDisplay({ size })}
                   options={[[1, '작게'], [2, '보통'], [3, '크게']] as const} />
-                <p className="t-desc text-ink-muted">가로 TV 는 상단 매장 이름 옆, 세로 TV 는 타이머 위 빈 자리에 들어가요 — 글자와 겹치지 않아요.</p>
+                <p className="t-desc text-ink-muted">가로 TV 는 상단 매장 이름 옆(세로로 긴 로고는 타이머 옆 오른쪽 위), 세로 TV 는 타이머 위 빈 자리에 들어가요 — 글자와 겹치지 않아요.</p>
               </>
             )}
-            {curDisp.fit !== 'cover' && curDark && (
+            {curDisp.fit !== 'cover' && curPlate !== 'none' && (
               <div className="flex flex-wrap items-center gap-1.5" data-testid="clk-bg-dark">
                 <p className="min-w-0 flex-1 text-2xs text-ink-secondary">
-                  {curDisp.plate ? '어두운 로고 — TV 바탕에 묻히지 않게 밝은 받침을 깔았어요' : '어두운 로고 — 받침을 껐어요. TV 바탕에서 잘 안 보일 수 있어요'}
+                  {curDisp.plate
+                    ? (curPlate === 'light' ? '어두운 로고 — TV 바탕에 묻히지 않게 밝은 받침을 깔았어요' : 'TV 바탕과 색이 비슷한 로고 — 또렷하게 검은 받침을 깔았어요')
+                    : '받침을 껐어요. TV 바탕에서 잘 안 보일 수 있어요'}
                 </p>
                 <button type="button" disabled={busy} onClick={() => pickDisplay({ plate: curDisp.plate ? 0 : undefined })}
                   className="btn-ghost min-h-11 px-3 text-2xs disabled:opacity-50">{curDisp.plate ? '받침 끄기' : '받침 켜기'}</button>
