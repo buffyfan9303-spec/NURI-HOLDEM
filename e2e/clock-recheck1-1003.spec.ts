@@ -1,4 +1,5 @@
-// 재점검 1회차(2026-10-03) 클락 결함 — 세로 TV 상금 띠(N-1) · 매장 이미지 표시 방식(N-2) · 다른 기기 TV 테마 반영(N-3).
+// 재점검 1회차(2026-10-03) 클락 결함 — 세로 TV 상금 띠(N-1·리뷰 중-1) · 매장 이미지 표시 방식(N-2·리뷰 중-2·중-3) · 다른 기기 TV 테마 반영(N-3).
+// 리뷰: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\review-recheck1-clock-1003.md
 // 원천: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\recheck1-screens-1003.md
 //
 // 매장·계정 없이 TV 화면만 연다(_clock.ts 와 같은 방식). 읽기 셋(clock_states · venues.page_config · 이미지)을 전부 목킹한다 — 운영 쓰기 0.
@@ -195,49 +196,69 @@ async function measureContrast(page: Page) {
   return { n: items.length, worstNormal: +worstNormal.toFixed(2), worstNormalText: wn, worstLarge: +worstLarge.toFixed(2), worstLargeText: wl };
 }
 
-for (const [w, h] of [[1920, 1080], [1080, 1920]] as const) {
-  test(`N-2 ${w}×${h} — 맞추기·가운데 크게는 어떤 비율의 이미지도 잘리지 않고, 순백 이미지 위 글자 대비 4.5(대형 3) 이상`, async ({ page }) => {
-    test.setTimeout(180_000);
+/** 화면에 보이는 '로고' 사각형들 — 로고로 넣기의 이미지(머리줄 칸 또는 타이머 위 칸 안). 숨은 쪽(display:none)은 크기 0 이라 빠진다. */
+const visibleLogos = (page: Page) => page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('[data-amb-root] img')]
+  .filter((im) => im.src.includes('/clock_bg/'))
+  .map((im) => { const r = im.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, nw: im.naturalWidth, nh: im.naturalHeight }; })
+  .filter((r) => r.w > 0 && r.h > 0));
+
+/** 로고가 다른 것에 가려진 비율 — 로고 안 격자 점마다 맨 위 요소가 로고 자신인지 본다(글자·판이 위에 있으면 가림). */
+const logoOcclusion = (page: Page) => page.evaluate(() => {
+  const ims = [...document.querySelectorAll<HTMLImageElement>('[data-amb-root] img')].filter((im) => im.src.includes('/clock_bg/') && im.getBoundingClientRect().width > 0);
+  let total = 0, hidden = 0;
+  for (const im of ims) {
+    const r = im.getBoundingClientRect();
+    for (let i = 1; i < 20; i++) for (let j = 1; j < 20; j++) {
+      const x = r.left + (r.width * i) / 20, y = r.top + (r.height * j) / 20;
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) { total++; hidden++; continue; }   // 화면 밖 = 안 보임
+      total++;
+      if (document.elementFromPoint(x, y) !== im) hidden++;
+    }
+  }
+  return { n: ims.length, pct: total ? (100 * hidden) / total : 100 };
+});
+
+for (const [w, h] of [[1920, 1080], [1080, 1920], [390, 844]] as const) {
+  test(`N-2 ${w}×${h} — 맞추기·로고로 넣기는 어떤 비율의 이미지도 잘리지 않고, 로고는 글자와 겹치지 않으며(가림 ≤5%), 순백 이미지 위 글자 대비 4.5(대형 3) 이상`, async ({ page }) => {
+    test.setTimeout(240_000);
     let cfg: unknown = null;
     await openTv(page, { w, h, prizes: table(5, 3_000_000), config: () => cfg });
     const log: string[] = [];
     for (const img of ['logo-sq.png', 'logo-wide.png', 'logo-tall.png', 'photo-white-d72.png']) {
-      for (const disp of [{}, { fit: 'contain' }, { fit: 'contain', pos: 'top' }, { fit: 'center', size: 3 }, { fit: 'center', size: 1, pos: 'bottom' }, { fit: 'center', size: 2, pos: 'top' }]) {
+      for (const disp of [{}, { fit: 'contain' }, { fit: 'contain', pos: 'top' }, { fit: 'center', size: 3 }, { fit: 'center', size: 1 }, { fit: 'center', size: 2 }]) {
         cfg = theme(img, disp);
         await page.reload();
         await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
         const fit = (disp as { fit?: string }).fit ?? 'cover';
-        const geo = await page.evaluate(async ({ url, fit }) => {
-          const im = new Image(); im.src = url; await im.decode();
-          const ar = im.naturalWidth / im.naturalHeight;
-          const stage = document.querySelector<HTMLElement>('[data-amb-root]')!;
-          const sr = stage.getBoundingClientRect();
-          const box = fit === 'center' ? document.querySelector<HTMLElement>('[data-testid="clk-logo"]') : stage;
-          if (!box) return { err: 'no-logo-layer' };
-          const b = box.getBoundingClientRect();
-          const cs = getComputedStyle(box);
-          // contain 으로 상자 안에 그려지는 실제 그림 사각형
-          const dw = Math.min(b.width, b.height * ar), dh = dw / ar;
-          return {
-            size: cs.backgroundSize, img: cs.backgroundImage.includes('clock_bg'),
-            draw: { w: Math.round(dw), h: Math.round(dh) },
-            inStage: b.left >= sr.left - 0.5 && b.right <= sr.right + 0.5 && b.top >= sr.top - 0.5 && b.bottom <= sr.bottom + 0.5,
-            plate: getComputedStyle(stage).getPropertyValue('--clk-plate').trim(),
-          };
-        }, { url: IMG(img), fit });
-        log.push(`${img} ${JSON.stringify(disp)} ${JSON.stringify(geo)}`);
-        if (fit === 'cover') {
-          expect(await rootBg(page)).toContain('/cover');
+        if (fit === 'cover') { expect(await rootBg(page)).toContain('/cover'); continue; }
+        if (fit === 'contain') {
+          const geo = await page.evaluate(() => {
+            const stage = document.querySelector<HTMLElement>('[data-amb-root]')!;
+            const cs = getComputedStyle(stage);
+            return { size: cs.backgroundSize, img: cs.backgroundImage.includes('clock_bg'), plate: cs.getPropertyValue('--clk-plate').trim() };
+          });
+          log.push(`${img} ${JSON.stringify(disp)} ${JSON.stringify(geo)}`);
+          expect(geo.img).toBe(true);
+          expect(geo.size).toContain('contain');   // contain = 잘림 0(정의상)
+          expect(geo.plate, '맞추기에 글자 판이 없다').not.toBe('');
           continue;
         }
-        expect(geo, `${img} ${fit}`).toMatchObject({ img: true, inStage: true });
-        expect(String((geo as { size: string }).size)).toContain('contain');
-        expect((geo as { plate: string }).plate, '글자 판이 없다').not.toBe('');
-        if (SHOTS && img !== 'photo-white-d72.png') await page.screenshot({ path: `${SHOTS}/n2-${w}x${h}-${img.replace('.png', '')}-${fit}-${(disp as { pos?: string }).pos ?? 'c'}-${(disp as { size?: number }).size ?? ''}.png` });
+        await page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>('[data-amb-root] img')].some((i) => i.src.includes('/clock_bg/') && i.complete && i.naturalWidth > 0));
+        const logos = await visibleLogos(page);
+        const occ = await logoOcclusion(page);
+        const stage = await page.locator('[data-amb-root]').first().boundingBox();
+        log.push(`${img} ${JSON.stringify(disp)} logos=${JSON.stringify(logos.map((l) => [Math.round(l.w), Math.round(l.h)]))} 가림 ${occ.pct.toFixed(1)}%`);
+        expect(logos.length, `${img} 로고가 화면에 하나여야 한다`).toBe(1);
+        const L = logos[0];
+        // 잘림 0 — 그려진 상자 비율이 원본 비율과 같고(contain), 상자가 스테이지 안이다
+        expect(Math.abs(L.w / L.h - L.nw / L.nh) / (L.nw / L.nh), `${img} 비율이 바뀌었다(잘림/늘림)`).toBeLessThan(0.03);
+        expect(L.x >= stage!.x - 0.5 && L.x + L.w <= stage!.x + stage!.width + 0.5 && L.y >= stage!.y - 0.5 && L.y + L.h <= stage!.y + stage!.height + 0.5, `${img} 로고가 스테이지 밖`).toBe(true);
+        expect(occ.pct, `${img} ${JSON.stringify(disp)} 로고가 ${occ.pct.toFixed(1)}% 가려졌다`).toBeLessThanOrEqual(5);
+        if (SHOTS && img !== 'photo-white-d72.png') await page.screenshot({ path: `${SHOTS}/n2-${w}x${h}-${img.replace('.png', '')}-${fit}-${(disp as { size?: number }).size ?? ''}.png` });
       }
     }
     console.log(`[N-2 geo ${w}x${h}]\n${log.join('\n')}`);
-    // 최악 바탕 — 화면 전체가 순백(맞추기 · 가운데 크게 둘 다)
+    // 최악 바탕 — 화면 전체가 순백(맞추기) · 순백 로고(로고로 넣기)
     for (const disp of [{ fit: 'contain' }, { fit: 'center', size: 3 }]) {
       cfg = theme(disp.fit === 'contain' ? 'photo-white-d72.png' : 'logo-white-sq.png', disp);
       await page.reload();
@@ -252,3 +273,133 @@ for (const [w, h] of [[1920, 1080], [1080, 1920]] as const) {
     }
   });
 }
+
+// ── 리뷰 중-3: 어두운 로고 — 검은 워드마크 · 흰 워드마크 · 컬러 로고, 로고와 바로 뒤 바탕 대비 3:1 이상 ──
+// 워드마크 = 투명 바탕에 글자 대신 막대 3개(x 100~300·500~700·900~1100, y 100~300 / 1200×400). 막대 = 로고색, 막대 사이 = 바로 뒤 바탕.
+const WORDMARKS: [string, string, string][] = [
+  ['wm-black-d0-t111111-k.png', '#000000', '검은 워드마크'],
+  ['wm-white-d72-t3a3a3a.png', '#FFFFFF', '흰 워드마크'],
+  ['wm-gold-d30-t2d220f.png', '#E0A94E', '컬러 로고'],
+];
+for (const [name, color] of WORDMARKS) {
+  SVG[name] = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400"><rect x="100" y="100" width="200" height="200" fill="${color}"/><rect x="500" y="100" width="200" height="200" fill="${color}"/><rect x="900" y="100" width="200" height="200" fill="${color}"/></svg>`;
+}
+
+/** 로고 막대 위 점과 막대 사이 점의 픽셀을 읽어 대비를 낸다. rect = 그림이 그려진 사각형(이미지 좌표 1200×400 이 여기에 대응). 판·글자에 덮인 점은 뺀다. */
+async function logoContrast(page: Page, rect: { x: number; y: number; w: number; h: number }, self: (x: number, y: number) => Promise<boolean>) {
+  const png = PNG.sync.read(await page.screenshot());
+  const k = png.width / (page.viewportSize()?.width ?? png.width);
+  const px = (cx: number, cy: number) => { const i = (Math.round(cy * k) * png.width + Math.round(cx * k)) * 4; return [png.data[i], png.data[i + 1], png.data[i + 2]]; };
+  const at = (ix: number, iy: number) => [rect.x + (ix / 1200) * rect.w, rect.y + (iy / 400) * rect.h] as const;
+  const bar: number[][] = [], gap: number[][] = [];
+  // 촘촘한 격자 — 가로 TV '맞추기' 는 막대 대부분이 글자 판 밑이라(설계상) 판 사이로 보이는 점을 찾아야 한다.
+  for (let iy = 115; iy <= 285; iy += 17) {
+    for (let ix = 115; ix <= 1085; ix += 15) {
+      const inBar = [100, 500, 900].some((b0) => ix >= b0 + 12 && ix <= b0 + 188);
+      const inGap = [300, 700].some((g0) => ix >= g0 + 12 && ix <= g0 + 188);
+      if (!inBar && !inGap) continue;
+      const [x, y] = at(ix, iy);
+      if (!(await self(x, y))) continue;
+      (inBar ? bar : gap).push(px(x, y));
+    }
+  }
+  const med = (a: number[][]) => a.map((c) => [lum(c), c] as const).sort((p, q) => p[0] - q[0])[Math.floor(a.length / 2)]?.[1];
+  const b = med(bar), g = med(gap);
+  return { bars: bar.length, gaps: gap.length, ratio: b && g ? +ratio(lum(b), lum(g)).toFixed(2) : 0, bar: b, gap: g };
+}
+
+for (const [w, h] of [[1920, 1080], [1080, 1920]] as const) {
+  test(`중-3 ${w}×${h} — 검은·흰·컬러 워드마크 모두 로고와 바로 뒤 바탕 대비 3:1 이상(로고로 넣기 · 맞추기)`, async ({ page }) => {
+    test.setTimeout(180_000);
+    let cfg: unknown = null;
+    await openTv(page, { w, h, prizes: table(3, 400_000), config: () => cfg });
+    for (const [name, , label] of WORDMARKS) {
+      for (const fit of ['center', 'contain'] as const) {
+        cfg = theme(name, { fit, size: 3 });
+        await page.reload();
+        await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+        await page.waitForTimeout(300);
+        let rect: { x: number; y: number; w: number; h: number };
+        let self: (x: number, y: number) => Promise<boolean>;
+        if (fit === 'center') {
+          await page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>('[data-amb-root] img')].some((i) => i.src.includes('/clock_bg/') && i.complete && i.naturalWidth > 0));
+          rect = await page.evaluate(() => {
+            const im = [...document.querySelectorAll<HTMLImageElement>('[data-amb-root] img')].find((i) => i.src.includes('/clock_bg/') && i.getBoundingClientRect().width > 0)!;
+            const r = im.getBoundingClientRect(); const cs = getComputedStyle(im);
+            const pl = parseFloat(cs.paddingLeft), pt = parseFloat(cs.paddingTop);
+            // object-fit: contain — 내용 상자 안에서 그림이 그려지는 사각형
+            const cw = r.width - pl - parseFloat(cs.paddingRight), ch = r.height - pt - parseFloat(cs.paddingBottom);
+            const s = Math.min(cw / 1200, ch / 400);
+            return { x: r.left + pl + (cw - 1200 * s) / 2, y: r.top + pt + (ch - 400 * s) / 2, w: 1200 * s, h: 400 * s };
+          });
+          self = (x, y) => page.evaluate(([x, y]) => (document.elementFromPoint(x, y) as HTMLImageElement | null)?.src?.includes('/clock_bg/') ?? false, [x, y] as const);
+        } else {
+          rect = await page.evaluate(() => {
+            const r = document.querySelector<HTMLElement>('[data-amb-root]')!.getBoundingClientRect();
+            const s = Math.min(r.width / 1200, r.height / 400);
+            return { x: r.left + (r.width - 1200 * s) / 2, y: r.top + (r.height - 400 * s) / 2, w: 1200 * s, h: 400 * s };
+          });
+          self = (x, y) => page.evaluate(([x, y]) => {
+            const el = document.elementFromPoint(x, y) as HTMLElement | null;
+            if (!el) return false;
+            // 판(글자 덩어리)이 덮은 점은 뺀다 — 루트 자신이거나, 배경이 투명한 빈 칸이어야 로고 바탕이다
+            let e: HTMLElement | null = el;
+            while (e && !e.hasAttribute('data-amb-root')) { const bg = getComputedStyle(e).backgroundColor; if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return false; if (e.innerText?.trim() && e.children.length === 0) return false; e = e.parentElement; }
+            return !!e;
+          }, [x, y] as const);
+        }
+        const c = await logoContrast(page, rect, self);
+        console.log(`[중-3 ${w}x${h}] ${label} ${fit} ${JSON.stringify(c)}`);
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/m3-${w}x${h}-${name.split('-')[1]}-${fit}.png` });
+        expect(c.bars, `${label} ${fit}: 로고 막대 표본 없음`).toBeGreaterThan(0);
+        expect(c.gaps, `${label} ${fit}: 바탕 표본 없음`).toBeGreaterThan(0);
+        expect(c.ratio, `${label} ${fit}: 로고-바탕 대비 ${c.ratio}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+}
+
+// ── 리뷰 중-1: 세로 비 1.11~2.05 여섯 화면 — 상금 띠 단계와 무관하게 보드 글자끼리 겹침 0 ──
+const textOverlaps = (page: Page) => page.evaluate(() => {
+  const root = document.querySelector<HTMLElement>('[data-amb-root]')!;
+  const sr = root.getBoundingClientRect();
+  const els = [...root.querySelectorAll<HTMLElement>('p, span, li')].filter((e) => {
+    if (e.closest('[aria-hidden="true"]') || e.closest('button')) return false;
+    if (![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())) return false;
+    const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0;
+  });
+  const out: string[] = [];
+  let outside = 0;
+  const R = els.map((e) => e.getBoundingClientRect());
+  for (let i = 0; i < els.length; i++) {
+    const a = R[i];
+    if (a.top < sr.top - 1 || a.bottom > sr.bottom + 1) outside++;
+    for (let j = i + 1; j < els.length; j++) {
+      if (els[i].contains(els[j]) || els[j].contains(els[i])) continue;
+      // 한 칸 안의 라벨·숫자 줄 상자(라벨 p 와 숫자 p>span — 글자는 안 닿고 줄 높이만 1~2px 겹친다)는 겹침이 아니다
+      if (els[i].parentElement?.contains(els[j]) || els[j].parentElement?.contains(els[i])) continue;
+      const b = R[j];
+      const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left), oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ox > 1 && oy > 1) out.push(`${els[i].textContent!.trim().slice(0, 12)}×${els[j].textContent!.trim().slice(0, 12)} ${Math.round(oy)}px`);
+    }
+  }
+  const vis = (id: string) => { const e = document.querySelector<HTMLElement>(`[data-testid="${id}"]`); return !!e && e.getBoundingClientRect().height > 0; };
+  return { overlaps: out, outside, tier: vis('clk-prizes-band') ? 'full' : vis('clk-prizes-short') ? 'short' : 'none', stage: `${Math.round(sr.width)}×${Math.round(sr.height)}` };
+});
+
+test('중-1 세로 6화면(768×1024 · 1080×1200 · 1080×1440 · 360×640 · 390×844 · 1080×1920) — 상금 띠가 있어도 글자 겹침 0 · 보드 밖 0', async ({ page }) => {
+  test.setTimeout(180_000);
+  const out: string[] = [];
+  await openTv(page, { w: 1080, h: 1920, prizes: table(20, 9_999_999_999) });
+  for (const [w, h] of [[768, 1024], [1080, 1200], [1080, 1440], [360, 640], [390, 844], [1080, 1920]] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(400);
+    const m = await textOverlaps(page);
+    out.push(`${w}×${h} 스테이지 ${m.stage} 띠 ${m.tier} 겹침 ${m.overlaps.length} 밖 ${m.outside} ${m.overlaps.slice(0, 4).join(' / ')}`);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/m1-${w}x${h}.png` });
+    expect.soft(m.overlaps, `${w}×${h} 글자 겹침: ${m.overlaps.join(', ')}`).toEqual([]);
+    expect.soft(m.outside, `${w}×${h} 보드 밖 글자`).toBe(0);
+    if (h / w >= 1.9) expect.soft(m.tier, `${w}×${h} 은 충분히 길어 전체 띠가 서야 한다`).toBe('full');
+  }
+  console.log(`[중-1]\n${out.join('\n')}`);
+});

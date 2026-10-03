@@ -4,6 +4,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { SUPABASE_URL } from './_session';
 
 const level = (sb: number, bb: number) => ({ kind: 'level', sb, bb, ante: bb, minutes: 20 });
 const clockRow = () => ({
@@ -153,4 +154,39 @@ test('L1-2 순위 단계 첫 방문(1440) — 장부 게임이 600ms 늦게 와�
   await expect(page.getByText('장부 게임').first()).toBeVisible();
   expect(ys.length).toBeGreaterThan(10);
   expect(shift, '장부 게임 목록이 늦게 와서 카드가 밀렸다').toBeLessThanOrEqual(1);
+});
+
+// ── 리뷰 중-2: 운영자 스테이지(내 매장 › 클락, 16:9 박스)에서도 '로고로 넣기' 로고가 글자에 가리지 않는다 ──
+test('중-2 운영자 스테이지(1440) — 로고로 넣기 로고가 머리줄 칸에 서고 가림 ≤5%', async ({ page }) => {
+  test.setTimeout(90_000);
+  const img = `${SUPABASE_URL}/storage/v1/object/public/clock_bg/${MOCK_VENUE}/logo-op.png`;
+  await bootOwner(page, {
+    viewport: { width: 1440, height: 900 }, clock: { ...clockRow(), running: true, ends_at: new Date(Date.now() + 600_000).toISOString() },
+    pageConfig: { clockTheme: { version: 1, palette: { preset: 'nuri-signature' }, background: { kind: 'gradient', preset: 'nuri-signature', image: img, fit: 'center', size: 3 } } },
+    extra: async (p) => {
+      await p.route(/\/storage\/v1\/object\/public\/clock_bg\//, (r) => r.fulfill({ status: 200, contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><circle cx="400" cy="400" r="380" fill="#E0A94E"/></svg>' }));
+    },
+  });
+  await openMyStore(page);
+  await expect(page.locator('[data-mystore-rail]')).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll<HTMLElement>('[data-mystore-rail] button')].find((x) => getComputedStyle(x).display !== 'none' && x.textContent?.trim() === '클락');
+    b?.click();
+  });
+  await expect(page.getByTestId('clk-timer').first()).toBeVisible({ timeout: 20_000 });
+  const logo = page.locator('[data-amb-root] img[data-testid="clk-logo"]').first();
+  await expect(logo).toBeVisible({ timeout: 10_000 });
+  await logo.scrollIntoViewIfNeeded();
+  const m = await logo.evaluate((im: HTMLImageElement) => {
+    const r = im.getBoundingClientRect();
+    let total = 0, hidden = 0;
+    for (let i = 1; i < 20; i++) for (let j = 1; j < 20; j++) { total++; if (document.elementFromPoint(r.left + (r.width * i) / 20, r.top + (r.height * j) / 20) !== im) hidden++; }
+    const header = im.closest('header')!.getBoundingClientRect();
+    return { w: r.width, h: r.height, pct: (100 * hidden) / total, inHeader: r.top >= header.top - 0.5 && r.bottom <= header.bottom + 0.5 };
+  });
+  console.log(`[중-2 운영자] ${JSON.stringify(m)}`);
+  expect(m.w).toBeGreaterThan(4);
+  expect(m.inHeader, '로고가 머리줄 칸 밖').toBe(true);
+  expect(m.pct, `운영자 스테이지 로고 가림 ${m.pct.toFixed(1)}%`).toBeLessThanOrEqual(5);
 });

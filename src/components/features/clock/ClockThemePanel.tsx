@@ -13,10 +13,11 @@ import { getVenuePageConfig, setVenuePageConfig, type VenuePageConfig } from '..
 import {
   CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
   clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf,
-  publishClockTheme, clockAmbienceOf, clockBgDisplayOf, type ClockTheme, type ClockThemePreset, type ClockBgDisplay,
+  publishClockTheme, subscribeClockTheme, clockAmbienceOf, clockBgDisplayOf, clockLogoDark, type ClockTheme, type ClockThemePreset, type ClockBgDisplay,
 } from './clockTheme';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
-import ClockLogoLayer, { clockLayerIsolation } from './ClockLogoLayer';
+import { ambIsolation } from './ambience/ambiencePresets';
+import { clockStageDecor } from './ClockStage';
 import { CLOCK_THEME_POLL_MS } from './useClockThemeVars';
 import { uploadClockBg, deleteClockBg, CLOCK_BG_ACCEPT } from './clockBgImage';
 import { msgOf } from '../../../lib/dbError';
@@ -43,6 +44,7 @@ function Seg<T extends string | number>({ label, value, options, onPick, disable
       <span className="w-16 shrink-0 text-2xs font-semibold text-ink-secondary">{label}</span>
       {options.map(([v, t]) => (
         <button key={String(v)} type="button" disabled={disabled} aria-pressed={v === value} onClick={() => { if (v !== value) onPick(v); }}
+          style={{ minWidth: 44 }}   // 리뷰 하-6 — '위' 버튼이 33px 였다
           className={['min-h-11 rounded-input border px-2.5 text-2xs font-semibold transition-colors disabled:opacity-50',
             v === value ? 'border-accent-300 bg-accent-300/10 text-accent-300 dark:text-accent-200' : 'border-border-default text-ink-secondary hover:border-accent-400/40'].join(' ')}>
           {t}
@@ -65,17 +67,18 @@ function ClockMiniFace({ vars, accent, em, cqw, className, still }: {
 }) {
   const RAIL = 16; // TV 는 24칸 — 축소판에서는 셀 수 있는 만큼만
   const v = vars as Record<string, string>;
+  const { logo } = clockStageDecor(v);
   const filled = 6;
   return (
     <div data-amb-root className={`relative flex aspect-video flex-col overflow-hidden text-white ${className ?? ''}`}
-      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)', ...clockLayerIsolation(v, clockAmbienceOf(v)) }} aria-hidden>
+      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)', ...ambIsolation(clockAmbienceOf(v)) }} aria-hidden>
       {/* 모션 테마 — TV 와 같은 장면을 이 크기로 그린다(해상도 무관). 테마가 아니면 아무것도 안 받는다. */}
       <ClockAmbienceSlot id={clockAmbienceOf(v)} still={still} />
-      {/* N-2 로고 층 — 축소판은 16:9 라 짧은 변 = 높이 = 부모 폭 × 9/16 → 1% = 0.5625cqw(부모가 inline-size 컨테이너). */}
-      <ClockLogoLayer vars={v} unit="0.5625cqw" />
       {/* 상단 — 매장명만. LEVEL 알약·RUNNING 알약은 2026-09-19 오너 지시 #9 로 보드에서 사라졌다(ClockStage LevelLine). */}
       <div className="flex shrink-0 items-center gap-[0.4em] px-[0.7em] pt-[0.5em]" style={MINI_PLATE}>
         <span className="h-[0.3em] w-[0.3em] rounded-full bg-emerald-400" />
+        {/* N-2 '로고로 넣기' — TV 가로 보드와 같은 자리(머리줄 매장 이름 옆). 축소판은 em 단위라 높이 0.5em ≈ 머리줄 칸. */}
+        {logo && <img src={logo.src} alt="" className="h-[0.5em] w-auto max-w-[3em] shrink-0 object-contain" style={logo.plate ? { background: logo.plate, borderRadius: '0.1em', padding: '0.03em 0.08em' } : undefined} />}
         <span className="truncate text-[0.5em] font-bold" style={{ color: 'var(--clk-ink-soft)' }}>NURI</span>
       </div>
 
@@ -128,14 +131,19 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const venueRef = useRef(venueId);
   venueRef.current = venueId;
 
+  // 리뷰 하-2 — A 저장 대기 중 A→B→A 로 돌아오면, 저장보다 먼저 출발한 읽기가 나중에 도착해 패널이 옛 값을 보였다(다음 클릭이 그 옛 값으로 덮어쓸 수 있다).
+  //   ① 읽기 출발 뒤에 저장이 하나라도 끝났으면 그 응답은 버리고 ② 같은 브라우저의 저장 신호(publishClockTheme)를 패널도 듣는다.
+  const saveSeqRef = useRef(0);
   useEffect(() => {
     let alive = true;
+    const startedAt = saveSeqRef.current;
     setLoaded(false);
     getVenuePageConfig(venueId)
-      .then((c) => { if (alive) setTheme(sanitizeClockTheme(c?.clockTheme)); })
+      .then((c) => { if (alive && saveSeqRef.current === startedAt) setTheme(sanitizeClockTheme(c?.clockTheme)); })
       .catch(() => {})
       .finally(() => { if (alive) setLoaded(true); });
-    return () => { alive = false; };
+    const off = subscribeClockTheme(venueId, (t) => { if (alive) setTheme(t); });
+    return () => { alive = false; off(); };
   }, [venueId]);
 
   const cur = theme;
@@ -145,6 +153,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const curAccent = curAccentSel ?? curPreset.accent;
   const curImage = clockBgImageOf(cur);
   const curDisp = clockBgDisplayOf(cur);
+  const curDark = clockLogoDark(cur);
 
   /** clockTheme 키만 교체 저장. 성공 시 남은 옛 배경 파일을 정리(저장 성공 후에만 — 순서가 계약이다) */
   const persist = async (next: ClockTheme | null, orphan?: string | null) => {
@@ -156,6 +165,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       await setVenuePageConfig(venueId, merged);
       // 저장이 DB 에만 남으면 '눌렀는데 아무 일도 안 일어난다' 가 된다 —
       // 열려 있는 TV·운영자 미리보기가 새로고침 없이 새 테마를 집게 알린다(같은 탭 + 다른 창).
+      saveSeqRef.current++;
       publishClockTheme(venueId, next);
       if (aliveRef.current && venueRef.current === venueId) setTheme(next);
       if (orphan) void deleteClockBg(orphan);
@@ -195,7 +205,8 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       const url = await uploadClockBg(venueId, file);
       setStage('저장 중…');
       const ok = await persist(makeClockTheme(curPresetId, curAccentSel, url, cur?.background), curImage);
-      if (ok) toast.show('배경 이미지를 등록했습니다. 글자가 잘 보이도록 자동으로 어둡게 처리됩니다', 'success');
+      // 리뷰 하-4 — 어둡게 처리는 '꽉 채우기' 에서만 일어난다. 문구를 표시 방식별로.
+      if (ok) toast.show(curDisp.fit === 'cover' ? '배경 이미지를 등록했습니다. 꽉 채우기라 글자가 잘 보이도록 사진을 어둡게 보여 줘요' : '이미지를 등록했습니다. 이미지 색은 그대로 두고 글자 뒤에만 판을 깔아요', 'success');
       else void deleteClockBg(url); // 저장 실패분은 고아로 남기지 않는다
     } catch (e) {
       toast.show(msgOf(e, '업로드 실패'), 'error');
@@ -206,7 +217,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const pickDisplay = async (patch: ClockBgDisplay) => {
     if (!curImage) return;
     if (await persist(makeClockTheme(curPresetId, curAccentSel, curImage, { ...curDisp, ...patch }))) {
-      toast.show(`표시 방식을 저장했습니다. 다른 기기 TV 는 ${CLOCK_THEME_POLL_MS / 1000}초 안에 바뀌어요`, 'success');
+      toast.show(`표시 방식을 저장했습니다. 이 기기 TV 는 바로, 다른 기기 TV 는 ${CLOCK_THEME_POLL_MS / 1000}초 안에 바뀌어요`, 'success');
     }
   };
 
@@ -261,20 +272,36 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
         </div>
         <p className="text-2xs text-ink-muted">
           {/* C1 C-1(2026-10-02) — 3줄(93자) → 2줄. */}
-          <span className="font-semibold text-ink-secondary">글자가 묻히지 않게 밝기를 자동으로 낮춰요</span>(WebP 자동 변환). 배경이 없으면 테마 색만 나가요.
+          <span className="font-semibold text-ink-secondary">꽉 채우기는 글자가 묻히지 않게 사진을 어둡게 보여 줘요</span> — 로고는 아래 '로고로 넣기'(색 그대로). 배경이 없으면 테마 색만 나가요.
         </p>
         {/* N-2(2026-10-03 오너 결정) — 사진은 꽉 채우고, 로고는 잘리지 않게. 맞추기·가운데는 이미지를 누르지 않고 글자 뒤에만 판을 깐다. */}
         {curImage && (
           <div className="space-y-1.5 border-t border-border-subtle pt-1.5" data-testid="clk-bg-display">
             <Seg label="표시 방식" testid="clk-bg-fit" value={curDisp.fit} disabled={busy} onPick={(fit) => pickDisplay({ fit })}
-              options={[['cover', '꽉 채우기(사진)'], ['contain', '잘림 없이 맞추기'], ['center', '가운데 크게(로고)']] as const} />
-            {curDisp.fit !== 'cover' && (
-              <Seg label="위치" testid="clk-bg-pos" value={curDisp.pos} disabled={busy} onPick={(pos) => pickDisplay({ pos })}
-                options={[['top', '위'], ['center', '가운데'], ['bottom', '아래']] as const} />
+              options={[['cover', '꽉 채우기(사진)'], ['contain', '잘림 없이 맞추기'], ['center', '로고로 넣기']] as const} />
+            {/* 위치는 '맞추기' 에서만 — 로고는 자리가 정해져 있다(가로 TV 머리줄 매장 이름 옆 · 세로 TV 타이머 위). 리뷰 중-2·하-3 */}
+            {curDisp.fit === 'contain' && (
+              <>
+                <Seg label="위치" testid="clk-bg-pos" value={curDisp.pos} disabled={busy} onPick={(pos) => pickDisplay({ pos })}
+                  options={[['top', '위'], ['center', '가운데'], ['bottom', '아래']] as const} />
+                <p className="t-desc text-ink-muted">위치는 이미지와 화면 비율이 달라 남는 칸이 생길 때만 달라져요.</p>
+              </>
             )}
             {curDisp.fit === 'center' && (
-              <Seg label="크기" testid="clk-bg-size" value={curDisp.size} disabled={busy} onPick={(size) => pickDisplay({ size })}
-                options={[[1, '작게'], [2, '보통'], [3, '크게']] as const} />
+              <>
+                <Seg label="크기" testid="clk-bg-size" value={curDisp.size} disabled={busy} onPick={(size) => pickDisplay({ size })}
+                  options={[[1, '작게'], [2, '보통'], [3, '크게']] as const} />
+                <p className="t-desc text-ink-muted">가로 TV 는 상단 매장 이름 옆, 세로 TV 는 타이머 위 빈 자리에 들어가요 — 글자와 겹치지 않아요.</p>
+              </>
+            )}
+            {curDisp.fit !== 'cover' && curDark && (
+              <div className="flex flex-wrap items-center gap-1.5" data-testid="clk-bg-dark">
+                <p className="min-w-0 flex-1 text-2xs text-ink-secondary">
+                  {curDisp.plate ? '어두운 로고 — TV 바탕에 묻히지 않게 밝은 받침을 깔았어요' : '어두운 로고 — 받침을 껐어요. TV 바탕에서 잘 안 보일 수 있어요'}
+                </p>
+                <button type="button" disabled={busy} onClick={() => pickDisplay({ plate: curDisp.plate ? 0 : undefined })}
+                  className="btn-ghost min-h-11 px-3 text-2xs disabled:opacity-50">{curDisp.plate ? '받침 끄기' : '받침 켜기'}</button>
+              </div>
             )}
             {curDisp.fit === 'cover' ? (
               <Seg label="어둡게" testid="clk-bg-shade" value={curDisp.shade} disabled={busy} onPick={(shade) => pickDisplay({ shade })}

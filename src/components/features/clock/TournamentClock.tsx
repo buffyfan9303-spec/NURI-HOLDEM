@@ -41,7 +41,7 @@ import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
 import { subscribeClockAd, publishClockSignal, clockAmbienceOf } from './clockTheme';
 import { useClockThemeVars } from './useClockThemeVars';
-import ClockLogoLayer, { clockLayerIsolation } from './ClockLogoLayer';
+import { ambIsolation } from './ambience/ambiencePresets';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
 import { useVenueScope } from '../../../lib/useVenueScope';
@@ -53,7 +53,7 @@ import { lazyWithReload } from '../../../lib/lazyWithReload';
 //   VenueManageTab 청크가 상한 119KB 를 0.2KB 넘었다 — 예산을 올리지 않고 이 패널을 뺐다). 폼이 뜨면 바로 preload 해서
 //   보통은 lazy 를 거치지 않고 동기로 그린다(lazyWithReload.preload). 폴백 = 패널 자신의 로딩 상자와 같은 높이(CLS 0).
 const ClockThemePanel = lazyWithReload(() => import('./ClockThemePanel'));
-import ClockStage from './ClockStage';
+import ClockStage, { clockStageDecor } from './ClockStage';
 import ClockPagesEditor from './ClockPagesEditor';
 import { useClockAds } from './useClockAds';
 import { clampExtraPages, clockPagesBlocked, type ClockExtraPage } from '../../../lib/clockSlides';
@@ -1032,8 +1032,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   //   다시 그리면 콘솔 숫자가 그만큼 늦게 바뀐다. 콘솔은 즉시, 보드는 다음 여유 렌더에서 같은 값으로 따라온다.
   //   tick 을 의존성에 넣는 이유: 보드 머리(effectiveLevel·curBB)는 시각에 따라 바뀌므로 초 틱마다 다시 그려야 한다(종전과 같다).
   const deferredStage = useDeferredValue(stageState);
-  const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} ads={slideAds} />,
-    [deferredStage, tick, venueName, adImg, adSize, slideAds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} ads={slideAds} decor={clockStageDecor(clkVars)} />,
+    [deferredStage, tick, venueName, adImg, adSize, slideAds, clkVars]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // C10 — 진행 중 구조 적용. 규칙 판정은 저장 **직전** 지금 시각으로 다시 한다(편집 중 레벨이 넘어갔으면 거절).
   //   쓰기는 persist → 바뀐 칸 저장기(config 한 칸, 끝난 대회 이어 가기면 +레벨 4필드). realtime 으로 TV·리모컨·장부·라이브 탭이 다시 읽는다.
@@ -1243,13 +1243,12 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-video',
         stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
         data-amb-root
-        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', ...clockLayerIsolation(clkVars, clockAmbienceOf(clkVars)),
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', ...ambIsolation(clockAmbienceOf(clkVars)),
           ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
         {/* 모션 테마(2026-09-30) — TV(ClockDisplay)와 같은 자리·같은 층. 테마가 아니면 아무것도 안 받는다(lazy). */}
         <ClockAmbienceSlot id={clockAmbienceOf(clkVars)} />
-        <ClockLogoLayer vars={clkVars} />
         {fs && (
           <div data-testid="clk-fs-overlay"
             className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] portrait:h-auto portrait:min-h-[12cqmin] portrait:py-[1.5cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',

@@ -21,19 +21,26 @@ export interface ClockTheme {
 
 /**
  * N-2(2026-10-03 오너 결정) — 매장이 올린 이미지(사진·자기 로고)를 **어떻게 놓을지**.
- *  · fit  cover(기본 — 종전 그대로, 사진용) · contain(잘림 없이 맞추기 — 남는 곳은 이미지 대표색) · center(가운데 크게 — 로고용, 투명 PNG 그대로)
- *  · pos  center(기본) · top · bottom — contain·center 에서만 의미가 있다
- *  · size 1·2·3 — center 의 크기 단계(짧은 변 대비 32·48·64%)
+ *  · fit  cover(기본 — 종전 그대로, 사진용) · contain(잘림 없이 맞추기 — 남는 곳은 이미지 대표색) · center('로고로 넣기' — 투명 PNG 그대로)
+ *  · pos  center(기본) · top · bottom — contain 에서만 의미가 있다(로고는 자리가 정해져 있다)
+ *  · size 1·2·3 — 로고 크기 단계. 가로 보드는 머리줄 로고 칸 높이(짧은 변 5·6·7%), 세로 보드는 타이머 위 빈 자리 상한(20·32·44%)
+ *  · plate 0 — 어두운 로고의 자동 밝은 받침 끄기(기본 = 자동)
  *  · shade 0·1·2 — cover 의 어둡게 단계. 0 = 업로드 때 잰 밝기 상한 그대로(종전), 1·2 는 그보다 더 어둡게만(상한을 풀지 않는다)
  * 저장 값은 enum 문자열·작은 정수뿐이다(URL 아님). **기본값은 저장하지 않는다** — 옛 매장의 테마 객체는 한 글자도 안 바뀐다.
  */
 export type ClockBgFit = 'cover' | 'contain' | 'center';
 export type ClockBgPos = 'center' | 'top' | 'bottom';
-export interface ClockBgDisplay { fit?: ClockBgFit; pos?: ClockBgPos; size?: 1 | 2 | 3; shade?: 0 | 1 | 2 }
+export interface ClockBgDisplay { fit?: ClockBgFit; pos?: ClockBgPos; size?: 1 | 2 | 3; shade?: 0 | 1 | 2; plate?: 0 | 1 }
 export const CLOCK_BG_FITS: readonly ClockBgFit[] = ['cover', 'contain', 'center'];
 export const CLOCK_BG_POSES: readonly ClockBgPos[] = ['center', 'top', 'bottom'];
-/** center 의 크기 단계 → 로고 상자 높이(짧은 변 대비 %). 폭은 보드 폭 − 여백, 그 상자 안 contain 이라 어떤 비율의 로고도 잘리지 않는다. */
-export const CLOCK_LOGO_SIZE_PCT = { 1: 32, 2: 48, 3: 64 } as const;
+/** 로고 크기 단계(짧은 변 대비 %). head = 가로 보드 머리줄 로고 칸 높이(머리줄 8), tall = 세로 보드 타이머 위 자리의 높이 상한.
+ *  리뷰(2026-10-03 중-2): 보드 한가운데 겹쳐 깔면 타이머 판 뒤에 65~96% 가려졌다 → 글자 판과 겹치지 않는 **자기 자리**(흐름 안의 칸)에만 그린다. */
+export const CLOCK_LOGO_SIZE = { head: { 1: 5, 2: 6, 3: 7 }, tall: { 1: 20, 2: 32, 3: 44 } } as const;
+/** 어두운 로고 받침(중-3) — 로고 뒤에만 까는 은은한 밝은 둥근 판. '맞추기' 의 남는 칸은 밝은 중립색. */
+export const CLOCK_LOGO_PLATE = 'rgba(236,239,245,0.9)';
+export const CLOCK_LIGHT_NEUTRAL = '#D9DDE5';
+/** 평균 상대휘도가 이 값 아래면 '어두운 로고' — 테마 바탕(#06080F 근처)과 대비 3:1 이 안 나오는 밝기((L+.05)/(.0025+.05) < 3). */
+export const CLOCK_DARK_LUM = 0.1075;
 /** cover 의 어둡게 단계 → 상한 위에 더하는 비율(남은 밝기의 몇 %를 더 누르나). 0 은 종전과 같다. */
 export const CLOCK_BG_SHADE_EXTRA = [0, 0.3, 0.55] as const;
 /** contain·center 에서 글자 뒤에만 까는 판. 전체를 누르지 않으므로 로고 색이 산다.
@@ -45,6 +52,7 @@ const isFit = (v: unknown): v is ClockBgFit => typeof v === 'string' && (CLOCK_B
 const isPos = (v: unknown): v is ClockBgPos => typeof v === 'string' && (CLOCK_BG_POSES as readonly string[]).includes(v);
 const isSize = (v: unknown): v is 1 | 2 | 3 => v === 1 || v === 2 || v === 3;
 const isShade = (v: unknown): v is 0 | 1 | 2 => v === 0 || v === 1 || v === 2;
+type DispFull = Required<ClockBgDisplay>;
 
 /** 표시 설정 정규화 — 화이트리스트 밖·기본값은 버린다(저장 객체에 기본값을 남기지 않는다). */
 export function normalizeClockBgDisplay(d: unknown): ClockBgDisplay {
@@ -54,24 +62,31 @@ export function normalizeClockBgDisplay(d: unknown): ClockBgDisplay {
   if (isPos(r.pos) && r.pos !== 'center') out.pos = r.pos;
   if (isSize(r.size) && r.size !== 2) out.size = r.size;
   if (isShade(r.shade) && r.shade !== 0) out.shade = r.shade;
+  if (r.plate === 0) out.plate = 0;
   return out;
 }
 
 /** 테마 → 표시 설정(기본값까지 채운 꼴). */
-export function clockBgDisplayOf(theme: ClockTheme | null | undefined): Required<ClockBgDisplay> {
+export function clockBgDisplayOf(theme: ClockTheme | null | undefined): DispFull {
   const n = normalizeClockBgDisplay(theme?.background);
-  return { fit: n.fit ?? 'cover', pos: n.pos ?? 'center', size: n.size ?? 2, shade: n.shade ?? 0 };
+  return { fit: n.fit ?? 'cover', pos: n.pos ?? 'center', size: n.size ?? 2, shade: n.shade ?? 0, plate: n.plate ?? 1 };
 }
 
 /**
- * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>-d37-t1a2b3c.webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색).
+ * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>-d37-t1a2b3c[-k].webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고).
  * 왜 테마 키가 아니라 이름인가: 이름은 URL 과 한 몸이라 옛 번들이 테마를 다시 저장해도(모르는 키는 버린다) 떨어지지 않는다.
  * 이름표가 없는 옛 파일은 업로드 때 이미 밝기를 구워 둔 것이라 d = 0 이 정답이다(종전 렌더와 같다).
  */
-export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null } {
-  const m = url ? /-d(\d{1,2})(?:-t([0-9a-f]{6}))?\.(?:webp|jpe?g|png)$/.exec(url) : null;
-  if (!m) return { dim: 0, tint: null };
-  return { dim: Math.min(95, Number(m[1])) / 100, tint: m[2] ? `#${m[2]}` : null };
+export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; dark: boolean } {
+  const m = url ? /-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
+  if (!m) return { dim: 0, tint: null, dark: false };
+  return { dim: Math.min(95, Number(m[1])) / 100, tint: m[2] ? `#${m[2]}` : null, dark: !!m[3] };
+}
+
+/** 이 테마의 이미지가 '어두운 로고' 인가(받침을 끄지 않았을 때만 참) — 설정 화면 안내·렌더 공용. */
+export function clockLogoDark(theme: ClockTheme | null | undefined): boolean {
+  const img = clockBgImageOf(theme);
+  return !!img && clockBgMetaOf(img).dark;
 }
 
 /** 아우라 골드(기본 테마 v2, 2026-09-02 오너 지시) — 순흑 + 금빛 보케(정적 radial-gradient 9겹 · 이미지·애니 없음).
@@ -457,13 +472,22 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
     bg = `${CLOCK_BG_SCRIM}, ${shade}url("${img}") center/cover no-repeat, ${base}`;
   } else if (img && disp.fit === 'contain') {
     const at = disp.pos === 'center' ? 'center' : `center ${disp.pos}`;
-    bg = `url("${img}") ${at}/contain no-repeat, ${meta.tint ?? CLOCK_DEFAULTS.bg}`;
+    // 중-3 — 어두운 로고를 어두운 대표색 위에 두면 1:1 로 사라졌다. 받침이 켜져 있으면 남는 칸을 밝은 중립색으로.
+    const fill = meta.dark && disp.plate ? CLOCK_LIGHT_NEUTRAL : (meta.tint ?? CLOCK_DEFAULTS.bg);
+    bg = `url("${img}") ${at}/contain no-repeat, ${fill}`;
   } else if (img) {
-    logo = { '--clk-logo': `url("${img}")`, '--clk-logo-size': String(CLOCK_LOGO_SIZE_PCT[disp.size]), '--clk-logo-pos': disp.pos };
+    // '로고로 넣기' — 루트 배경은 테마 그대로. 로고는 ClockStage 의 로고 칸(가로: 머리줄, 세로: 타이머 위)이 그린다.
+    logo = {
+      '--clk-logo': img,
+      '--clk-logo-head': `${CLOCK_LOGO_SIZE.head[disp.size]}cqmin`,
+      '--clk-logo-tall': `${CLOCK_LOGO_SIZE.tall[disp.size]}cqmin`,
+      ...(meta.dark && disp.plate ? { '--clk-logo-plate': CLOCK_LOGO_PLATE } : null),
+    };
   }
   return {
     '--clk-bg': bg,
-    ...(img && disp.fit !== 'cover' ? { '--clk-plate': CLOCK_PLATE, '--clk-plate-r': '1.2cqmin', '--clk-plate-align': 'center' } : null),
+    // 글자 판은 '맞추기' 에서만 — 로고는 이제 글자와 겹치지 않는 자기 칸에 있어 판이 필요 없다.
+    ...(img && disp.fit === 'contain' ? { '--clk-plate': CLOCK_PLATE, '--clk-plate-r': '1.2cqmin', '--clk-plate-align': 'center' } : null),
     ...logo,
     // ── 강조색이 바꿀 수 있는 것 ──────────────────────────────────────────────
     '--clk-accent': accent,                           // 레벨·현재 블라인드·진행률

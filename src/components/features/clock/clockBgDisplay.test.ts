@@ -37,11 +37,11 @@ describe('N-2 표시 방식 — 기본값은 종전 화면 그대로', () => {
   it('화이트리스트 밖 값은 버린다(문자열 주입·큰 수)', () => {
     const raw = { version: 1, palette: { preset: 'carbon' }, background: { kind: 'solid', preset: 'carbon', image: url('a.webp'), fit: 'url(x)', pos: 'left', size: 9, shade: 7 } };
     const t = T.sanitizeClockTheme(raw)!;
-    expect(T.clockBgDisplayOf(t)).toEqual({ fit: 'cover', pos: 'center', size: 2, shade: 0 });
+    expect(T.clockBgDisplayOf(t)).toEqual({ fit: 'cover', pos: 'center', size: 2, shade: 0, plate: 1 });
   });
   it('왕복(make → sanitize)·프리셋 전환에서 표시 설정이 산다', () => {
     const t = T.makeClockTheme('carbon', undefined, url('a.webp'), { fit: 'center', pos: 'top', size: 3 });
-    expect(T.clockBgDisplayOf(T.sanitizeClockTheme(t))).toEqual({ fit: 'center', pos: 'top', size: 3, shade: 0 });
+    expect(T.clockBgDisplayOf(T.sanitizeClockTheme(t))).toEqual({ fit: 'center', pos: 'top', size: 3, shade: 0, plate: 1 });
     expect(T.clockBgDisplayOf(T.themeForPresetChange('aura-gold', t))).toMatchObject({ fit: 'center', pos: 'top', size: 3 });
   });
   it('이미지가 없으면 표시 설정도 남지 않는다', () => {
@@ -67,15 +67,33 @@ describe('N-2 렌더 변수', () => {
     expect(v['--clk-bg']).not.toContain('rgba(0,0,0');   // 이미지를 누르지 않는다
     expect(v['--clk-plate']).toBe(T.CLOCK_PLATE);
   });
-  it('center — 루트 배경은 테마 바탕 그대로, 로고 층 변수(크기 단계·위치)', () => {
+  it('로고로 넣기 — 루트 배경은 테마 바탕 그대로, 로고 칸 크기 변수만(글자 판 없음 — 로고는 겹치지 않는 자기 칸)', () => {
     const img = url('logo.webp');
     const v = T.clockThemeVars(T.makeClockTheme('carbon', undefined, img, { fit: 'center', size: 1, pos: 'top' }));
     expect(v['--clk-bg']).toBe(T.clockPresetById('carbon')!.bg);
-    expect(v).toMatchObject({ '--clk-logo': `url("${img}")`, '--clk-logo-size': '32', '--clk-logo-pos': 'top', '--clk-plate': T.CLOCK_PLATE });
+    expect(v).toMatchObject({ '--clk-logo': img, '--clk-logo-head': '5cqmin', '--clk-logo-tall': '20cqmin' });
+    expect(v['--clk-plate']).toBeUndefined();
+    expect(v['--clk-logo-plate']).toBeUndefined();   // 밝은 로고는 받침 없음
+  });
+  it('중-3 어두운 로고(-k) — 로고는 밝은 받침, 맞추기는 밝은 중립 바탕 · 받침 끄기(plate 0)면 둘 다 없음', () => {
+    const img = url('1-d0-t111111-k.webp');
+    const logo = T.clockThemeVars(T.makeClockTheme('carbon', undefined, img, { fit: 'center' }));
+    expect(logo['--clk-logo-plate']).toBe(T.CLOCK_LOGO_PLATE);
+    const fit = T.clockThemeVars(T.makeClockTheme('carbon', undefined, img, { fit: 'contain' }));
+    expect(fit['--clk-bg']).toContain(T.CLOCK_LIGHT_NEUTRAL);
+    const off = T.makeClockTheme('carbon', undefined, img, { fit: 'center', plate: 0 });
+    expect(off.background).toMatchObject({ plate: 0 });
+    expect(T.clockThemeVars(off)['--clk-logo-plate']).toBeUndefined();
+    expect(T.clockThemeVars(T.makeClockTheme('carbon', undefined, img, { fit: 'contain', plate: 0 }))['--clk-bg']).toContain('#111111');
+    // 받침/바탕과 로고(검정) 대비 3:1 이상
+    const plate = [236, 239, 245].map((c) => 0.9 * c + 0.1 * 6);
+    expect(ratio(lum([0, 0, 0]), lum(plate))).toBeGreaterThanOrEqual(3);
+    expect(ratio(lum([0, 0, 0]), lum([0xd9, 0xdd, 0xe5]))).toBeGreaterThanOrEqual(3);
   });
   it('이름표 해석 — 없는 이름표는 d=0(옛 파일은 이미 구웠다) · 범위 밖은 95 로 막는다', () => {
-    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null });
-    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef' });
+    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null, dark: false });
+    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef', dark: false });
+    expect(T.clockBgMetaOf(url('1-d0-t111111-k.webp'))).toEqual({ dim: 0, tint: '#111111', dark: true });
     expect(T.clockBgMetaOf(url('1-d99.webp')).dim).toBe(0.95);
   });
   it('글자 판 계산 — 판 뒤가 순백이어도 흰 글자 4.5:1·가장 어두운 강조색 3:1(대형) 이상', () => {
@@ -88,6 +106,16 @@ describe('N-2 렌더 변수', () => {
     expect(ratio(lum(dim), L)).toBeGreaterThanOrEqual(4.5);
     // 가장 어두운 스와치 #5E6AD2 — 배경 없는 기본 바탕(4.27)·종전 사진 상한(3.05)과 같은 대형 글자 기준
     expect(ratio(lum([0x5e, 0x6a, 0xd2]), L)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('중-3 어두운 로고 판정(업로드 이름표 -k)', () => {
+  it('검은 워드마크·짙은 남색은 어둡고, 흰 워드마크·금색 로고는 아니다', async () => {
+    const { isDarkAvg } = await import('./clockBgImage');
+    expect(isDarkAvg(0, 0, 0)).toBe(true);
+    expect(isDarkAvg(0.1, 0.12, 0.3)).toBe(true);
+    expect(isDarkAvg(1, 1, 1)).toBe(false);
+    expect(isDarkAvg(0xe0 / 255, 0xa9 / 255, 0x4e / 255)).toBe(false);
   });
 });
 
