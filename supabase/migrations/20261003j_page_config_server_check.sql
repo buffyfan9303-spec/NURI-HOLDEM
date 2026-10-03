@@ -22,7 +22,11 @@ as $function$
     when exists (
       select 1 from jsonb_path_query(p_cfg, 'strict $.**') v
        where jsonb_typeof(v) = 'string'
-         and (v #>> '{}') ~* '^\s*((javascript|data|vbscript|https?|ftp|file|blob)\s*:|//)'
+         -- critical 재리허설(2026-10-03 밤) 우회 6종: 스킴 중간 탭·개행 · 앞 제어문자(브라우저 URL 파서가 지운다) · 역슬래시 두 개/'/' 시작 ·
+         --   intent:·mailto: — 공백·제어문자를 지운 뒤 위험 스킴 목록 + 슬래시/역슬래시 두 개 연속을 본다.
+         --   ⚠ '아무 스킴이나' 막지 않는다 — 라이브 값 custom:cgt6pzq(커스텀 순위 보드 키)가 막힌다.
+         and regexp_replace(v #>> '{}', E'[\\x00-\\x20\\x7f]', '', 'g')
+               ~* E'^((javascript|data|vbscript|https?|ftp|file|blob|intent|mailto|tel|sms|wss?):|[\\\\/]{2})'
          and (v #>> '{}') !~ '^https://idsxiqspecrucvfvtgbw\.supabase\.co/storage/v1/object/public/[a-z0-9_-]+/[^"''()\\\s]*$'
     ) then '매장 설정에 허용되지 않은 주소가 있습니다(우리 저장소 이미지 주소만 쓸 수 있습니다)'
     when (p_cfg #>> '{clockTheme,background,image}') is not null
@@ -36,9 +40,12 @@ $function$;
 revoke all on function public._venue_page_config_problem(uuid, jsonb) from public, anon, authenticated;
 grant execute on function public._venue_page_config_problem(uuid, jsonb) to service_role;
 
+-- SECURITY DEFINER(critical 재리허설): INVOKER 면 업주가 venues 를 직접 UPDATE 할 때 판정 함수 실행권(회수됨) 때문에
+--   판정 문구 대신 '42501 permission denied for function' 이 났다. 실행권은 아래에서 anon·authenticated 모두 회수한다(트리거로만 돈다).
 create or replace function public._venue_page_config_guard()
  returns trigger
  language plpgsql
+ security definer
  set search_path = public, pg_temp
 as $function$
 declare v_err text;
@@ -62,6 +69,9 @@ begin
   select count(*), string_agg(id::text || ':' || public._venue_page_config_problem(id, page_config), ' | ')
     into n, ex from public.venues where public._venue_page_config_problem(id, page_config) is not null;
   if n > 0 then raise exception '20261003j: 기존 page_config % 건이 새 검사를 통과하지 못한다 — 지우지 말고 리드에게 보고: %', n, ex; end if;
+  if not (select prosecdef and proconfig @> array['search_path=public, pg_temp'] from pg_proc where oid = 'public._venue_page_config_guard()'::regprocedure) then
+    raise exception '20261003j: 트리거 함수가 DEFINER·search_path 고정이 아니다';
+  end if;
   if not exists (select 1 from pg_trigger where tgrelid = 'public.venues'::regclass and tgname = 'trg_venue_page_config_guard' and tgenabled <> 'D') then
     raise exception '20261003j: 트리거가 없다';
   end if;
@@ -74,6 +84,14 @@ begin
      or public._venue_page_config_problem(gen_random_uuid(), '{"a":{"b":["data:text/html,x"]}}') is null
      or public._venue_page_config_problem(gen_random_uuid(), '{"a":"https://evil.example/x.png"}') is null
      or public._venue_page_config_problem(gen_random_uuid(), '{"a":"//evil.example/x"}') is null
+     or public._venue_page_config_problem(gen_random_uuid(), jsonb_build_object('a', E'java\tscript:alert(1)')) is null
+     or public._venue_page_config_problem(gen_random_uuid(), jsonb_build_object('a', chr(1) || 'javascript:alert(1)')) is null
+     or public._venue_page_config_problem(gen_random_uuid(), jsonb_build_object('a', E'\\\\evil.example/a.png')) is null
+     or public._venue_page_config_problem(gen_random_uuid(), jsonb_build_object('a', E'/\\evil.example/a.png')) is null
+     or public._venue_page_config_problem(gen_random_uuid(), '{"a":"intent://x#Intent;end"}') is null
+     or public._venue_page_config_problem(gen_random_uuid(), '{"a":"mailto:a@b.c"}') is null
+     or public._venue_page_config_problem(gen_random_uuid(), '{"rankMetrics":["prize","custom:cgt6pzq"]}') is not null
+     or public._venue_page_config_problem(gen_random_uuid(), '{"logo":"https://idsxiqspecrucvfvtgbw.supabase.co/storage/v1/object/public/posters/a.webp"}') is not null
      or public._venue_page_config_problem(gen_random_uuid(), '{"customBoards":[{"key":"k","name":"월요 토너 킹"}],"rankMetrics":["prize"]}') is not null then
     raise exception '20261003j: 판정기 자체 단언 실패';
   end if;
