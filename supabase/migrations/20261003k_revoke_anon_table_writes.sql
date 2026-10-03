@@ -1,4 +1,4 @@
--- ⏳ 적용 전 — 리드 적용 예정. 라이브 미적용. (store-team 2026-10-03 · critical-reviewer recheck1 R3 초안 + anon 쓰기 경로 전수 확인)
+-- ✅ 적용 완료 2026-10-03 밤(리드, i·j·k 한 트랜잭션 HTTP 201 · 실측: anon 테이블 쓰기 GRANT 0(client_errors INSERT 는 유지) · page_config 트리거 DEFINER · advisors ERROR 0). (store-team 2026-10-03 · critical-reviewer recheck1 R3 초안 + anon 쓰기 경로 전수 확인)
 -- 회수 전 확인(라이브 2026-10-03, 읽기 조회): public 의 쓰기(INSERT/UPDATE/DELETE/ALL) 정책 78개 중 anon 을 대상으로 한 것은 client_errors_insert 하나뿐.
 --   `to public` 정책은 모든 분기가 auth.uid()·my_role()·can_*·is_*·*_ok() 를 거쳐 비로그인은 원래 0행이다(게이트 없는 public 쓰기 정책 0).
 --   화면의 비로그인 쓰기도 src/lib/errorLog.ts 의 client_errors insert 하나뿐(returning 없음 → SELECT 권한 불필요).

@@ -1,4 +1,4 @@
--- ⏳ 적용 전 — 리드 적용 예정. 라이브 미적용. (store-team 2026-10-03 · critical-reviewer recheck1 R2 초안 확장)
+-- ✅ 적용 완료 2026-10-03 밤(리드, i·j·k 한 트랜잭션 HTTP 201 · 실측: anon 테이블 쓰기 GRANT 0(client_errors INSERT 는 유지) · page_config 트리거 DEFINER · advisors ERROR 0). (store-team 2026-10-03 · critical-reviewer recheck1 R2 초안 확장)
 -- 요구 키: recheck1-security-1003.md#R2 · 리드 지시(URL 은 https + 우리 storage 공개 URL 만, javascript:/data:/외부 금지, 크기 상한)
 -- 무엇: venues.page_config 는 업주가 쓰는 자유 JSON 이고 비로그인도 읽는다. 클락 배경 URL 검증은 화면(sanitizeClockTheme)만 했다.
 --   서버에서도 판정한다 — 판정기는 한 벌(_venue_page_config_problem)이고 트리거와 아래 기존 값 전수 검사가 같은 함수를 쓴다.

@@ -1,4 +1,4 @@
--- ⏳ 적용 전 — 리드 적용 예정. 라이브 미적용. (store-team 2026-10-03 · critical-reviewer recheck1 R1 초안 + 자가검사·화면 연동)
+-- ✅ 적용 완료 2026-10-03 밤(리드, i·j·k 한 트랜잭션 HTTP 201 · 실측: anon 테이블 쓰기 GRANT 0(client_errors INSERT 는 유지) · page_config 트리거 DEFINER · advisors ERROR 0). (store-team 2026-10-03 · critical-reviewer recheck1 R1 초안 + 자가검사·화면 연동)
 -- 선행: 20261003h(lb_select v4) 와 같은 창 정의. h 보다 먼저 적용해도 해롭지 않다(그때는 직원이 행을 다 읽으므로 새 노출이 없다).
 -- 화면: TournamentClock '장부 연동' 목록이 직원에게 창 밖 지난 마감 장부를 빼고(staffSeesSession), 서버 거절 문장은 그대로 보인다(ledgerErrorText).
 -- 리허설: Documents/누리홀덤_영상분석_0930/recheck1-sec-fix-1003 — node rehearse.mjs 00_harness.sql <이 파일> 60_clock_window_check.sql
