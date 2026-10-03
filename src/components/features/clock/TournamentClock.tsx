@@ -36,11 +36,10 @@ import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGa
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, clockAmbienceOf, type ClockTheme } from './clockTheme';
+import { subscribeClockAd, publishClockSignal, clockAmbienceOf } from './clockTheme';
+import { useClockThemeVars } from './useClockThemeVars';
+import ClockLogoLayer, { clockLayerIsolation } from './ClockLogoLayer';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
-import { ambIsolation } from './ambience/ambiencePresets';
-import { fetchVenuePageConfig } from '../../../api/rankings';
-import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
 import { useVenueScope } from '../../../lib/useVenueScope';
 import { createBackoff } from '../../../lib/retryBackoff';
@@ -423,7 +422,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expe
                 onClick={() => { if (window.confirm(`${label(g)} 클락을 메인 설정 복사로 바로 시작할까요? (오늘 장부에 연동됩니다)`)) onQuickStart(g); }}
                 title="메인 설정 복사해 바로 시작" className={base}>
                 <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-300"><Icon name="play" size={10} className="shrink-0" />바로 시작</span></div>
-                <p className="mt-0.5 text-2xs text-ink-muted truncate">{gt || '메인 설정으로 시작'}</p>
+                <p className="mt-0.5 text-2xs text-ink-secondary truncate">{gt || '메인 설정으로 시작'}</p>
               </button>
             );
           }
@@ -978,24 +977,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
    * TV(ClockDisplay)와 **같은 경로**로 읽는다 — 캐시 퍼스트(readSnap) + 실패 시 keep-last.
    * 같은 스냅샷 키를 쓰므로 TV 를 한 번 띄운 매장은 운영자 화면이 즉시 같은 룩으로 뜬다.
    */
-  const [clkVars, setClkVars] = useState<Record<string, string>>(
-    () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(state.venueId))),
-  );
-  useEffect(() => {
-    let alive = true;
-    setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(state.venueId))));
-    fetchVenuePageConfig(state.venueId)
-      .then((c) => {
-        if (!alive) return;
-        const t = sanitizeClockTheme(c?.clockTheme);
-        writeSnap(clockThemeSnapKey(state.venueId), t);
-        setClkVars(clockThemeVars(t));
-      })
-      .catch(() => { /* keep-last — 네트워크 블립에 기본 테마로 깜빡이지 않는다 */ });
-    // 설정 패널에서 테마를 고르면 이 미리보기가 즉시 바뀐다(같은 탭이라 CustomEvent 경로).
-    const off = subscribeClockTheme(state.venueId, (t) => setClkVars(clockThemeVars(t)));
-    return () => { alive = false; off(); };
-  }, [state.venueId]);
+  // 2026-10-03 N-3 — TV(ClockDisplay)와 **같은 훅 한 벌**(캐시 퍼스트 · keep-last · 같은 탭 즉시 · 다른 기기 30초 재조회).
+  const clkVars = useClockThemeVars(state.venueId);
 
   const [ctlOn, setCtlOn] = useState(true);
   useEffect(() => {
@@ -1243,12 +1226,13 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-video',
         stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
         data-amb-root
-        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', ...ambIsolation(clockAmbienceOf(clkVars)),
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', ...clockLayerIsolation(clkVars, clockAmbienceOf(clkVars)),
           ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
         {/* 모션 테마(2026-09-30) — TV(ClockDisplay)와 같은 자리·같은 층. 테마가 아니면 아무것도 안 받는다(lazy). */}
         <ClockAmbienceSlot id={clockAmbienceOf(clkVars)} />
+        <ClockLogoLayer vars={clkVars} />
         {fs && (
           <div data-testid="clk-fs-overlay"
             className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] portrait:h-auto portrait:min-h-[12cqmin] portrait:py-[1.5cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',

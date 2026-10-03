@@ -1,12 +1,12 @@
 // src/components/features/clock/clockBgImage.ts
-// 클락 배경 이미지 — 업로드(리사이즈 → 밝기 굽기 → webp) · 삭제.
+// 클락 배경 이미지 — 업로드(리사이즈 → webp → 밝기 상한·대표색 측정 → 이름표) · 삭제.
 //
 // 왜 별도 모듈인가: 포스터·아바타 업로드(lib/storage.ts)는 '원본을 줄여서 올린다'까지가 전부다.
 // 클락 배경은 **그 위에 흰 글자가 상시 올라가는 매장 TV 바탕**이라, 사진이 밝으면 그대로 판독 불능이 된다.
 // 그래서 이 한 가지가 더 필요하다 — 올리는 순간 밝기 상한을 굽는 것(clockTheme.ts CLOCK_BG_BAKE_CEIL).
 // 리사이즈·EXIF 회전·webp 인코딩은 중복 구현하지 않고 lib/storage 의 resizeImage 를 그대로 쓴다.
 import { supabase, IS_MOCK } from '../../../lib/supabase';
-import { resizeImage, encodeImage, extOf } from '../../../lib/storage';
+import { resizeImage, extOf } from '../../../lib/storage';
 import {
   CLOCK_BG_BUCKET, CLOCK_BG_LUM_CAP, CLOCK_BG_SCRIM_MID, CLOCK_BG_MAX_PX, CLOCK_BG_TARGET_BYTES,
   clockBgObjectPath,
@@ -18,10 +18,6 @@ const GRID_W = 32, GRID_H = 18;
 /** sRGB 채널(0~1) → 선형 — WCAG 상대휘도 정의 그대로 */
 const lin = (u: number) => (u <= 0.03928 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4);
 const relLum = (r: number, g: number, b: number) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-
-function toWebp(canvas: HTMLCanvasElement, q: number): Promise<Blob | null> {
-  return new Promise((res) => canvas.toBlob((b) => res(b), 'image/webp', q));
-}
 
 /** Blob → 그릴 수 있는 이미지. createImageBitmap 미지원 브라우저는 <img> 폴백(lib/storage 와 같은 문법) */
 async function decodeBlob(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
@@ -76,46 +72,60 @@ function bakeScale(cell: [number, number, number]): number {
   return Math.max(0, lo - 1 / 255);
 }
 
+/** 올릴 수 있는 형식 — 입력칸 accept 와 **같은 목록 한 벌**(L1-7). 버킷(clock_bg allowed_mime_types)도 webp·jpeg·png 3종이다.
+ *  예전엔 `image/*` 면 다 받아 GIF·SVG 도 webp 로 바뀌어 저장됐다(움직이는 GIF 는 첫 장만 · SVG 는 래스터로 굳음). */
+export const CLOCK_BG_ACCEPT = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+/** 대표색(맞추기의 남는 칸) — 불투명 픽셀 평균을 상대휘도 상한 아래로 눌러 #rrggbb. 글자는 판(--clk-plate) 위에 앉지만 판 밖 여백도 어둡게 둔다. */
+function tintOf(src: CanvasImageSource, w: number, h: number): string | null {
+  try {
+    const c = document.createElement('canvas');
+    c.width = GRID_W; c.height = GRID_H;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(src, 0, 0, w, h, 0, 0, GRID_W, GRID_H);
+    const d = ctx.getImageData(0, 0, GRID_W, GRID_H).data;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;   // 투명 로고의 빈 곳은 색이 아니다
+      r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+    }
+    if (!n) return null;
+    let k = 1;
+    const at = (s: number) => relLum((r / n / 255) * s, (g / n / 255) * s, (b / n / 255) * s);
+    while (k > 0.02 && at(k) > 0.012) k *= 0.9;   // 기본 바탕(#06080F) 근처의 어둠까지만
+    const hex = (v: number) => Math.round((v / n) * k).toString(16).padStart(2, '0');
+    return `${hex(r)}${hex(g)}${hex(b)}`;
+  } catch { return null; }
+}
+
 /**
- * 매장 클락 배경 업로드 — 최대 1920px · webp · 밝기 상한 적용 후 clock_bg/<venueId>/<ts>.webp.
+ * 매장 클락 배경 업로드 — 최대 1920px · webp · 밝기 상한·대표색을 **재서 이름에 싣는다** → clock_bg/<venueId>/<ts>-d<n>-t<hex>.webp.
  * 반환: 공개 URL(sanitizeClockTheme 의 허용 접두사와 일치).
+ *
+ * N-2(2026-10-03 오너 결정) — 예전엔 밝기 상한을 **사진에 구워** 저장했다. 그래서 로고를 올리면 색이 거의 검게 눌렸다.
+ *   이제 원본 밝기 그대로 저장하고, 같은 값(d = 상한까지 누를 비율)을 이름표로 남긴다. '꽉 채우기' 는 렌더 때 그 비율의
+ *   검은 층을 사진 위에 얹으므로 **합성 결과는 굽던 때와 같다**(rgba(0,0,0,d) 를 덮어 그리는 것 = 구운 것). '맞추기'·'가운데' 는
+ *   누르지 않고 글자 뒤 판으로 가독을 지킨다. 이름표 없는 옛 파일은 이미 구운 파일이라 d = 0 으로 읽힌다(clockBgMetaOf).
  */
 export async function uploadClockBg(venueId: string, file: File): Promise<string> {
   if (IS_MOCK) throw new Error('미리보기 모드에서는 배경 이미지를 올릴 수 없습니다');
-  if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 올릴 수 있습니다');
+  if (!(CLOCK_BG_ACCEPT as readonly string[]).includes(file.type)) throw new Error('JPG·PNG·WebP 이미지만 올릴 수 있습니다');
 
-  // ① 리사이즈 + webp — 포스터·갤러리와 같은 경로(EXIF 회전 보정·적응형 품질 포함)
+  // ① 리사이즈 + webp — 포스터·갤러리와 같은 경로(EXIF 회전 보정·적응형 품질 포함). webp 는 알파를 지킨다(투명 로고).
   const sized = await resizeImage(file, CLOCK_BG_MAX_PX, CLOCK_BG_MAX_PX, 0.85, CLOCK_BG_TARGET_BYTES);
 
-  // ② 밝기 굽기 — 어두운 사진은 손대지 않고, 밝은 사진만 상한까지 눌러 저장한다.
-  //    렌더 스크림(고정)과 곱해져 최종 합성 밝기가 결정된다 — 계약·실측값은 clockTheme.ts 주석 참조.
-  //    (resizeImage 가 이미 EXIF 정방향으로 돌려놨으므로 여기선 회전 보정이 필요 없다)
+  // ② 밝기 상한·대표색 측정 — 픽셀은 바꾸지 않는다.
   const img = await decodeBlob(sized);
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width; canvas.height = img.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) { if (img instanceof ImageBitmap) img.close(); throw new Error('이미지 처리에 실패했습니다'); }
-  ctx.drawImage(img as CanvasImageSource, 0, 0);
   const cell = brightestCell(img as CanvasImageSource, img.width, img.height);
+  const tint = tintOf(img as CanvasImageSource, img.width, img.height);
   if (img instanceof ImageBitmap) img.close();
-  const dim = 1 - bakeScale(cell ?? [1, 1, 1]); // 측정 실패 = 순백 사진으로 간주(가장 보수적)
-  if (dim > 0.005) {
-    ctx.fillStyle = `rgba(0,0,0,${dim.toFixed(4)})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  // S-12 — webp 를 못 만드는 브라우저는 PNG 를 돌려준다 → encodeImage 가 jpeg 로 고정한다(형식·확장자는 blob 기준).
-  let q = 0.85;
-  let blob = await encodeImage(canvas, q);
-  const type = blob?.type || 'image/webp';
-  while (blob && blob.size > CLOCK_BG_TARGET_BYTES && q > 0.5) {
-    q = Math.max(0.5, q - 0.12);
-    blob = type === 'image/webp' ? await toWebp(canvas, q) : await encodeImage(canvas, q, type);
-  }
-  if (!blob) throw new Error('이미지 처리에 실패했습니다');
+  // 측정 실패 = 순백 사진으로 간주(가장 보수적). 정수 % 는 올림 — 반올림으로 상한을 넘지 않게.
+  const dimPct = Math.min(95, Math.ceil((1 - bakeScale(cell ?? [1, 1, 1])) * 100));
+  const blob = sized;
 
   // ③ 업로드 — 경로 첫 칸이 venue_id 다(스토리지 RLS 가 '본인 매장 폴더'를 이 값으로 판정).
-  const path = `${venueId}/${Date.now()}.${extOf(blob)}`;
+  const path = `${venueId}/${Date.now()}-d${dimPct}${tint ? `-t${tint}` : ''}.${extOf(blob)}`;
   const { error } = await supabase.storage.from(CLOCK_BG_BUCKET).upload(path, blob, {
     contentType: blob.type || 'image/webp',
     // upsert 를 쓰지 않는다 — 경로가 타임스탬프라 충돌이 없고, 덮어쓰기는 CDN 1년 캐시와 상극이다.

@@ -26,11 +26,10 @@ import ClockStage from './ClockStage';
 import { gameLabel } from '../../../lib/clockLevel';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
-import { fetchVenuePageConfig } from '../../../api/rankings';
-import { readSnap, writeSnap } from '../../../lib/snapshot';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, clockAmbienceOf, type ClockTheme } from './clockTheme';
+import { subscribeClockAd, clockAmbienceOf } from './clockTheme';
+import { useClockThemeVars } from './useClockThemeVars';
+import ClockLogoLayer, { clockLayerIsolation } from './ClockLogoLayer';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
-import { ambIsolation } from './ambience/ambiencePresets';
 import Icon from '../../atoms/Icon';
 import { BIZ_REQUIRED, AGE_HELPLINE } from '../BusinessFooter';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
@@ -48,25 +47,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   // 클락 테마 — page_config.clockTheme → 루트 CSS 변수(기본 = 아우라).
   // 배경 이미지가 설정돼 있으면 --clk-bg 가 '스크림 + 사진 + 프리셋색' 3층 합성으로 바뀌고 보조 라벨 2단이 함께 올라간다.
   // 캐시 퍼스트(readSnap) + 실패 시 keep-last: 네트워크 블립에 기본 테마로 깜빡이면 안 되는 매장 TV 화면.
-  const [clkVars, setClkVars] = useState<Record<string, string>>(
-    () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))),
-  );
-  useEffect(() => {
-    let alive = true;
-    setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))));
-    fetchVenuePageConfig(venueId)
-      .then((c) => {
-        if (!alive) return;
-        const t = sanitizeClockTheme(c?.clockTheme);
-        writeSnap(clockThemeSnapKey(venueId), t);
-        setClkVars(clockThemeVars(t));
-      })
-      .catch(() => { /* keep-last */ });
-    // 운영자가 설정에서 테마를 바꾸면 **이 창을 다시 열지 않아도** 반영된다.
-    //   TV 는 보통 window.open 으로 띄운 별도 창이라, 여기가 없으면 업주는 바꾼 걸 확인할 방법이 없다.
-    const off = subscribeClockTheme(venueId, (t) => setClkVars(clockThemeVars(t)));
-    return () => { alive = false; off(); };
-  }, [venueId]);
+  const clkVars = useClockThemeVars(venueId);   // 캐시 퍼스트 · keep-last · 같은 브라우저 즉시 · 다른 기기 30초(N-3)
 
   const [fs, setFs] = useState(false);
   // 멀티게임 자동 순환 — ?auto=0 이면 URL 의 게임에 고정(운영자가 특정 게임만 송출할 때 · e2e 결정성)
@@ -211,9 +192,11 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     //   일반 이용자도 들어온다. 전체화면(TV 송출)이 **아닐 때만** 보드 아래 형제로 붙인다 — 보드 위에 겹치지 않고,
     //   컨테이너(스테이지)가 그만큼 줄어 cq 크기가 스스로 맞춰진다. 전체화면이면 스테이지 = 화면 전체(종전과 같다).
     <div ref={rootRef} className="fixed inset-0 z-80 flex flex-col text-white select-none" style={{ background: '#06080F' }}>
-    <div data-amb-root className="flex min-h-0 flex-1 flex-col @container-size" style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', position: 'relative', ...ambIsolation(clockAmbienceOf(clkVars)) }}>
+    <div data-amb-root className="flex min-h-0 flex-1 flex-col @container-size" style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', position: 'relative', ...clockLayerIsolation(clkVars, clockAmbienceOf(clkVars)) }}>
       {/* 모션 테마(2026-09-30) — 첫 자식·z-index -1 이라 --clk-bg 위, 보드 아래. 테마가 아니면 아무것도 안 받는다(lazy). */}
       <ClockAmbienceSlot id={clockAmbienceOf(clkVars)} />
+      {/* N-2 '가운데 크게'(로고) 층 — 같은 자리·같은 층(z −1). 그 표시 방식이 아니면 아무것도 안 그린다. */}
+      <ClockLogoLayer vars={clkVars} />
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}
       {clocks === null || !g || !timeReady ? (

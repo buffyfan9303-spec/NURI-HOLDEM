@@ -32,6 +32,9 @@ export const PRIZE_ONE_COL_MAX = 15;
 
 /** 프라이즈 열의 가로 예산(cqmin). 1920×1080 실측 401.33px ÷ cqmin 10.8 = 37.16. */
 export const PRIZE_COL_CQ = 37.16;
+/** N-1(2026-10-03) 세로 보드 상금 띠의 가로 예산(cqmin). 세로 스테이지는 짧은 변 = 폭이라 띠 폭은 늘 ≥ 94cqmin 이고,
+ *  가운데 72cqmin 에만 그린다(넓게 펴면 등수와 금액이 화면 양끝으로 갈라져 한 줄로 안 읽힌다). */
+export const PRIZE_BAND_CQ = 72;
 /** 2단 사이 여백(cqmin). */
 export const PRIZE_GUTTER_CQ = 1.5;
 /** 한 행 안 등수↔금액 최소 여백(cqmin) — li 의 gap-[1.2cqmin] 과 같은 값이어야 한다. */
@@ -107,10 +110,10 @@ export function prizeRowCq(s: PrizeSpec, placeFactor: number, amountChars: numbe
  *    · **그 밖의 모든 줄**: 보통 글자 + **가장 긴 등수**(마지막 장의 "200등" 이 여기 걸린다).
  *  한 장은 `좌단 = max(1등 줄, 보통 줄)` · `우단 = 보통 줄` 이므로 아래 합이 상한이다.
  */
-export function fitsTwoColumns(s: PrizeSpec, w: PrizeWorst): boolean {
+export function fitsTwoColumns(s: PrizeSpec, w: PrizeWorst, colCq: number = PRIZE_COL_CQ): boolean {
   const lead = prizeRowCq(s, w.leadPlaceFactor, w.amountChars, true);
   const normal = prizeRowCq(s, w.placeFactor, w.amountChars, false);
-  return Math.max(lead, normal) + normal + PRIZE_GUTTER_CQ <= PRIZE_COL_CQ;
+  return Math.max(lead, normal) + normal + PRIZE_GUTTER_CQ <= colCq;
 }
 
 export interface PrizeWorst {
@@ -156,12 +159,14 @@ export interface PrizeLayout {
  * 2단이 들어가는 **가장 큰 규격**을 쓰고, 어떤 규격으로도 안 들어가면 **1단 20줄로 떨어진다**
  * (= 이 변경 이전과 같은 화면). 그래서 잘림은 구조적으로 나오지 않는다.
  */
-export function pickPrizeLayout(prizes: readonly PrizeRow[]): PrizeLayout {
+export function pickPrizeLayout(
+  prizes: readonly PrizeRow[], colCq: number = PRIZE_COL_CQ, oneColMax: number = PRIZE_ONE_COL_MAX,
+): PrizeLayout {
   const worst = prizeWorst(prizes);
   // 종전과 픽셀까지 같아야 하는 구간 — 여기서 맨 먼저 빠져나간다.
-  if (prizes.length <= PRIZE_ONE_COL_MAX) return { spec: PRIZE_SPECS[0], twoCol: false, worst };
+  if (prizes.length <= oneColMax) return { spec: PRIZE_SPECS[0], twoCol: false, worst };
   for (const spec of PRIZE_SPECS) {
-    if (fitsTwoColumns(spec, worst)) return { spec, twoCol: true, worst };
+    if (fitsTwoColumns(spec, worst, colCq)) return { spec, twoCol: true, worst };
   }
   // 1단 폴백 — 20줄을 세로로 쌓아야 하므로 규격은 가장 좁은 것으로 고정한다.
   return { spec: PRIZE_SPECS[PRIZE_SPECS.length - 1], twoCol: false, worst };

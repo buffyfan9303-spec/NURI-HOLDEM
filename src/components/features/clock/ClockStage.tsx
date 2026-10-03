@@ -22,7 +22,7 @@ import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
-  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
+  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, PRIZE_BAND_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
@@ -71,6 +71,17 @@ const LABEL_SIZE = 'text-[max(9px,1.5cqmin)]';
 const NO_ADS: readonly string[] = [];
 const DIM = { color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' } as const;
 const SOFT = { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' } as const;
+/** N-2(2026-10-03) — 글자 판. 매장 이미지를 '맞추기'·'가운데 크게' 로 놓으면 테마가 --clk-plate 를 주고, 그때만 글자 덩어리 뒤에 반투명 판이 깔린다
+ *  (이미지 전체를 누르지 않아 로고 색이 산다). 변수가 없으면 배경·그림자 모두 transparent · 반경 0 이라 **화면 변화 0**, 레이아웃도 안 바뀐다
+ *  (판 여백은 padding 이 아니라 box-shadow spread 라 크기·위치를 밀지 않는다). */
+const PLATE = {
+  background: 'var(--clk-plate, transparent)',
+  boxShadow: '0 0 0 1.2cqmin var(--clk-plate, transparent)',
+  borderRadius: 'var(--clk-plate-r, 0px)',
+} as const;
+/** 좌우 열은 판이 있을 때만 **내용 높이로** 줄여 가운데 둔다(--clk-plate-align = center) — 열 전체 높이의 판이 이미지를 가리지 않게.
+ *  변수가 없으면 stretch(종전). 내용은 원래도 세로 가운데라 글자 위치는 같다. */
+const COL_PLATE = { ...PLATE, alignSelf: 'var(--clk-plate-align, stretch)' } as const;
 
 
 export interface ClockStageProps {
@@ -159,7 +170,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
           예전엔 이 줄이 자라면 아래 타이머가 통째로 밀렸다.
           2026-09-19 오너 지시 #9: 가운데 있던 알약 두 개('레벨 1' · 'READY')를 없앴다 — LEVEL 은 타이머 바로 위(LevelLine)로
           내려가 큰 글자가 됐고, 진행 상태 단어는 보드에서 사라졌다(남은 신호는 아래 점의 색과 타이머 색). */}
-      <header className="flex h-[8cqmin] shrink-0 items-center justify-between gap-[1.5cqmin] px-[3cqmin]">
+      <header className="flex h-[8cqmin] shrink-0 items-center justify-between gap-[1.5cqmin] px-[3cqmin]" style={PLATE}>
         <div className="flex min-w-0 items-center gap-[1.5cqmin]">
           <span className={`h-[1.2cqmin] w-[1.2cqmin] shrink-0 rounded-full ${g.running ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
           <p className="min-w-0 truncate text-[max(9px,2.6cqmin)] font-extrabold tracking-tight">
@@ -224,14 +235,14 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                 {/* P-01(2026-10-01) — 높이 400px 이하 스테이지(운영자 미리보기 570×320 등)에서 7cqmin 이 26/16/9px 글자 하한 누적을 못 버텨
                     ANTE 줄이 하단 지표와 겹쳤다(4쌍). 그 크기에서만 2cqmin. TV·전체화면·1024 미리보기(>400px)는 불변. */}
                 {/* data-amb-avoid: 모션 테마가 글자 뒤를 흐린 유리·그늘로 누르는 영역(CURRENT/NEXT·ANTE 라벨까지 한 덩어리) */}
-                <div data-amb-avoid className="mt-[7cqmin] [@container(max-height:400px)]:mt-[2cqmin] w-full shrink-0">
+                <div data-amb-avoid className="mt-[7cqmin] [@container(max-height:400px)]:mt-[2cqmin] w-full shrink-0" style={PLATE}>
                   <BlindsRow g={g} />
                 </div>
               </div>
             </div>
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
-            <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]">
+            <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]" style={COL_PLATE}>
               {rails}
             </aside>
           </div>
@@ -240,9 +251,17 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               지표 레일(생존/엔트리·리바이·애드온/얼리·바인)은 .clk-col 과 함께 통째로 숨었다. Next Break 는 하단 레일과 **두 번** 나왔다(1080×1920 실측).
               이제 레일 조각 전부를 여기 격자로 편다 — Reg Close 는 레일 안(TimeRails), Next Break 는 하단 레일에 한 번씩만 있다.
               본문(clk-cols) 밖이라 타이머의 '본문 세로 중앙' 계약(clock-board.spec)은 그대로다. */}
-          <div data-testid="clk-rails-band" className="clk-narrow-only shrink-0 grid-cols-[repeat(auto-fit,minmax(28cqmin,1fr))] items-end gap-x-[3cqmin] gap-y-[1cqmin] border-t border-white/6 px-[3cqmin] py-[1.4cqmin]">
+          <div data-testid="clk-rails-band" className="clk-narrow-only shrink-0 grid-cols-[repeat(auto-fit,minmax(28cqmin,1fr))] items-end gap-x-[3cqmin] gap-y-[1cqmin] border-t border-white/6 px-[3cqmin] py-[1.4cqmin]" style={PLATE}>
             {rails}
           </div>
+
+          {/* 🔴 N-1(2026-10-03 재점검 1회차) — 세로 보드의 상금 띠. 위 지표 띠(#1)와 같은 부류인데 상금 열만 빠져 있어서
+              세로 TV(1080×1920)에서 PRIZE POOL 이 화면 어디에도 없었다. 같은 PrizeColumn 을 band 모드로 한 번 더 꽂는다
+              (장 넘김·광고·추가 페이지·미스터리 바운티까지 가로 보드와 같은 내용). 정사각에 가까운 스테이지(1~5/4)는 높이가 모자라
+              타이머가 눌리므로 띠는 **세로(폭 ≤ 높이) 스테이지에서만** 선다(컨테이너 쿼리 max-aspect-ratio 1/1 — 아래 band 클래스). */}
+          {(prizes.length > 0 || extras.length > 0 || ads.length > 0) && (
+            <PrizeColumn band prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} extras={extras} ads={ads} />
+          )}
 
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
           {/* 12cqmin: 하단이 이제 보조가 아니라 **지표 레일**이다(총 칩·평균 스택·다음 휴식).
@@ -255,7 +274,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               3줄로 접혀 칸 높이(38 → 52px)가 레일(12cqmin = 43~47px)을 넘으면, 고정 높이는 내용을 스테이지 밖으로 흘렸다 —
               전체화면에선 화면 아래로 잘리고, 창 모드에선 보드 아래 법정 고지 줄을 덮었다. 넘칠 때만 레일이 자라고 본문(flex-1)이 그만큼 준다.
               TV·PC 는 내용이 12cqmin 안이라 픽셀이 종전과 같다. 인라인인 이유는 CSS 예산(여유 0%). */}
-          <div data-amb-avoid className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]" style={{ minHeight: '12cqmin' }}>
+          <div data-amb-avoid className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]" style={{ minHeight: '12cqmin', ...PLATE }}>
             {qr ? (
               <div className="flex min-w-0 items-center gap-[1cqmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6cqmin] bg-white" style={{ width: 'clamp(34px, 5cqmin, 78px)', height: 'auto' }} />
@@ -311,11 +330,17 @@ const BIG = 'clamp(22px, 4.6cqmin, 76px)';
  *
  * 초당 틱이 아니다 — 다음 전환 시각에 맞춘 setTimeout 한 개. 움직일 장이 없으면 타이머 자체를 걸지 않는다.
  */
-function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
+function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads, band = false }: {
   prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null; mysteryBounty: number;
   extras: ClockExtraPage[]; ads: readonly string[];
+  /** N-1 — 세로 보드 하단 띠로 그린다. 가로 예산 PRIZE_BAND_CQ · 10줄 넘으면 2단(안 들어가면 1단 10줄씩 넘김) — 띠 높이 상한 = 10줄. */
+  band?: boolean;
 }) {
-  const prizePages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
+  // 띠는 가로 보드 열과 **같은 화면에 동시에** 있다(한쪽은 display:none). e2e 앵커가 겹치지 않게 testid 에 꼬리표를 단다.
+  const tid = (s: string) => (band ? `${s}-band` : s);
+  const { spec, twoCol } = band ? pickPrizeLayout(prizes, PRIZE_BAND_CQ, PRIZE_LEFT_ROWS) : pickPrizeLayout(prizes);
+  const perPage = band && !twoCol ? PRIZE_LEFT_ROWS : PRIZES_PER_PAGE;
+  const prizePages = Math.ceil(prizes.length / perPage);
   // 광고 — 미리 불러 보고, 못 불러오는 주소는 건너뛴다(빈 장을 TV 에 걸지 않는다).
   const [failedAds, setFailedAds] = useState<ReadonlySet<string>>(() => new Set());
   const adKey = ads.join('\n');
@@ -347,8 +372,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
   //   — 다음 광고로 바뀌는 순간은 광고 칸에 들어서는 전환(밀려 들어오는 첫 프레임)이다. 이미지는 위에서 미리 불러 둔다.
   const adCycle = seg?.kind === 'ad' ? pos.cycle : pos.cycle - 1;
   const ad = liveAds.length ? liveAds[adIndexAt(liveAds.length, adCycle)] : null;
-  const { spec, twoCol } = pickPrizeLayout(prizes);
-  const sheets = Array.from({ length: prizePages }, (_, i) => prizes.slice(i * PRIZES_PER_PAGE, (i + 1) * PRIZES_PER_PAGE));
+  const sheets = Array.from({ length: prizePages }, (_, i) => prizes.slice(i * perPage, (i + 1) * perPage));
   const cq = (n: number) => `${n}cqmin`;
 
   /** 한 단. `from` 은 전체 표에서의 시작 번호 — 1등 줄(큰 글자)을 그것으로 판정한다. */
@@ -409,11 +433,13 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
   let sheetNo = prizePages;
 
   return (
-    <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
+    <aside data-testid={tid('clk-prizes')}
+      className={band ? 'hidden [@container(max-aspect-ratio:1/1)]:flex shrink-0 flex-col border-t border-white/6 py-[1.2cqmin]' : 'clk-col min-h-0 flex-col justify-center'}
+      style={band ? { paddingInline: `max(3cqmin, calc((100cqw - ${PRIZE_BAND_CQ}cqmin) / 2))`, ...PLATE } : COL_PLATE}>
       {/* shrink-0 — 트랙이 길어져도 머리말(특히 Prize Pool 총액)이 눌려 잘리지 않는다(design-reviewer ②). */}
       <p className={`${LABEL} shrink-0 text-[max(9px,1.5cqmin)]`} style={SOFT}>{head.label}</p>
       {(head.big || multi) && (
-        <p data-testid={seg?.kind === 'prize' && head.big ? 'clk-prize-total' : undefined}
+        <p data-testid={seg?.kind === 'prize' && head.big ? tid('clk-prize-total') : undefined}
           // 칸이 하나(종전)면 종전 클래스 그대로. 둘 이상이면 줄 높이를 고정해(총액 크기 기준) 장이 바뀌어도 높이가 같고,
           //   추가 페이지 제목은 **글자 수에 맞춰** 칸 폭(PRIZE_COL_CQ) 안으로 줄인다 — 상한 12자에서 3.2cqmin(design-reviewer ③).
           className={`mt-[0.3cqmin] shrink-0 font-black tabular-nums ${multi ? 'truncate' : 'leading-none'}${head.big ? '' : ' invisible'}`}
@@ -428,7 +454,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
       {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다).
           overflow-x: hidden 은 세로를 auto 로 바꿔 긴 장에서 세로 스크롤 상자가 되고 줄이 잘렸다 → clip(세로는 visible 그대로). */}
       <div className="mt-[1.4cqmin] border-t border-white/8 pt-[1.2cqmin]" style={{ overflowX: 'clip' }}>
-        <div data-testid="clk-prize-track" className="flex transition-transform ease-out motion-reduce:transition-none"
+        <div data-testid={tid('clk-prize-track')} className="flex transition-transform ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${cur * 100}%)`, transitionDuration: `${PRIZE_SLIDE_MS}ms` }}>
           {sheets.map((rows, pi) => {
             const from = pi * PRIZES_PER_PAGE;
@@ -469,7 +495,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
       {/* 미스터리 바운티 — 03cd8bb 에서 옛 보드가 사라지며 **함께 사라졌던** 값이다.
           설정 입력란(TournamentClock)은 그대로 남아 있어서, 없으면 '써도 아무 데도 안 나오는 죽은 컨트롤' 이 된다. */}
       {mysteryBounty > 0 && (
-        <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/8 pt-[1cqmin]">
+        <div data-testid={tid('clk-mystery')} className="mt-[1.2cqmin] border-t border-white/8 pt-[1cqmin]">
           <p className={`${LABEL} text-[max(9px,1.4cqmin)]`} style={SOFT}>Mystery Bounty</p>
           <p className="mt-[0.2cqmin] font-extrabold leading-none tabular-nums text-white" style={{ fontSize: 'clamp(16px, 2.6cqmin, 44px)' }}>
             {mysteryBounty.toLocaleString()}
@@ -477,7 +503,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
         </div>
       )}
       {total > 1 && (
-        <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[max(9px,1.5cqmin)] font-bold tabular-nums" style={DIM}>
+        <p data-testid={tid('clk-prize-page')} className="mt-[1cqmin] text-right text-[max(9px,1.5cqmin)] font-bold tabular-nums" style={DIM}>
           {cur + 1} / {total}
         </p>
       )}
@@ -500,7 +526,7 @@ function PausedLabel({ g }: { g: ClockState }) {
   if (clockPhase(g) !== 'paused') return null;
   return (
     <p data-testid="clk-paused" className="mb-[1.2cqmin] whitespace-nowrap font-black uppercase leading-none tracking-[0.3em] text-white"
-      style={{ fontSize: 'clamp(36px, 13cqmin, 180px)', textShadow: '0 0.3cqmin 1.2cqmin rgba(0,0,0,0.55)' }}>
+      style={{ fontSize: 'clamp(36px, 13cqmin, 180px)', textShadow: '0 0.3cqmin 1.2cqmin rgba(0,0,0,0.55)', ...PLATE }}>
       PAUSED
     </p>
   );
@@ -524,7 +550,7 @@ function LevelLine({ g }: { g: ClockState }) {
   const isBreak = lvls[eff.index]?.kind === 'break';
   return (
     <p data-testid="clk-level" className="whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
-      style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)' }}>
+      style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)', ...PLATE }}>
       {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
     </p>
   );
@@ -653,7 +679,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
           25px 넘어 우측 레일을 10px 덮었다. 중앙 열 폭 = 2·--clk-half + 2cqmin(index.css 의 1열·3열 식 그대로)을 글자 폭 3.3em 으로 나눈
           상한을 하한·기본값 모두에 건다. 16:9·세로 TV(1080×1920)·4K 는 이 상한이 26cqmin 보다 커서 **픽셀 불변**이다. */}
       <p data-testid="clk-timer" className="font-black leading-none tabular-nums"
-        style={{ fontSize: `clamp(min(84px, ${TIMER_FIT}), min(26cqmin, ${TIMER_FIT}), 400px)`, letterSpacing: '0.005em', color: timerColor }}>
+        style={{ fontSize: `clamp(min(84px, ${TIMER_FIT}), min(26cqmin, ${TIMER_FIT}), 400px)`, letterSpacing: '0.005em', color: timerColor, ...PLATE }}>
         {mmss(remaining)}
       </p>
 

@@ -2544,6 +2544,10 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
             </button>
           );
         };
+        const gamesReady = dayGamesKey === `${venueId}|${date}`;
+        const EmptyChipRow = ({ loading }: { loading: boolean }) => (
+          <span className="inline-flex min-h-9 items-center text-2xs text-ink-muted">{loading ? '불러오는 중…' : '그날 없음'}</span>
+        );
         const Section = ({ icon, label, hint, children }: { icon: IconName; label: string; hint: string; children: ReactNode }) => (
           <div className="space-y-1">
             <p className="flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name={icon} size={12} className="shrink-0" />{label}<span className="font-normal text-ink-muted"> · {hint}</span></p>
@@ -2570,19 +2574,18 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
               {mains.map((n) => chip(n, 'g-m-' + n))}
             </Section>
 
-            {/* 사이드 게임 — 사이드 포스터에서 등록된 이벤트(여러 개) */}
-            {sides.length > 0 && (
-              <Section icon="dice" label="사이드 게임" hint="사이드 포스터">
-                {sides.map((n) => chip(n, 'g-s-' + n))}
-              </Section>
-            )}
+            {/* 사이드 게임 — 사이드 포스터에서 등록된 이벤트(여러 개)
+                🔴 L1-2(2026-10-03 재점검 1회차) — 예전엔 칸이 있을 때만 그렸다. 그날 포스터·장부 조회(getSchedules 전체 + 장부 게임)가
+                400~570ms 뒤에 도착하면 이 칸이 **나중에 끼어들어** 아래 '그날 장부 명단' 카드가 71px 밀렸다(1440 라이트에서 늦은 이동 0.056).
+                이제 두 칸은 늘 자리를 갖고, 비면 '없음'(조회 중이면 '불러오는 중')을 칩 높이(min-h-9)로 둔다 — 도착해도 높이가 같다. */}
+            <Section icon="dice" label="사이드 게임" hint="사이드 포스터">
+              {sides.length > 0 ? sides.map((n) => chip(n, 'g-s-' + n)) : <EmptyChipRow loading={!gamesReady} />}
+            </Section>
 
             {/* 장부 게임 — 포스터 없이 장부만 있는 게임 */}
-            {ledgers.length > 0 && (
-              <Section icon="notebook" label="장부 게임" hint="장부에서">
-                {ledgers.map((n) => chip(n, 'g-l-' + n))}
-              </Section>
-            )}
+            <Section icon="notebook" label="장부 게임" hint="장부에서">
+              {ledgers.length > 0 ? ledgers.map((n) => chip(n, 'g-l-' + n)) : <EmptyChipRow loading={!gamesReady} />}
+            </Section>
 
             {/* 기타 — 포스터·장부 없는 게임(직접 추가) */}
             <Section icon="edit" label="기타 게임" hint="포스터·장부 없음">

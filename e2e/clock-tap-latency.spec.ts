@@ -277,14 +277,14 @@ test(`🔴 리모컨 — 지연 ${RTT}ms·CPU 4× 연타 20회가 하나도 버�
   await page.goto(`/?remote=${MOCK_VENUE}&g=1`);
   const plus = page.getByRole('button', { name: '엔트리 더하기' });
   await expect(plus).toBeEnabled({ timeout: 20_000 });
-  const value = () => plus.evaluate((b) => Number(b.parentElement!.querySelectorAll('span')[1].textContent));
+  const value = () => plus.evaluate((b) => Number(b.closest('[data-counter]')!.querySelector('[data-counter-value]')!.textContent));
   await expect.poll(value, { timeout: 15_000 }).toBe(2);
   await page.waitForTimeout(1500);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await plus.evaluate((b) => {
     const w = window as unknown as { __log: number[] }; w.__log = [];
-    const v = b.parentElement!.querySelectorAll('span')[1];
+    const v = b.closest('[data-counter]')!.querySelector('[data-counter-value]')!;
     new MutationObserver(() => w.__log.push(Number(v.textContent))).observe(v, { childList: true, characterData: true, subtree: true });
   });
   const box = (await plus.boundingBox())!;

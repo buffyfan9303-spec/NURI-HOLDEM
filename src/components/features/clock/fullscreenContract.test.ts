@@ -91,8 +91,11 @@ describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
 describe('운영자 미리보기는 TV 와 같은 얼굴을 쓴다', () => {
   it('🔴 미리보기가 매장 테마를 읽는다 — AURA_BG 하드코딩이 남아 있지 않다', () => {
     expect(code.includes('background: AURA_BG'), 'AURA_BG 를 하드코딩해 선택 테마를 무시한다').toBe(false);
-    expect(code).toContain('clockThemeVars');
-    expect(code).toContain('clockThemeSnapKey');   // TV 와 같은 스냅샷 키 = 같은 룩
+    // 2026-10-03 N-3 — 테마 읽기는 TV 와 **같은 훅 한 벌**(useClockThemeVars)로 옮겼다. 훅 안에 같은 스냅샷 키·변환이 있다.
+    expect(code).toContain('useClockThemeVars(');
+    const hook = readFileSync(join(__dirname, 'useClockThemeVars.ts'), 'utf-8');
+    expect(hook).toContain('clockThemeVars');
+    expect(hook).toContain('clockThemeSnapKey');   // TV 와 같은 스냅샷 키 = 같은 룩
     expect(code).toContain("var(--clk-bg");
   });
 
