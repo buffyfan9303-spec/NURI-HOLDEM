@@ -43,7 +43,10 @@ export default function StoreToolsPanel() {
               {/* xl 부터는 예약을 푼다 — main 상한(1224px) 때문에 1280·1440·1920 전부 칸폭 226.9px 로 같고 7종 설명이
                   전부 1줄(실측 2026-09-18)이라, 2줄 예약이 칸마다 15px 빈 줄 + 아이콘이 글자 중심보다 8px 아래로 처졌다.
                   lg(1024~1279, 칸폭 ~177px)까지는 2줄로 접히는 설명이 있어 예약을 유지한다. */}
-              <span className="mt-1 block min-h-7.5 xl:min-h-0 text-2xs text-ink-muted [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden break-keep">{t.desc}</span>
+              {/* E3 L-8(2026-10-03) — 1024(칸폭 ~177px)에서 '칩 분배기' 설명이 "… 총 칩 / 수" 로 끝 줄에 한 글자만 남았다.
+                  CSS 줄바꿈 pretty 로 끝 줄을 두 어절 이상으로 — 전역 CSS 예산에 0 바이트(인라인). 줄 수(2줄 예약)는 그대로다. */}
+              <span className="mt-1 block min-h-7.5 xl:min-h-0 text-2xs text-ink-muted [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden break-keep"
+                style={{ textWrap: 'pretty' }}>{t.desc}</span>
             </span>
           </button>
         ))}

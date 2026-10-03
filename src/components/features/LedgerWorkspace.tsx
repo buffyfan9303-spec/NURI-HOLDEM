@@ -135,18 +135,26 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 
   // 정산바(position:fixed, NuriPosLedger)의 좌우 경계를 **표 칸**에 맞춘다 — 레일이 옆에 서면 바가 레일 밑까지 뻗지 않게.
   //   값은 표 칸의 실제 좌우 끝(뷰포트 기준). 바는 CSS 변수(--ledger-bar-left/right/max)를 읽는다(전체화면은 index.css 가 같은 일을 한다).
+  //   E3 L-4(2026-10-03) — 레일이 없는 매장(이용권 권한 없음)도 맞춘다. 종전엔 `!side` 면 변수를 지워 바가 판이 아니라
+  //   뷰포트 가운데 72rem 에 섰다(1440: 바 105~1330 / 판 260~1416). 레일이 없으면 표 칸 = 판 전체 폭이다.
   const colRef = useRef<HTMLDivElement>(null);
   const [barVars, setBarVars] = useState<Record<string, string> | undefined>(undefined);
   useLayoutEffect(() => {
     const col = colRef.current;
-    if (!side || full || !isLg || !col) { setBarVars(undefined); return; }
+    if (full || !isLg || !col) { setBarVars(undefined); return; }
     let raf = 0;
     const sync = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const r = col.getBoundingClientRect();
         if (r.width <= 0) return;   // 숨은 판(display:none) — 다음 발화에서 다시 잰다
-        const vw = document.documentElement.clientWidth;
+        // 고정 요소의 기준 폭을 직접 잰다 — html 의 `scrollbar-gutter: stable` 자리(실측 6px)를 clientWidth 는 빼지 않아(1440)
+        //   바 오른쪽이 판보다 6px 안으로 들어왔다(고정 기준 폭 1434). 레일 있는 매장도 같은 계산이라 함께 맞는다.
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;left:0;right:0;top:0;height:0;visibility:hidden;pointer-events:none';
+        document.body.appendChild(probe);
+        const vw = probe.getBoundingClientRect().width;
+        probe.remove();
         const next = { '--ledger-bar-left': `${Math.max(0, Math.round(r.left))}px`, '--ledger-bar-right': `${Math.max(0, Math.round(vw - r.right))}px`, '--ledger-bar-max': 'none' };
         setBarVars((p) => (p && p['--ledger-bar-left'] === next['--ledger-bar-left'] && p['--ledger-bar-right'] === next['--ledger-bar-right'] ? p : next));
       });

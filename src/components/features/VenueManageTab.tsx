@@ -1054,10 +1054,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       {/* S-06 — 인증 등급은 대표 업주만, 숨김 안내는 이 매장을 다루는 모두에게(지금 고른 매장 기준). */}
       {/* 2026-10-02 감사 H-2 — 인증 등급 배너(62px)가 모든 메뉴 맨 위에 상시라 장부 첫 화면에 표가 0행이었다. 등급 배너는 대시보드 판 **안**으로
           옮겼다(여기 두고 대시보드에서만 그리면 단계 바가 요약↔포스터 사이에서 62px 오르내린다). '숨김 상태' 경고(S-06)는 포스터·장부
-          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다. 레일 밖 메뉴(설정·직원 등)는 단계 바가 없어 종전대로 등급 배너도 맨 위
-          (그 메뉴들의 판 이동 계약 e2e/subpanel-scroll-tear 가 판 줄 위 블록을 표지로 쓴다). */}
-      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner}
-        part={renderSection === 'dashboard' || renderSection === 'game' || renderSection === 'voucher' ? 'hidden' : 'all'} />}
+          어디서든 알아야 하는 사실이라 종전대로 전 메뉴 맨 위에 남긴다.
+          E3 M-1(2026-10-03) — 레일 밖 메뉴(캘린더·설정·직원 등)만 등급 배너를 셸 위에 그리던 절충 때문에 레일 안팎을 오갈 때마다 사이드바·판이
+          통째로 69px 오르내렸다(손 밑에서 메뉴가 움직여 다음 클릭이 다른 메뉴로 간다). 이제 셸 위에는 숨김 경고만 두고, 등급 배너는 레일 밖 메뉴도
+          판 안 제목 아래(아래 secInnerRef 의 머리 다음)에 그린다 — 모든 메뉴에서 셸 윗변이 같다. */}
+      {venueId && <VenueVerificationCard venueId={venueId} showVerification={isOwner} part="hidden" />}
 
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
@@ -1396,6 +1397,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 icon={renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
                   : renderSection ? SECTION_ICON[renderSection] : undefined}
               />
+              </div>
+            )}
+            {/* E3 M-1 — 레일 밖 메뉴의 인증 등급 배너(대시보드는 자기 판 안에 따로 그린다). 메뉴마다 새로 마운트하면 조회가 끝날 때
+                배너가 늦게 생겨 판 안이 밀린다 — 한 벌을 계속 마운트해 두고 레일 메뉴에서는 그리지만 않는다(off). */}
+            {venueId && isOwner && (
+              <div className="empty:hidden" style={renderSection === 'settings' ? { maxWidth: READ_W } : undefined}>
+                <VenueVerificationCard venueId={venueId} showVerification part="grade"
+                  off={!!dItem?.locked || renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher'} />
               </div>
             )}
             {/* 방문한 판(섹션/스텝)은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred */}
