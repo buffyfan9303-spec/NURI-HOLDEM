@@ -35,7 +35,9 @@ describe('U06 · VenuePage·GroupPage 는 Modal 과 같은 focus 계약을 공�
   });
 
   it('공유 훅에 열기 직전 포커스 기억 → 복원 계약이 있다(ESC 가 focus 를 BODY 로 흘리던 결함)', () => {
-    expect(hookSrc).toMatch(/const opener = document\.activeElement/);
+    // 2026-10-03: opener 는 effect 가 아니라 렌더 중(active 가 켜지는 렌더)에 잡는다 — 자식 autoFocus 커밋 전이어야 한다.
+    //   동작 계약은 e2e/dialog-autofocus.spec.ts(닫으면 연 버튼으로)가 실제 화면에서 잰다.
+    expect(hookSrc).toMatch(/setOpener\(document\.activeElement/);
     expect(hookSrc).toMatch(/opener[^\n]*\)\.focus\(|opener\.focus\(/);
   });
 
