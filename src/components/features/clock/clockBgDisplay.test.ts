@@ -91,10 +91,22 @@ describe('N-2 렌더 변수', () => {
     expect(ratio(lum([0, 0, 0]), lum([0xd9, 0xdd, 0xe5]))).toBeGreaterThanOrEqual(3);
   });
   it('이름표 해석 — 없는 이름표는 d=0(옛 파일은 이미 구웠다) · 범위 밖은 95 로 막는다', () => {
-    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null, dark: false });
-    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef', dark: false });
-    expect(T.clockBgMetaOf(url('1-d0-t111111-k.webp'))).toEqual({ dim: 0, tint: '#111111', dark: true });
+    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null, plate: 'none' });
+    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef', plate: 'none' });
+    expect(T.clockBgMetaOf(url('1-d0-t111111-k.webp'))).toEqual({ dim: 0, tint: '#111111', plate: 'light' });
+    expect(T.clockBgMetaOf(url('1-m-d0-t350e14.webp'))).toEqual({ dim: 0, tint: '#350e14', plate: 'dark' });
     expect(T.clockBgMetaOf(url('1-d99.webp')).dim).toBe(0.95);
+  });
+  it('하-A 옛 번들 호환 — -m 이 붙어도 옛 정규식은 d·t 를 그대로 읽는다', () => {
+    const old = /-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url('1-m-d37-t350e14.webp'));
+    expect(old?.slice(1, 3)).toEqual(['37', '350e14']);
+  });
+  it('하-A 중간 밝기 로고(-m) — 로고·맞추기 모두 검은 받침 · 받침 끄기면 없음', () => {
+    const img = url('1-m-d0-t350e14.webp');
+    expect(T.clockThemeVars(T.makeClockTheme('nuri-signature', undefined, img, { fit: 'center' }))['--clk-logo-plate']).toBe(T.CLOCK_LOGO_PLATE_DARK);
+    expect(T.clockThemeVars(T.makeClockTheme('nuri-signature', undefined, img, { fit: 'contain' }))['--clk-bg']).toMatch(/, #000000$/);
+    expect(T.clockThemeVars(T.makeClockTheme('nuri-signature', undefined, img, { fit: 'center', plate: 0 }))['--clk-logo-plate']).toBeUndefined();
+    expect(T.clockThemeVars(T.makeClockTheme('nuri-signature', undefined, img, { fit: 'contain', plate: 0 }))['--clk-bg']).toMatch(/, #350e14$/);
   });
   it('글자 판 계산 — 판 뒤가 순백이어도 흰 글자 4.5:1·가장 어두운 강조색 3:1(대형) 이상', () => {
     const a = T.CLOCK_PLATE_ALPHA;
@@ -109,13 +121,31 @@ describe('N-2 렌더 변수', () => {
   });
 });
 
-describe('중-3 어두운 로고 판정(업로드 이름표 -k)', () => {
-  it('검은 워드마크·짙은 남색은 어둡고, 흰 워드마크·금색 로고는 아니다', async () => {
-    const { isDarkAvg } = await import('./clockBgImage');
-    expect(isDarkAvg(0, 0, 0)).toBe(true);
-    expect(isDarkAvg(0.1, 0.12, 0.3)).toBe(true);
-    expect(isDarkAvg(1, 1, 1)).toBe(false);
-    expect(isDarkAvg(0xe0 / 255, 0xa9 / 255, 0x4e / 255)).toBe(false);
+describe('중-3·하-A 로고 받침 판정(업로드 이름표 -k·-m) — 실제 바탕(CLOCK_LOGO_BG_LUM) 기준 3:1', () => {
+  // 픽셀 휘도 묶음: [색, 개수] — 재점검 시험 그림과 같은 구성(빨강 판 + 흰 글자 15% 등)
+  const px = (...parts: [number[], number][]) => parts.flatMap(([c, n]) => Array<number>(n).fill(lum(c)));
+  const RED = px([[0xc8, 0x10, 0x2e], 85], [[255, 255, 255], 15]);
+  const BLUE = px([[0x1e, 0x88, 0xe5], 85], [[255, 255, 255], 15]);
+  const GOLD = px([[0xd4, 0xaf, 0x37], 92], [[0x7a, 0x5a, 0x10], 4], [[0x3b, 0x1f, 0x00], 4]);
+  const BLACK = px([[0x11, 0x11, 0x11], 100]);
+  const WHITE = px([[255, 255, 255], 100]);
+  const LIGHT = [236, 239, 245].map((c) => 0.9 * c + 0.1 * 30);   // 밝은 받침(0.9) — 뒤가 바탕(≈#1e)일 때
+  /** 하위 10% 픽셀(판정과 같은 자리)과 받침/바탕의 대비 */
+  const worst = (ls: number[], bgL: number) => { const l = [...ls].sort((a, b) => a - b)[Math.floor(ls.length * 0.1)]; return (Math.max(l, bgL) + 0.05) / (Math.min(l, bgL) + 0.05); };
+  it('빨강은 검은 받침, 검정은 밝은 받침, 파랑·금색·흰색은 받침 없음', () => {
+    expect(T.clockLogoPlateKind(RED)).toBe('dark');
+    expect(T.clockLogoPlateKind(BLACK)).toBe('light');
+    expect(T.clockLogoPlateKind(BLUE)).toBe('none');
+    expect(T.clockLogoPlateKind(GOLD)).toBe('none');
+    expect(T.clockLogoPlateKind(WHITE)).toBe('none');
+    expect(T.clockLogoPlateKind([])).toBe('none');
+  });
+  it('5종 모두 고른 받침(또는 실제 바탕) 위에서 3:1 이상 · 빨강은 받침 없이는 3:1 미만이었다', () => {
+    const bgOf = (k: string) => (k === 'dark' ? 0 : k === 'light' ? lum(LIGHT) : T.CLOCK_LOGO_BG_LUM);
+    for (const ls of [RED, BLUE, GOLD, BLACK, WHITE]) expect(worst(ls, bgOf(T.clockLogoPlateKind(ls)))).toBeGreaterThanOrEqual(3);
+    expect(worst(RED, T.CLOCK_LOGO_BG_LUM)).toBeLessThan(3);
+    // 기본 테마 머리줄 실측 0.0165 가 상한 안에 있다(상한을 낮추면 빨강이 다시 받침 없이 나간다)
+    expect(T.CLOCK_LOGO_BG_LUM).toBeGreaterThanOrEqual(0.0177);
   });
 });
 

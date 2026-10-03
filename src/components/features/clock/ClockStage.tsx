@@ -116,6 +116,14 @@ export interface ClockStageProps {
 export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm', ads = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
   const pl = decor.plated ? PLATE : undefined;
   const logo = decor.logo;
+  // 재점검 2회차 하-C — 세로로 긴 로고는 머리줄(높이 고정)에서 23×63px 로 읽히지 않았다. 원본 비율을 재서
+  // 폭/높이 < LOGO_TALL_AR 이면 가로 보드에서도 타이머 위 칸(LogoTall)에 그린다(1920×1080 실측: 54×150px).
+  const [logoAr, setLogoAr] = useState<{ src: string; ar: number } | null>(null);
+  const tallLogo = !!logo && logoAr?.src === logo.src && logoAr.ar < LOGO_TALL_AR;
+  const onLogoLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const im = e.currentTarget;
+    if (logo && im.naturalHeight > 0) setLogoAr({ src: logo.src, ar: im.naturalWidth / im.naturalHeight });
+  };
   const lvls = g.config?.levels ?? [];
   // 손님 기기라 DB 를 고치지 않고 '지금 진짜 레벨' 을 계산해 표시한다(DB 전진은 운영자 화면 책임).
   const eff = effectiveLevel(g);
@@ -183,8 +191,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
       <header className="flex h-[8cqmin] shrink-0 items-center justify-between gap-[1.5cqmin] px-[3cqmin]" style={pl}>
         <div className="flex min-w-0 items-center gap-[1.5cqmin]">
           {/* N-2 '로고로 넣기' — 가로 보드는 머리줄 로고 칸(매장 이름 앞). 머리줄은 높이가 고정이라 아무 글자 판과도 겹치지 않는다. */}
-          {logo && (
-            <img data-testid="clk-logo" src={logo.src} alt="" aria-hidden className="clk-wide-only shrink-0 object-contain"
+          {logo && !tallLogo && (
+            <img data-testid="clk-logo" src={logo.src} alt="" aria-hidden onLoad={onLogoLoad} className="clk-wide-only shrink-0 object-contain"
               style={{ maxHeight: logo.head, maxWidth: '36cqmin', width: 'auto', height: 'auto', ...logoPlate(logo.plate) }} />
           )}
           <span className={`h-[1.2cqmin] w-[1.2cqmin] shrink-0 rounded-full ${g.running ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
@@ -243,7 +251,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                 스페이서 높이(basis-0)를 바꾸지 않아 타이머 중심도 그대로다. 남는 높이가 없으면 로고가 작아질 뿐 넘치지 않는다. */}
             <div className="relative flex min-h-0 flex-col items-center">
               <div className="flex min-h-0 w-full flex-1 basis-0 flex-col items-center justify-end">
-                {logo && <LogoTall logo={logo} />}
+                {logo && <LogoTall logo={logo} onLoad={onLogoLoad} />}
                 <PausedLabel g={g} />
                 <LevelLine g={g} />
               </div>
@@ -263,6 +271,12 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
             <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]" style={decor.plated ? COL_PLATE : undefined}>
+              {/* 하-C — 세로로 긴 로고는 머리줄 대신 여기(타이머 옆, 지표 위). 높이 = 머리줄 로고 칸 × 3(15·18·21cqmin) — 지표는 줄 수가 정해져 있어
+                  가장 큰 단계에서도 열(80cqmin) 안에 든다. 타이머가 있는 가운데 열은 PAUSED 글자가 같은 칸을 써서 일시정지 때 24px 로 줄었다(실측). */}
+              {logo && tallLogo && (
+                <img data-testid="clk-logo" src={logo.src} alt="" aria-hidden className="max-w-full shrink-0 self-center object-contain"
+                  style={{ height: `calc(${logo.head} * 3)`, width: 'auto', ...logoPlate(logo.plate) }} />
+              )}
               {rails}
             </aside>
           </div>
@@ -326,10 +340,14 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   );
 }
 
-function LogoTall({ logo }: { logo: NonNullable<ClockStageDecor['logo']> }) {
+/** 폭/높이가 이보다 작은(세로로 긴) 로고는 가로 보드에서 머리줄 대신 지표 열 위에 — 머리줄 높이(5~7cqmin)에 묶이면
+ *  폭이 그 0.36배(23px)로 줄어 글자를 못 읽는다. 0.9 = 정사각에 가까운 로고까지는 머리줄 '작게'(54px)에서도 짧은 변 48px 이상. */
+const LOGO_TALL_AR = 0.9;
+
+function LogoTall({ logo, onLoad }: { logo: NonNullable<ClockStageDecor['logo']>; onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void }) {
   return (
     <div data-testid="clk-logo-tall" className="clk-narrow-only relative mb-[2.4cqmin] min-h-0 w-full flex-1" style={{ maxHeight: logo.tall }}>
-      <img src={logo.src} alt="" aria-hidden className="absolute inset-0 m-auto max-h-full max-w-[80%] object-contain" style={logoPlate(logo.plate)} />
+      <img src={logo.src} alt="" aria-hidden onLoad={onLoad} className="absolute inset-0 m-auto max-h-full max-w-[80%] object-contain" style={logoPlate(logo.plate)} />
     </div>
   );
 }

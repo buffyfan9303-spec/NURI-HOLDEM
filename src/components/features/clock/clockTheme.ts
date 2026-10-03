@@ -39,8 +39,20 @@ export const CLOCK_LOGO_SIZE = { head: { 1: 5, 2: 6, 3: 7 }, tall: { 1: 20, 2: 3
 /** 어두운 로고 받침(중-3) — 로고 뒤에만 까는 은은한 밝은 둥근 판. '맞추기' 의 남는 칸은 밝은 중립색. */
 export const CLOCK_LOGO_PLATE = 'rgba(236,239,245,0.9)';
 export const CLOCK_LIGHT_NEUTRAL = '#D9DDE5';
-/** 평균 상대휘도가 이 값 아래면 '어두운 로고' — 테마 바탕(#06080F 근처)과 대비 3:1 이 안 나오는 밝기((L+.05)/(.0025+.05) < 3). */
-export const CLOCK_DARK_LUM = 0.1075;
+/** 대비가 모자란 **중간 밝기** 로고(빨강 등) 받침 — 검은 판. 밝은 판은 그 로고 안의 흰 글자를 지운다(1.2:1). */
+export const CLOCK_LOGO_PLATE_DARK = '#000000';
+/** 로고 칸(머리줄·타이머 위) 바탕의 **실측** 상대휘도 상한. 재점검 2회차 하-A(2026-10-04): 예전 문턱은 바탕을 #06080F(0.0025)로 가정했는데
+ *  기본 테마(nuri-signature) 머리줄은 0.0165 라 빨간 로고가 2.72:1 이었다. 1920×1080 · 프리셋 25종의 로고 칸 p90 최댓값 0.0177(whale-light) → 0.018. */
+export const CLOCK_LOGO_BG_LUM = 0.018;
+export type ClockLogoPlate = 'none' | 'dark' | 'light';
+/** 로고 불투명 픽셀 휘도들 → 받침. 기준은 **하위 10%** 픽셀(평균은 흰 글자가 끌어올려 빨강을 놓친다).
+ *  그 픽셀이 실제 바탕과 3:1 이상이면 받침 없음, 아니면 검은 판(3:1 이 나오는 밝기 ≥ 0.1) 또는 밝은 판. */
+export function clockLogoPlateKind(lums: readonly number[]): ClockLogoPlate {
+  if (!lums.length) return 'none';
+  const l = [...lums].sort((a, b) => a - b)[Math.floor(lums.length * 0.1)];
+  if ((l + 0.05) / (CLOCK_LOGO_BG_LUM + 0.05) >= 3) return 'none';
+  return (l + 0.05) / 0.05 >= 3 ? 'dark' : 'light';
+}
 /** cover 의 어둡게 단계 → 상한 위에 더하는 비율(남은 밝기의 몇 %를 더 누르나). 0 은 종전과 같다. */
 export const CLOCK_BG_SHADE_EXTRA = [0, 0.3, 0.55] as const;
 /** contain·center 에서 글자 뒤에만 까는 판. 전체를 누르지 않으므로 로고 색이 산다.
@@ -73,20 +85,21 @@ export function clockBgDisplayOf(theme: ClockTheme | null | undefined): DispFull
 }
 
 /**
- * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>-d37-t1a2b3c[-k].webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고).
+ * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>[-m]-d37-t1a2b3c[-k].webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고 → 밝은 받침, m = 중간 밝기 로고 → 검은 받침).
  * 왜 테마 키가 아니라 이름인가: 이름은 URL 과 한 몸이라 옛 번들이 테마를 다시 저장해도(모르는 키는 버린다) 떨어지지 않는다.
  * 이름표가 없는 옛 파일은 업로드 때 이미 밝기를 구워 둔 것이라 d = 0 이 정답이다(종전 렌더와 같다).
  */
-export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; dark: boolean } {
-  const m = url ? /-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
-  if (!m) return { dim: 0, tint: null, dark: false };
-  return { dim: Math.min(95, Number(m[1])) / 100, tint: m[2] ? `#${m[2]}` : null, dark: !!m[3] };
+export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; plate: ClockLogoPlate } {
+  // -m(검은 판)은 -d **앞**에 붙인다 — 옛 번들의 정규식(-d…$)이 그대로 맞아 d·t 를 계속 읽는다(받침만 모른다).
+  const m = url ? /(-m)?-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
+  if (!m) return { dim: 0, tint: null, plate: 'none' };
+  return { dim: Math.min(95, Number(m[2])) / 100, tint: m[3] ? `#${m[3]}` : null, plate: m[4] ? 'light' : m[1] ? 'dark' : 'none' };
 }
 
-/** 이 테마의 이미지가 '어두운 로고' 인가(받침을 끄지 않았을 때만 참) — 설정 화면 안내·렌더 공용. */
-export function clockLogoDark(theme: ClockTheme | null | undefined): boolean {
+/** 이 테마의 이미지에 자동 받침이 붙는가(받침 끄기와 무관한 판정) — 설정 화면 안내용. */
+export function clockLogoPlateOf(theme: ClockTheme | null | undefined): ClockLogoPlate {
   const img = clockBgImageOf(theme);
-  return !!img && clockBgMetaOf(img).dark;
+  return img ? clockBgMetaOf(img).plate : 'none';
 }
 
 /** 아우라 골드(기본 테마 v2, 2026-09-02 오너 지시) — 순흑 + 금빛 보케(정적 radial-gradient 9겹 · 이미지·애니 없음).
@@ -473,7 +486,8 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
   } else if (img && disp.fit === 'contain') {
     const at = disp.pos === 'center' ? 'center' : `center ${disp.pos}`;
     // 중-3 — 어두운 로고를 어두운 대표색 위에 두면 1:1 로 사라졌다. 받침이 켜져 있으면 남는 칸을 밝은 중립색으로.
-    const fill = meta.dark && disp.plate ? CLOCK_LIGHT_NEUTRAL : (meta.tint ?? CLOCK_DEFAULTS.bg);
+    //   하-A — 중간 밝기 로고(빨강)는 눌린 대표색(#350e14) 위에서 2.94 였다 → 검은 남는 칸.
+    const fill = !disp.plate || meta.plate === 'none' ? (meta.tint ?? CLOCK_DEFAULTS.bg) : meta.plate === 'light' ? CLOCK_LIGHT_NEUTRAL : CLOCK_LOGO_PLATE_DARK;
     bg = `url("${img}") ${at}/contain no-repeat, ${fill}`;
   } else if (img) {
     // '로고로 넣기' — 루트 배경은 테마 그대로. 로고는 ClockStage 의 로고 칸(가로: 머리줄, 세로: 타이머 위)이 그린다.
@@ -481,7 +495,7 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
       '--clk-logo': img,
       '--clk-logo-head': `${CLOCK_LOGO_SIZE.head[disp.size]}cqmin`,
       '--clk-logo-tall': `${CLOCK_LOGO_SIZE.tall[disp.size]}cqmin`,
-      ...(meta.dark && disp.plate ? { '--clk-logo-plate': CLOCK_LOGO_PLATE } : null),
+      ...(disp.plate && meta.plate !== 'none' ? { '--clk-logo-plate': meta.plate === 'light' ? CLOCK_LOGO_PLATE : CLOCK_LOGO_PLATE_DARK } : null),
     };
   }
   return {

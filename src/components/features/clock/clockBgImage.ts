@@ -9,7 +9,7 @@ import { supabase, IS_MOCK } from '../../../lib/supabase';
 import { resizeImage, extOf } from '../../../lib/storage';
 import {
   CLOCK_BG_BUCKET, CLOCK_BG_LUM_CAP, CLOCK_BG_SCRIM_MID, CLOCK_BG_MAX_PX, CLOCK_BG_TARGET_BYTES,
-  clockBgObjectPath, CLOCK_DARK_LUM,
+  clockBgObjectPath, clockLogoPlateKind, type ClockLogoPlate,
 } from './clockTheme';
 
 /** 밝기 측정 격자 — 셀 하나가 원본의 1/576 영역 평균이라 스펙큘러 1px 에 흔들리지 않는다 */
@@ -76,11 +76,23 @@ function bakeScale(cell: [number, number, number]): number {
  *  예전엔 `image/*` 면 다 받아 GIF·SVG 도 webp 로 바뀌어 저장됐다(움직이는 GIF 는 첫 장만 · SVG 는 래스터로 굳음). */
 export const CLOCK_BG_ACCEPT = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
-/** 불투명 픽셀 평균색이 어두운가 — 테마 바탕(#06080F 근처)과 대비 3:1 미만(CLOCK_DARK_LUM). sRGB 0~1. */
-export const isDarkAvg = (r: number, g: number, b: number) => relLum(r, g, b) < CLOCK_DARK_LUM;
+/** 받침 판정 — 40×40 으로 줄인 그림의 불투명(알파 ≥ 160) 픽셀 휘도로 clockLogoPlateKind. 실패하면 받침 없음(종전과 같다). */
+function plateOf(src: CanvasImageSource, w: number, h: number): ClockLogoPlate {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 40;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 'none';
+    ctx.drawImage(src, 0, 0, w, h, 0, 0, 40, 40);
+    const d = ctx.getImageData(0, 0, 40, 40).data;
+    const ls: number[] = [];
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] >= 160) ls.push(relLum(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255));
+    return clockLogoPlateKind(ls);
+  } catch { return 'none'; }
+}
 
 /** 대표색(맞추기의 남는 칸) — 불투명 픽셀 평균을 상대휘도 상한 아래로 눌러 #rrggbb. 글자는 판(--clk-plate) 위에 앉지만 판 밖 여백도 어둡게 둔다. */
-function tintOf(src: CanvasImageSource, w: number, h: number): { hex: string; dark: boolean } | null {
+function tintOf(src: CanvasImageSource, w: number, h: number): { hex: string } | null {
   try {
     const c = document.createElement('canvas');
     c.width = GRID_W; c.height = GRID_H;
@@ -94,12 +106,11 @@ function tintOf(src: CanvasImageSource, w: number, h: number): { hex: string; da
       r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
     }
     if (!n) return null;
-    const dark = isDarkAvg(r / n / 255, g / n / 255, b / n / 255);
     let k = 1;
     const at = (s: number) => relLum((r / n / 255) * s, (g / n / 255) * s, (b / n / 255) * s);
     while (k > 0.02 && at(k) > 0.012) k *= 0.9;   // 기본 바탕(#06080F) 근처의 어둠까지만
     const hex = (v: number) => Math.round((v / n) * k).toString(16).padStart(2, '0');
-    return { hex: `${hex(r)}${hex(g)}${hex(b)}`, dark };
+    return { hex: `${hex(r)}${hex(g)}${hex(b)}` };
   } catch { return null; }
 }
 
@@ -123,14 +134,15 @@ export async function uploadClockBg(venueId: string, file: File): Promise<string
   const img = await decodeBlob(sized);
   const cell = brightestCell(img as CanvasImageSource, img.width, img.height);
   const tint = tintOf(img as CanvasImageSource, img.width, img.height);
+  const plate = plateOf(img as CanvasImageSource, img.width, img.height);
   if (img instanceof ImageBitmap) img.close();
   // 측정 실패 = 순백 사진으로 간주(가장 보수적). 정수 % 는 올림 — 반올림으로 상한을 넘지 않게.
   const dimPct = Math.min(95, Math.ceil((1 - bakeScale(cell ?? [1, 1, 1])) * 100));
   const blob = sized;
 
   // ③ 업로드 — 경로 첫 칸이 venue_id 다(스토리지 RLS 가 '본인 매장 폴더'를 이 값으로 판정).
-  // -k = 어두운 로고(리뷰 중-3) — 렌더가 밝은 받침·밝은 남는 칸을 고른다.
-  const path = `${venueId}/${Date.now()}-d${dimPct}${tint ? `-t${tint.hex}${tint.dark ? '-k' : ''}` : ''}.${extOf(blob)}`;
+  // -k = 어두운 로고(리뷰 중-3) — 렌더가 밝은 받침·밝은 남는 칸을 고른다. -m = 중간 밝기 로고(하-A) — 검은 받침. -m 은 옛 번들 정규식을 위해 -d 앞.
+  const path = `${venueId}/${Date.now()}${plate === 'dark' ? '-m' : ''}-d${dimPct}${tint ? `-t${tint.hex}${plate === 'light' ? '-k' : ''}` : ''}.${extOf(blob)}`;
   const { error } = await supabase.storage.from(CLOCK_BG_BUCKET).upload(path, blob, {
     contentType: blob.type || 'image/webp',
     // upsert 를 쓰지 않는다 — 경로가 타임스탬프라 충돌이 없고, 덮어쓰기는 CDN 1년 캐시와 상극이다.
