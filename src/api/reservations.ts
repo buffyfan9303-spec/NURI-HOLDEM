@@ -265,7 +265,7 @@ export async function getMyReservations(limit = 30): Promise<MyReservationRow[]>
 }
 
 // ── 고객 분석(업주/통계) — 방문 손님 전체 리스트 + 행동 통계 ─────────────────────
-// 바인 횟수 · 방문 · 머니인(입상) · 머니인 비율 · 미수 횟수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문
+// 바인 횟수 · 방문 · 입상(순위 등재 횟수 — 필드명 moneyIn 은 옛 이름, 화면은 '입상') · 입상 비율 · 미수 횟수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문
 export interface CustomerStat {
   name: string;
   buyins: number;

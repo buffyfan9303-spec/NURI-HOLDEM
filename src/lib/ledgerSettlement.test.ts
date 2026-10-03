@@ -6,7 +6,7 @@
 //  ③ '바인 많이 한 손님'(건수)과 '머니인 순위'(금액)는 서로 다른 순위다 —
 //     티켓으로 여러 번 들어온 손님과 현금 한 번에 크게 넣은 손님이 갈린다.
 import { describe, it, expect } from 'vitest';
-import { settlementReport } from './ledgerSettlement';
+import { isDaySettled, settlementReport } from './ledgerSettlement';
 import { nonSplitSnapshot, type LedgerBuyin, type LedgerPlayer, type LedgerSession } from '../api/ledger';
 
 const DATE = '2026-09-08';
@@ -208,5 +208,21 @@ describe('마감 상태', () => {
     expect(settlementReport(DATE, [session({ closed: true }), session({ gameSeq: 2 })], [], []).allClosed).toBe(false);
     expect(settlementReport(DATE, [session({ closed: true })], [], []).allClosed).toBe(true);
     expect(settlementReport(DATE, [], [], []).allClosed).toBe(false); // 장부가 없으면 '마감됨'이 아니다
+  });
+});
+
+// dummy-1003 D3 — 대시보드 '정산' 칩 ✓ 와 '오늘 운영 완료'가 함께 쓰는 하루 판정. 화면 배선은 e2e/settle-fix-1003.spec.ts 가 본다.
+describe('isDaySettled — 오늘 운영 완료 = 모든 게임 마감 AND 미수 0', () => {
+  const g = (closed: boolean, unpaid = 0) => ({ closed, unpaid });
+  it.each([
+    ['전부 마감 · 미수 0', g(true), [g(true), g(true)], true],
+    ['🔴 전부 마감인데 미수 11만(더미 정산)', g(true, 80_000), [g(true, 80_000), g(true, 30_000)], false],
+    ['🔴 메인만 마감 · 사이드 열림', g(true), [g(true), g(false)], false],
+    ['🔴 메인 미수 0 · 사이드에만 미수', g(true), [g(true), g(true, 30_000)], false],
+    ['메인 미마감', g(false), [g(false)], false],
+    ['장부 없음', null, [], false],
+    ['14일 범위 미도착 — 메인만으로', g(true), [], true],
+  ] as const)('%s', (_n, main, games, want) => {
+    expect(isDaySettled(main, games)).toBe(want);
   });
 });

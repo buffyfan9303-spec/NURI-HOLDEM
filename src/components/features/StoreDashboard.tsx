@@ -21,6 +21,7 @@ import { useClockSecond } from '../../lib/clockTick';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
+import { isDaySettled } from '../../lib/ledgerSettlement'; // '정산' 칩 ✓ 와 '오늘 운영 완료'의 단일 판정(dummy-1003 D3)
 import { voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
 import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
@@ -548,6 +549,21 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // 요청 게임의 바인 금액(결제 팝오버 표시) — 해당 게임 클락 liveStats 우선, 없으면 메인 세션
   const buyinAmountFor = (gameSeq: number | null) => venueClocks.find((c) => c.gameSeq === (gameSeq ?? 1))?.liveStats?.buyInAmount ?? session?.buyinAmount ?? null;
   const liveWidget = caps.ledger && (clockActive || activeClocks.length > 0 || pendingReqs.length > 0); // 진행 클락(메인/사이드) 또는 대기 요청
+  // 2026-10-03 B — '라이브 운영 현황'은 응답(클락·요청)이 와야 서는데, 확인 중엔 자리가 없어 정착 순간 그 높이만큼(PC 175 · 390 263px)
+  //   아래 할 일·카드 격자를 밀었다(main 에도 있던 이동). 응답 전엔 클락이 켜져 있는지 모르므로 **이 기기에서 이 매장이 마지막으로 보인 높이**만큼
+  //   확인 중에 자리를 잡는다(순위 미입력의 기기 기억과 같은 조리법). 처음 보는 매장·상태가 바뀐 날은 한 번 움직인다.
+  const liveKey = `nuri:dash-live-h:${venueId}`;
+  const liveRef = useRef<HTMLElement>(null);
+  const liveReserveH = useMemo(() => {
+    if (!loading) return 0;
+    try { return Number(localStorage.getItem(liveKey)) || 0; } catch { return 0; }
+  }, [loading, liveKey]);
+  useLayoutEffect(() => {
+    if (loading || !active) return; // 숨은 판(keep-alive)의 높이 0 을 '위젯 없음'으로 적지 않는다
+    const h = liveWidget ? Math.round(liveRef.current?.getBoundingClientRect().height ?? 0) : 0;
+    if (liveWidget && h === 0) return;
+    try { if (h > 0) localStorage.setItem(liveKey, String(h)); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
+  }, [loading, active, liveWidget, liveKey, activeClocks.length, pendingReqs.length]);
 
   // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
   //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
@@ -584,6 +600,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       }), { paid: 0, unpaid: 0, entry: 0, ticket: 0, totalBuyins: 0, games: 0 })
     : { ...fin, totalBuyins: cnt.totalBuyins, games: started ? 1 : 0 };
   const dayStarted = started || todayGames.some((g) => !!g.sx.openedAt);
+  // 오늘 하루 정산 끝 — 아래 '정산' 칩(stepInfo.settle)과 '지금 할 일'의 '오늘 운영 완료'가 **이 값 하나**를 본다(dummy-1003 D3:
+  //   할 일 카드만 메인 마감을 보고 미수 11만이 남았는데 '오늘 운영 완료'를 말했다).
+  const daySettled = isDaySettled(session ? { closed: !!session.closed, unpaid: fin.unpaid } : null,
+    todayGames.map((g) => ({ closed: !!g.sx.closed, unpaid: g.unpaid })));
   /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
      예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
      겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
@@ -619,11 +639,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       //   every([])=true 라 **예전대로 메인 기준**으로 떨어진다 — 조회 실패가 ✓ 를 지우지 않는다
       //   (실패 자체는 rangeErr 배너가 말한다: F14). 5번 칩 하나만 바꾼다 — KPI 밴드는 단일 세션 그대로.
       settle: {
-        done: closed && fin.unpaid === 0 && todayGames.every((g) => g.sx.closed && g.unpaid === 0),
+        done: daySettled,
         dest: { section: 'ledger', date: d, gameSeq: seq, settle: true },
       },
     };
-  }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, fin.unpaid, todayGames, schedules, venueId, d]);
+  }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, daySettled, schedules, venueId, d]);
   useEffect(() => { onProgress?.(stepInfo); }, [stepInfo, onProgress]);
   // '오늘 장부'를 뜻하는 이동(KPI 밴드·장부 보기·미수금·바인 요청 전체 관리·빠른 작업 장부)은 전부 이 하나로.
   // bare 'ledger' 는 resolveDest 규약상 시드를 만들지 않아 goStep 이 ledgerSeed 를 지우고, 장부 판이 처음이면
@@ -1067,8 +1087,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           · box-shadow 는 자기 overflow-hidden 에 잘리지 않고, .ring-aura::before 는 inset:0 이라 범위 안이다.
           · 이 카드가 뜨는 동안 아래 '지금 할 일' CTA 는 보라 후광을 내려놓는다(그 카드 주석 참조) —
             안 그러면 같은 화면에 바이올렛 후광이 둘이 되어 '어느 쪽이 지금인가'가 사라진다. */}
+      {loading && liveReserveH > 0 && <div aria-hidden data-testid="live-reserve" className="skeleton rounded-card" style={{ height: liveReserveH }} />}
       {!loading && liveWidget && (
-        <section className="overflow-hidden rounded-card border border-accent-400/20 ring-aura ring-aura-glow bg-linear-to-br/srgb from-accent-300/[0.07] to-transparent">
+        <section ref={liveRef} data-testid="live-widget" className="overflow-hidden rounded-card border border-accent-400/20 ring-aura ring-aura-glow bg-linear-to-br/srgb from-accent-300/[0.07] to-transparent">
           <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
             <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <span className="relative flex h-2 w-2" aria-hidden>
@@ -1332,10 +1353,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         // 2026-10-03 리드 판정(review-mystore-followup-1003 FAIL) — 밀린 순위가 오늘 할 일을 가리면 안 된다. 오늘 할 일이 주 카드이고
         //   밀린 순위는 같은 칸 안의 **보조 한 줄**이다. 그 줄 자리도 틀에 늘 잡아 두어(장부 권한) 줄이 있든 없든 칸 높이가 같다 —
         //   줄이 없으면 주 줄이 세로 가운데에 선다. 응답 전엔 밀린 건수를 모르므로 이 고정이 정착 이동 0 의 조건이다.
+        // 2026-10-03 design-reviewer 대안 A — xl(≥1280)에서는 이 보조 줄을 **주 줄 안, CTA 왼쪽 칩**으로 둔다(칸 72.1px · 빈 띠 0).
+        //   한 요소를 그대로 두고 자리만 바꾼다: 주 줄이 flex-wrap 이라 xl 미만은 order-last + basis-full 로 다음 줄(종전 보조 줄과 같은 높이),
+        //   xl 은 DOM 순서대로 설명과 CTA 사이에 선다. 칩이 폭을 먹으니 xl 에서 설명은 한 줄로 자른다(1024 는 가장 긴 갈래가 18px 모자라 종전 방식 유지).
         const rankRow = (text: string, onClick?: () => void) => (
-          <span data-testid={onClick ? 'todo-rank' : undefined} className="mt-1.5 flex min-w-0 items-center gap-2 border-t border-gold-400/25 pt-1.5">
+          <span data-testid={onClick ? 'todo-rank' : undefined} className="order-last mt-1.5 flex min-w-0 basis-full items-center gap-2 border-t border-gold-400/25 pt-1.5 xl:order-none xl:mt-0 xl:basis-auto xl:rounded-input xl:border xl:border-gold-400/40 xl:py-1 xl:pl-2 xl:pr-1">
             <Icon name="trophy" size={14} className="shrink-0 text-gold-300" />
-            <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary">{text}</span>
+            <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary xl:flex-none">{text}</span>
             {onClick
               ? <button type="button" onClick={onClick} className="hit shrink-0 rounded-input bg-gold-400 px-2.5 py-0.5 text-2xs font-bold text-ink-inverse hover:bg-gold-500">순위 입력</button>
               : <span className="shrink-0 rounded-input px-2.5 py-0.5 text-2xs font-bold">순위 입력</span>}
@@ -1344,15 +1368,15 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         // 틀의 버튼 글자는 가장 넓은 CTA('대회 등록하기')로 — 좁은 글자로 재면 360 에서 그 갈래 설명이 한 줄 더 꺾여 틀을 넘었다(보조 줄이 있을 때 19px).
         const ghost = (
           <span aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }} className="flex min-w-0 flex-col">
-            <span className="flex min-w-0 items-center gap-3">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-3">
               <Icon name="refresh" size={22} className="shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">지난 게임 그대로 열기 · 00/00</span>
-                <span className="mt-1 block t-desc break-keep">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
+                <span className="block text-sm font-bold xl:truncate">지난 게임 그대로 열기 · 00/00</span>
+                <span className="mt-1 block t-desc break-keep xl:line-clamp-1">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
               </span>
+              {caps.ledger && rankRow('순위 미입력 00건 · 최근 00/00')}
               <span className="btn-primary shrink-0 px-4 py-2 text-xs">대회 등록하기</span>
             </span>
-            {caps.ledger && rankRow('— 00건 · 00/00')}
           </span>
         );
         if (loading || !lastRoundReady) {
@@ -1401,7 +1425,19 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
           todo = { icon: 'plus', title: '오늘 등록된 대회가 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '대회 등록하기', onClick: onCreatePoster, tone: 'gold' };
-        } else if (caps.manage && session?.closed) {
+        } else if (caps.ledger && session?.closed && !daySettled && todayGames.some((g) => !g.sx.closed)) {
+          // dummy-1003 D3 변형 — 메인은 마감했지만 사이드가 아직 열려 있다. '오늘 운영 완료'가 아니라 그 게임을 마저 볼 차례다.
+          const open = todayGames.filter((g) => !g.sx.closed);
+          todo = { icon: 'cards', title: `아직 열린 게임 ${open.length}개`, desc: `${open.map((g) => ledgerGameLabel(g.sx.gameSeq)).join(' · ')} · 마감해야 오늘 정산이 끝나요.`,
+            cta: '장부 보기', onClick: () => onGoto({ section: 'ledger', date: d, gameSeq: open[0].sx.gameSeq }), tone: 'gold' };
+        } else if (caps.ledger && session?.closed && !daySettled) {
+          // dummy-1003 D3 — 전부 마감했는데 미수가 남았다(종전엔 여기서 '오늘 운영 완료'). 미수가 있는 첫 게임의 장부·정산바로 연다
+          //   ('정산' 칩 목적지와 같은 모양 — 메인만 열면 사이드에만 남은 미수가 0 으로 보인다).
+          const owed = todayGames.filter((g) => g.unpaid > 0);
+          todo = { icon: 'alert', title: `미수 ${wonToMan(day.unpaid || fin.unpaid)}만원이 남았어요`,
+            desc: `${owed.length ? `${owed.map((g) => ledgerGameLabel(g.sx.gameSeq)).join(' · ')} · ` : ''}마감한 장부에 받지 못한 돈이 있어요.`,
+            cta: '미수 회수', onClick: () => onGoto({ section: 'ledger', date: d, gameSeq: owed[0]?.sx.gameSeq ?? session?.gameSeq, settle: true }), tone: 'warn' };
+        } else if (caps.manage && daySettled) {
           todo = { icon: 'check-circle', title: '오늘 운영 완료', desc: '수고하셨습니다. 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
         } else if (caps.ledger && pendingRanks.length > 0) {
           // 2026-10-03 E3 후속 — 밀린 '순위 미입력'(마감했지만 순위가 빈 지난 대회)은 이 칸의 한 갈래다(오늘 할 일이 없을 때만 주 카드, 있으면 아래 보조 줄).
@@ -1427,12 +1463,16 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           <div data-testid="todo-card" className={`grid rounded-card border p-3 ${toneCls}`}>
           {ghost}
           <div style={{ gridArea: '1 / 1' }} className="flex min-w-0 flex-col justify-center">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3">
             <Icon name={todo.icon} size={22} className={`shrink-0 ${iconCls}`} />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-ink-primary">{todo.title}</p>
-              <p className={`mt-1 t-desc break-keep text-ink-muted${todo.clamp ? ' line-clamp-2' : ''}`} title={todo.clamp ? todo.desc : undefined}>{todo.desc}</p>
+              <p className="text-sm font-bold text-ink-primary xl:truncate" title={todo.title}>{todo.title}</p>
+              <p className={`mt-1 t-desc break-keep text-ink-muted${todo.clamp ? ' line-clamp-2' : ''} xl:line-clamp-1`} title={todo.desc}>{todo.desc}</p>
             </div>
+            {/* 밀린 순위 보조 줄(xl 미만은 다음 줄 · xl 은 이 자리 칩) — rankRow 주석 */}
+            {caps.ledger && !rankPrimary && latest && rankRow(
+              `순위 미입력 ${pendingRanks.length}건 · 최근 ${latest.date.slice(5).replace('-', '/')}${latest.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(latest.gameSeq)}` : ''}`,
+              () => goRanking(latest))}
             {/* 라이브 운영 현황 카드가 글로우를 쓰는 동안(liveWidget)에는 이 CTA 가 **보라 후광을 내려놓는다**.
                 btn-primary 의 그림자는 index.css:620 의 violet-500 이라, 그대로 두면 같은 화면에 같은 색
                 후광이 둘이 되어 '지금 볼 곳'이 사라진다 — v3 가 조잡했던 정확한 메커니즘이고,
@@ -1446,9 +1486,6 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               {todo.cta}
             </button>
           </div>
-          {caps.ledger && !rankPrimary && latest && rankRow(
-            `순위 미입력 ${pendingRanks.length}건 · 최근 ${latest.date.slice(5).replace('-', '/')}${latest.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(latest.gameSeq)}` : ''}`,
-            () => goRanking(latest))}
           </div>
           </div>
         );

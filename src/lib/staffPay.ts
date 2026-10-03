@@ -368,3 +368,18 @@ export function payForPeriod(from: string, to: string, shifts: PayShift[], rates
   if (other === 0) return hp?.total ?? 0;
   return Math.round((hp ? hp.raw / 600 : 0) + other);
 }
+
+/** 'HH:MM' 여럿의 평균 시각 — **원형 평균**(24시간 시계를 각도로 보고 평균).
+ *  산술 평균은 자정을 넘긴 퇴근에서 무너진다: 01:10·23:35 → 12:23(실제로는 둘 사이 00:22:30 — dummy-1003 D1).
+ *  '정오 이전은 +24h' 같은 영업일 오프셋도 같은 답을 내지만 그 기준 시각은 매장마다 다르다 — 기준이 필요 없는 원형 평균을 쓴다.
+ *  빈 값은 건너뛰고 하나도 없으면 '—'. 정반대 시각이 같은 수로 섞여 방향이 없으면(벡터 합 0) 평균이 정의되지 않는다 — '—'. */
+export function avgClockHm(list: (string | null | undefined)[]): string {
+  const mins = list.filter((t): t is string => !!t).map((t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; });
+  if (!mins.length) return '—';
+  const rad = (m: number) => (m / 1440) * 2 * Math.PI;
+  const x = mins.reduce((s, m) => s + Math.cos(rad(m)), 0);
+  const y = mins.reduce((s, m) => s + Math.sin(rad(m)), 0);
+  if (Math.hypot(x, y) < 1e-9 * mins.length) return '—';
+  const a = ((Math.round((Math.atan2(y, x) / (2 * Math.PI)) * 1440) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(a / 60)).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}`;
+}

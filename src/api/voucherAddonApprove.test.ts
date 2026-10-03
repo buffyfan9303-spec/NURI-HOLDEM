@@ -59,8 +59,10 @@ describe('#8 레일·이용권 탭 — 사용 줄에 애드온 표시', () => {
   });
   it('배선 — 레일과 이용권 탭이 애드온 사용에 \'애드온\' 을 붙인다', () => {
     expect(src('../components/features/LedgerVoucherRail.tsx')).toContain("{r.usedFor === 'addon' ? ' · 애드온' : ''}");
+    // 이용권 탭 내역 줄은 lib/voucherFeed.manageFeedRows 가 만든다(dummy-1003 D2 — 전송 취소 장수와 함께 한 함수로 옮김).
     const m = src('../components/features/VoucherManageModal.tsx');
-    expect(m).toContain("addon: v.usedFor === 'addon'");
+    expect(m).toContain('return manageFeedRows(list, whoOf);');
+    expect(src('../lib/voucherFeed.ts')).toContain("addon: v.usedFor === 'addon'");
     expect(m).toContain("{e.addon ? ' · 애드온' : ''}");
   });
 });

@@ -142,6 +142,14 @@ const zeroGame = (): Omit<GameSettlement, 'gameSeq' | 'title' | 'closed'> => ({
  *   gross − disc = value = cash + card + transfer + ticket + support + unpaid,  received = cash + card + transfer + ticket
  * ⚠ 엔트리·바인 횟수·기준 대비(entries·buyinCount·targetRevenue)에는 여전히 섞지 않는다 — 여기는 돈의 대차표만이다.
  */
+/** 오늘 하루가 **정산까지** 끝났는가 — 대시보드의 '정산' 단계 칩 ✓ 와 '지금 할 일'의 '오늘 운영 완료'가 이 한 함수를 쓴다.
+ *  둘이 따로 판정하던 때 칩은 미수를 보고 할 일 카드는 메인 마감만 봐서, 미수 11만이 남았는데 '오늘 운영 완료'가 섰다(dummy-1003 D3).
+ *  조건: 메인이 마감·미수 0, 그리고 그날 모든 게임(사이드 포함)이 마감·미수 0.
+ *  games 가 비면(14일 범위 미도착·조회 실패) 메인만으로 판정한다 — 조회 실패를 ✓ 해제로 바꾸지 않는다(실패는 범위 배너가 말한다). */
+export function isDaySettled(main: { closed: boolean; unpaid: number } | null | undefined, games: readonly { closed: boolean; unpaid: number }[]): boolean {
+  return !!main?.closed && main.unpaid === 0 && games.every((g) => g.closed && g.unpaid === 0);
+}
+
 export interface SettlementReceipt { tender: Tender; gross: number; value: number; received: number; cashlike: number; addonTotal: number }
 export function settlementReceipt(t: Pick<GameSettlement, 'tender' | 'gross' | 'value' | 'revenue' | 'ticketWon' | 'addon'>): SettlementReceipt {
   const a = t.addon;

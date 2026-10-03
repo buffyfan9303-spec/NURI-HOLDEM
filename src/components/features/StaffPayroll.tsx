@@ -9,7 +9,7 @@ import { getMyVenueStaff } from '../../api/auth';
 // 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { belowMinWage, laborSummary, weekStartOf, type LaborRow, type PayRules } from '../../lib/staffPay';
+import { avgClockHm, belowMinWage, laborSummary, weekStartOf, type LaborRow, type PayRules } from '../../lib/staffPay';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
@@ -28,13 +28,8 @@ function hours(inHm?: string | null, outHm?: string | null): number {
   const [ih, im] = inHm.split(':').map(Number); const [oh, om] = outHm.split(':').map(Number);
   let mins = (oh * 60 + om) - (ih * 60 + im); if (mins < 0) mins += 1440; return mins / 60;
 }
-function avgHm(list: (string | null | undefined)[]): string {
-  const v = list.filter(Boolean) as string[];
-  if (!v.length) return '—';
-  const mins = v.map((t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; });
-  const a = Math.round(mins.reduce((s, x) => s + x, 0) / mins.length);
-  return `${String(Math.floor(a / 60)).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}`;
-}
+// 평균 출/퇴근 시각은 원형 평균(staffPay.avgClockHm) — 산술 평균은 자정 넘긴 퇴근을 낮 12시로 만들었다(dummy-1003 D1).
+const avgHm = avgClockHm;
 
 function useRoster(venueId: string) {
   const run = useVenueScope(venueId);
