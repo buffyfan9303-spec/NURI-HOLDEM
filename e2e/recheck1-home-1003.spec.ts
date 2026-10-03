@@ -79,49 +79,73 @@ test.describe('재점검 1회차 home-team 수정', () => {
   });
 
   // ── L1-1 ───────────────────────────────────────────────────────────────────
-  test('L1-1 오늘 대회 포스터 상세 — QR 이 늦게 와도 \'꾹 눌러 참가 신청\' 줄이 움직이지 않는다 (390)', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await mockAll(page, false);
-    const SID = 'e2e-rc1-today';
-    const row = {
-      id: SID, title: '재점검 오늘 대회', venue_id: 'e2e-rc1-venue', pub_name: '재점검 홀덤펍', region: '서울', address: '서울시 강남구',
-      date: kstDay(0), start_time: '23:30:00', duration: '6시간', format: 'MTT', guaranteed: true, prize_pool: 1_000_000,
-      prize_percent: null, is_competition: false, grade: null, blinds: null, reg_close_time: null, buy_in: { amount: 50_000 },
-      seats: null, structure: null, description: null, side_events: null, ranking_prizes: null, partners: null, promotions: null,
-      payment_methods: null, rules: null, poster_url: null, poster_color: null, display_order: 1, is_premium: false,
-      premium_until: null, owner_id: 'e2e-rc1-owner', unread_qna_count: 0, approved: true, view_count: 0, rejected_at: null, reject_reason: null,
-    };
-    await page.route(/\/rest\/v1\/schedules\?/, (r) => {
-      const single = /vnd\.pgrst\.object\+json/.test(r.request().headers()['accept'] ?? '');
-      return r.fulfill(json(single ? row : [row]));
-    });
-    // '꾹 눌러 참가 신청' 버튼이 처음 생긴 프레임부터 매 프레임 위치를 적는다(포스터 상세는 lazy 라 언제 뜰지 모른다)
-    await page.addInitScript(() => {
-      const w = window as unknown as { __hold: { t: number; left: number; top: number; boxH: number }[] };
-      w.__hold = [];
-      let t0 = 0;
-      const tick = () => {
-        const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('꾹 눌러 참가 신청'));
-        if (btn) {
-          if (!t0) t0 = performance.now();
-          const box = btn.closest('.rounded-aura') as HTMLElement | null;
-          const r = btn.getBoundingClientRect();
-          w.__hold.push({ t: Math.round(performance.now() - t0), left: r.left, top: r.top - (box?.getBoundingClientRect().top ?? 0), boxH: box?.getBoundingClientRect().height ?? 0 });
-        }
-        requestAnimationFrame(tick);
+  for (const qrFails of [false, true]) {
+    // 정상: QR 이 늦게 와도 · 실패(하-1): QR 이 끝내 안 만들어져도 — 어느 쪽이든 버튼이 한 픽셀도 움직이면 안 된다.
+    test(`L1-1 오늘 대회 포스터 상세 — QR 이 ${qrFails ? '만들어지지 않아도 자리가 남아서' : '늦게 와도'} '꾹 눌러 참가 신청' 줄이 움직이지 않는다 (390)`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await mockAll(page, false);
+      // 하-1 QR 생성 실패 흉내 — qrcode 라이브러리는 canvas.toDataURL 로 이미지를 만든다(이게 던지면 .catch → setQr(null))
+      if (qrFails) {
+        await page.addInitScript(() => {
+          const w = window as unknown as { __qrFail: number };
+          w.__qrFail = 0;
+          HTMLCanvasElement.prototype.toDataURL = () => { w.__qrFail++; throw new Error('e2e: QR 생성 실패 흉내'); };
+        });
+      }
+      const SID = 'e2e-rc1-today';
+      const row = {
+        id: SID, title: '재점검 오늘 대회', venue_id: 'e2e-rc1-venue', pub_name: '재점검 홀덤펍', region: '서울', address: '서울시 강남구',
+        date: kstDay(0), start_time: '23:30:00', duration: '6시간', format: 'MTT', guaranteed: true, prize_pool: 1_000_000,
+        prize_percent: null, is_competition: false, grade: null, blinds: null, reg_close_time: null, buy_in: { amount: 50_000 },
+        seats: null, structure: null, description: null, side_events: null, ranking_prizes: null, partners: null, promotions: null,
+        payment_methods: null, rules: null, poster_url: null, poster_color: null, display_order: 1, is_premium: false,
+        premium_until: null, owner_id: 'e2e-rc1-owner', unread_qna_count: 0, approved: true, view_count: 0, rejected_at: null, reject_reason: null,
       };
-      requestAnimationFrame(tick);
+      await page.route(/\/rest\/v1\/schedules\?/, (r) => {
+        const single = /vnd\.pgrst\.object\+json/.test(r.request().headers()['accept'] ?? '');
+        return r.fulfill(json(single ? row : [row]));
+      });
+      // '꾹 눌러 참가 신청' 버튼이 처음 생긴 프레임부터 매 프레임 위치를 적는다(포스터 상세는 lazy 라 언제 뜰지 모른다)
+      await page.addInitScript(() => {
+        const w = window as unknown as { __hold: { t: number; left: number; top: number; boxH: number }[] };
+        w.__hold = [];
+        let t0 = 0;
+        const tick = () => {
+          const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('꾹 눌러 참가 신청'));
+          if (btn) {
+            if (!t0) t0 = performance.now();
+            const box = btn.closest('.rounded-aura') as HTMLElement | null;
+            const r = btn.getBoundingClientRect();
+            w.__hold.push({ t: Math.round(performance.now() - t0), left: r.left, top: r.top - (box?.getBoundingClientRect().top ?? 0), boxH: box?.getBoundingClientRect().height ?? 0 });
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await page.goto(`/?s=${SID}`);
+      await expect(page.getByRole('button', { name: /꾹 눌러 참가 신청/ })).toBeVisible({ timeout: 20_000 });
+      if (qrFails) {
+        // 실패 처리(.catch → setQr(null))가 끝난 뒤부터 잰다 — 라이브러리가 toDataURL 을 실제로 불렀는지로 확인
+        await page.waitForFunction(() => (window as unknown as { __qrFail?: number }).__qrFail! > 0, undefined, { timeout: 20_000 });
+      } else {
+        await expect(page.getByRole('img', { name: '바인 요청 QR' })).toBeVisible();
+      }
+      await page.waitForTimeout(1200);
+      const frames = await page.evaluate(() => (window as unknown as { __hold: { t: number; left: number; top: number; boxH: number }[] }).__hold);
+      expect(frames.length, '버튼 프레임을 하나도 못 잡았다(측정 무효)').toBeGreaterThan(10);
+      const first = frames[0];
+      const moved = frames.filter((f) => Math.abs(f.left - first.left) > 0.5 || Math.abs(f.top - first.top) > 0.5 || Math.abs(f.boxH - first.boxH) > 0.5);
+      expect(moved.length ? `첫 프레임 ${JSON.stringify(first)} → ${JSON.stringify(moved[0])}` : 'stable').toBe('stable');
+      // 실패해도 자리는 남고 작은 안내가 보인다(빈 칸이 아니라 이유를 알려 준다)
+      if (qrFails) {
+        const slot = page.getByTestId('buyin-qr-slot');
+        await expect(slot).toHaveText('QR을 만들지 못했어요');
+        // 72×72 안에 안내가 다 들어간다(잘리지 않는다)
+        const m = await slot.evaluate((e) => ({ w: e.clientWidth, h: e.clientHeight, sw: e.scrollWidth, sh: e.scrollHeight }));
+        expect(m, '안내 칸 크기·잘림').toEqual({ w: 72, h: 72, sw: 72, sh: 72 });
+      }
     });
-    await page.goto(`/?s=${SID}`);
-    await expect(page.getByRole('button', { name: /꾹 눌러 참가 신청/ })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('img', { name: '바인 요청 QR' })).toBeVisible();
-    await page.waitForTimeout(1200);
-    const frames = await page.evaluate(() => (window as unknown as { __hold: { t: number; left: number; top: number; boxH: number }[] }).__hold);
-    expect(frames.length, '버튼 프레임을 하나도 못 잡았다(측정 무효)').toBeGreaterThan(10);
-    const first = frames[0];
-    const moved = frames.filter((f) => Math.abs(f.left - first.left) > 0.5 || Math.abs(f.top - first.top) > 0.5 || Math.abs(f.boxH - first.boxH) > 0.5);
-    expect(moved.length ? `첫 프레임 ${JSON.stringify(first)} → ${JSON.stringify(moved[0])}` : 'stable').toBe('stable');
-  });
+  }
 
   // ── L1-12(관리자 › 회원 관리 '정지 중') ────────────────────────────────────
   test('L1-12 라이트 모드 text-orange-400 상태 글자 대비 ≥ 4.5 (surface-high 카드 · 주황 배지)', async ({ page }) => {
@@ -231,6 +255,52 @@ test.describe('재점검 1회차 home-team 수정', () => {
         return Math.round(worst * 10) / 10;
       });
       expect.soft(cpl, '국외 이전 표 줄당 최소 글자 수').toBeGreaterThanOrEqual(3);
+    });
+  }
+
+  // ── 하-2 · 하-3: 본문(표·하단 고지 밖)의 1336 과 사용설명서의 숫자+단위 ─────────────
+  for (const width of [360, 390]) {
+    test(`하-2·3 약관·청소년보호 본문의 1336 이 한 줄 · 사용설명서 본문의 숫자와 단위가 줄 끝에서 안 갈린다 (${width})`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      for (const doc of ['terms', 'anti-gambling']) {
+        await page.goto(`/legal/${doc}.html`);
+        await page.evaluate(() => document.fonts.ready);
+        const lines = await page.evaluate(() => {
+          const out: string[] = [];
+          const tw = document.createTreeWalker(document.querySelector('.doc')!, NodeFilter.SHOW_TEXT); let n: Node | null;
+          while ((n = tw.nextNode())) {
+            for (const nd of ['1336(24시간·무료)', '1336 (24시간·무료)']) {
+              const i = (n.nodeValue ?? '').indexOf(nd); if (i < 0) continue;
+              const rg = document.createRange(); rg.setStart(n, i); rg.setEnd(n, i + nd.length);
+              const rows = new Set([...rg.getClientRects()].filter((r) => r.width > 0.5).map((r) => Math.round(r.top))).size;
+              out.push(`${nd}=${rows}줄`);
+            }
+          }
+          return out;
+        });
+        expect(lines.length, `${doc} 본문에서 1336 고지를 하나도 못 찾았다(측정 무효)`).toBeGreaterThan(0);
+        expect.soft(lines.filter((l) => !l.endsWith('=1줄')), `${doc} 본문 1336 고지가 줄을 넘는다`).toEqual([]);
+      }
+
+      await page.goto('/guide/manual.html');
+      await page.evaluate(() => document.fonts.ready);
+      const split = await page.evaluate(() => {
+        const out: string[] = [];
+        const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n: Node | null;
+        while ((n = tw.nextNode())) {
+          const t = n.nodeValue ?? '';
+          // 숫자(와 / ~ . 로 이어진 숫자 묶음) + 바로 붙은 첫 단위 글자 — '3/7/14/30일'·'25분'·'1~15레벨'
+          const re = /\d[\d.,~/]*[^\s\d.,~/]/g; let m: RegExpExecArray | null;
+          while ((m = re.exec(t))) {
+            const rg = document.createRange(); rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
+            const rows = new Set([...rg.getClientRects()].filter((r) => r.width > 0.5).map((r) => Math.round(r.top))).size;
+            if (rows > 1) out.push(m[0]);
+          }
+        }
+        return { out, overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      });
+      expect.soft(split.out, '사용설명서 본문에서 줄 끝에 갈린 숫자+단위').toEqual([]);
+      expect.soft(split.overflowX, '사용설명서 가로 넘침').toBeLessThanOrEqual(0);
     });
   }
 });
