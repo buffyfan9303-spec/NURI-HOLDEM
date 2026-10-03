@@ -319,8 +319,18 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
     }
   };
 
+  // 작성 중 닫기 확인(2026-10-04 재점검 2회차 하-4 · 리드 결정): 쓴 것이 있으면 묻는다(취소 = 계속 쓰기). 빈 창은 바로 닫힌다.
+  // 🔴 재검토 H2 — '쓴 것' 은 제목·내용만이 아니다. 사진·핸드(카드·팟·액션)·핸드 카드 요약·투표 문구만 채운 초안도
+  //   확인 없이 닫혀 사라졌다. 그리고 푸터 '취소' 도 X·ESC·배경·뒤로가기·끌기와 **같은 판정**을 지난다.
+  //   게시 성공 뒤의 닫기와 첨부 실패 화면의 '이대로 닫기'(본문은 이미 저장됨)는 onClose 를 직접 부르므로 묻지 않는다.
+  const hasDraft = !!(title.trim() || content.trim() || files.length
+    || hero.length || villain.length || board.length || pot.trim() || Object.values(acts).some((v) => v.trim())
+    || handDraft.headline.trim() || handDraft.delta.trim() || handDraft.meta.trim() || handDraft.cards.length
+    || (pollDraft.enabled && (pollDraft.question.trim() || pollDraft.options.some((o) => o.trim()))));
+  const confirmDiscard = () => !hasDraft || window.confirm('작성 중인 내용이 있어요. 닫을까요?');
+
   return (
-    <Modal open={open} onClose={onClose} title="글쓰기" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="글쓰기" maxWidth="md" variant="sheet" confirmClose={confirmDiscard}>
       <form onSubmit={handleSubmit}>
         {/* 입력부 — 액션바(하단 고정)와 분리해야 sticky 가 스크롤포트 바닥에 붙는다 */}
         <div className="p-4 space-y-4">
@@ -556,7 +566,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             상시 노출 요소의 blur 는 스크롤 중 페인트 폭탄이다(모션 헌법 §20.4-3·5).
             버튼·제목 입력칸은 min-h-[44px](M-09, 2026-10-01) — 전역 .btn/.input 기본(2.4rem=40.8px)은 그대로 둔다. */}
         <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3">
-          <button type="button" onClick={pendingPostId ? dismissPending : onClose} className="btn-ghost flex-1 min-h-[44px]">
+          <button type="button" onClick={pendingPostId ? dismissPending : () => { if (confirmDiscard()) onClose(); }} className="btn-ghost flex-1 min-h-[44px]">
             {pendingPostId ? '이대로 닫기' : '취소'}
           </button>
           <button type="submit" disabled={saving} className="btn-primary flex-1 min-h-[44px] disabled:opacity-60">
