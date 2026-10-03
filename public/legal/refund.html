@@ -24,6 +24,8 @@ h1{font-size:26px;letter-spacing:-.01em;margin-top:10px}
 .badge{display:inline-block;margin-top:10px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--mute)}
 .badge.req{color:var(--danger);border-color:var(--danger)}
 .doc{margin-top:22px}
+.doc,footer{word-break:keep-all;overflow-wrap:break-word}
+.nw{white-space:nowrap}
 .doc section{margin:0 0 26px}
 .doc h3{font-size:16px;margin:0 0 8px;color:var(--ink)}
 .doc p{color:var(--sub);font-size:15px;margin:0 0 8px}
@@ -44,6 +46,7 @@ h1{font-size:26px;letter-spacing:-.01em;margin-top:10px}
 .doc .scrollx{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:10px 0}
 .doc div.box.scrollx{padding:0;background:transparent}
 .doc table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+.doc table:has(tr > :nth-child(5)){min-width:640px}
 .doc th,.doc td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
 .doc th{color:var(--ink);font-weight:600;background:var(--panel);white-space:nowrap}
 .doc td{color:var(--sub)}
@@ -80,10 +83,10 @@ a{color:var(--accent)}
     </nav>
 
     <footer>
-      <b>상호</b> 엔에이치홀딩스 · <b>대표자</b> 김윤혜 · <b>사업자등록번호</b> 525-20-02937<br>
+      <b>상호</b> 엔에이치홀딩스 · <b>대표자</b> 김윤혜 · <b>사업자등록번호</b> <span class="nw">525-20-02937</span><br>
       <b>사업장 소재지</b> 경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호(다산동, 파인듀파크빌딩)<br>
-      <b>전화번호</b> 070-8098-1727 · <b>고객센터</b> <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a><br>
-      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)<br>
+      <b>전화번호</b> <span class="nw">070-8098-1727</span> · <b>고객센터</b> <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a><br>
+      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 <span class="nw">1336(24시간·무료)</span><br>
       © 2026 엔에이치홀딩스. · <a href="/">nuriholdem.com 으로 이동</a>
     </footer>
   </div>

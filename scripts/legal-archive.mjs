@@ -107,10 +107,10 @@ export async function buildArchive({ root, CSS, esc, reclass, biz, SITE }) {
 
   const foot = [
     '    <footer>',
-    '      <b>상호</b> ' + esc(biz.company) + ' · <b>대표자</b> ' + esc(biz.ceo) + ' · <b>사업자등록번호</b> ' + esc(biz.bizNo) + '<br>',
+    '      <b>상호</b> ' + esc(biz.company) + ' · <b>대표자</b> ' + esc(biz.ceo) + ' · <b>사업자등록번호</b> <span class="nw">' + esc(biz.bizNo) + '</span><br>',
     '      <b>사업장 소재지</b> ' + esc(biz.addr) + '<br>',
-    '      <b>전화번호</b> ' + esc(biz.phone) + ' · <b>고객센터</b> <a href="mailto:' + esc(biz.email) + '">' + esc(biz.email) + '</a><br>',
-    '      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)<br>',
+    '      <b>전화번호</b> <span class="nw">' + esc(biz.phone) + '</span> · <b>고객센터</b> <a href="mailto:' + esc(biz.email) + '">' + esc(biz.email) + '</a><br>',
+    '      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 <span class="nw">1336(24시간·무료)</span><br>',
     '      © 2026 ' + esc(biz.company) + '. · <a href="/legal/terms.html">이용약관</a> · <a href="/legal/privacy.html">개인정보처리방침</a> · <a href="/">nuriholdem.com 으로 이동</a>',
     '    </footer>',
   ].join('\n');

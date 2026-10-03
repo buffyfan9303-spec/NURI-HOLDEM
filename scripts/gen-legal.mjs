@@ -157,6 +157,10 @@ const CSS = [
   ".badge{display:inline-block;margin-top:10px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--mute)}",
   ".badge.req{color:var(--danger);border-color:var(--danger)}",
   ".doc{margin-top:22px}",
+  // 한글 단어 안에서 줄을 바꾸지 않는다(띄어쓰기에서만) — 기본값은 음절마다 끊어 '30/일'·'24/시간'·표 칸 '백업사/본을만' 처럼 숫자와 단위·단어가 갈렸다
+  //   (재점검 1회차 L1-9·L1-10). 띄어쓰기 없는 긴 묶음은 overflow-wrap 이 넘칠 때만 끊는다. 문구는 그대로다.
+  ".doc,footer{word-break:keep-all;overflow-wrap:break-word}",
+  ".nw{white-space:nowrap}",
   ".doc section{margin:0 0 26px}",
   ".doc h3{font-size:16px;margin:0 0 8px;color:var(--ink)}",
   ".doc p{color:var(--sub);font-size:15px;margin:0 0 8px}",
@@ -178,6 +182,9 @@ const CSS = [
   ".doc .scrollx{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:10px 0}",
   ".doc div.box.scrollx{padding:0;background:transparent}",
   ".doc table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}",
+  // 5열 이상 표(개인정보 국외 이전 6열)는 520 에서 '목적' 칸이 62px 로 줄당 2~3자였다(재점검 1회차 L1-9). 640 = 360 실측 줄당 최소 3자 · 표 높이 1785→1194px.
+  //   :has() 미지원 브라우저는 종전 520 그대로 — 표는 이미 .scrollx 안에서 가로 스크롤된다.
+  ".doc table:has(tr > :nth-child(5)){min-width:640px}",
   ".doc th,.doc td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}",
   ".doc th{color:var(--ink);font-weight:600;background:var(--panel);white-space:nowrap}",
   ".doc td{color:var(--sub)}",
@@ -236,10 +243,10 @@ function page(doc, bodyHtml, biz) {
     '    </nav>',
     '',
     '    <footer>',
-    '      <b>상호</b> ' + esc(biz.company) + ' · <b>대표자</b> ' + esc(biz.ceo) + ' · <b>사업자등록번호</b> ' + esc(biz.bizNo) + '<br>',
+    '      <b>상호</b> ' + esc(biz.company) + ' · <b>대표자</b> ' + esc(biz.ceo) + ' · <b>사업자등록번호</b> <span class="nw">' + esc(biz.bizNo) + '</span><br>',
     '      <b>사업장 소재지</b> ' + esc(biz.addr) + '<br>',
-    '      <b>전화번호</b> ' + esc(biz.phone) + ' · <b>고객센터</b> <a href="mailto:' + esc(biz.email) + '">' + esc(biz.email) + '</a><br>',
-    '      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)<br>',
+    '      <b>전화번호</b> <span class="nw">' + esc(biz.phone) + '</span> · <b>고객센터</b> <a href="mailto:' + esc(biz.email) + '">' + esc(biz.email) + '</a><br>',
+    '      만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 <span class="nw">1336(24시간·무료)</span><br>',
     '      © 2026 ' + esc(biz.company) + '. · <a href="/">nuriholdem.com 으로 이동</a>',
     '    </footer>',
     '  </div>',
