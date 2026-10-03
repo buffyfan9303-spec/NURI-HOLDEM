@@ -45,13 +45,20 @@ export const CLOCK_LOGO_PLATE_DARK = '#000000';
  *  기본 테마(nuri-signature) 머리줄은 0.0165 라 빨간 로고가 2.72:1 이었다. 1920×1080 · 프리셋 25종의 로고 칸 p90 최댓값 0.0177(whale-light) → 0.018. */
 export const CLOCK_LOGO_BG_LUM = 0.018;
 export type ClockLogoPlate = 'none' | 'dark' | 'light';
-/** 로고 불투명 픽셀 휘도들 → 받침. 기준은 **하위 10%** 픽셀(평균은 흰 글자가 끌어올려 빨강을 놓친다).
- *  그 픽셀이 실제 바탕과 3:1 이상이면 받침 없음, 아니면 검은 판(3:1 이 나오는 밝기 ≥ 0.1) 또는 밝은 판. */
-export function clockLogoPlateKind(lums: readonly number[]): ClockLogoPlate {
-  if (!lums.length) return 'none';
-  const l = [...lums].sort((a, b) => a - b)[Math.floor(lums.length * 0.1)];
+/** 밝은 받침을 금지하는 밝은 픽셀(휘도 ≥ 0.6) 비율 — 흰 글자+검은 테두리 로고는 밝은 판 위에서 흰 면이 1.21:1 로 지워졌다(검토 중-2). */
+export const CLOCK_LOGO_BRIGHT_MAX = 0.15;
+/** 로고 픽셀 휘도 → 받침.
+ *  edge = **가장자리** 픽셀(불투명인데 이웃이 투명·그림 밖) — 받침이 실제로 닿는 곳. 안쪽 글자·테두리는 바탕과 맞닿지 않아 판정에서 뺀다
+ *         (금색 원형 로고가 안쪽 갈색 글자 때문에 쓸모없는 검은 판을 받았다 — 검토 중-1).
+ *  all  = 불투명 픽셀 전부 — 밝은 픽셀 비율만 본다.
+ *  가장자리 **하위 10%** 가 실제 바탕과 3:1 이상이면 받침 없음, 아니면 검은 판(밝기 ≥ 0.1 이면 3:1) 또는 밝은 판.
+ *  밝은 판은 밝은 픽셀이 15% 를 넘으면 쓰지 않는다(그 면을 지운다) — 그때는 받침 없음. */
+export function clockLogoPlateKind(edge: readonly number[], all: readonly number[] = edge): ClockLogoPlate {
+  if (!edge.length) return 'none';
+  const l = [...edge].sort((a, b) => a - b)[Math.floor(edge.length * 0.1)];
   if ((l + 0.05) / (CLOCK_LOGO_BG_LUM + 0.05) >= 3) return 'none';
-  return (l + 0.05) / 0.05 >= 3 ? 'dark' : 'light';
+  if ((l + 0.05) / 0.05 >= 3) return 'dark';
+  return all.filter((v) => v >= 0.6).length > all.length * CLOCK_LOGO_BRIGHT_MAX ? 'none' : 'light';
 }
 /** cover 의 어둡게 단계 → 상한 위에 더하는 비율(남은 밝기의 몇 %를 더 누르나). 0 은 종전과 같다. */
 export const CLOCK_BG_SHADE_EXTRA = [0, 0.3, 0.55] as const;
@@ -85,15 +92,15 @@ export function clockBgDisplayOf(theme: ClockTheme | null | undefined): DispFull
 }
 
 /**
- * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>[-m]-d37-t1a2b3c[-k].webp`(d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고 → 밝은 받침, m = 중간 밝기 로고 → 검은 받침).
+ * 업로드 때 잰 값은 **파일 이름**에 싣는다 — `<ts>[-a36][-m]-d37-t1a2b3c[-k].webp`(a = 폭/높이 ×100, d = 밝기 상한까지 누를 비율 %, t = 대표색, k = 어두운 로고 → 밝은 받침, m = 중간 밝기 로고 → 검은 받침).
  * 왜 테마 키가 아니라 이름인가: 이름은 URL 과 한 몸이라 옛 번들이 테마를 다시 저장해도(모르는 키는 버린다) 떨어지지 않는다.
  * 이름표가 없는 옛 파일은 업로드 때 이미 밝기를 구워 둔 것이라 d = 0 이 정답이다(종전 렌더와 같다).
  */
-export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; plate: ClockLogoPlate } {
-  // -m(검은 판)은 -d **앞**에 붙인다 — 옛 번들의 정규식(-d…$)이 그대로 맞아 d·t 를 계속 읽는다(받침만 모른다).
-  const m = url ? /(-m)?-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
-  if (!m) return { dim: 0, tint: null, plate: 'none' };
-  return { dim: Math.min(95, Number(m[2])) / 100, tint: m[3] ? `#${m[3]}` : null, plate: m[4] ? 'light' : m[1] ? 'dark' : 'none' };
+export function clockBgMetaOf(url: string | null | undefined): { dim: number; tint: string | null; plate: ClockLogoPlate; ar: number | null } {
+  // -a(폭/높이 ×100)·-m(검은 판)은 -d **앞**에 붙인다 — 옛 번들의 정규식(-d…$)이 그대로 맞아 d·t 를 계속 읽는다.
+  const m = url ? /(?:-a(\d{1,4}))?(-m)?-d(\d{1,2})(?:-t([0-9a-f]{6}))?(-k)?\.(?:webp|jpe?g|png)$/.exec(url) : null;
+  if (!m) return { dim: 0, tint: null, plate: 'none', ar: null };
+  return { dim: Math.min(95, Number(m[3])) / 100, tint: m[4] ? `#${m[4]}` : null, plate: m[5] ? 'light' : m[2] ? 'dark' : 'none', ar: m[1] ? Number(m[1]) / 100 : null };
 }
 
 /** 이 테마의 이미지에 자동 받침이 붙는가(받침 끄기와 무관한 판정) — 설정 화면 안내용. */
@@ -496,6 +503,8 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
       '--clk-logo-head': `${CLOCK_LOGO_SIZE.head[disp.size]}cqmin`,
       '--clk-logo-tall': `${CLOCK_LOGO_SIZE.tall[disp.size]}cqmin`,
       ...(disp.plate && meta.plate !== 'none' ? { '--clk-logo-plate': meta.plate === 'light' ? CLOCK_LOGO_PLATE : CLOCK_LOGO_PLATE_DARK } : null),
+      // 업로드 때 잰 비율 — 보드가 그림을 받기 전에 로고 자리(머리줄/지표 열)를 정한다(검토 하-2: 첫 60ms 자리 이동·지표 102px 밀림).
+      ...(meta.ar ? { '--clk-logo-ar': String(meta.ar) } : null),
     };
   }
   return {

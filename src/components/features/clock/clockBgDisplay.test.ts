@@ -91,10 +91,12 @@ describe('N-2 렌더 변수', () => {
     expect(ratio(lum([0, 0, 0]), lum([0xd9, 0xdd, 0xe5]))).toBeGreaterThanOrEqual(3);
   });
   it('이름표 해석 — 없는 이름표는 d=0(옛 파일은 이미 구웠다) · 범위 밖은 95 로 막는다', () => {
-    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null, plate: 'none' });
-    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef', plate: 'none' });
-    expect(T.clockBgMetaOf(url('1-d0-t111111-k.webp'))).toEqual({ dim: 0, tint: '#111111', plate: 'light' });
-    expect(T.clockBgMetaOf(url('1-m-d0-t350e14.webp'))).toEqual({ dim: 0, tint: '#350e14', plate: 'dark' });
+    expect(T.clockBgMetaOf(url('1700000000000.webp'))).toEqual({ dim: 0, tint: null, plate: 'none', ar: null });
+    expect(T.clockBgMetaOf(url('1-d37-tabcdef.webp'))).toEqual({ dim: 0.37, tint: '#abcdef', plate: 'none', ar: null });
+    expect(T.clockBgMetaOf(url('1-d0-t111111-k.webp'))).toEqual({ dim: 0, tint: '#111111', plate: 'light', ar: null });
+    expect(T.clockBgMetaOf(url('1-m-d0-t350e14.webp'))).toEqual({ dim: 0, tint: '#350e14', plate: 'dark', ar: null });
+    expect(T.clockBgMetaOf(url('1-a36-m-d0-t350e14.webp'))).toEqual({ dim: 0, tint: '#350e14', plate: 'dark', ar: 0.36 });
+    expect(T.clockThemeVars(T.makeClockTheme('carbon', undefined, url('1-a36-d0-t000000.webp'), { fit: 'center' }))['--clk-logo-ar']).toBe('0.36');
     expect(T.clockBgMetaOf(url('1-d99.webp')).dim).toBe(0.95);
   });
   it('하-A 옛 번들 호환 — -m 이 붙어도 옛 정규식은 d·t 를 그대로 읽는다', () => {
@@ -139,6 +141,18 @@ describe('중-3·하-A 로고 받침 판정(업로드 이름표 -k·-m) — 실�
     expect(T.clockLogoPlateKind(GOLD)).toBe('none');
     expect(T.clockLogoPlateKind(WHITE)).toBe('none');
     expect(T.clockLogoPlateKind([])).toBe('none');
+  });
+  it('검토 중-1 — 판정은 가장자리만: 안쪽 갈색 글자가 많아도 가장자리가 금색이면 받침 없음', () => {
+    const goldEdge = px([[0xd4, 0xaf, 0x37], 100]);
+    const goldAll = px([[0xd4, 0xaf, 0x37], 60], [[0x3b, 0x1f, 0x00], 40]);
+    expect(T.clockLogoPlateKind(goldEdge, goldAll)).toBe('none');
+    expect(T.clockLogoPlateKind(goldAll)).toBe('light');   // 전체로 판정하면 잘못 받침이 붙는다
+  });
+  it('검토 중-2 — 흰 글자+검은 테두리: 가장자리는 검정이지만 밝은 면이 15% 를 넘어 밝은 받침 금지(받침 없음)', () => {
+    const outEdge = px([[0, 0, 0], 100]);
+    const outAll = px([[0, 0, 0], 50], [[255, 255, 255], 50]);
+    expect(T.clockLogoPlateKind(outEdge, outAll)).toBe('none');
+    expect(T.clockLogoPlateKind(BLACK, BLACK)).toBe('light');   // 검은 글자만인 로고는 그대로 밝은 받침
   });
   it('5종 모두 고른 받침(또는 실제 바탕) 위에서 3:1 이상 · 빨강은 받침 없이는 3:1 미만이었다', () => {
     const bgOf = (k: string) => (k === 'dark' ? 0 : k === 'light' ? lum(LIGHT) : T.CLOCK_LOGO_BG_LUM);

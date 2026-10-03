@@ -116,10 +116,12 @@ export interface ClockStageProps {
 export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm', ads = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
   const pl = decor.plated ? PLATE : undefined;
   const logo = decor.logo;
-  // 재점검 2회차 하-C — 세로로 긴 로고는 머리줄(높이 고정)에서 23×63px 로 읽히지 않았다. 원본 비율을 재서
-  // 폭/높이 < LOGO_TALL_AR 이면 가로 보드에서도 타이머 위 칸(LogoTall)에 그린다(1920×1080 실측: 54×150px).
+  // 재점검 2회차 하-C — 세로로 긴 로고는 머리줄(높이 고정)에서 23×63px 로 읽히지 않았다. 폭/높이 < LOGO_TALL_AR 이면
+  // 가로 보드에서 지표 열 위에 그린다. 비율은 업로드 이름표(-a)로 **첫 렌더부터** 안다 — 그림을 받은 뒤 옮기면
+  // 첫 60ms 머리줄에 섰다가 옮겨 가며 지표가 102px 밀렸다(검토 하-2). 이름표 없는 옛 파일만 그림을 받은 뒤 잰다.
   const [logoAr, setLogoAr] = useState<{ src: string; ar: number } | null>(null);
-  const tallLogo = !!logo && logoAr?.src === logo.src && logoAr.ar < LOGO_TALL_AR;
+  const ar = logo?.ar ?? (logoAr?.src === logo?.src ? logoAr?.ar : undefined);
+  const tallLogo = !!logo && ar != null && ar < LOGO_TALL_AR;
   const onLogoLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const im = e.currentTarget;
     if (logo && im.naturalHeight > 0) setLogoAr({ src: logo.src, ar: im.naturalWidth / im.naturalHeight });
@@ -274,8 +276,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               {/* 하-C — 세로로 긴 로고는 머리줄 대신 여기(타이머 옆, 지표 위). 높이 = 머리줄 로고 칸 × 3(15·18·21cqmin) — 지표는 줄 수가 정해져 있어
                   가장 큰 단계에서도 열(80cqmin) 안에 든다. 타이머가 있는 가운데 열은 PAUSED 글자가 같은 칸을 써서 일시정지 때 24px 로 줄었다(실측). */}
               {logo && tallLogo && (
-                <img data-testid="clk-logo" src={logo.src} alt="" aria-hidden className="max-w-full shrink-0 self-center object-contain"
-                  style={{ height: `calc(${logo.head} * 3)`, width: 'auto', ...logoPlate(logo.plate) }} />
+                <img data-testid="clk-logo" src={logo.src} alt="" aria-hidden className="max-w-full shrink-0 object-contain"
+                  style={{ height: `calc(${logo.head} * 3)`, width: 'auto', alignSelf: 'flex-start', ...logoPlate(logo.plate) }} />
               )}
               {rails}
             </aside>
@@ -352,9 +354,10 @@ function LogoTall({ logo, onLoad }: { logo: NonNullable<ClockStageDecor['logo']>
   );
 }
 
-/** 로고 뒤 받침(어두운 로고 · 리뷰 중-3) — 로고 상자에만 은은한 밝은 둥근 판. 없으면 스타일 없음. */
+/** 로고 뒤 받침(리뷰 중-3 · 재점검 2회차 하-A) — 로고 상자 뒤 판 + 바깥 링(box-shadow). 없으면 스타일 없음.
+ *  여백(padding)을 쓰면 받침이 칸 높이를 먹어 로고가 36% 작아졌다(빨강 '작게' 261.7×52.3 → 167.5×33.5, 검토 중-3) → 링은 상자 **밖**에 그려 크기 손실 0. */
 function logoPlate(plate: string | null) {
-  return plate ? { background: plate, padding: '0.9cqmin 1.6cqmin', borderRadius: '1.6cqmin', boxSizing: 'border-box' as const } : undefined;
+  return plate ? { background: plate, boxShadow: `0 0 0 0.5cqmin ${plate}`, borderRadius: '1.6cqmin' } : undefined;
 }
 
 /** 짧은 상금 띠 — 총상금 + 상위 3등 한 줄. 덜 긴 세로 화면(폭/높이 0.6~0.8) 전용. 테스트 앵커 clk-prizes-short. */
