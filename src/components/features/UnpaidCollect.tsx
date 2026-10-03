@@ -87,6 +87,11 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
       if (st !== null) onPwState?.(st);
       if (ledgerHintOf(e) === LEDGER_NOTHING_UNPAID) { toast.show(text, 'info'); setTarget(null); onDone(); return; }
       setErr(text);
+      // 틀린 비밀번호 뒤 바로 다시 칠 수 있게 — 비밀번호 칸으로 돌아가 값 전체 선택(design-reviewer 재검토 비차단).
+      window.setTimeout(() => {
+        const el = formRef.current?.querySelector<HTMLInputElement>('[data-testid="unpaid-collect-pw"]');
+        if (el) { el.focus({ preventScroll: true }); el.select(); }
+      }, 0);
     } finally { setBusy(false); }
   };
   return (

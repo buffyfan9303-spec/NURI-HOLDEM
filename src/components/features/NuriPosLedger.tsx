@@ -2348,7 +2348,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
-        {(stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
+        {/* 직원 지난 마감 장부(staffPartial)는 미수 행만 와서 할인·가게지원 건수가 틀린다 — 줄째 그리지 않는다(verifier 재검증). */}
+        {!staffPartial && (stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
           <p className="text-2xs text-center mt-0.5">
             {/* '−N만'은 **덜 받은 현금**이다 → cashTotal. 깎아 준 총액은 마감 모달에서 따로 본다. */}
             {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · −{wonToMan(stats.discount.total)}만 · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
@@ -2880,7 +2881,8 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
           금액은 한 덩어리라 쪼개지면 읽는 사람이 다른 수로 오해한다 — 줄바꿈을 막는다. */}
       <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
       {/* 보조 수 — 같은 칸에서 '횟수 vs 엔트리' 처럼 **다른 척도**를 나란히 세울 때만 쓴다 */}
-      {sub && <p className="text-2xs tabular-nums leading-none text-ink-muted mt-0.5">{sub}</p>}
+      {/* 한 줄 고정 — 직원 360 3칸(칸 ~81px)에서 '엔트리 N · 생존 M'이 두 줄로 꺾여 옆 칸과 높이가 갈렸다. 넘치면 말줄임 + title. */}
+      {sub && <p className="truncate text-2xs tabular-nums leading-none text-ink-muted mt-0.5" title={sub}>{sub}</p>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 -- 20261003h — 마감 뒤 미수 회수(Q2) · 직원 매출 합계 서버 차단(Q3)
--- ⏳ 적용 전 — 리드 적용 예정(화면 PR 병합 직전). 라이브 미적용. (store-team 2026-10-03 v3, critical-reviewer F1·F2 · verifier 반영)
--- 리허설: Documents\누리홀덤_영상분석_0930\settle-auth-1003 — node rehearse.mjs R0_helpers_baseline.sql <이 파일> R1_tests.sql → REHEARSAL_OK(55항목), 음성 변형 8종 전부 실패 확인.
+-- ⏳ 적용 전 — 리드 적용 예정(화면 PR 병합 직전). 라이브 미적용. (store-team 2026-10-03 v4, critical-reviewer F1·F2·v3 재검토 · verifier 반영)
+-- 리허설: Documents\누리홀덤_영상분석_0930\settle-auth-1003 — node rehearse.mjs R0_helpers_baseline.sql <이 파일> R1_tests.sql → REHEARSAL_OK(66항목), 음성 변형 11종 전부 실패 확인.
 -- 요구: 오너 2026-10-03
 --   Q2 "게임이 완전히 마감된 뒤의 손님 미수는 직원도 받을 수 있지만 비밀번호를 입력해야 한다."
 --   Q3 "직원에게 매출 합계는 숨겨." (서버까지)
@@ -12,6 +12,10 @@
 --   C. ledger_dow_avg_buyins(p_venue_id) · venue_regulars(p_venue_id) — 신규 읽기 RPC(금액 없음)
 --   개정 2026-10-03 오후: critical-reviewer F1(정책 to authenticated · SELECT 정책 1개 단언) · F2 리드 결정(직원 횟수 응답 축소) · 애드온 오류 문구
 --   v3 2026-10-03 저녁: 직원 범위에 '마감 18시간 이내 게임' 추가(자정 넘겨 마감한 게임의 순위 입력 등) · ledger_buyin_counts 삭제(화면 호출부 0 — verifier)
+--   v4 2026-10-03 밤(critical v3 재검토 '막음' — 직원이 마감 세션 closed_at 을 now()/미래로 바꿔 18시간 창으로 과거 장부 전부를 읽었다):
+--     (b) 트리거 _ledger_session_closed_at_guard — 마감 상태가 그대로인데 closed_at 을 바꾸는 것은 can_manage_pos 만
+--     (c) 마감 전환(closed false→true) 때 closed_at 은 서버가 now() 로 강제(브라우저 시계값 무시 — ledger.ts closeLedgerSession 이 보내도 덮는다)
+--     (a) lb_select 의 18시간 창에 세션 날짜 하한(KST 어제 이후)도 AND
 --
 -- 비밀번호 규칙은 기존 _ledger_require_cancel_auth 를 그대로 부른다(20260925e/f D4 — 취소·감액·플레이어 삭제와 한 규칙):
 --   관리자 통과 · 비밀번호 미설정 매장은 can_manage_pos(업주·승인 공동운영자)만 비밀번호 없이 · 설정 매장은 업주 포함 누구나 비밀번호.
@@ -153,8 +157,42 @@ create policy lb_select on public.ledger_buyins for select to authenticated usin
              or exists (select 1 from public.ledger_sessions s
                          where s.venue_id = ledger_buyins.venue_id and s.session_date = ledger_buyins.session_date
                            and s.game_seq = ledger_buyins.game_seq
-                           and (not s.closed or s.closed_at > now() - interval '18 hours')) ) )
+                           and (not s.closed or (s.closed_at > now() - interval '18 hours'
+                                                 and s.session_date >= (now() at time zone 'Asia/Seoul')::date - 1))) ) )
 );
+
+-- B-2(v4). 18시간 창의 근거(closed_at)를 직원이 바꾸지 못하게 — 기존 _guard_ledger_session_update 는 마감 세션 비교에서
+--   closed_at 을 빼므로(마감 메모·스냅샷과 함께) 장부 권한 직원도 ls_update 로 바꿀 수 있었다. 기존 함수는 고치지 않고 트리거를 더한다.
+--   · 마감 전환(false→true): closed_at := now() — 누가 닫든 서버 시각(클라이언트 값 무시). 해제(true→false)는 기존 동작 그대로.
+--   · 마감 상태 그대로 closed_at 변경: 클라이언트 역할(authenticated·anon)이고 can_manage_pos 가 아니면 42501.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public._ledger_session_closed_at_guard()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path = public, pg_temp
+as $function$
+begin
+  if coalesce(new.closed, false) and not coalesce(old.closed, false) then
+    new.closed_at := now();
+    return new;
+  end if;
+  if new.closed_at is distinct from old.closed_at and new.closed is not distinct from old.closed
+     and not coalesce(public.can_manage_pos(old.venue_id), false)
+     and ( coalesce(current_setting('role', true), '') in ('authenticated', 'anon')
+           or coalesce(auth.role(), '') in ('authenticated', 'anon') ) then
+    raise exception '마감 시각은 업주만 바꿀 수 있습니다' using errcode = '42501';
+  end if;
+  return new;
+end $function$;
+revoke all on function public._ledger_session_closed_at_guard() from public, anon, authenticated;
+grant execute on function public._ledger_session_closed_at_guard() to service_role;
+drop trigger if exists trg_ledger_session_closed_at_guard on public.ledger_sessions;
+create trigger trg_ledger_session_closed_at_guard
+  before update on public.ledger_sessions
+  for each row
+  when (old.closed is distinct from new.closed or old.closed_at is distinct from new.closed_at)
+  execute function public._ledger_session_closed_at_guard();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- C. 금액 없는 집계 — B 때문에 직원 화면에서 사라질 기능을 보존한다.
@@ -232,6 +270,22 @@ begin
    where polrelid = 'public.ledger_buyins'::regclass and polname = 'lb_select';
   if to_regprocedure('public.ledger_buyin_counts(uuid,date,date)') is not null then
     raise exception '20261003h: ledger_buyin_counts 가 남아 있다(v3 에서 뺐다)';
+  end if;
+  -- v4 — closed_at 가드 트리거·함수
+  if not exists (select 1 from pg_trigger where tgrelid = 'public.ledger_sessions'::regclass
+                  and tgname = 'trg_ledger_session_closed_at_guard' and not tgisinternal and tgenabled <> 'D') then
+    raise exception '20261003h: closed_at 가드 트리거가 없다(꺼져 있다)';
+  end if;
+  select p.oid, p.proname, p.prosecdef, p.proconfig into f from pg_proc p
+   where p.oid = 'public._ledger_session_closed_at_guard()'::regprocedure;
+  if not f.prosecdef or not (f.proconfig @> array['search_path=public, pg_temp']) then
+    raise exception '20261003h: closed_at 가드 함수가 DEFINER·search_path 고정이 아니다';
+  end if;
+  if has_function_privilege('anon', f.oid, 'execute') or has_function_privilege('authenticated', f.oid, 'execute') then
+    raise exception '20261003h: closed_at 가드(내부 함수)를 anon·authenticated 가 실행할 수 있다';
+  end if;
+  if q !~ '::date - 1\M' then
+    raise exception '20261003h: lb_select 18시간 창에 세션 날짜 하한(KST 어제)이 없다: %', q;
   end if;
   if q is null or position('18:00:00' in q) = 0 and position('18 hours' in q) = 0 then
     raise exception '20261003h: lb_select 에 마감 18시간 창이 없다: %', q;

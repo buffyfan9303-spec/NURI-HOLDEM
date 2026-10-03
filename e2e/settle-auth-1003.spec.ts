@@ -7,7 +7,7 @@
 //   음성 대조: 수정 전 빌드(origin/main e5cd044c)에서 Q3·Q2·①~④ FAIL, 수정 빌드에서 PASS(보고서 참조).
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { bootOwner, openMyStore, applyClockCounts, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 
 test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
@@ -187,6 +187,9 @@ test('Q2 1440 직원 — 마감 장부 미수 받기: 비번 없음/틀림/맞�
   await confirm.click();
   await expect(dlg.getByRole('alert'), '틀린 비밀번호 문구').toContainText('비밀번호가 올바르지 않습니다');
   await expect(dlg, '틀렸는데 창이 닫혔다').toBeVisible();
+  // 틀린 뒤 포커스는 비밀번호 칸으로, 값 전체 선택(바로 다시 친다)
+  await expect(dlg.getByTestId('unpaid-collect-pw'), '틀린 뒤 비밀번호 칸으로 돌아가지 않았다').toBeFocused({ timeout: 3_000 });
+  expect(await dlg.getByTestId('unpaid-collect-pw').evaluate((e) => { const i = e as HTMLInputElement; return (i.selectionEnd ?? 0) - (i.selectionStart ?? 0); }), '값이 선택되지 않았다').toBe(4);
   const before = probe.buyinGets;
   await dlg.getByTestId('unpaid-collect-pw').fill(PW);
   await dlg.getByTestId('unpaid-collect-pw').press('Enter');   // Enter 로 제출(비차단 2)
@@ -226,8 +229,9 @@ async function openLedgerAt(page: Page, date: string) {
 // 서버(20261003h)가 직원에게 주는 모양 그대로 — 마감 18시간 지난 장부는 미수 행만.
 const oldClosed = (staff: boolean): World => {
   const date = dayAgo(2);
-  const all = buys(date, 1, 4, 20_000);
-  return { sessions: [sess(date, { clock_snapshot: { entries: 4 } })], buyins: staff ? all.filter((b) => b.is_unpaid) : all };
+  // 미수 행에 할인 1건 — 직원에게 오는 부분 행만으로 '할인 1건' 줄이 서는지(서면 거짓 집계) 본다.
+  const all = buys(date, 1, 4, 20_000).map((b) => (b.is_unpaid ? { ...b, discount_index: 1 } : b));
+  return { sessions: [sess(date, { clock_snapshot: { entries: 4 }, discounts: [{ label: '얼리', amount: 10_000 }] })], buyins: staff ? all.filter((b) => b.is_unpaid) : all };
 };
 for (const staff of [true, false]) {
   test(`B1 1440 ${staff ? '직원' : '업주(양성)'} — 지난 마감 장부: ${staff ? '바인 수·티켓·클락 대조 없음(부분 행) · 미수만' : '바인 수·클락 대조 그대로'}`, async ({ page }) => {
@@ -251,6 +255,7 @@ for (const staff of [true, false]) {
     expect(txt.includes('완납 매출'), '정산 바 완납 매출').toBe(!staff);
     expect(txt, '미수는 직원에게도 남는다').toContain('미수금');
     if (staff) await expect(led.getByTestId('ledger-staff-partial')).toBeVisible();
+    await expect(led.getByText(/할인 \d+건/), '할인·가게지원 줄(부분 행 집계)').toHaveCount(staff ? 0 : 1);
   });
 }
 test('B1 1440 직원 양성 — 자정 넘겨 마감한 지 15시간 된 장부는 바인 수가 그대로 보인다(18시간 창)', async ({ page }) => {
@@ -330,6 +335,74 @@ test('B4 1440 직원 — 정산 탭: 마감 전 게임의 미수에는 미수 �
   await expect(pane.getByTestId('settle-staff')).toBeVisible({ timeout: 15_000 });
   await expect(pane.getByTestId('unpaid-collect-btn'), '마감 게임 미수 1건만 받기 버튼').toHaveCount(1);
   await expect(pane.getByText('아직 마감 전 게임의 미수는 장부에서')).toBeVisible();
+});
+
+// ── 마지막 수정(verifier 재검증 6ee4664d) — 클락: 마감 장부는 서버 저장 몫으로 표시·하한, 열린 장부는 로컬 ──────────
+const clockRow = (date: string, ledgerEntries: number): R => ({
+  venue_id: MOCK_VENUE, game_seq: 1, title: '메인',
+  config: { title: '메인', startStack: 50_000, rebuyStack: 50_000, addonStack: 0, isAddon: false, earlyBonus: 0, doubleEarlyBonus: 0, regCloseLevel: 3, maxLevel: 10,
+    earlyDoubleLevel: 0, earlySingleLevel: 0, earlyDoubleMin: 0, earlySingleMin: 0, mysteryBounty: 0, prizes: [],
+    levels: [{ kind: 'level', sb: 100, bb: 200, ante: 200, minutes: 20 }, { kind: 'level', sb: 200, bb: 400, ante: 400, minutes: 20 }] },
+  current_index: 1, running: false, ends_at: null, remaining_ms: 10 * 60_000, adj_entries: 0, adj_rebuys: 0, adj_earlies: 0, adj_addons: 0, eliminations: 0,
+  session_date: date,
+  live_stats: { buyInAmount: 30_000, ledger: { entries: ledgerEntries, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: ledgerEntries, earlyUnits: 0, addons: 0 } },
+});
+async function openClockPane(page: Page) {
+  const ok = await page.evaluate((sel) => {
+    const b = [...document.querySelectorAll<HTMLElement>(`${sel} button, ${sel} [role=tab]`)].find((x) => getComputedStyle(x).display !== 'none' && (x.textContent ?? '').trim() === '클락');
+    b?.click(); return !!b;
+  }, RAIL);
+  expect(ok, '레일에 «클락» 칸이 없다').toBe(true);
+}
+const entriesOf = (page: Page) => page.locator('[data-pane="clock"] span', { hasText: /^Entries/ }).first().locator('b');
+test('K 1440 직원 — 18시간 지난 마감 장부의 클락: 엔트리 = 서버 저장 몫(4) · 보정 하한도 저장 몫 기준(−4)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const date = dayAgo(2);
+  const row = clockRow(date, 4);
+  await boot(page, 1440, 900, merge(hist(1), oldClosed(true)), { staff: true });
+  await page.route(/\/rest\/v1\/clock_states/, (r) => r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(single(r) ? row : [row])));
+  await page.route(/\/rest\/v1\/rpc\/clock_adjust_counts/, (r) => { const res = applyClockCounts(row, r.request().postDataJSON() as R); return r.fulfill({ status: res.status, contentType: 'application/json', body: JSON.stringify(res.body) }); });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await openClockPane(page);
+  await expect(entriesOf(page), '직원 클락 엔트리가 저장 몫(4)이 아니다(부분 행 1을 셌다)').toHaveText('4', { timeout: 15_000 });
+  const minus = page.locator('[data-pane="clock"] span', { hasText: /^Entries/ }).first().locator('xpath=..').getByRole('button', { name: '－' });
+  for (let i = 0; i < 6; i++) { await minus.click(); await page.waitForTimeout(150); }
+  await page.waitForTimeout(800);
+  console.log(`[K staff] 서버 adj_entries=${row.adj_entries} · 표시=${await entriesOf(page).textContent()}`);
+  expect(row.adj_entries, '보정 하한이 저장 몫(−4)이 아니라 부분 행(−1)으로 잘렸다').toBe(-4);
+  await expect(entriesOf(page)).toHaveText('0');
+});
+test('K 1440 업주 양성 — 열린 오늘 장부의 클락은 로컬 장부(4)를 센다(낡은 저장 몫 99 무시)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const row = clockRow(MOCK_DAY, 99);
+  await boot(page, 1440, 900, merge(hist(3), today([{ seq: 1, closed: false }])));
+  await page.route(/\/rest\/v1\/clock_states/, (r) => r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(single(r) ? row : [row])));
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await openClockPane(page);
+  await expect(entriesOf(page), '열린 장부인데 저장 몫을 썼다').toHaveText('4', { timeout: 15_000 });
+});
+test('B5 360 직원 — 열린 장부 정산 바 엔트리 보조 줄이 한 줄', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page, 360, 780, merge(hist(3), today([{ seq: 1, closed: false, unpaid: 20_000 }])), { staff: true });
+  await page.goto('/');
+  await openMyStore(page);
+  await settledDash(page);
+  await openLedgerAt(page, MOCK_DAY);
+  const m = page.locator('[data-pane="ledger"] [data-testid="ledger-metrics"]');
+  await expect(m).toBeVisible({ timeout: 15_000 });
+  const r = await m.evaluate((el) => {
+    const p = [...el.querySelectorAll('p')].find((x) => (x.textContent ?? '').startsWith('엔트리'));
+    if (!p) return null;
+    const lh = parseFloat(getComputedStyle(p).fontSize);
+    return { h: p.getBoundingClientRect().height, fs: lh, ws: getComputedStyle(p).whiteSpace };
+  });
+  console.log(`[B5 360] ${JSON.stringify(r)}`);
+  expect(r, '엔트리 보조 줄(전제)').not.toBeNull();
+  expect(r!.h, "'엔트리 · 생존' 이 두 줄로 꺾였다").toBeLessThan(r!.fs * 1.6);
 });
 
 // ── 후속 ① 1280 미만 Tab 순서 = 화면 순서(CTA → 다음 줄 순위 칩) ───────────────────────────────────────
