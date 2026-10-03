@@ -19,7 +19,8 @@ import {
   getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT, posHasPassword,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
-import UnpaidCollectList, { unpaidItemsOf } from './UnpaidCollect';
+import UnpaidCollectList from './UnpaidCollect';
+import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { businessDateOf } from '../../lib/businessDate';
 import { settlementReport, settlementReceipt, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 import { msgOf } from '../../lib/dbError';

@@ -34,7 +34,8 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
   LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
 } from '../../api/ledger';
-import UnpaidCollectList, { unpaidItemsOf } from './UnpaidCollect';
+import UnpaidCollectList from './UnpaidCollect';
+import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';

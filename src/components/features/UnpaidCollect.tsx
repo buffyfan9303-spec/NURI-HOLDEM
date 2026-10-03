@@ -8,24 +8,11 @@ import { useEffect, useRef, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import {
-  addonFinance, buyinFinance, cancelPwStateFromError, hasUnpaid, ledgerErrorText, ledgerHintOf, settleUnpaidAfterClose, wonToMan,
-  LEDGER_NOTHING_UNPAID, type LedgerBuyin, type LedgerSession, type SettleMethod, type SettlePart,
+  cancelPwStateFromError, ledgerErrorText, ledgerHintOf, settleUnpaidAfterClose, wonToMan,
+  LEDGER_NOTHING_UNPAID, type SettleMethod, type SettlePart,
 } from '../../api/ledger';
 import { ledgerGameLabel } from '../../lib/ledgerLink';
-
-export interface UnpaidItem { b: LedgerBuyin; buyinWon: number; addonWon: number }
-
-/** 미수가 남은 행과 그 금액 — 금액은 장부·정산과 같은 정본(buyinFinance·addonFinance)으로만 센다. */
-export function unpaidItemsOf(buyins: readonly LedgerBuyin[], sessionOf: (b: LedgerBuyin) => LedgerSession | undefined): UnpaidItem[] {
-  const out: UnpaidItem[] = [];
-  for (const b of buyins) {
-    if (!hasUnpaid(b)) continue;
-    const s = sessionOf(b);
-    const buyinWon = s ? buyinFinance(b, s).unpaid : (b.isSplit ? b.unpaidAmount : 0);
-    out.push({ b, buyinWon, addonWon: addonFinance(b).unpaid });
-  }
-  return out.sort((x, y) => x.b.gameSeq - y.b.gameSeq || x.b.playerName.localeCompare(y.b.playerName) || x.b.entryNo - y.b.entryNo);
-}
+import type { UnpaidItem } from '../../lib/unpaidItems';
 
 const METHODS: { v: SettleMethod; label: string }[] = [{ v: 'cash', label: '현금' }, { v: 'card', label: '카드' }, { v: 'transfer', label: '이체' }];
 
