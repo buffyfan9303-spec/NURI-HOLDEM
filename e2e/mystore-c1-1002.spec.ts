@@ -10,7 +10,7 @@
 // 음성 대조: origin/main(f2a7c0bf) 빌드에서 FAIL, 수정 빌드에서 PASS(보고서 C1 참고).
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { bootOwner, openMyStore, regularsOf, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 
 test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
@@ -57,6 +57,7 @@ async function boot(page: Page, w: number, h: number, o: Opts = {}) {
       await p.route(/\/rest\/v1\/ledger_sessions\?/, byVenue((s) => (s ? sessions.filter((x) => x.game_seq === s) : sessions)));
       await p.route(/\/rest\/v1\/ledger_players\?/, byVenue((s) => (s ? players(s) : [])));
       await p.route(/\/rest\/v1\/ledger_buyins\?/, byVenue((s) => (s ? buyinsOf(s) : TITLES.flatMap((_, i) => buyinsOf(i + 1)))));
+      await p.route(/\/rest\/v1\/rpc\/venue_regulars/, (r) => r.fulfill(json(regularsOf(TITLES.flatMap((_, i) => buyinsOf(i + 1))))));
       if (o.vouchers) await p.route(/\/rest\/v1\/store_vouchers\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback()));
       if (o.twoVenues) {
         await p.route(/\/rest\/v1\/rpc\/my_member_venues/, (r) => r.fulfill(json([{ id: MOCK_VENUE, name: '테스트 홀덤펍', relation: 'owner' }, { id: VENUE_B, name: '둘째 매장', relation: 'coowner' }])));

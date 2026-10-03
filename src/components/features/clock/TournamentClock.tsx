@@ -11,7 +11,7 @@ import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '.
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats,
+  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats, composeLiveStats,
   countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
@@ -618,9 +618,15 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const phase = clockPhase(state);
   // K4(2026-09-29) — 얼리 창은 earlyWindowOf 한 벌(장부 세션 기준 · 세션이 없을 때만 클락 설정). 예전엔 여기만 `설정 || 세션` 이라
   //   같은 바인을 장부 화면과 다른 얼리·총칩으로 썼다(4D 실측: 8/240,000 vs 0/200,000, 나중 쓴 쪽이 이김).
-  const derived = useMemo(() => deriveClockCounts(buyins, earlyWindowOf(cfg, linkedSession)), [buyins, linkedSession, cfg]);
+  // 20261003h(verifier 재검증 2026-10-03 · 리드 결정) — 연결 장부가 **마감**이면 로컬 바인 행으로 다시 세지 않고
+  //   서버 트리거(20260929t)가 맞춰 둔 저장 몫(clock_states.live_stats.ledger)을 표시·보정 하한 모두에 쓴다.
+  //   마감 장부의 바인 행은 직원에게 미수 행만 올 수 있어(마감 18시간 뒤) 로컬로 세면 엔트리가 작게 나왔다.
+  //   마감 몫은 굳어 있어 업주·직원 같은 값이다. 저장 몫이 없는 옛 클락만 로컬 계산으로 떨어진다. 열린 장부는 종전 그대로 로컬.
+  const storedLedger = linkedSession?.closed ? (state.liveStats?.ledger ?? null) : null;
+  const derived = useMemo(() => storedLedger ?? deriveClockCounts(buyins, earlyWindowOf(cfg, linkedSession)), [storedLedger, buyins, linkedSession, cfg]);
   // 표시값 = 저장하는 스냅샷과 **같은 함수**(ledgerLiveStats). 장부 미연동이면 장부 몫 0.
-  const liveStats = useMemo(() => ledgerLiveStats(state, state.sessionDate ? buyins : [], linkedSession), [state, buyins, linkedSession]);
+  const liveStats = useMemo(() => (storedLedger && composeLiveStats(state)) || ledgerLiveStats(state, state.sessionDate ? buyins : [], linkedSession),
+    [storedLedger, state, buyins, linkedSession]);
 
   // ⚠ 낙관적 반영에는 **롤백이 있어야 한다**(2026-09-17). 예전엔 실패해도 로컬 state 가 next 로 남아,
   //   예컨대 [일시정지] 저장이 실패하면 PC 만 '정지'로 보이고 서버·TV·장부는 계속 진행했다.

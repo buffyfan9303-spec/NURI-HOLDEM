@@ -34,6 +34,8 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
   LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
 } from '../../api/ledger';
+import UnpaidCollectList from './UnpaidCollect';
+import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
@@ -918,6 +920,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   };
 
   const closed = session.closed;
+  // 오너 2026-10-03 Q3 — 직원(can_manage_pos 아님)에게 서버(20261003h lb_select)가 이 장부의 바인 행을 **다** 주는가.
+  //   서버 경계: 영업일 이후 · 미마감 · 마감 18시간 이내(자정 넘겨 마감해도 그 영업 마무리 동안) · 미수 행.
+  //   그 밖의 마감 장부는 미수 행만 온다 → 바인 수·티켓·클락 대조 같은 횟수를 그리면 틀린 숫자가 정상처럼 보인다.
+  //   경계는 숨기는 쪽으로 1시간 당긴다(17시간) — 기기 시계가 앞서 서버는 이미 숨겼는데 화면이 전체값이라 믿지 않게.
+  const staffPartial = !canManage && closed && date < businessDateOf(venueId)
+    && !(session.closedAt && Date.now() - Date.parse(session.closedAt) < 17 * 3_600_000
+      && date >= kstToday(Date.now() - 86_400_000)); // 서버 v4 날짜 하한(KST 어제 이후)과 같게
 
   // B1 — 영업일을 **따라가던** 화면만 새 영업일로 옮긴다. 첫 렌더는 캐시가 없어 달력 오늘로 열리고,
   //   서버 답(어제 영업일)이 오면 그리로 옮겨 앉는다. 사용자가 다른 날짜를 골랐으면(date ≠ 직전 영업일) 건드리지 않고,
@@ -1873,10 +1882,13 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 같은 마감 메모('정산 제외: 관계자') 옆에 제외 전 숫자가 선다. 조건은 마감 모달의 제외 배너와 같다. */}
             {stats.removed.count > 0 ? <span className="text-danger-light">제외 적용 · </span>
               : session.closeMemo?.includes('정산 제외') ? <span className="text-ink-muted">제외 전 전체 기록 · </span> : null}
-            바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue + stats.addon.revenue)}만</b>
-            {stats.addon.count > 0 ? <> · 애드온 <b className="text-ink-primary">{stats.addon.count}</b></> : null}
-            {stats.unpaid + stats.addon.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid + stats.addon.unpaid)}만</b></> : ' · 미수 없음'}
-            {session.clockSnapshot && (() => {
+            {/* 오너 2026-10-03 Q3 — 직원에게 매출은 없다. 지난 마감 장부(staffPartial)는 서버가 미수 행만 줘서 횟수도 그리지 않는다 — 미수는 다 온다. */}
+            {!staffPartial && <>바인 <b data-testid="ledger-closed-buyins" className="text-ink-primary">{stats.totalBuyins}</b></>}
+            {canManage && <> · 매출 <b data-testid="ledger-closed-revenue" className="text-ink-primary">{wonToMan(stats.revenue + stats.addon.revenue)}만</b></>}
+            {!staffPartial && stats.addon.count > 0 ? <> · 애드온 <b className="text-ink-primary">{stats.addon.count}</b></> : null}
+            {staffPartial && '미수'}
+            {stats.unpaid + stats.addon.unpaid > 0 ? <>{staffPartial ? ' ' : ' · 미수 '}<b className="text-danger-light">{wonToMan(stats.unpaid + stats.addon.unpaid)}만</b></> : staffPartial ? ' 없음' : ' · 미수 없음'}
+            {!staffPartial && session.clockSnapshot && (() => {
               const lp = new Set(buyins.map((b) => b.playerName)).size;
               const d = (session.clockSnapshot.entries ?? 0) - lp;
               return d !== 0
@@ -1884,6 +1896,11 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 : <span className="text-emerald-400"> · 클락 대조 일치 ✓</span>;
             })()}
           </p>
+          {staffPartial && <p data-testid="ledger-staff-partial" className="text-2xs text-ink-muted">지난 마감 장부는 직원에게 받을 미수만 보여요. 전체 기록은 업주가 볼 수 있어요.</p>}
+          {/* Q2(오너 2026-10-03) — 마감을 풀지 않고 미수를 받는다. 직원도 받되 취소 비밀번호(서버 settle_unpaid_after_close).
+              성공하면 이 장부를 직접 다시 읽는다 — 직원에게 지난 날짜 회수 행은 RLS 로 사라져 Realtime UPDATE 가 오지 않는다. */}
+          <UnpaidCollectList items={unpaidItemsOf(buyins, () => session)} hasPw={hasPw} canManage={canManage}
+            onDone={reload} onPwState={setHasPw} />
         </div>
       )}
 
@@ -1938,9 +1955,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             {stats.removed.count > 0 && <span className="text-danger-light"> · 제외 적용</span>}
           </p>
           <div className="flex items-center gap-2 rounded-aura border card-aura px-3 py-2">
-            <dl className="grid min-w-0 flex-1 grid-cols-3 gap-2 text-center">
-              <div><dt className="text-2xs text-ink-muted">{exKeys.size > 0 ? '바인(제외 적용)' : '바인'}</dt><dd data-sum="buyins" className="text-sm font-bold tabular-nums text-ink-primary">{stats.totalBuyins.toLocaleString()}회</dd></div>
-              <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>
+            {/* 직원(리드 결정 2026-10-03 — 오너 '직원에게 매출 합계 숨김'): 열린 장부에서도 완납 매출 칸이 없다. 지난 마감 장부는 바인 수도 없다(staffPartial). */}
+            <dl className={`grid min-w-0 flex-1 ${canManage ? 'grid-cols-3' : staffPartial ? 'grid-cols-1' : 'grid-cols-2'} gap-2 text-center`}>
+              {!staffPartial && <div><dt className="text-2xs text-ink-muted">{exKeys.size > 0 ? '바인(제외 적용)' : '바인'}</dt><dd data-sum="buyins" className="text-sm font-bold tabular-nums text-ink-primary">{stats.totalBuyins.toLocaleString()}회</dd></div>}
+              {canManage && <div><dt className="text-2xs text-ink-muted">완납 매출</dt><dd data-sum="revenue" className="text-sm font-bold tabular-nums text-emerald-400">{wonToMan(stats.revenue + stats.addon.revenue)}만</dd></div>}
               <div><dt className="text-2xs text-ink-muted">미수</dt><dd data-sum="unpaid" className={['text-sm font-bold tabular-nums', stats.unpaid + stats.addon.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{wonToMan(stats.unpaid + stats.addon.unpaid)}만</dd></div>
             </dl>
             {/* 3d — 마감 장부도 표(엔트리별 결제수단·얼리·할인·방문 유형·비고)를 볼 수 있어야 한다. 같은 표를 띄우되
@@ -2292,20 +2310,24 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           )}
           {/* ⚠ 2026-09-14 실측(375): 4열이면 칸이 좁아 값이 숫자 중간에서 끊겼다("7,194 / .44만").
               가장 좁은 폭만 2×2 로 내린다 — sm 이상은 종전 4열 그대로(PC 렌더 불변). */}
-          <div className={['grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4', !closed ? 'lg:grid-cols-5' : ''].join(' ')}>
+          {/* 칸 수는 실제로 서는 칸과 같게(design-reviewer B2 — 직원 마감 장부에 빈 칸·혼자 남는 칸이 생겼다).
+              업주: 바인·[생존 lg]·티켓·완납·미수 / 직원: 완납 없음 / 직원 지난 마감 장부: 미수만. */}
+          <div data-testid="ledger-metrics" className={['grid gap-2 flex-1 text-center',
+            canManage ? `grid-cols-2 sm:grid-cols-4${!closed ? ' lg:grid-cols-5' : ''}`
+              : staffPartial ? 'grid-cols-1' : closed ? 'grid-cols-3' : 'grid-cols-3 lg:grid-cols-4'].join(' ')}>
             {/* 2026-09-11: 이 줄은 상시 떠 있는 기준선이다. 엔트리(금액 기준·소수)만 세워 두면
                 '3명 앉았는데 2.5' 가 인원으로 오독된다 — 마감 모달·대시보드처럼 **횟수를 주로**,
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
-            <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
+            {!staffPartial && <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
-              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · 생존${aliveLive != null ? ` ${aliveLive}` : `≈${aliveEst}`}` : ''}`} />
+              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}${!closed && !isDesktopLedger ? ` · 생존${aliveLive != null ? ` ${aliveLive}` : `≈${aliveEst}`}` : ''}`} />}
             {/* P-02 — PC 는 위 요약 띠를 숨겨서 띠에만 있던 생존을 여기 둔다(마감 전만 — 띠와 같은 조건). */}
             {!closed && <div className="hidden lg:block">{aliveMetric}</div>}
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
             {/* T = 차감된 이용권 장수(2026-10-01) — 원(아래 대차표 tender.ticket)과 다를 수 있다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
-            <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
-            <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
+            {!staffPartial && <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />}
+            {canManage && <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />}
             <Metric label="미수금" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone="danger" />
           </div>
           <div className="flex flex-col gap-1 shrink-0">
@@ -2328,7 +2350,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
-        {(stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
+        {/* 직원 지난 마감 장부(staffPartial)는 미수 행만 와서 할인·가게지원 건수가 틀린다 — 줄째 그리지 않는다(verifier 재검증). */}
+        {!staffPartial && (stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
           <p className="text-2xs text-center mt-0.5">
             {/* '−N만'은 **덜 받은 현금**이다 → cashTotal. 깎아 준 총액은 마감 모달에서 따로 본다. */}
             {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · −{wonToMan(stats.discount.total)}만 · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
@@ -2860,7 +2883,8 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
           금액은 한 덩어리라 쪼개지면 읽는 사람이 다른 수로 오해한다 — 줄바꿈을 막는다. */}
       <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
       {/* 보조 수 — 같은 칸에서 '횟수 vs 엔트리' 처럼 **다른 척도**를 나란히 세울 때만 쓴다 */}
-      {sub && <p className="text-2xs tabular-nums leading-none text-ink-muted mt-0.5">{sub}</p>}
+      {/* 한 줄 고정 — 직원 360 3칸(칸 ~81px)에서 '엔트리 N · 생존 M'이 두 줄로 꺾여 옆 칸과 높이가 갈렸다. 넘치면 말줄임 + title. */}
+      {sub && <p className="truncate text-2xs tabular-nums leading-none text-ink-muted mt-0.5" title={sub}>{sub}</p>}
     </div>
   );
 }

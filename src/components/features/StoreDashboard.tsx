@@ -10,7 +10,7 @@ import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
-  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, getDowAvgBuyins, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest, voucherShortOf,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
@@ -234,10 +234,21 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // 같은 요일 평소 엔트리(최근 4주 동일 요일 평균) — 위젯 미니 추세용. 핫 리로드와 분리해 매장당 1회만 로드(28일 데이터).
   useEffect(() => {
     if (!caps.ledger) return;
+    const owner = `${venueId}#${d}`;
+    // 오너 2026-10-03 Q3 · 리드 F2 — 직원(can_manage_pos 아님)은 날짜별 횟수를 받지 않는다(횟수 × 단가 = 그날 매출).
+    //   서버가 평균 하나만 준다(ledger_dow_avg_buyins). 주차별 막대는 업주만 — 직원 위젯은 '오늘 vs 평소' 한 줄.
+    //   (직원에게 바인 행은 영업일·미수 행만 보이므로 아래 28일 range 로 세면 평소가 0 에 가깝게 틀린다.)
+    // verifier 2026-10-03 경고 2 — 권한 확인 중(caps.manage 거짓)에 나간 평균 응답이 업주 경로(주차별 막대)보다 늦게 오면
+    //   같은 owner 키라 ownerOnly 가 못 거르고 weeks 를 [] 로 덮었다. 권한이 바뀌면 앞 갈래 응답은 버린다.
+    let alive = true;
+    if (!caps.manage) {
+      getDowAvgBuyins(venueId).then(ownerOnly(owner, (avg: number | null) => { if (alive) setDowStats({ avg, weeks: [] }); })).catch(() => {});
+      return () => { alive = false; };
+    }
     const d28 = last28();
     const todayDow = new Date(d + 'T00:00:00').getDay();
-    const owner = `${venueId}#${d}`;
     getLedgerRange(venueId, d28[0], d28[27]).then(ownerOnly(owner, ({ sessions, buyins: bs }: Awaited<ReturnType<typeof getLedgerRange>>) => {
+      if (!alive) return;
       // ⚠ 세션은 (날짜 + 게임)이 키다. 날짜만으로 매핑하면 사이드 게임이 있는 날
       //   메인 바인이 사이드 단가로 계산돼 엔트리·매출이 통째로 틀어진다(통계 화면과 값이 갈림).
       const byGame = new Map<string, LedgerSession>();
@@ -259,7 +270,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
       setDowStats({ avg, weeks });
     })).catch(() => {});
-  }, [venueId, d, caps.ledger]);
+    return () => { alive = false; };
+  }, [venueId, d, caps.ledger, caps.manage]);
   // 결제수단 기본값 학습 — 매장이 자주 쓰는 결제수단을 팝오버 첫 버튼으로(localStorage 카운트 기반)
   useEffect(() => {
     try {
@@ -483,7 +495,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   };
   // ⚠ 아직 못 읽은 동안 '미시작'이라고 단언하지 않는다 — 본문은 스켈레톤인데 배지만 결론을 말하면
   //   그 배지가 곧 '장부 시작하기'를 정당화하는 거짓 근거가 된다.
-  const ledgerStatus = loading ? '확인 중' : !started ? '미시작' : session?.closed ? '정산 마감' : session?.regClosed ? '레지 마감' : '진행중';
+
   // 오늘 장부 KPI 값 한 칸 — 확인 중엔 자리만(값 visibility:hidden + 같은 크기 스켈레톤), 미시작은 흐린 0(아래 밴드 주석).
   //   ⚠ 컴포넌트가 아니라 함수 호출이다 — 렌더마다 새 컴포넌트를 만들면 안의 CountUp 이 매번 다시 마운트된다.
   const kv = (tone: string, children: ReactNode) => (
@@ -552,18 +564,24 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // 2026-10-03 B — '라이브 운영 현황'은 응답(클락·요청)이 와야 서는데, 확인 중엔 자리가 없어 정착 순간 그 높이만큼(PC 175 · 390 263px)
   //   아래 할 일·카드 격자를 밀었다(main 에도 있던 이동). 응답 전엔 클락이 켜져 있는지 모르므로 **이 기기에서 이 매장이 마지막으로 보인 높이**만큼
   //   확인 중에 자리를 잡는다(순위 미입력의 기기 기억과 같은 조리법). 처음 보는 매장·상태가 바뀐 날은 한 번 움직인다.
+  // 2026-10-03 settle-fix 후속 ② — 높이에 **날짜**를 붙인다({h, d}). 매장의 하루는 '밤 클락 켬 → 다음 날 아침 꺼짐'이라
+  //   날짜 없이 기억하면 다음 날 아침 첫 방문마다 어제 높이만큼 예약했다가 접혀 한 번 움직였다(review-settle-fix-1003 B ③ −175/−263).
+  //   오늘 적은 높이만 예약한다. 옛 숫자 형식(날짜 없음)은 '오늘 것이 아님'으로 읽는다.
   const liveKey = `nuri:dash-live-h:${venueId}`;
   const liveRef = useRef<HTMLElement>(null);
   const liveReserveH = useMemo(() => {
     if (!loading) return 0;
-    try { return Number(localStorage.getItem(liveKey)) || 0; } catch { return 0; }
-  }, [loading, liveKey]);
+    try {
+      const v = JSON.parse(localStorage.getItem(liveKey) || 'null') as { h?: unknown; d?: unknown } | null;
+      return v && v.d === d ? Number(v.h) || 0 : 0;
+    } catch { return 0; }
+  }, [loading, liveKey, d]);
   useLayoutEffect(() => {
     if (loading || !active) return; // 숨은 판(keep-alive)의 높이 0 을 '위젯 없음'으로 적지 않는다
     const h = liveWidget ? Math.round(liveRef.current?.getBoundingClientRect().height ?? 0) : 0;
     if (liveWidget && h === 0) return;
-    try { if (h > 0) localStorage.setItem(liveKey, String(h)); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
-  }, [loading, active, liveWidget, liveKey, activeClocks.length, pendingReqs.length]);
+    try { if (h > 0) localStorage.setItem(liveKey, JSON.stringify({ h, d })); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
+  }, [loading, active, liveWidget, liveKey, d, activeClocks.length, pendingReqs.length]);
 
   // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
   //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
@@ -604,6 +622,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   할 일 카드만 메인 마감을 보고 미수 11만이 남았는데 '오늘 운영 완료'를 말했다).
   const daySettled = isDaySettled(session ? { closed: !!session.closed, unpaid: fin.unpaid } : null,
     todayGames.map((g) => ({ closed: !!g.sx.closed, unpaid: g.unpaid })));
+  // ⚠ 아직 못 읽은 동안 '미시작'이라고 단언하지 않는다 — 본문은 스켈레톤인데 배지만 결론을 말하면
+  //   그 배지가 곧 '장부 시작하기'를 정당화하는 거짓 근거가 된다.
+  // 2026-10-03 settle-fix 후속 ④ — 메인 마감만 보고 '정산 마감'이라 했다(사이드가 열려 있거나 미수가 남아도). D3 와 같은 뿌리라
+  //   아래 할 일·'정산' 칩과 같은 판정(daySettled)으로 가른다.
+  const ledgerStatus = loading ? '확인 중' : !started ? '미시작'
+    : session?.closed ? (daySettled ? '정산 마감' : todayGames.some((g) => !g.sx.closed) ? '마감 · 열린 게임' : '마감 · 미수')
+    : session?.regClosed ? '레지 마감' : '진행중';
   /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
      예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
      겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
@@ -872,12 +897,15 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   예전엔 여기가 막다른 안내 한 장이라 일반 직원에게 내 매장이 **아무 쓸모가 없었다.**
   const anyCap = caps.ledger || caps.manage || caps.voucher || caps.posters || caps.staff;
   if (!anyCap) return <MyStaffCard venueId={venueId} />;
+  // settle-fix 후속 ③ — 할 일이 '미수 회수' 갈래로 그려졌는지. 아래 JSX 에서 할 일 카드가 빨간 미수 배너보다 **먼저** 평가되며 이 값을 세운다
+  //   (같은 렌더 안 순서). 같은 사실(미수 N만)을 KPI·할 일·배너 세 번 말하던 것을 줄이고, 배너가 빠지면 1280·1366 에서 할 일 설명 폭이 돌아온다.
+  let todoOwedShown = false;
 
   return (
     <div className="space-y-3">
       {/* 고객·단골(CRM). 이용권 보내기는 권한이 있을 때만 넘긴다 — 없으면 버튼 자체가 그려지지 않는다.
           모달을 겹치지 않고 교체한다: 시트 위 시트는 뒤로가기 스택이 꼬이고 반투명이 두 겹 쌓인다. */}
-      <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]}
+      <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} money={caps.manage}
         onSendVoucher={caps.issueVoucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
       <Suspense fallback={null}>
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
@@ -1050,11 +1078,14 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               · 모바일도 한 줄 4칸(text-lg) — 2×2 는 칸이 184px 라 360 에서 '순위 입력' 카드가 첫 화면 밖으로 밀렸다. */}
           {(
             /* C1 D-2 — items-start: 엔트리 보조줄이 붙은 칸만 높아져도 옆 칸 라벨 윗줄은 맞는다. */
-            <span ref={kpiGridRef} data-testid="dash-kpi-grid" aria-busy={loading || undefined} className="mt-2 grid grid-cols-4 items-start gap-x-3 gap-y-3 lg:gap-x-6">
-              <span className="block min-w-0">
+            <span ref={kpiGridRef} data-testid="dash-kpi-grid" aria-busy={loading || undefined} className={`mt-2 grid ${caps.manage ? 'grid-cols-4' : 'grid-cols-3'} items-start gap-x-3 gap-y-3 lg:gap-x-6`}>
+              {/* 오너 2026-10-03 Q3 — 직원(can_manage_pos 아님)에게는 매출 칸 자체가 없다(0 으로도 그리지 않는다). */}
+              {caps.manage && (
+              <span data-testid="dash-kpi-revenue" className="block min-w-0">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 {kv('text-gold-300', <>{wonToMan(day.paid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}
               </span>
+              )}
               <span className="block min-w-0">
                 <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
                 {kv('stat-indigo', <>
@@ -1232,17 +1263,19 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             </div>
           </div>
           {/* 미니 추세 — 오늘 vs 같은 요일 평소(4주 평균). 탭하면 주차별 막대 드릴다운 */}
+          {/* 직원은 평균 하나만 받는다(weeks 빈 배열 — 리드 F2) → 주차별 막대 드릴다운이 없다. 줄은 버튼이 아니라 글줄. */}
           {(clockActive || activeClocks.length > 0) && sameDowAvg != null && (
             <div className="border-t border-border-subtle">
-              <button type="button" onClick={() => setDowOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-2xs transition-colors hover:bg-white/2">
+              <button type="button" onClick={() => setDowOpen((v) => !v)} disabled={dowStats.weeks.length === 0} data-testid="dash-dow-row"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-2xs transition-colors enabled:hover:bg-white/2 disabled:cursor-default">
                 <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
                 <span className="tabular-nums text-ink-secondary">
                   오늘 <b className="text-ink-primary">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
                   {dowDelta != null && <span className={['ml-1 font-bold', dowDelta > 0 ? 'text-emerald-400' : dowDelta < 0 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>{dowDelta > 0 ? '▲' : dowDelta < 0 ? '▼' : '–'}{Math.abs(dowDelta)}%</span>}
-                  <span className="ml-1 text-ink-muted">{dowOpen ? '▲' : '▼'}</span>
+                  {dowStats.weeks.length > 0 && <span className="ml-1 text-ink-muted">{dowOpen ? '▲' : '▼'}</span>}
                 </span>
               </button>
-              <Fold open={dowOpen}>{() => {
+              <Fold open={dowOpen && dowStats.weeks.length > 0}>{() => {
                 const bars = [...dowStats.weeks, { label: '오늘', entries: todayEntries }];
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
@@ -1357,7 +1390,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         //   한 요소를 그대로 두고 자리만 바꾼다: 주 줄이 flex-wrap 이라 xl 미만은 order-last + basis-full 로 다음 줄(종전 보조 줄과 같은 높이),
         //   xl 은 DOM 순서대로 설명과 CTA 사이에 선다. 칩이 폭을 먹으니 xl 에서 설명은 한 줄로 자른다(1024 는 가장 긴 갈래가 18px 모자라 종전 방식 유지).
         const rankRow = (text: string, onClick?: () => void) => (
-          <span data-testid={onClick ? 'todo-rank' : undefined} className="order-last mt-1.5 flex min-w-0 basis-full items-center gap-2 border-t border-gold-400/25 pt-1.5 xl:order-none xl:mt-0 xl:basis-auto xl:rounded-input xl:border xl:border-gold-400/40 xl:py-1 xl:pl-2 xl:pr-1">
+          // settle-fix 후속 ① — 칩은 DOM 에서 CTA **뒤**다(Tab 순서 = xl 미만의 화면 순서: CTA → 다음 줄 칩). xl 은 CTA 를 xl:order-last 로 칩 오른쪽에 보낸다.
+          <span data-testid={onClick ? 'todo-rank' : undefined} className="mt-1.5 flex min-w-0 basis-full items-center gap-2 border-t border-gold-400/25 pt-1.5 xl:mt-0 xl:basis-auto xl:rounded-input xl:border xl:border-gold-400/40 xl:py-1 xl:pl-2 xl:pr-1">
             <Icon name="trophy" size={14} className="shrink-0 text-gold-300" />
             <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary xl:flex-none">{text}</span>
             {onClick
@@ -1374,8 +1408,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <span className="block text-sm font-bold xl:truncate">지난 게임 그대로 열기 · 00/00</span>
                 <span className="mt-1 block t-desc break-keep xl:line-clamp-1">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
               </span>
+              <span className="btn-primary shrink-0 px-4 py-2 text-xs xl:order-last">대회 등록하기</span>
               {caps.ledger && rankRow('순위 미입력 00건 · 최근 00/00')}
-              <span className="btn-primary shrink-0 px-4 py-2 text-xs">대회 등록하기</span>
             </span>
           </span>
         );
@@ -1431,6 +1465,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = { icon: 'cards', title: `아직 열린 게임 ${open.length}개`, desc: `${open.map((g) => ledgerGameLabel(g.sx.gameSeq)).join(' · ')} · 마감해야 오늘 정산이 끝나요.`,
             cta: '장부 보기', onClick: () => onGoto({ section: 'ledger', date: d, gameSeq: open[0].sx.gameSeq }), tone: 'gold' };
         } else if (caps.ledger && session?.closed && !daySettled) {
+          todoOwedShown = true;
           // dummy-1003 D3 — 전부 마감했는데 미수가 남았다(종전엔 여기서 '오늘 운영 완료'). 미수가 있는 첫 게임의 장부·정산바로 연다
           //   ('정산' 칩 목적지와 같은 모양 — 메인만 열면 사이드에만 남은 미수가 0 으로 보인다).
           const owed = todayGames.filter((g) => g.unpaid > 0);
@@ -1469,10 +1504,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <p className="text-sm font-bold text-ink-primary xl:truncate" title={todo.title}>{todo.title}</p>
               <p className={`mt-1 t-desc break-keep text-ink-muted${todo.clamp ? ' line-clamp-2' : ''} xl:line-clamp-1`} title={todo.desc}>{todo.desc}</p>
             </div>
-            {/* 밀린 순위 보조 줄(xl 미만은 다음 줄 · xl 은 이 자리 칩) — rankRow 주석 */}
-            {caps.ledger && !rankPrimary && latest && rankRow(
-              `순위 미입력 ${pendingRanks.length}건 · 최근 ${latest.date.slice(5).replace('-', '/')}${latest.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(latest.gameSeq)}` : ''}`,
-              () => goRanking(latest))}
+
             {/* 라이브 운영 현황 카드가 글로우를 쓰는 동안(liveWidget)에는 이 CTA 가 **보라 후광을 내려놓는다**.
                 btn-primary 의 그림자는 index.css:620 의 violet-500 이라, 그대로 두면 같은 화면에 같은 색
                 후광이 둘이 되어 '지금 볼 곳'이 사라진다 — v3 가 조잡했던 정확한 메커니즘이고,
@@ -1480,11 +1512,15 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 단 'warn'(지난 장부 미마감·순위 누락)은 놓치면 하류가 통째로 멈추는 급한 알림이라
                 골드 채움은 그대로 두고 **그림자만** 뺀다 — 위계를 낮추지 않으면서 색 경쟁만 없앤다. */}
             <button type="button" onClick={todo.onClick} data-testid="todo-cta"
-              className={todo.tone === 'warn'
+              className={`${todo.tone === 'warn'
                 ? `btn-primary shrink-0 px-4 py-2 text-xs bg-none! bg-gold-400! text-ink-inverse! hover:bg-gold-500!${liveWidget ? ' shadow-none!' : ''}`
-                : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
+                : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'} xl:order-last`}>
               {todo.cta}
             </button>
+            {/* 밀린 순위 보조 줄(xl 미만은 다음 줄 · xl 은 CTA 왼쪽 칩) — rankRow 주석. DOM 은 CTA 뒤(후속 ① Tab 순서). */}
+            {caps.ledger && !rankPrimary && latest && rankRow(
+              `순위 미입력 ${pendingRanks.length}건 · 최근 ${latest.date.slice(5).replace('-', '/')}${latest.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(latest.gameSeq)}` : ''}`,
+              () => goRanking(latest))}
           </div>
           </div>
           </div>
@@ -1495,7 +1531,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-1">
       {/* '순위 미입력' 지난 대회는 위 '지금 할 일' 칸의 한 갈래로 옮겼다(2026-10-03 E3 후속 — 별도 카드의 정착 이동 제거). */}
       {/* 미수·리스크 알림 (장부 권한) */}
-      {caps.ledger && dayStarted && day.unpaid > 0 && (
+      {caps.ledger && dayStarted && day.unpaid > 0 && !todoOwedShown && (
         <button type="button" onClick={gotoTodayLedger} data-testid="unpaid-cta"
           className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/8 p-3 text-left hover:bg-danger/12 transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
@@ -1723,7 +1759,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <>
               {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
                   오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {/* 직원은 '7일 사용' 칸이 없다(아래) — 3칸을 한 줄로. */}
+              <div className={`grid ${caps.manage ? 'grid-cols-2' : 'grid-cols-3'} gap-x-3 gap-y-2`}>
                 {/* 2026-09-18 오너 결정: "이용권은 T 단위로" — 발행도 T 로 맞춘다.
                     이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
                     ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
@@ -1732,7 +1769,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
-                <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
+                {/* verifier 2026-10-03 — 7일 사용 T 는 14일 장부 행에서 센다. 직원(can_manage_pos 아님)에게는 지난 날의 바인 행이 미수 행만 와서(20261003h)
+                    작은 숫자가 정상처럼 보였다 → 직원에게는 칸을 뺀다(이용권 전송 수·오늘 사용은 온전한 원천이라 남긴다). */}
+                {caps.manage && <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />}
                 {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
                 <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
               </div>
@@ -1799,7 +1838,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />오늘 게임
               <span className="text-2xs font-normal text-ink-muted">· {rangeErr ? '—' : `${todayGames.length}개`}</span>
             </p>
-            <span className="text-2xs text-ink-muted">머니인 가치 = 게임에 투입된 총 가치(현금·카드·이체·이용권)</span>
+            {caps.manage && <span className="text-2xs text-ink-muted">머니인 가치 = 게임에 투입된 총 가치(현금·카드·이체·이용권)</span>}
           </div>
           {!!rangeErr && <div className="mb-2"><LoadFailRow what="오늘 게임" onRetry={reloadRange} /></div>}
           {todayGames.length > 0 && (
@@ -1813,7 +1852,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                   <th scope="col" className="py-1.5 px-2 text-right font-semibold">플레이어</th>
                   <th scope="col" className="hidden py-1.5 px-2 text-right font-semibold sm:table-cell">첫 바인</th>
                   <th scope="col" className="hidden py-1.5 px-2 text-right font-semibold sm:table-cell">리바인</th>
-                  <th scope="col" className="py-1.5 px-2 text-right font-semibold">머니인 가치</th>
+                  {caps.manage && <th scope="col" className="py-1.5 px-2 text-right font-semibold">머니인 가치</th>}
                   <th scope="col" className="py-1.5 px-2 text-right font-semibold">미수</th>
                   <th scope="col" className="hidden py-1.5 px-2 font-semibold lg:table-cell">클락</th>
                   <th scope="col" className="py-1.5 pl-2 text-right font-semibold">작업</th>
@@ -1836,7 +1875,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                       <td className="py-2 px-2 text-right text-ink-secondary">{c.players}</td>
                       <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.firstBuyins}</td>
                       <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.rebuys}</td>
-                      <td className="py-2 px-2 text-right font-bold text-gold-300">{wonToMan(value)}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">만</span></td>
+                      {caps.manage && <td data-testid="dash-game-value" className="py-2 px-2 text-right font-bold text-gold-300">{wonToMan(value)}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">만</span></td>}
                       <td className={['py-2 px-2 text-right', unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>{wonToMan(unpaid)}</td>
                       <td className="hidden py-2 px-2 lg:table-cell">
                         {ckLive
