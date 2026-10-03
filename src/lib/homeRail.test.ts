@@ -57,18 +57,18 @@ describe('buildLiveFactMap — 클락 → 생존·레벨', () => {
     const lv = [{ kind: 'level', minutes: 20 }, { kind: 'level', minutes: 20 }, { kind: 'break', minutes: 10 }, { kind: 'level', minutes: 20 }];
     const g = clock({ title: '메인', config: { levels: lv } as unknown as ClockState['config'], currentIndex: 3, running: false, remainingMs: 60_000,
       liveStats: { alive: 12, entries: 40 } as ClockState['liveStats'] });
-    expect(buildLiveFactMap([g], [s]).get('s')).toEqual({ alive: 12, levelNo: 3 }); // 브레이크는 번호에서 빠진다
+    expect(buildLiveFactMap([g], [s], 0).get('s')).toEqual({ alive: 12, levelNo: 3 }); // 브레이크는 번호에서 빠진다
     const h = clock({ title: '메인', adjEntries: 3, eliminations: 5, running: false });
-    expect(buildLiveFactMap([h], [s]).get('s')).toEqual({ alive: 0, levelNo: 0 });
+    expect(buildLiveFactMap([h], [s], 0).get('s')).toEqual({ alive: 0, levelNo: 0 });
   });
   it('🔴 메인·사이드가 같은 포스터에 붙으면 메인(gameSeq 1)이 이긴다 — 응답 순서와 무관', () => {
     const side = clock({ title: '메인', gameSeq: 2, liveStats: { alive: 99 } as ClockState['liveStats'], running: false });
     const main = clock({ title: '메인', gameSeq: 1, liveStats: { alive: 7 } as ClockState['liveStats'], running: false });
-    expect(buildLiveFactMap([side, main], [s]).get('s')?.alive).toBe(7);
-    expect(buildLiveFactMap([main, side], [s]).get('s')?.alive).toBe(7);
+    expect(buildLiveFactMap([side, main], [s], 0).get('s')?.alive).toBe(7);
+    expect(buildLiveFactMap([main, side], [s], 0).get('s')?.alive).toBe(7);
   });
   it('연결 안 된 클락은 맵에 없다', () => {
-    expect(buildLiveFactMap([clock({ venueId: 'other' })], [s]).size).toBe(0);
+    expect(buildLiveFactMap([clock({ venueId: 'other' })], [s], 0).size).toBe(0);
   });
 });
 
