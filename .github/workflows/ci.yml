@@ -206,7 +206,9 @@ jobs:
           URL: repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?filter=latest&per_page=100
         run: |
           while :; do
-            jobs=$(gh api "$URL" --jq '[.jobs[] | select(.name == "checks" or (.name | startswith("e2e (")))]')
+            # 2026-10-04 GitHub API 일시 503("No server is currently available")에 집계만 실패해 배포가 두 번 막혔다(실제 시험은 전부 통과).
+            # 조회 실패는 판정이 아니므로 20초 뒤 다시 묻는다. 판정 기준(전부 success)은 그대로, 상한은 timeout-minutes.
+            jobs=$(gh api "$URL" --jq '[.jobs[] | select(.name == "checks" or (.name | startswith("e2e (")))]') || { echo "gh api 조회 실패 — 20초 뒤 재시도"; sleep 20; continue; }
             total=$(jq length <<<"$jobs")
             open=$(jq '[.[] | select(.status != "completed")] | length' <<<"$jobs")
             # checks 1 + e2e 5(1/4..4/4 · boot) = 6
