@@ -226,6 +226,104 @@ for (const w of [390, 360, 320]) {
   });
 }
 
+// ⑨ 디자인 검토 P1(2026-10-04): 짧은 화면(×640)에서 맨 끝까지 내리면 FAB 칸이 하위 탭 바(sticky z-30)까지 올라온다.
+//    그때 탭 바가 이겨야 한다 — 391c5a78(FAB z-40)에서는 '딜러'·'장터' 중심을 FAB 가 가로챘다. 푸터 '더보기' 를 펼친 상태는 높이 760 에서 본다
+//    (640 에서 펼치면 탭 바째 화면 위로 밀려 나가 잴 것이 없다 — 391c5a78 실측: 360·320×760 에서 '딜러' 를 FAB 가 가로챘다).
+//    판정은 '화면 안에 들어온 탭 중심의 elementFromPoint 가 FAB 안이 아니다'.
+for (const w of [390, 360, 320]) {
+  for (const more of [false, true]) {
+    test(`⑨ ${w}×${more ? 760 : 640}${more ? ' · 푸터 더보기 펼침' : ''}: 맨 끝 스크롤에서 하위 탭 바 누름을 FAB 가 가로채지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: more ? 760 : 640 });
+      await openBoard(page);
+      if (more) {
+        const more = page.getByTestId('footer-more');
+        await expect(more, "푸터 '더보기'(details) 가 없다 — 검사 조건이 사라졌다").toHaveCount(1);
+        await more.locator('summary').evaluate((b) => (b as HTMLElement).click());
+        await expect(more, '더보기가 안 펼쳐졌다').toHaveAttribute('open', '');
+        await page.waitForTimeout(300);
+      }
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(600);
+      const r = await page.evaluate(() => {
+        const fab = document.querySelector('[data-testid="board-write"]')!;
+        const tabs = [...document.querySelectorAll<HTMLElement>('[data-community-secbar] [data-testid^="sec-tab-"]')];
+        return tabs.map((t) => {
+          const b = t.getBoundingClientRect();
+          const x = b.left + b.width / 2, y = b.top + b.height / 2;
+          if (x < 0 || x > innerWidth || y < 0 || y > innerHeight) return { id: t.dataset.testid, ok: true, skipped: true };
+          const hit = document.elementFromPoint(x, y);
+          return { id: t.dataset.testid, ok: !(hit && fab.contains(hit)), hit: hit?.closest('[data-testid]')?.getAttribute('data-testid') ?? hit?.tagName, skipped: false };
+        });
+      });
+      expect(r.filter((x) => !x.skipped).length, '잴 탭이 없다(탭 바가 화면 밖)').toBeGreaterThan(3);
+      expect(r.filter((x) => !x.ok), `탭 중심을 FAB 가 가로챈다: ${JSON.stringify(r)}`).toEqual([]);
+    });
+  }
+}
+
+// ⑩ 디자인 검토 P2(2026-10-04): PC(1024·1440)에서 레일 밖 카테고리도 마우스 세로 휠로 꺼내 누를 수 있다.
+for (const w of [1440, 1024]) {
+  test(`⑩ ${w}: 모든 카테고리를 마우스(세로 휠)로 꺼내 누를 수 있다`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: 900 });
+    await openBoard(page);
+    const rail = page.locator('[data-board-cat-rail]');
+    const n = await rail.locator('button').count();
+    expect(n, '카테고리 칩 수').toBeGreaterThanOrEqual(8);
+    const rb = (await rail.boundingBox())!;
+    const y0 = await page.evaluate(() => scrollY);
+    for (let i = 0; i < n; i++) {
+      const chip = rail.locator('button').nth(i);
+      // 칩이 레일 안에 온전히 들어올 때까지 레일 위에서 휠(아래로)
+      for (let k = 0; k < 20; k++) {
+        const inside = await chip.evaluate((c) => { const r = c.getBoundingClientRect(); const p = c.parentElement!.getBoundingClientRect(); return r.left >= p.left - 0.5 && r.right <= p.right + 0.5; });
+        if (inside) break;
+        await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+        await page.mouse.wheel(0, 60);
+        await page.waitForTimeout(80);
+      }
+      const b = (await chip.boundingBox())!;
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(chip, `${i}번째 칩을 꺼내 누르지 못했다`).toHaveAttribute('aria-pressed', 'true');
+    }
+    expect(await page.evaluate(() => scrollY), '레일을 휠로 밀 수 있는 동안 페이지가 세로로 움직였다').toBe(y0);
+    // 레일 끝에 닿은 뒤의 세로 휠은 페이지에 돌려준다(레일 위에서도 페이지가 내려간다)
+    const canScroll = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight > 20);
+    if (canScroll) {
+      await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+      await page.mouse.wheel(0, 200);
+      await expect.poll(() => page.evaluate(() => scrollY), { timeout: 3_000 }).toBeGreaterThan(y0);
+    }
+  });
+}
+
+test('⑪ 검색칸 × 는 하나(닫기) · ⇅ 메뉴는 ↑↓ 로 항목을 옮기고 페이지를 스크롤하지 않는다', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openBoard(page);
+  await page.getByTestId('board-search-open').click();
+  const input = page.getByRole('searchbox', { name: /게시글 검색/ });
+  await input.fill('위클리');
+  // 브라우저 기본 지우기(×)는 type=search 에만 붙는다 — 검색 의미는 role=searchbox · inputmode=search 로 유지
+  expect(await input.getAttribute('type'), '기본 × 가 붙는 type=search').not.toBe('search');
+  await expect(input).toHaveAttribute('inputmode', 'search');
+  await page.getByTestId('board-search-close').click();
+  await page.getByTestId('board-search-open').click();
+  await input.fill('');
+  await page.getByTestId('board-search-close').click();
+  const y0 = await page.evaluate(() => scrollY);
+  await page.getByTestId('board-sort').click();
+  await expect(page.getByTestId('board-sort-new')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('board-sort-popular')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('board-sort-new'), '끝에서 처음으로 돌아가야 한다').toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('board-sort-popular')).toBeFocused();
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => scrollY), '화살표 키에 페이지가 스크롤됐다').toBe(y0);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('board-sort')).toHaveAttribute('aria-label', '정렬: 인기');
+});
+
 test('⑥ 실제 손가락(CDP 터치) — 칩 레일 밀기 · 칩 누르기 · 🔍 누르기', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBoard(page);

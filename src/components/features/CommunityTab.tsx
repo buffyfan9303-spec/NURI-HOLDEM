@@ -850,10 +850,33 @@ function FeedSection({
     };
     upd();
     el.addEventListener('scroll', upd, { passive: true });
+    // PC 마우스: 세로 휠을 레일의 가로 스크롤로 넘긴다 — 스크롤바가 없어 레일 밖 칩(1440 '후기·자유·공부', 1024 '질문~공부')을
+    //   꺼낼 길이 Shift+휠·Tab 뿐이었다(디자인 검토 P2 2026-10-04). 레일이 그 방향으로 더 갈 수 있을 때만 가로채고,
+    //   끝에 닿으면 페이지 세로 스크롤에 돌려준다(레일 위에 손을 올려도 페이지가 영영 안 내려가는 일은 없다).
+    //   터치·트랙패드 가로 밀기는 브라우저 기본 그대로다(deltaX 가 더 크면 관여하지 않는다).
+    const wheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 1) return;
+      if ((e.deltaY > 0 && el.scrollLeft >= max - 1) || (e.deltaY < 0 && el.scrollLeft <= 1)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(upd);
     ro?.observe(el);
-    return () => { el.removeEventListener('scroll', upd); ro?.disconnect(); };
+    return () => { el.removeEventListener('scroll', upd); el.removeEventListener('wheel', wheel); ro?.disconnect(); };
   }, [hasPosts]);
+  // ⇅ 메뉴 화살표 키 — ↑↓ 로 항목 이동(끝에서 돌아감), Home/End. 페이지가 스크롤되지 않게 기본 동작을 막는다(검토 P3).
+  const sortMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    const n = items.length;
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : e.key === 'ArrowDown' ? (i + 1) % n : (i - 1 + n) % n;
+    items[next]?.focus();
+  };
   // 글쓰기 — 예전 '글쓰기' 바와 같은 갈래: 로그인이면 글쓰기(본인인증 게이트는 App 의 onOpenWrite 가 그대로 건다), 아니면 로그인 유도.
   const write = () => (user ? onOpenWrite() : promptLogin());
   // 비로그인 안내 문구(예전 '로그인하면 게시글을 작성할 수 있습니다' 바)는 버튼 이름·툴팁으로 보존한다
@@ -925,7 +948,7 @@ function FeedSection({
                   {order === 'new' ? '최신' : '인기'}
                 </button>
                 {sortOpen && (
-                  <div role="menu" aria-label="정렬" className="absolute right-0 top-full z-40 mt-1 w-28 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
+                  <div role="menu" aria-label="정렬" onKeyDown={sortMenuKey} className="absolute right-0 top-full z-40 mt-1 w-28 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
                     {(['new', 'popular'] as const).map((o) => (
                       <button key={o} type="button" role="menuitemradio" aria-checked={order === o} data-testid={`board-sort-${o}`}
                         autoFocus={order === o}
@@ -965,13 +988,13 @@ function FeedSection({
                     <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
                   </svg>
                   <input
-                    type="search" enterKeyHint="search" autoFocus
+                    type="text" inputMode="search" role="searchbox" enterKeyHint="search" autoFocus
                     value={q}
                     onChange={(e) => { setQ(e.target.value); setVisible(15); }}
                     onKeyDown={(e) => { if (e.key === 'Escape') closeSearch(); else if (e.key === 'Enter') e.currentTarget.blur(); }}
                     placeholder="검색"
                     aria-label="게시글 검색 (제목·내용·작성자)"
-                    className="input h-[44px] min-h-0 w-full py-0 pl-9 pr-3 text-sm"
+                    className="input h-[44px] min-h-0 w-full rounded-[12px] py-0 pl-9 pr-3 text-sm"
                   />
                 </div>
                 <button type="button" data-testid="board-search-close" aria-label="검색 닫기" onClick={closeSearch}
@@ -1101,9 +1124,11 @@ function FeedSection({
             예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
           · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).
           · 스크롤에 따라 접거나 숨기지 않는다 — 아이콘만 있는 원이라 접을 것이 없다.
+          · z-20: 하위 탭 바(sticky z-30) **밑**이다. 짧은 화면(×640)에서 맨 끝까지 올라오면 바 밑으로 들어가 '딜러'·'장터' 누름을
+            가로채지 않는다(z-40 이던 391c5a78 에서 가로챘다 — 검토 P1). 정렬 메뉴(z-40)·토스트·맨 위로(fixed z-40)는 여전히 위다.
           · [data-sec="board"] 안이라 다른 하위 탭·다른 탭에서는 display:none 으로 같이 사라진다. PC 는 위 한 줄 끝 버튼. */}
       <div style={{ bottom: 'calc(var(--tabbar-float) + 4rem)' }}
-        className="pointer-events-none sticky z-40 flex justify-end lg:hidden">
+        className="pointer-events-none sticky z-20 flex justify-end lg:hidden">
         <button type="button" data-testid="board-write" aria-label={writeLabel} title={writeLabel} onClick={write}
           className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-300 text-white shadow-dialog">
           {pencil}
