@@ -250,23 +250,20 @@ describe('N07 · 공지 섹션은 접힌 한 줄 바', () => {
   });
 });
 
-describe('UI-05 · 보기 전환 두 슬롯', () => {
-  const i = COMM.indexOf('data-board-view-toggle');
-  it('🔴 트랙에 data-board-view-toggle + 그룹 이름, 버튼 두 개가 h-11 w-11 슬롯이고 aria-pressed 를 가진다', () => {
-    expect(i, 'data-board-view-toggle 이 없다').toBeGreaterThan(-1);
-    const T = COMM.slice(i, i + 2200);
-    expect(T).toMatch(/role="group" aria-label="보기 방식"/);
-    // 두 슬롯은 같은 map 한 벌에서 나온다 — 한쪽만 radius·보더·크기가 달라질 수 없다(§6-4)
-    // 오너 2026-10-02: 왼쪽 = 모아보기(기본), 오른쪽 = 펼쳐보기 — **순서까지** 계약이다(compact 가 먼저).
-    expect(T).toMatch(/\{ v: 'compact' as const, label: '모아보기'[\s\S]*\{ v: 'feed' as const, label: '펼쳐보기'/);
-    expect(T).toMatch(/<button key=\{v\} type="button" data-testid=\{`board-view-\$\{v\}`\} aria-label=\{label\} title=\{label\} aria-pressed=\{view === v\}/);
-    expect(T).toMatch(/relative flex h-11 w-11 items-center justify-center/);
-    expect(T).not.toMatch(/h-7 w-7/);
-    // 선택 배경은 슬롯 안 inset 3px 의 별도 면 — 아이콘과 같은 버튼 안에서 함께 움직인다
-    expect(T).toMatch(/absolute inset-\[3px\] rounded-\[6px\]/);
+// 2026-10-04 오너 결정(안 A — 상단 한 줄): 예전 '두 슬롯 트랙'(UI-05 · 2026-10-02 좌 모아보기/우 펼쳐보기)을 **토글 하나**로 바꿨다.
+//   실화면 수치(44px·아이콘 중앙·눌림·N08 첫 프레임)는 e2e/board-view-toggle.spec.ts · e2e/board-oneline.spec.ts 가 잰다.
+describe('보기 전환 토글 하나(2026-10-04)', () => {
+  const i = COMM.indexOf('data-testid="board-view-toggle"');
+  it('🔴 토글 버튼 하나가 44px 이고, aria-pressed=펼쳐보기 · data-view · switchView 로 다른 쪽을 고른다', () => {
+    expect(i, 'board-view-toggle 버튼이 없다').toBeGreaterThan(-1);
+    const T = COMM.slice(i, i + 1600);
+    expect(T).toMatch(/data-board-view-toggle data-view=\{view\}/);
+    expect(T).toMatch(/aria-label="펼쳐보기" aria-pressed=\{view === 'feed'\}/);
+    expect(T).toMatch(/onClick=\{\(\) => switchView\(view === 'feed' \? 'compact' : 'feed'\)\}/);
+    expect(T).toMatch(/flex h-\[44px\] w-\[44px\] shrink-0 items-center justify-center/);
     expect((T.match(/width="18" height="18"/g) ?? []).length).toBe(2);
-    // 트랙에 p-0.5 같은 안쪽 여백이 없다 — 버튼이 슬롯을 꽉 채운다(빈틈 0)
-    expect(T).toMatch(/^data-board-view-toggle role="group" aria-label="보기 방식"\s+className="flex h-11 shrink-0 items-center rounded-input border border-border-default bg-surface-high"/);
     expect(T).not.toMatch(/SlidingPill/);
+    // 옛 두 슬롯 testid 는 남지 않는다(한 화면에 두 문법이 섞이지 않게)
+    expect(COMM).not.toMatch(/board-view-\$\{v\}/);
   });
 });

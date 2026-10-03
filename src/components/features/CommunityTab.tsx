@@ -457,7 +457,6 @@ function CommunityTab({
               onLike={onLikePost}
               onSelectPost={isDesktop ? selectBoard : onSelectPost}
               selectedId={isDesktop ? boardSelected?.id : undefined}
-              placeholder="나누고 싶은 이야기를 적어보세요…"
               emptyText="첫 게시글을 남겨보세요"
               enableCategory
             />
@@ -577,7 +576,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
 function FeedSection({
   posts, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
   selectedId,
-  placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
+  emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
@@ -590,7 +589,6 @@ function FeedSection({
   onSelectPost: (p: CommunityPost, nav?: PostNavCtx) => void;
   /** 데스크탑 2-pane: 현재 열린 게시글 id(목록 하이라이트용) */
   selectedId?: string;
-  placeholder?: string;
   emptyText?: string;
   /** 게시판: 카테고리 필터 + HOT(최근 6시간 최다 조회) 노출 */
   enableCategory?: boolean;
@@ -811,133 +809,193 @@ function FeedSection({
     setServerErr(null);
   }, []);
 
+  // ── 상단 한 줄(오너 결정 2026-10-04 안 A) ──────────────────────────────────────
+  //   예전 세 줄(① 글쓰기 바 ② 검색+최신|인기 ③ 카테고리+보기 전환, 390 실측 151.6px)을 44px 한 줄로 합쳤다.
+  //   왼쪽 = 카테고리 칩 레일, 오른쪽 = 🔍 · ⇅ · 보기 토글. 글쓰기는 오른쪽 아래 떠 있는 버튼(FAB)으로 옮겼다.
+  //   기능은 그대로다 — 검색(q)·정렬(order)·카테고리(cat)·보기(switchView)·글쓰기(onOpenWrite / 비로그인 promptLogin)가
+  //   예전과 같은 상태·같은 함수를 탄다. 바뀐 것은 진입 위치뿐이다.
+  // 검색 열림 — 열면 같은 줄이 입력칸으로 바뀌고 ✕ 로 돌아온다. 닫아도 검색어는 남는다(🔍 에 점으로 표시).
+  //   keep-alive 탭이라 이 상태는 탭을 옮겼다 돌아와도 그대로다(언마운트되지 않는다).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchBtnRef = useRef<HTMLButtonElement>(null);
+  const closedByUser = useRef(false);
+  useEffect(() => {
+    // 닫으면 포커스를 🔍 로 돌린다 — 닫는 순간엔 버튼이 아직 invisible 이라 커밋 뒤에 준다.
+    if (!searchOpen && closedByUser.current) { closedByUser.current = false; searchBtnRef.current?.focus({ preventScroll: true }); }
+  }, [searchOpen]);
+  const closeSearch = () => { closedByUser.current = true; setSearchOpen(false); };
+  // 정렬 메뉴(최신/인기) — 바깥을 누르거나 Escape 면 닫는다.
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortWrapRef = useRef<HTMLDivElement>(null);
+  const sortBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!sortOpen) return;
+    const down = (e: PointerEvent) => { if (!sortWrapRef.current?.contains(e.target as Node)) setSortOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSortOpen(false); sortBtnRef.current?.focus({ preventScroll: true }); } };
+    document.addEventListener('pointerdown', down);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key); };
+  }, [sortOpen]);
+  // 칩 레일 끝 흐림 — 가려진 칩이 남아 있는 쪽만 흐린다(TierLeaderboard 하위 탭 레일과 같은 규칙 · 같은 유틸).
+  //   ResizeObserver: keep-alive 로 숨은 채(폭 0) 마운트됐다가 보이게 될 때도 다시 잰다.
+  const catRailRef = useRef<HTMLDivElement>(null);
+  const [catFade, setCatFade] = useState('');
+  const hasPosts = posts.length > 0;
+  useEffect(() => {
+    const el = catRailRef.current;
+    if (!el) return;
+    const upd = () => {
+      const l = el.scrollLeft > 1, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setCatFade(l && r ? 'scroll-fade-x' : r ? 'scroll-fade-r' : l ? 'scroll-fade-l' : '');
+    };
+    upd();
+    el.addEventListener('scroll', upd, { passive: true });
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(upd);
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', upd); ro?.disconnect(); };
+  }, [hasPosts]);
+  // 글쓰기 — 예전 '글쓰기' 바와 같은 갈래: 로그인이면 글쓰기(본인인증 게이트는 App 의 onOpenWrite 가 그대로 건다), 아니면 로그인 유도.
+  const write = () => (user ? onOpenWrite() : promptLogin());
+  const pencil = (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+
   return (
     // data-board-loaded: 서버 첫 페이지의 3상태(idle=아직 안 시작 · loading=진행 중 · done=커서 끝) — 화면은 그대로, e2e 계약용.
     //   post-nav ③(2026-09-13): 네트워크 응답을 봐도 serverDone 커밋 전에 글을 열면 스냅샷 done=false 라 마지막 글이 '더 불러오기'(정직)로 뜬다.
     //   테스트가 기다릴 DOM 신호가 없어서(:894 갈래는 목록이 비었을 때만 렌더) 상태를 속성으로 노출한다.
     // (역사) M1 cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다.
     <div data-main-enter data-main-enter-ready className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
-      {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
-      {user ? (
-        <button
-          type="button"
-          onClick={onOpenWrite}
-          className="w-full min-h-[44px] flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-accent-400/50 transition-colors text-left"
-        >
-          <span className="text-xs text-ink-muted">{placeholder}</span>
-          <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-accent-300">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-            글쓰기
-          </span>
-        </button>
-      ) : (
-        <button type="button" onClick={() => promptLogin()}
-          className="w-full min-h-[44px] rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
-          로그인하면 게시글을 작성할 수 있습니다 — <b className="text-accent-300">로그인하기 →</b>
-        </button>
-      )}
-
-      {/* 검색 + 카테고리 필터 */}
-      {posts.length > 0 && (
-        <div className="space-y-1.5">
-          {/* 오너 리포트(2026-08-28) "검색에 '게시글 검색' — 제목 뒤에는 밀려서 보이지도 않아".
-              375px 실측: 행 341px 중 정렬 85px + 보기 74px + gap 12px 을 빼면 입력은 169px,
-              pl-9(38.25)+pr(12.75) 을 다시 빼면 글자가 설 수 있는 폭은 116px 뿐이었다.
-              placeholder '게시글 검색 (제목·내용·작성자)' 는 193px → 77px 초과, 18자 중 11자만 보였다.
-              (수정 후 실측: 입력 249.7px · 글자폭 196.7px · placeholder 27.7px → 잘림 0, 한글 14자까지 통째로 보임)
-              처방 ① placeholder 를 '검색' 한 단어로(아이콘이 이미 '검색'을 말한다)
-                   ② 입력을 1행 전폭으로 올리고, 정렬은 그대로 두되 **보기 토글만** 카테고리 행으로
-                     내려보낸다 — 행 수는 2행 그대로라 오너가 지적했던 '세로가 길다'가 재발하지 않는다. */}
-          <div className="flex items-center gap-1.5">
-            <div className="relative min-w-0 flex-1">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
-                <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
-              </svg>
-              <input
-                type="search" enterKeyHint="search"
-                value={q}
-                onChange={(e) => { setQ(e.target.value); setVisible(15); }}
-                placeholder="검색"
-                aria-label="게시글 검색 (제목·내용·작성자)"
-                className="input h-[44px] min-h-0 w-full py-0 pl-9 pr-3 text-sm"
-              />
-            </div>
-            {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순. overflow-hidden이 .hit 확장을 잘라내므로 실높이로 탭 타깃 확보.
-                ⚠ h-9 는 이 앱(루트 17px)에서 38.25px 라 44 에 못 미쳤다(2026-09-27 실측) — px 로 박는다 */}
-            <div className="inline-flex shrink-0 overflow-hidden rounded-input border border-border-default">
-              {(['new', 'popular'] as const).map((o) => (
-                <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                  className={['h-[44px] min-w-[44px] px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300/15 text-accent-200 font-bold' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                  {o === 'new' ? '최신' : '인기'}
+      {/* 상단 한 줄 — 왼쪽 카테고리 칩(가로 스크롤) · 오른쪽 🔍 ⇅ 보기. 줄 높이는 언제나 44px 이다:
+          검색을 열면 칩·아이콘은 invisible 로 **자리를 그대로 지킨 채** 숨고 입력칸이 그 위(absolute inset-0)에 선다 —
+          그래서 열고 닫아도 아래 목록이 한 픽셀도 움직이지 않고, 닫으면 칩 레일의 가로 스크롤 위치도 그대로다.
+          글이 0건이면 예전처럼 필터 줄은 그리지 않는다(PC 의 글쓰기 버튼만 남는다). */}
+      <div data-board-topline className="flex items-center gap-1">
+        {hasPosts && (
+          <div className="relative flex min-w-0 flex-1">
+            <div className={['flex min-w-0 flex-1 items-center gap-1', searchOpen ? 'invisible' : ''].join(' ')}>
+              {enableCategory ? (
+                // 칩 = h-[44px] 투명 히트박스 + 안쪽 32px 시각 칩(overflow-x 레일 안에서 .hit 확장은 세로 넘침이 된다 — 예전과 같은 조리법)
+                <div ref={catRailRef} data-board-cat-rail className={['flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none', catFade].join(' ')}>
+                  {BOARD_CATEGORIES.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={cat === c.id}
+                      onClick={() => { setCat(c.id); setVisible(15); }}
+                      className="shrink-0 inline-flex h-[44px] items-center"
+                    >
+                      <span className={[
+                        'inline-flex items-center h-8 px-3 rounded-chip border text-2xs font-bold leading-none transition-colors',
+                        cat === c.id
+                          ? 'border-accent-300 bg-accent-300 text-white'
+                          : 'chip-aura',
+                      ].join(' ')}>
+                        {c.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="min-w-0 flex-1" />
+              )}
+              {/* 🔍 — 검색어가 남아 있으면 점으로 알린다(닫아도 필터는 걸려 있다) */}
+              <button ref={searchBtnRef} type="button" data-testid="board-search-open"
+                aria-label={q.trim() ? `검색 — 검색어 '${q.trim()}' 적용 중` : '검색'}
+                onClick={() => { setSortOpen(false); setSearchOpen(true); }}
+                className="relative flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:text-ink-primary">
+                <svg width="18" height="18" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                  <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+                </svg>
+                {q.trim() && <span data-board-search-dot aria-hidden className="absolute top-2 right-2 h-2 w-2 rounded-full bg-accent-300" />}
+              </button>
+              {/* ⇅ 정렬(Phase 14) — 인기 = 좋아요순. 현재 값을 버튼에 적고, 누르면 작은 메뉴(오른쪽 끝 정렬 → 화면 밖으로 안 나간다) */}
+              <div ref={sortWrapRef} className="relative shrink-0">
+                <button ref={sortBtnRef} type="button" data-testid="board-sort"
+                  aria-haspopup="menu" aria-expanded={sortOpen} aria-label={`정렬: ${order === 'new' ? '최신' : '인기'}`}
+                  onClick={() => setSortOpen((o) => !o)}
+                  className="flex h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-input px-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="m21 16-4 4-4-4" /><path d="M17 20V4" /><path d="m3 8 4-4 4 4" /><path d="M7 4v16" />
+                  </svg>
+                  {order === 'new' ? '최신' : '인기'}
                 </button>
-              ))}
-            </div>
-          </div>
-          {/* 2행 — 카테고리 칩(가로 스크롤) + 보기 토글. 칩 h-8 과 토글 h-8 로 밀도 정합 */}
-          <div className="flex items-center gap-1.5">
-            {enableCategory ? (
-              // 오너 지시(2026-08-27): 카테고리 나열이 지저분 — 줄바꿈 없는 한 줄 스크롤 칩,
-              // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
-              // 44px 탭 타깃(오너 승인 2026-09-03): overflow-x-auto 레일 안에서는 .tap-y-44 의 ::before(-6px) 가
-              // 세로 스크롤 오버플로를 만들므로, 버튼을 h-11 투명 컨테이너로 두고 안의 span 이 32px 시각 칩을 그린다.
-              // UI-05 로 보기 토글이 h-11(46.75px) 트랙이 되면서 행 높이도 46.75 — 레일의 -my-1.5(행 32 유지) 는 뺀다.
-              <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
-                {BOARD_CATEGORIES.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-pressed={cat === c.id}
-                    onClick={() => { setCat(c.id); setVisible(15); }}
-                    className="shrink-0 inline-flex h-11 items-center"
-                  >
-                    <span className={[
-                      'inline-flex items-center h-8 px-3 rounded-chip border text-2xs font-bold leading-none transition-colors',
-                      cat === c.id
-                        ? 'border-accent-300 bg-accent-300 text-white'
-                        : 'chip-aura',
-                    ].join(' ')}>
-                      {c.label}
-                    </span>
-                  </button>
-                ))}
+                {sortOpen && (
+                  <div role="menu" aria-label="정렬" className="absolute right-0 top-full z-40 mt-1 w-28 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
+                    {(['new', 'popular'] as const).map((o) => (
+                      <button key={o} type="button" role="menuitemradio" aria-checked={order === o} data-testid={`board-sort-${o}`}
+                        autoFocus={order === o}
+                        onClick={() => { setOrder(o); setSortOpen(false); }}
+                        className={['flex h-[44px] w-full items-center justify-between rounded-input px-3 text-left text-sm transition-colors',
+                          order === o ? 'font-bold text-accent-200' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                        {o === 'new' ? '최신' : '인기'}
+                        {order === o && <Icon name="check" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="min-w-0 flex-1" />
-            )}
-            {/* 보기 모드 토글 — **왼쪽 모아보기(compact, 기본 · N08) / 오른쪽 펼쳐보기(feed, 카드 스택)**(오너 2026-10-02). 두 보기 모두 유지(기능 보존).
-                UI-05(2026-09-13): 예전 트랙 h-8+p-0.5 안의 h-7 w-7 버튼은 클릭 영역 28×28 · 아이콘 15px 였고
-                트랙 안쪽(27.75px)보다 자식(29.75px)이 커 위아래가 어긋났다. 이제 **동일한 두 슬롯 h-11 w-11**(46.75px ≥ 44)이
-                버튼 자체이고, 선택 배경은 슬롯 안 inset 3px 의 별도 면(span)이라 빈틈이 없다. 아이콘 18px 중앙.
-                SlidingPill 을 쓰지 않는다(이 버튼은 그 소비처가 아니다 — 공유 pill 을 건드리면 13곳 회귀).
-                전역 프레스(button:active scale .97)는 버튼(=아이콘+선택면이 같이)에만 걸리고 트랙(div)은 움직이지 않는다 —
-                e2e/board-view-toggle.spec.ts 가 눌림 120ms·놓은 뒤 60/150/300/600ms·정지의 inset 을 잰다. */}
-            <div data-board-view-toggle role="group" aria-label="보기 방식"
-              className="flex h-11 shrink-0 items-center rounded-input border border-border-default bg-surface-high">
-              {([
-                { v: 'compact' as const, label: '모아보기', icon: (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-                    <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
-                  </svg>) },
-                { v: 'feed' as const, label: '펼쳐보기', icon: (
+              {/* 보기 토글 하나 — 지금 보기의 아이콘(☰ 모아보기 / ▭ 펼쳐보기)을 보이고, 누르면 다른 쪽으로 바꾼다.
+                  aria-pressed = 펼쳐보기 켜짐. 저장은 switchView(lib/boardView) 한 곳 — 기본값(N08 compact)·저장 규칙 그대로. */}
+              <button type="button" data-testid="board-view-toggle" data-board-view-toggle data-view={view}
+                aria-label="펼쳐보기" aria-pressed={view === 'feed'}
+                title={view === 'feed' ? '펼쳐보기 — 누르면 모아보기' : '모아보기 — 누르면 펼쳐보기'}
+                onClick={() => switchView(view === 'feed' ? 'compact' : 'feed')}
+                className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:text-ink-primary">
+                {view === 'feed' ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                     <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
-                  </svg>) },
-              ]).map(({ v, label, icon }) => (
-                <button key={v} type="button" data-testid={`board-view-${v}`} aria-label={label} title={label} aria-pressed={view === v}
-                  onClick={() => switchView(v)}
-                  className={['relative flex h-11 w-11 items-center justify-center rounded-input transition-colors',
-                    view === v ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  <span aria-hidden className={['absolute inset-[3px] rounded-[6px]', view === v ? 'bg-surface-float' : ''].join(' ')} />
-                  <span className="relative">{icon}</span>
-                </button>
-              ))}
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                    <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                  </svg>
+                )}
+              </button>
             </div>
+            {searchOpen && (
+              <div className="absolute inset-0 flex items-center gap-1">
+                <div className="relative min-w-0 flex-1">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
+                    <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+                  </svg>
+                  <input
+                    type="search" enterKeyHint="search" autoFocus
+                    value={q}
+                    onChange={(e) => { setQ(e.target.value); setVisible(15); }}
+                    onKeyDown={(e) => { if (e.key === 'Escape') closeSearch(); else if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    placeholder="검색"
+                    aria-label="게시글 검색 (제목·내용·작성자)"
+                    className="input h-[44px] min-h-0 w-full py-0 pl-9 pr-3 text-sm"
+                  />
+                </div>
+                <button type="button" data-testid="board-search-close" aria-label="검색 닫기" onClick={closeSearch}
+                  className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:text-ink-primary">
+                  <Icon name="close" />
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+        {/* PC(lg+) 글쓰기 — 떠 있는 버튼 대신 이 줄 끝에 선다. 2-pane 오른쪽 상세(댓글 입력·등록)를 FAB 가 덮지 않게. */}
+        <button type="button" data-testid="board-write-inline" aria-label="글쓰기" title="글쓰기" onClick={write}
+          className="hidden h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-accent-300 text-white lg:flex">
+          {pencil}
+        </button>
+        {/* 모바일 글쓰기 FAB — 오른쪽 아래. 위치는 '맨 위로'(App ScrollTopButton: bottom --tabbar-float · right-4 · 42.5px)의
+            바로 위 같은 세로축(right-3 + 51px → 중심 x 일치)이고, 아래 4rem 은 하단 중앙 토스트(1줄 44.5 · 2줄 65.75px)를 비켜 선다.
+            스크롤에 따라 접거나 숨기지 않는다 — 아이콘만 있는 원이라 접을 것이 없고, 움직이지 않는 편이 누르기 쉽다.
+            [data-sec="board"] 안에 있어 다른 하위 탭·다른 탭에서는 display:none 으로 같이 사라진다.
+            ⚠ 이 flex 줄 **안**에 둔다 — 바깥 space-y-2 의 직계 자식이면 margin-bottom 이 붙어 fixed 위치가 8.5px 뜬다. */}
+        <button type="button" data-testid="board-write" aria-label="글쓰기" title="글쓰기" onClick={write}
+          style={{ bottom: 'calc(var(--tabbar-float) + 4rem)' }}
+          className="fixed right-3 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent-300 text-white shadow-dialog lg:hidden">
+          {pencil}
+        </button>
+      </div>
 
       {/* 광고 조회 실패는 **운영자에게만** 알린다.
           · 일반 손님에겐 아무 의미가 없고(할 수 있는 게 없다), 피드는 광고 없이 정상 동작한다.
@@ -972,7 +1030,7 @@ function FeedSection({
           ) : serverErr != null ? (
             <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
           ) : user && posts.length === 0 ? (
-            // AI 문구 정리(2026-09-14): 위 '글쓰기' 바가 이미 "쓸 수 있다"고 말하고 있다 — 로그인 상태에서
+            // AI 문구 정리(2026-09-14): 글쓰기 버튼(2026-10-04 부터 FAB)이 이미 "쓸 수 있다"고 말하고 있다 — 로그인 상태에서
             // 그 아래 emptyText 로 같은 말을 또 하면 댓글 0→입력창→"첫 댓글을 남겨보세요" 와 같은 3단 중복이다
             // (CommentThread.tsx 와 같은 판단, 같은 user 조건 재사용). 검색으로 0건이 된 경우(비로그인 포함)는
             // 새 정보라 그대로 보여준다 — 아래 else 분기.
