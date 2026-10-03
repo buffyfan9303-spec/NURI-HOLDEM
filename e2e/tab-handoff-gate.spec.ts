@@ -30,6 +30,63 @@ function installFadeSpy() {
   };
 }
 import { bootOwner, openMyStore } from './_mockOwner';
+import type { Frame } from './_flicker';
+import { FRAME_MS } from './_cutNorm';
+
+// 자리 판정(2026-10-03 rca-handoff-6px-1003) — 떠나는 판 복제본은 **페이드가 시작되기 전에도** 원본 자리여야 한다.
+//   normalizedCut 은 onset 앞 걸음을 세지 않는다. 그 빈 구간에서 복제본 내용이 10.6px 내려앉아(위 껍데기의 마진 겹침 소실 · 커뮤니티 홀덤펍 → 게시판)
+//   목록이 한 번에 툭 떨어진 채 페이드됐다. 두 단언으로 막는다:
+//   A. DOM — 누르기 직전 본문 글자 칸(제 글자를 가진 요소 ≤16개)의 윗변 ↔ 복제본이 처음 페인트된 뒤(두 번째 rAF)의 같은 글자 칸. 차 중앙값 ≤ 0.5px · 최댓값 ≤ 3px.
+//   B. 픽셀 — 누른 뒤 ~ onset 앞(1프레임 여유) 프레임은 누르기 직전 프레임과 같다(본문 크롭 썸네일 차 ≤ 1.5).
+function installAlignSpy() {
+  const w = window as unknown as { __al: { sig: { t: string; y: number }[]; worst: number; med: number; seen: boolean; detail: string } | null };
+  w.__al = null;
+  const own = (e: Element) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent ?? '').join('').trim();
+  new MutationObserver((rs) => {
+    const al = w.__al; if (!al || al.seen) return;
+    for (const r of rs) for (const n of r.addedNodes) {
+      if (!(n instanceof HTMLElement) || !n.hasAttribute('data-pane-leaving') || n.classList.contains('tab-pane') || n.tagName === 'FOOTER') continue;
+      al.seen = true;
+      // 두 번째 rAF = 복제본이 처음 페인트된 뒤. 첫 rAF 는 content-visibility:auto 행(.cv-row-*)의 화면 근접 판정 **전**이라
+      //   행이 contain-intrinsic-size 로 서 있어 1~3px 씩 밀려 보인다(그려지지 않는 값 — B 의 픽셀 차 0.00 으로 확인).
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!n.isConnected) return;
+        const pool = [...n.querySelectorAll('*')].map((e) => ({ t: own(e), y: e.getBoundingClientRect().top })).filter((x) => x.t);
+        const ds: number[] = [];
+        for (const s of al.sig) {
+          const c = pool.filter((p) => p.t === s.t).sort((a, b) => Math.abs(a.y - s.y) - Math.abs(b.y - s.y))[0];
+          if (!c) continue;
+          const d = Math.abs(c.y - s.y); ds.push(d);
+          if (d > 0.5) al.detail += ` '${s.t.slice(0, 10)}' ${s.y.toFixed(1)}→${c.y.toFixed(1)}`;
+          if (d > al.worst) al.worst = d;
+        }
+        ds.sort((a, b) => a - b); al.med = ds.length ? ds[Math.floor(ds.length / 2)] : 0;
+      }));
+      return;
+    }
+  }).observe(document, { subtree: true, childList: true });
+}
+/** 누르기 직전 서명 — 판 안의 보이는 본문(crop 세로 구간) 글자 칸 윗변. 서명 개수를 돌려준다. */
+const armAlign = (page: Page, panel: string, crop: { top: number; bottom: number }) => page.evaluate(([panel, top, bottom]) => {
+  const own = (e: Element) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent ?? '').join('').trim();
+  const p = [...document.querySelectorAll(panel as string)].find((e) => e.getClientRects().length);
+  const sig = p ? [...p.querySelectorAll('*')].filter((e) => e.getClientRects().length && own(e)).map((e) => ({ t: own(e), y: e.getBoundingClientRect().top }))
+    .filter((s) => s.y > (top as number) && s.y < (bottom as number)).slice(0, 16) : [];
+  (window as unknown as { __al: unknown }).__al = { sig, worst: 0, med: 0, seen: false, detail: '' };
+  return sig.length;
+}, [panel, crop.top, crop.bottom] as [string, number, number]);
+/** A·B 판정 — 행 꼬리(row)와 실패 문구(bad), 잰 복제본 수(measured 0/1). */
+async function alignVerdict(page: Page, id: string, nsig: number, pre: Frame | undefined, post: Frame[], onset: number | null, d: (a: Frame, b: Frame) => number) {
+  const al = await page.evaluate(() => (window as unknown as { __al: { worst: number; med: number; seen: boolean; detail: string } }).__al);
+  const before = onset ? post.filter((f) => f.t + FRAME_MS < onset) : [];
+  const preDrift = pre ? Math.max(0, ...before.map((f) => d(pre, f))) : 0;
+  const bad: string[] = [];
+  const measured = al.seen && nsig > 0 ? 1 : 0;
+  if (measured && (al.med > 0.5 || al.worst > 3)) bad.push(`${id} 복제본 내용이 원본과 어긋났다(중앙값 ${al.med.toFixed(1)}px · 최대 ${al.worst.toFixed(1)}px:${al.detail})`);
+  if (preDrift > 1.5) bad.push(`${id} 페이드 시작 전 본문이 바뀌었다(차 ${preDrift.toFixed(2)} > 1.5)`);
+  const fade = onset ? post.filter((f) => f.t >= onset && f.t < onset + 260).length : 0; // 퇴장 페이드(240ms) 동안 나온 프레임 수 — 진단용
+  return { row: ` sig=${nsig} dom=${measured ? `${al.med.toFixed(1)}/${al.worst.toFixed(1)}` : '-'} pre=${before.length}f/${preDrift.toFixed(2)} fade=${fade}f`, bad, measured };
+}
 
 const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
 const TAB = (label: string): Finder => ({ sel: 'nav[aria-label="하단 내비게이션"] button', text: label, exact: true });
@@ -230,6 +287,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
   test('④ 하위 탭 — 떠나는 판이 서고 걷힌다 · 한 프레임 컷 없음 · 빠진 타일 0 · 입력은 새 판', async ({ page }) => {
     const cdp = await boot(page, 'dark');
     await page.evaluate(installFadeSpy);
+    await page.evaluate(installAlignSpy);
     await page.evaluate(() => {
       const w = window as unknown as { __lv: number[] };
       w.__lv = [];
@@ -245,7 +303,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
       { nav: '커뮤니티', rail: '[data-community-secbar] button', panel: '[data-community-secpanel]', lim: 900 },
       { nav: 'GTO', rail: '[data-tools-lanebar] button', panel: '[data-tools-lanepanel]', lim: 60 },
     ];
-    const rows: string[] = []; const bad: string[] = []; let changed = 0; let taps = 0;
+    const rows: string[] = []; const bad: string[] = []; let changed = 0; let taps = 0; let aligned = 0;
     for (const sc of SCOPES) {
       await tapTab(page, cdp, sc.nav, sc.nav);
       await page.waitForTimeout(2000);
@@ -254,7 +312,13 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
       const K = Math.min(n, 5);
       for (let i = 0; i < K; i++) {
         const idx = (i + 1) % K;
-        await page.evaluate((lim) => scrollTo({ top: Math.max(0, Math.min(lim, document.documentElement.scrollHeight - innerHeight - 150)), behavior: 'instant' as ScrollBehavior }), sc.lim);
+        // 판 위쪽(커뮤니티 홀덤펍의 필터 칩 줄)이 화면 위로 나가야 복제본에 위 껍데기가 생긴다(자리 판정 A·B 의 대상). 운영 데이터가 짧은 날엔
+        //   끝까지 스크롤해도 그 줄이 화면 안에 남아 결함이 가려졌다(2026-10-03 오후 실측: 문서 1244px · scrollY 255 · 칩 줄 y=49) — 문서 끝에 300px 여유를 준다.
+        await page.evaluate((lim) => {
+          const html = document.documentElement;
+          html.style.minHeight = ''; html.style.minHeight = `${html.scrollHeight + 300}px`;
+          scrollTo({ top: Math.max(0, Math.min(lim, html.scrollHeight - innerHeight - 150)), behavior: 'instant' as ScrollBehavior });
+        }, sc.lim);
         await page.waitForTimeout(700);
         const b = await page.evaluate(([rail, panel, k]) => {
           const x = [...document.querySelectorAll(rail as string)].filter((e) => e.getClientRects().length)[k as number];
@@ -270,6 +334,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         const id = `${sc.nav}#${i}:${b!.label}`;
         const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
         const fd0 = await page.evaluate(() => (window as unknown as { __fade: number[] }).__fade.length);
+        const nsig = await armAlign(page, sc.panel, b!.crop);
         await cast.start(b!.crop);
         await page.waitForTimeout(120);
         const t0 = Date.now();
@@ -298,7 +363,9 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
         const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
         const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
-        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${hit ? ' hit=' + hit : ''}`);
+        const al = await alignVerdict(page, id, nsig, pre, post, onset, d);
+        aligned += al.measured; bad.push(...al.bad);
+        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${al.row}${hit ? ' hit=' + hit : ''}`);
         if (total > 3) {
           changed += 1;
           if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 메인 탭과 다른 전환)`);
@@ -308,6 +375,9 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         if (stuck.n || stuck.swap) bad.push(`${id} 정착 뒤 남았다: 떠나는 판 ${stuck.n} · data-tab-swap ${stuck.swap}`);
         await page.waitForTimeout(300);
       }
+      // 여유를 걷고 하단바가 보이는 자리(끝에서 150px 위)로 — 다음 범위의 메인 탭을 누를 수 있게
+      await page.evaluate(() => { const html = document.documentElement; html.style.minHeight = ''; scrollTo({ top: Math.max(0, html.scrollHeight - innerHeight - 150), behavior: 'instant' as ScrollBehavior }); });
+      await page.waitForTimeout(700);
     }
     const done = new Promise<{ stream: string }>((res) => cdp.once('Tracing.tracingComplete', (e) => res(e as { stream: string })));
     await cdp.send('Tracing.end');
@@ -320,9 +390,10 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     const tapsTr = ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('tap:')).sort((a, b) => a.ts - b.ts);
     const near = (ts: number) => { let best: Ev | null = null; for (const m of tapsTr) if (m.ts <= ts && (!best || m.ts > best.ts)) best = m; return best ? { tap: best.name.slice(4), dt: Math.round((ts - best.ts) / 1000) } : null; };
     const missing = ev.filter((e) => e.name === 'PipelineReporter' && e.args?.frame_reporter?.has_missing_content).map((e) => near(e.ts)).filter((n): n is { tap: string; dt: number } => !!n && n.dt <= 1100);
-    console.log(`[handoff-sub] taps=${taps} changed=${changed} missing=${missing.length}\n  ${rows.join('\n  ')}`);
+    console.log(`[handoff-sub] taps=${taps} changed=${changed} aligned=${aligned} missing=${missing.length}\n  ${rows.join('\n  ')}`);
     expect(tapsTr.length, '트레이스에서 탭 표식을 못 찾았다').toBe(taps);
     expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다(데이터·선택자 확인)').toBeGreaterThanOrEqual(6);
+    expect(aligned, '자리 판정(A)으로 잰 복제본이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
     expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다').toEqual([]);
     expect(bad).toEqual([]);
   });
@@ -448,6 +519,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
       page.on('request', (r) => { if (r.method() === 'GET' && /\/rest\/v1\/legal_consents\?/.test(r.url())) consentReads += 1; });
       const cdp = await boot(page, scheme);
       await page.evaluate(installFadeSpy);
+      await page.evaluate(installAlignSpy);
       await page.evaluate(() => {
         const g = window as unknown as { __lv: number[] };
         g.__lv = [];
@@ -475,7 +547,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
       // '@…' = 판 안의 이동 버튼(대시보드 '프로필 편집' → 설정 탭) — 탭바가 아닌 두 번째 입구도 같은 장치를 타야 한다.
       const ORDER = ['프로필', '설정', '보안', '대시보드', '@프로필 편집', '보안', '프로필', '대시보드'];
       const DEST: Record<string, string> = { '@프로필 편집': '설정' };
-      const rows: string[] = []; const bad: string[] = []; let changed = 0; let readsAfterSec = -1;
+      const rows: string[] = []; const bad: string[] = []; let changed = 0; let readsAfterSec = -1; let aligned = 0;
       for (let i = 0; i < ORDER.length; i++) {
         const name = ORDER[i];
         // 판을 스크롤한 뒤(가능하면 200px) 누른다 — 원점 스크롤 0 은 실사용이 아니다
@@ -497,6 +569,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
         const id = `${w}${scheme[0]}#${i}:${name}`;
         const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
         const fd0 = await page.evaluate(() => (window as unknown as { __fade: number[] }).__fade.length);
+        const nsig = await armAlign(page, '[data-profile-panel]', b!.crop);
         await cast.start(b!.crop);
         await page.waitForTimeout(120);
         const t0 = Date.now();
@@ -523,7 +596,9 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
         const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
         const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
         const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
-        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${hit ? ' hit=' + hit : ''}`);
+        const al = await alignVerdict(page, id, nsig, pre, post, onset, d);
+        aligned += al.measured; bad.push(...al.bad);
+        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${al.row}${hit ? ' hit=' + hit : ''}`);
         if (total > 3) {
           changed += 1;
           if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 다른 하위 탭과 다른 전환)`);
@@ -535,8 +610,9 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
         await page.waitForTimeout(300);
       }
       const same = await page.evaluate(() => { const d = (window as unknown as { __dash: Element & { __keep?: boolean } }).__dash; return !!d?.isConnected && d.__keep === true; });
-      console.log(`[handoff-me ${w} ${scheme}] changed=${changed} consentReads=${consentReads} (after first 보안 ${readsAfterSec})\n  ${rows.join('\n  ')}`);
+      console.log(`[handoff-me ${w} ${scheme}] changed=${changed} aligned=${aligned} consentReads=${consentReads} (after first 보안 ${readsAfterSec})\n  ${rows.join('\n  ')}`);
       expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
+      expect(aligned, '자리 판정(A)으로 잰 복제본이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
       expect(same, 'keep-alive: 대시보드 판이 다시 마운트됐다').toBe(true);
       expect(readsAfterSec, '보안 탭 진입을 못 쟀다').toBeGreaterThanOrEqual(0);
       expect(consentReads, 'keep-alive: 첫 보안 진입 뒤 약관 이력을 다시 불렀다').toBe(readsAfterSec);

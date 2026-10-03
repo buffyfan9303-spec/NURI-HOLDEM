@@ -448,6 +448,10 @@ type SubSnap = {
   clipBelow: (railBottom: number | null) => void;
   /** 판을 세로로 자르는 가장 가까운 그릇(뜨는 카드·시트)과 이벤트 시점 높이 — 없으면 null(지면 위 판). */
   frame: { el: HTMLElement; h: number } | null;
+  /** 보이는 첫 복제 요소와 그 원본의 이벤트 시점 윗변 — 붙인 뒤 내용이 원본 자리인지 잰다. */
+  anchor: { c: Element; top: number } | null;
+  /** 복제본을 d 만큼 위로 옮겼을 때 자르는 선은 화면에 그대로 둔다. */
+  nudge: (d: number) => void;
 };
 /** 레일이 판과 가로로 겹치면 그 밑변(뷰포트 y), 아니면 null — 세로 사이드바(PC)는 판과 가로로 안 겹친다. */
 const railBottomOver = (rail: Element | null, box: { left: number; width: number }): number | null => {
@@ -527,9 +531,21 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
         const s = ch.cloneNode(false) as HTMLElement;
         if (s.style) { s.style.height = `${q.height}px`; s.style.minHeight = '0'; s.style.maxHeight = 'none'; }
         c.appendChild(s);
-      } else c.appendChild(cut(ch, depth + 1));
+      } else {
+        const cc = cut(ch, depth + 1);
+        if (!anchor && q.height > 0 && q.bottom > top && q.top < bottom && !stuck(ch)) anchor = { c: cc as Element, top: q.top };
+        c.appendChild(cc);
+      }
     }
     return c;
+  };
+  // 위 껍데기는 높이만 지킨다 — 자손이 껍데기 경계로 넘기던 마진 겹침(-my-2.5 등)은 사라져 그 아래 내용이 통째로 밀린다(2026-10-03 커뮤니티
+  //   홀덤펍 → 게시판 +10.6px). 겹침 규칙을 다시 짜지 않고, 붙인 뒤 보이는 첫 요소의 자리를 재서 판을 그만큼 되돌린다(아래 handOffSubPanel).
+  //   sticky·fixed 안의 요소는 복제본에서 자리가 달라 기준점으로 쓰지 않는다.
+  let anchor: SubSnap['anchor'] = null;
+  const stuck = (e: Element): boolean => {
+    for (let n: Element | null = e; n && n !== root; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'sticky' || p === 'fixed') return true; }
+    return false;
   };
   const el = cut(root, 0) as HTMLElement;
   el.setAttribute('aria-hidden', 'true');
@@ -543,10 +559,15 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   el.style.setProperty('display', getComputedStyle(root).display, 'important'); // [data-pane-leaving] 의 block 이 판의 flex·grid 를 깨지 않게
   el.style.height = `${r.height}px`;
   if (page) el.style.minHeight = `${h}px`;
+  let shift = 0; // nudge 로 옮긴 거리 — 자르는 선의 원점을 그만큼 되돌려 화면 자리에 고정한다
+  let lastRb = rb;
   const clipBelow = (railBottom: number | null) => {
+    lastRb = railBottom;
     const t = Math.min(bottom, Math.max(top0, railBottom ?? top0));
-    el.style.clipPath = `inset(${t - r.top}px ${r.right - right}px ${r.top + h - bottom}px ${left - r.left}px)`;
+    const o = r.top - shift;
+    el.style.clipPath = `inset(${t - o}px ${r.right - right}px ${o + h - bottom}px ${left - r.left}px)`;
   };
+  const nudge = (d: number) => { shift += d; clipBelow(lastRb); };
   clipBelow(rb);
   if (base === null) {
     const ground = window.matchMedia('(prefers-reduced-transparency: reduce)').matches
@@ -559,7 +580,7 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     el.style.backgroundAttachment = 'scroll';
   }
   place(el, { top: r.top, left: r.left, width: r.width });
-  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow, frame };
+  return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow, frame, anchor, nudge };
 }
 
 // ── 커밋 판정(2026-09-27 COMMIT-SIGNAL) ─────────────────────────────────────────
@@ -683,6 +704,11 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     for (const a of el.getAnimations({ subtree: true })) {
       try { if (a.timeline === document.timeline && Number.isFinite(Number(a.effect?.getComputedTiming().endTime))) a.finish(); else a.cancel(); } catch { a.cancel(); }
     }
+    // 내용이 원본 자리인가(snapSubPanel 의 껍데기 마진 겹침) — 어긋난 만큼 판을 옮기고 자르는 선은 화면에 둔다.
+    //   스크롤 복원·애니 정지 **뒤**에 잰다 — 판 자신이 스크롤 상자(내 정보)면 복원 전 기준점은 scrollTop 만큼 아래에 있고(앞에 두면 −200px 로
+    //   끌려 올라갔다), 다시 돈 진입 애니(translate)가 기준점을 잠깐 옮겨 둔다.
+    const ax = s.anchor ? s.anchor.c.getBoundingClientRect().top - (s.anchor.top - dy) : 0;
+    if (Math.abs(ax) > 0.5) { el.style.setProperty('--leave-top', `${s.box.top - dy - oy - ax}px`); s.nudge(ax); }
     // 푸터 복제본은 메인 탭과 같은 자리(앱 셸 = 판(.tab-pane)의 부모)에 넣는다 — 푸터의 부모(.reveal)는 스크롤 리빌 transform 이라
     //   fixed 의 기준·쌓임 맥락이 바뀌어 복제본이 엉뚱한 자리·판 복제본 **아래**에 섰다(실측: 545 → 1120).
     const pane = root.closest('.tab-pane');

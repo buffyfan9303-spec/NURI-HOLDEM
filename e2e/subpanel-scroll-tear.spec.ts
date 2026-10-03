@@ -7,7 +7,7 @@
 //   판 밖(배너·레벨바·사이드바 열)은 scroll 0 자리 → 페이드 240ms(+첫 방문 대기) 동안 300px 찢김.
 // 이 스펙: 스크롤 300·1500 에서 사이드바 이동을 여러 번 하고, 복제본이 보이는 모든 프레임에서
 //   (a) 판 밖 비고정 표지(판 줄 바로 위 블록)가 **보이면** 그 이동량 == 복제본 이동량(같은 페이지처럼 움직인다)
-//   (b) 복제본 첫 프레임 윗변 == 직전 **페인트된** 판 윗변(옛 그림이 되돌아가거나 튀지 않는다 — 표본은 ResizeObserver 로 페인트 직전에)
+//   (b) 복제본 첫 프레임의 글자 칸 윗변 == 직전 **페인트된** 판의 같은 글자 칸(옛 그림이 되돌아가거나 튀지 않는다 — 표본은 ResizeObserver 로 페인트 직전에)
 //   (c) 복제본이 실제로 섰다(페이드가 있다 — 0 프레임이면 측정이 빈 것이라 실패)
 // 클릭은 실제 마우스 down→up(locator.click 은 자동 스크롤로 측정을 오염시킨다).
 import type { Page } from '@playwright/test';
@@ -51,11 +51,16 @@ for (const scroll of [300, 1500]) {
         const row = document.querySelector('[data-mystore-secpanel]')!.parentElement!;
         const anchor = (row.previousElementSibling ?? row.parentElement!.firstElementChild) as HTMLElement;
         const vis = () => { const q = anchor.getBoundingClientRect(); const x = q.left + 20; for (let y = Math.max(0, q.top + 2); y < Math.min(innerHeight, q.bottom - 2); y += 8) { const e = document.elementFromPoint(x, y); if (e && anchor.contains(e)) return true; } return false; };
+        // 판 상자가 아니라 **판 안 글자 칸**으로 잰다(2026-10-03) — 복제본은 위 껍데기의 마진 겹침 소실을 상자째 옮겨 바로잡는다(매장 설정 +12.8px).
+        //   사용자가 보는 것은 내용이므로, 화면에 보이는 첫 글자 칸과 복제본 속 같은 글자 칸(그 자리에서 가장 가까운 것)을 비교한다.
+        const own = (e: Element) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent ?? '').join('').trim();
+        const ref = [...document.querySelectorAll('[data-mystore-secpanel] *')].find((e) => { const q = e.getBoundingClientRect(); return q.height > 0 && q.top > 0 && q.top < innerHeight && !!own(e); })!;
+        const key = own(ref), y0 = ref.getBoundingClientRect().top;
+        const inClone = (lv: HTMLElement) => [...lv.querySelectorAll('*')].filter((e) => own(e) === key).map((e) => e.getBoundingClientRect().top).sort((a, b) => Math.abs(a - y0) - Math.abs(b - y0))[0] ?? null;
         const step = () => {
           const t = performance.now() - t0;
-          const root = document.querySelector('[data-mystore-secpanel]')!;
           const lv = [...document.querySelectorAll<HTMLElement>('[data-pane-leaving]')].find((e) => !e.matches('footer, .tab-pane'));
-          g.__f.push({ t, o: lv ? +getComputedStyle(lv).opacity : null, clone: lv ? lv.getBoundingClientRect().top : null, root: root.getBoundingClientRect().top, aTop: anchor.getBoundingClientRect().top, aVis: vis() });
+          g.__f.push({ t, o: lv ? +getComputedStyle(lv).opacity : null, clone: lv ? inClone(lv) : null, root: ref.getBoundingClientRect().top, aTop: anchor.getBoundingClientRect().top, aVis: vis() });
         };
         // ⚠ 표본은 **페인트 직전**에 뜬다 — rAF 콜백이 전부 끝난 뒤 도는 ResizeObserver. rAF 표본은 같은 프레임의 뒤쪽 rAF(P2 정렬)가
         //   바꾼 스크롤을 못 봐, '정렬된 채 페인트 → 복제본이 옛 자리로 되돌아감(161px)' 을 놓쳤다(세로 레일만 고친 사본이 rAF 표본에선 통과).
@@ -75,6 +80,7 @@ for (const scroll of [300, 1500]) {
       const i1 = f.findIndex((x) => x.o != null);
       if (i1 < 1) { bad.push(`r${round}: 복제본 없음(페이드 0 — 측정 불가)`); continue; }
       const pre = f[i1 - 1];
+      if (f[i1].clone == null) { bad.push(`r${round}: 복제본에서 기준 글자 칸을 못 찾았다(측정 불가)`); continue; }
       const back = f[i1].clone! - pre.root;
       if (Math.abs(back) > 2) bad.push(`r${round}: 옛 그림 튐 ${Math.round(back)}px`);
       const torn = f.slice(i1).filter((x) => x.o != null && x.o > 0.05 && x.aVis && Math.abs((x.aTop - pre.aTop) - (x.clone! - pre.root)) > 2);
