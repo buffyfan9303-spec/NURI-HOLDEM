@@ -529,7 +529,15 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
       if (q.width === 0 && q.height === 0 && getComputedStyle(ch).display === 'none') { c.appendChild(ch.cloneNode(false)); continue; }
       if (q.height > 0 && (q.bottom < top0 || q.top > bottom)) { // 레일 위(top0~top)는 남긴다 — 레일이 올라가면 드러난다
         const s = ch.cloneNode(false) as HTMLElement;
-        if (s.style) { s.style.height = `${q.height}px`; s.style.minHeight = '0'; s.style.maxHeight = 'none'; }
+        // 원본의 display·마진을 고정한다 — 비운 껍데기는 내용에 기대는 스타일(empty:hidden 의 :empty · :has())에 걸려 숨으면 그 높이만큼
+        //   아래 내용이 올라갔다(2026-10-03 내 매장 등급 배너 래퍼 −76px). 자손이 경계 밖으로 넘기던 마진 겹침은 여기서 못 지킨다 —
+        //   그건 붙인 뒤 기준점(anchor)으로 바로잡는다(handOffSubPanel).
+        if (s.style) {
+          const cs = getComputedStyle(ch);
+          s.style.setProperty('display', cs.display, 'important');
+          s.style.setProperty('margin', `${cs.marginTop} ${cs.marginRight} ${cs.marginBottom} ${cs.marginLeft}`, 'important');
+          s.style.height = `${q.height}px`; s.style.minHeight = '0'; s.style.maxHeight = 'none';
+        }
         c.appendChild(s);
       } else {
         const cc = cut(ch, depth + 1);
@@ -539,7 +547,7 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     }
     return c;
   };
-  // 위 껍데기는 높이만 지킨다 — 자손이 껍데기 경계로 넘기던 마진 겹침(-my-2.5 등)은 사라져 그 아래 내용이 통째로 밀린다(2026-10-03 커뮤니티
+  // 위 껍데기는 제 상자(높이·display·마진)만 지킨다 — 자손이 껍데기 경계로 넘기던 마진 겹침(-my-2.5 등)은 사라져 그 아래 내용이 통째로 밀린다(2026-10-03 커뮤니티
   //   홀덤펍 → 게시판 +10.6px). 겹침 규칙을 다시 짜지 않고, 붙인 뒤 보이는 첫 요소의 자리를 재서 판을 그만큼 되돌린다(아래 handOffSubPanel).
   //   sticky·fixed 안의 요소는 복제본에서 자리가 달라 기준점으로 쓰지 않는다.
   let anchor: SubSnap['anchor'] = null;
