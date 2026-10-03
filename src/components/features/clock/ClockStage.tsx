@@ -21,6 +21,7 @@ import { useClockSecond } from '../../../lib/clockTick';
 import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
+import type { ClockStageDecor } from './clockStageDecor';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, PRIZE_BAND_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
@@ -86,18 +87,6 @@ const COL_PLATE = { ...PLATE, alignSelf: 'var(--clk-plate-align, stretch)' } as 
 const PlateCtx = createContext(false);
 const usePlate = () => useContext(PlateCtx);
 
-/** 테마 변수 → 보드 장식(글자 판 유무 · 로고). 호출처(TV·운영자 스테이지)가 루트 변수에서 뽑아 넘긴다 — 보드는 데이터를 읽지 않는다. */
-export interface ClockStageDecor {
-  plated: boolean;
-  logo: { src: string; head: string; tall: string; plate: string | null } | null;
-}
-export function clockStageDecor(vars: Record<string, string>): ClockStageDecor {
-  const src = vars['--clk-logo'];
-  return {
-    plated: !!vars['--clk-plate'],
-    logo: src ? { src, head: vars['--clk-logo-head'] ?? '6cqmin', tall: vars['--clk-logo-tall'] ?? '32cqmin', plate: vars['--clk-logo-plate'] ?? null } : null,
-  };
-}
 const NO_DECOR: ClockStageDecor = { plated: false, logo: null };
 
 

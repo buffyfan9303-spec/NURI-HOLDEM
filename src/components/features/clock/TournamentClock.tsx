@@ -53,7 +53,8 @@ import { lazyWithReload } from '../../../lib/lazyWithReload';
 //   VenueManageTab 청크가 상한 119KB 를 0.2KB 넘었다 — 예산을 올리지 않고 이 패널을 뺐다). 폼이 뜨면 바로 preload 해서
 //   보통은 lazy 를 거치지 않고 동기로 그린다(lazyWithReload.preload). 폴백 = 패널 자신의 로딩 상자와 같은 높이(CLS 0).
 const ClockThemePanel = lazyWithReload(() => import('./ClockThemePanel'));
-import ClockStage, { clockStageDecor } from './ClockStage';
+import ClockStage from './ClockStage';
+import { clockStageDecor } from './clockStageDecor';
 import ClockPagesEditor from './ClockPagesEditor';
 import { useClockAds } from './useClockAds';
 import { clampExtraPages, clockPagesBlocked, type ClockExtraPage } from '../../../lib/clockSlides';

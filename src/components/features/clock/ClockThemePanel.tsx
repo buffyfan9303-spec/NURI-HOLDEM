@@ -17,7 +17,7 @@ import {
 } from './clockTheme';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { ambIsolation } from './ambience/ambiencePresets';
-import { clockStageDecor } from './ClockStage';
+import { clockStageDecor } from './clockStageDecor';
 import { CLOCK_THEME_POLL_MS } from './useClockThemeVars';
 import { uploadClockBg, deleteClockBg, CLOCK_BG_ACCEPT } from './clockBgImage';
 import { msgOf } from '../../../lib/dbError';

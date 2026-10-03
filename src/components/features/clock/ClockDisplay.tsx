@@ -22,7 +22,8 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, type ClockState } from '../../../api/clock';
-import ClockStage, { clockStageDecor } from './ClockStage';
+import ClockStage from './ClockStage';
+import { clockStageDecor } from './clockStageDecor';
 import { gameLabel } from '../../../lib/clockLevel';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
