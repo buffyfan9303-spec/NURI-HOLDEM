@@ -28,6 +28,13 @@ const sess = (date: string, o: Record<string, unknown> = {}) => ({
 const pending = (n: number) => Array.from({ length: n }, (_, i) =>
   sess(dayAgo(i + 1), { title: `밀린 메인${i + 1}`, schedule_id: `99999999-9999-4999-8999-${String(i).padStart(12, '0')}` }));
 
+const TODAY_POSTER = {
+  id: '99999999-9999-4999-8999-000000000090', title: '오늘 메인 포스터', venue_id: MOCK_VENUE, pub_name: '테스트 홀덤펍', region: '서울', address: '서울 강남구 1',
+  date: MOCK_DAY, start_time: '19:00:00', duration: '', format: 'tournament', guaranteed: 1_000_000, prize_pool: null, buy_in: { amount: 30_000 }, seats: 40,
+  structure: null, description: '', side_events: [], ranking_prizes: [], partners: [], promotions: [], payment_methods: [], rules: [], poster_url: null,
+  poster_color: null, display_order: 1, is_premium: false, premium_until: null, owner_id: '00000000-0000-4000-8000-0000000000ee', unread_qna_count: 0,
+  approved: true, view_count: 0,
+};
 async function routeRank(p: Page, n: number) {
   await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
   await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => {
@@ -87,7 +94,7 @@ for (const [W, H] of [[1024, 768], [390, 844], [360, 780]] as const) for (const 
     await page.goto('/');
     await openMyStore(page);
     const pane = page.locator('[data-pane="dashboard"]');
-    if (now > 0) await expect(pane.getByText(/순위 미입력/).first(), '순위 미입력 안내에 닿지 못했다(전제)').toBeVisible({ timeout: 25_000 });
+    if (now > 0) await expect(pane.getByTestId('todo-rank'), '순위 미입력 보조 줄에 닿지 못했다(전제)').toBeVisible({ timeout: 25_000 });
     else await expect(pane.getByTestId('todo-cta'), "0건 — '지금 할 일'(그대로 열기)에 닿지 못했다(전제)").toBeVisible({ timeout: 25_000 });
     await page.waitForTimeout(1000);
     const f = await frames(page);
@@ -104,22 +111,45 @@ for (const [W, H] of [[1024, 768], [390, 844], [360, 780]] as const) for (const 
   });
 }
 
-test(`R 1024 — '순위 미입력' 할 일은 건수·대상을 말하고, 누르면 가장 최근 그 대회의 순위 입력으로 간다`, async ({ page }) => {
+test(`R 1024 — 밀린 순위는 오늘 할 일(그대로 열기) 아래 보조 줄로 건수·최근 날짜를 말하고, 누르면 그 대회 순위 입력으로 간다`, async ({ page }) => {
   test.setTimeout(90_000);
   await installSampler(page);
   await bootOwner(page, { viewport: { width: 1024, height: 768 }, goto: false, extra: (p) => routeRank(p, 3) });
   await page.goto('/');
   await openMyStore(page);
   const pane = page.locator('[data-pane="dashboard"]');
-  const cta = pane.getByTestId('todo-cta');
-  await expect(cta).toHaveText('순위 입력', { timeout: 25_000 });
-  const card = cta.locator('..');
-  await expect(card).toContainText('순위 미입력 대회 3개');
-  for (let i = 1; i <= 3; i++) await expect(card).toContainText(dayAgo(i).slice(5).replace('-', '/'));
-  await cta.click();
+  await expect(pane.getByTestId('todo-cta'), '오늘 할 일(그대로 열기)이 주 카드여야 한다').toHaveText('그대로 열기', { timeout: 25_000 });
+  const row = pane.getByTestId('todo-rank');
+  await expect(row).toContainText(`순위 미입력 3건 · 최근 ${dayAgo(1).slice(5).replace('-', '/')}`);
+  await row.getByRole('button', { name: '순위 입력' }).click();
   await expect(page.locator('[data-pane="ranking"]'), '순위 입력 판이 열리지 않았다').toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-pane="ranking"] input[type="date"]').first(), '가장 최근 밀린 대회 날짜로 착지하지 않았다').toHaveValue(dayAgo(1), { timeout: 10_000 });
 });
+
+// 리드 판정(review-mystore-followup-1003 FAIL) — 밀린 순위가 오늘 할 일을 가리면 안 된다. 기준 e4e6f660 에서 FAIL(순위만 보임).
+for (const [W, H] of [[1440, 900], [390, 844]] as const) {
+  test(`P ${W} — 오늘 포스터 + 밀린 순위 1건: '장부 시작하기'와 '순위 입력'이 둘 다 보인다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await installSampler(page);
+    await bootOwner(page, { viewport: { width: W, height: H }, goto: false, extra: async (p) => {
+      await routeRank(p, 1);
+      await p.route(/\/rest\/v1\/schedules\?/, (r) => r.request().method() !== 'GET' ? r.fallback()
+        : r.fulfill(json(single(r) ? TODAY_POSTER : [TODAY_POSTER])));
+    } });
+    await page.goto('/');
+    await openMyStore(page);
+    const pane = page.locator('[data-pane="dashboard"]');
+    await expect(pane.getByTestId('todo-cta'), "오늘 포스터 할 일('장부 시작하기')이 사라졌다").toHaveText('장부 시작하기', { timeout: 25_000 });
+    await expect(pane.getByTestId('todo-rank').getByRole('button', { name: '순위 입력' }), '밀린 순위 보조 줄이 없다').toBeVisible();
+    await page.waitForTimeout(1000);
+    const f = await frames(page);
+    const t0 = (f[0]?.t ?? 0) + 300;
+    const grids = f.filter((x) => x.t >= t0).map((x) => x.grid).filter((x): x is number => x != null);
+    console.log(`[P ${W}] 격자 y폭=${spanOf(grids).toFixed(1)}`);
+    expect(grids.length, '격자를 못 쟀다 — 빈 검사').toBeGreaterThan(10);
+    expect(spanOf(grids), `${W}: 정착에 아래 격자가 움직였다`).toBeLessThanOrEqual(3);
+  });
+}
 
 // ── T: 7일 장부가 없는 매장 — PC 첫 줄 카드가 같은 높이로 서고, 정착에 아무 카드도 움직이지 않는다 ─────────
 for (const [W, H] of [[1440, 900], [1280, 900], [1024, 768]] as const) {
@@ -153,6 +183,46 @@ for (const [W, H] of [[1440, 900], [1280, 900], [1024, 768]] as const) {
     const titles = Object.keys(chk[chk.length - 1].cards).filter((k) => k && chk[chk.length - 1].cards[k][0] < H);
     expect(titles.length, '화면 안 카드를 못 쟀다 — 빈 검사').toBeGreaterThan(0);
     for (const k of titles) expect(spanOf(fs.map((x) => x.cards[k]?.[0]).filter((v): v is number => v != null)), `${W}: '${k}' 가 정착에 움직였다`).toBeLessThanOrEqual(3);
+  });
+}
+
+// 리드 판정 2 — 데이터 있는 매장은 확인 중에도 이웃을 늘리지 않는다(종전 e4e6f660: 171 로 늘었다가 정착에 98.7/121 로 줄었다).
+for (const [W, H] of [[1440, 900], [1280, 900]] as const) {
+  test(`T ${W} 데이터 매장 — 확인 중 → 정착에 '대회 클락'·'전주 대비' 높이가 크게 변하지 않는다(늘렸다 줄이기 없음)`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await installSampler(page);
+    const s0 = sess(MOCK_DAY, { closed: false, reg_closed: false, closed_at: null });
+    const buys = Array.from({ length: 5 }, (_, i) => ({
+      id: `eeeeeeee-0002-4000-8000-${String(i).padStart(12, '0')}`, venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, player_name: `손님${i}`, entry_no: 1,
+      payment_method: 'cash', is_unpaid: false, buyin_at: `${MOCK_DAY}T11:00:00+09:00`, is_split: false,
+      cash_amount: 30_000, card_amount: 0, transfer_amount: 0, ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: 0, early_override: null,
+    }));
+    await bootOwner(page, { viewport: { width: W, height: H }, goto: false, extra: async (p) => {
+      await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
+      await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        const u = decodeURIComponent(r.request().url());
+        await sleep(FIRST_DELAY);
+        const rows = u.includes(`session_date=eq.${MOCK_DAY}`) || /session_date=gte?\./.test(u) ? [s0] : [];
+        return r.fulfill(json(single(r) ? (rows[0] ?? null) : rows)).catch(() => {});
+      });
+      await p.route(/\/rest\/v1\/ledger_buyins\?/, async (r) => { if (r.request().method() !== 'GET') return r.fallback(); await sleep(FIRST_DELAY); return r.fulfill(json(buys)).catch(() => {}); });
+    } });
+    await page.goto('/');
+    await openMyStore(page);
+    const pane = page.locator('[data-pane="dashboard"]');
+    await expect(pane.getByText('7일 합계'), '7일 데이터 정착에 닿지 못했다(전제)').toBeVisible({ timeout: 25_000 });
+    await page.waitForTimeout(800);
+    const f = await frames(page);
+    const t0 = (f[0]?.t ?? 0) + 300;
+    const fs = f.filter((x) => x.t >= t0);
+    expect(fs.filter((x) => x.badge === '확인 중').length, `'확인 중' 프레임을 못 봤다 — 빈 검사`).toBeGreaterThan(5);
+    for (const k of ['대회 클락', '전주 대비']) {
+      const hs = fs.map((x) => x.cards[k]?.[1]).filter((v): v is number => v != null);
+      console.log(`[T ${W} data] ${k} 높이 ${Math.min(...hs)}~${Math.max(...hs)}`);
+      expect(hs.length, `'${k}' 를 못 쟀다 — 빈 검사`).toBeGreaterThan(10);
+      expect(spanOf(hs), `${W}: '${k}' 가 확인 중에 늘었다가 정착에 줄었다`).toBeLessThanOrEqual(15);
+    }
   });
 }
 

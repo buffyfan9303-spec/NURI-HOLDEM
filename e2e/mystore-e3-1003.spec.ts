@@ -80,7 +80,7 @@ async function installDashSampler(page: Page) {
             .map((s) => [(s.querySelector('button > span')?.textContent ?? '').trim(), Math.round(s.getBoundingClientRect().top + scrollY)])),
           vh: innerHeight,
           // 2026-10-03 후속 — '순위 미입력'은 별도 카드가 아니라 '지금 할 일' 칸의 한 갈래다(자리 예약도 그 칸의 todo-reserve).
-          rank: /순위 미입력/.test(pane.querySelector('[data-testid="todo-cta"]')?.parentElement?.textContent ?? ''),
+          rank: /순위 미입력/.test(pane.querySelector('[data-testid="todo-card"]')?.textContent ?? ''),
           rankRes: !!pane.querySelector('[data-testid="todo-reserve"]'),
           todo: pane.querySelector('[data-testid="todo-cta"]')?.textContent?.trim() ?? null,
         });
@@ -104,7 +104,7 @@ for (const [W, H] of [[1024, 768], [390, 844], [360, 780]] as const) {
     await bootOwner(page, { viewport: { width: W, height: H }, goto: false, extra: (p) => routeWorld(p, 'rank', FIRST_DELAY) });
     await page.goto('/');
     await openMyStore(page);
-    await expect(page.locator('[data-pane="dashboard"]').getByText(/순위 미입력/).first(), '순위 미입력 카드에 닿지 못했다(전제)').toBeVisible({ timeout: 25_000 });
+    await expect(page.locator('[data-pane="dashboard"] [data-testid="todo-rank"]'), '순위 미입력 보조 줄에 닿지 못했다(전제)').toBeVisible({ timeout: 25_000 });
     await page.waitForTimeout(1000);
     const f = await page.evaluate(() => (window as unknown as { __f: DFn[] }).__f);
     const t0 = (f[0]?.t ?? 0) + 300;   // 누름 직후 셸 자리잡기(입력 면제) 제외 — D1 과 같은 기준
