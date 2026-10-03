@@ -72,9 +72,21 @@ interface ModalProps {
    *   e2e: login-gate-layer.spec.ts(장터 sheet 위 · 일정 page 위 양성 대조).
    */
   layer?: 'default' | 'gate';
+  /**
+   * 사용자가 닫으려 할 때(X·배경·ESC·뒤로가기·끌어내리기) **먼저** 묻는다. false 를 돌려주면 창이 그대로 남는다.
+   * 작성 중인 창(글쓰기)용 — 2026-10-04 재점검 2회차 하-4: 글을 쓰다 ESC·배경 한 번에 확인 없이 닫혀 내용이 사라졌다.
+   *  · 끌어내리기는 **던지기 전에** 묻는다(취소하면 제자리로 돌아온다 — 화면 밖에 굳지 않는다).
+   *  · 뒤로가기는 history 칸이 이미 소비된 뒤에 불린다 — 취소하면 칸을 다시 잡아 다음 뒤로가기도 이 창이 받는다.
+   *  · 넘기지 않으면(기본) 동작은 종전 그대로다.
+   */
+  confirmClose?: () => boolean;
 }
 
 const NOOP = () => {};
+/** 고정 오버레이 래퍼의 바깥 여백을 0 으로 못 박는다(인라인이라 CSS 바이트 0 · 어떤 클래스 규칙보다 이긴다).
+ *  2026-10-04 하-1: Modal 은 포털이 아니라 호출부 DOM 안에서 그려진다. `space-y-*`(index.css 의 v3 형 `> :not([hidden]) ~ :not([hidden])`,
+ *  특이도 0,3,0) 묶음 안에 놓이면 `fixed inset-0` 래퍼에 margin-top 이 붙어 딤이 화면 위에서 6.375px 내려와 있었다(미수 받기 창). */
+const NO_MARGIN = { margin: 0 } as const;
 
 /** 텍스트를 편집 중인 컨트롤 — 여기서 시작한 손짓은 절대 '닫기'로 해석하지 않는다. */
 const EDITABLE_SEL = 'input,textarea,select,[contenteditable=""],[contenteditable="true"],[data-no-drag-close]';
@@ -110,7 +122,7 @@ export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dra
 
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
-  dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true, layer = 'default',
+  dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true, layer = 'default', confirmClose,
 }: ModalProps) {
   const compact = density === 'compact';
   // 닫을 수 없는 창은 본문 끌기도 끈다 — 변형과 무관하게 resolveBodyDrag 가 false 를 낸다(page 그립도 사라진다).
@@ -134,7 +146,28 @@ export default function Modal({
   // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다. ESC 도 같은 스택이 최상단 한 겹만 닫는다 —
   // 여기서 window keydown 을 따로 들으면 겹친 모달(포스터 상세 위 글쓰기)이 ESC 한 번에 전부 닫힌다(MODAL-01).
   // 닫을 수 없는 창도 겹은 등록한다 — 뒤로가기가 뒤 화면(탭 이력)으로 새지 않게 이 겹이 받아 삼킨다. ESC 대상에서는 뺀다.
-  useBackClose(open && !inline, dismissible ? onClose : NOOP, { escape: dismissible });
+  // 사용자 닫기의 단일 입구 — confirmClose 가 거절하면 아무것도 하지 않고 false.
+  const requestClose = () => {
+    if (confirmClose && !confirmClose()) return false;
+    onClose();
+    return true;
+  };
+  // ── confirmClose 가 있는 창의 뒤로가기/ESC 겹(backArmed) ──
+  //  ① **한 커밋 늦게** 올린다. lazy 청크가 이미 받아져 있으면 이 창은 App 의 '열림' 커밋에 바로 그려지고,
+  //     자식 레이아웃 효과가 부모보다 먼저 돌아 이 창이 제 칸을 밀고 그 위에 App 의 예약 칸(closePostForm 등)이 얹힌다.
+  //     그러면 ESC·뒤로가기가 예약 칸을 닫아 **확인을 건너뛴다**(2026-10-04 실측: 두 번째부터 확인 0회).
+  //     한 커밋 늦게 올리면 예약 칸이 먼저 서 있어 이 창이 그것을 입양한다 — 모든 닫기가 requestClose 를 지난다.
+  //     (레이아웃 효과 안의 setState 는 페인트 전에 동기로 처리된다 — '칸 없는 프레임'은 생기지 않는다.)
+  //  ② 뒤로가기로 불렸는데 거절하면 칸은 이미 소비됐다 — backArmed 를 내렸다 다시 올려 칸을 새로 잡는다.
+  //     ESC 로 불린 경우(칸이 살아 있음)도 같은 길인데, 다시 입양하거나 pushEntry 가 죽은 칸을 재사용해 history 칸 수는 그대로다.
+  //  confirmClose 가 없는 창은 이 상태를 쓰지 않는다(종전과 같은 커밋에 같은 겹).
+  const [backArmed, setBackArmed] = useState(false);
+  useLayoutEffect(() => {
+    if (!confirmClose) return;
+    if (open !== backArmed) setBackArmed(open);
+  });
+  useBackClose(open && !inline && (!confirmClose || backArmed),
+    dismissible ? () => { if (!requestClose()) setBackArmed(false); } : NOOP, { escape: dismissible });
 
   // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
   const [render, setRender] = useState(open);
@@ -298,6 +331,8 @@ export default function Modal({
     // 투영(Apple §6): 이 속도로 놓으면 어디까지 미끄러지나 → 그 착지점으로 판단한다. 놓은 위치가 아니라 **가려던 곳**.
     const landing = y + project(v);
     if (v > 600 || (v >= 0 && landing > 120)) {
+      // 작성 중인 창 — 던지기 **전에** 묻는다. 취소면 아래 '제자리' 와 같은 복귀(던진 뒤 물으면 시트가 화면 밖에 굳는다).
+      if (confirmClose && !confirmClose()) { animateDim(1, 300); void springTo(el, 0, { damping: 1, response: 0.3 }); return; }
       // 끌던 방향 그대로, 손 뗀 속도 그대로 화면 밖으로 — 감쇠 1.0(바운스 없음). 이음매가 없어야 '던졌다' 가 된다.
       //
       // ⚠ 목표는 window.innerHeight 가 아니라 **시트가 화면에서 사라지는 데 실제로 필요한 거리**다.
@@ -351,7 +386,7 @@ export default function Modal({
               {headerAction}
               {/* [B] inline(2-pane) 변형만 34px 였다 — sheet/page 변형과 같은 w-11 h-11 로 통일(-mr-2 로 시각 여백 상쇄) */}
               {dismissible && (
-                <button type="button" onClick={onClose} aria-label="닫기" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                <button type="button" onClick={requestClose} aria-label="닫기" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                   <Icon name="close" size={18} />
                 </button>
               )}
@@ -383,6 +418,7 @@ export default function Modal({
         // UI-Aura(2026-09-14, 실행문 §4-1): compact page(게시글 상세)만 surface-mid — 본문 대부분이 투명이라
         // 셸이 곧 화면 전체 지면이다. surface-base(다크 #06080F 거의 검정)를 그대로 두면 "단색 검정 한 장"이 된다.
         // compact 아닌 나머지 5곳(캘린더/매장 도구·GTO 분석·일정 상세 등)은 그대로(바이트 동일 유지).
+        style={NO_MARGIN}
         className={['fixed inset-0 z-55 flex flex-col pt-[env(safe-area-inset-top)]',
           compact ? 'bg-surface-mid' : 'bg-surface-base',
           closing ? (dragClosed ? '' : PAGE_LEAVE) : PAGE_ENTER].join(' ')}>
@@ -401,7 +437,7 @@ export default function Modal({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerAction}
               {dismissible && (
-                <button type="button" onClick={onClose} aria-label="닫기"
+                <button type="button" onClick={requestClose} aria-label="닫기"
                   className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
                   <Icon name="close" size={18} />
                 </button>
@@ -437,6 +473,7 @@ export default function Modal({
     //   이 CSS 애니를 getAnimations() 로 넘겨받아 취소하고 보이는 값에서 잇는다(열리는 도중에 잡아도 튀지 않는다).
     <div data-scroll-lock className={['fixed inset-0 flex', layer === 'gate' ? 'z-65' : 'z-60', closing && variant !== 'sheet' ? 'animate-fade-out' : ''].join(' ')}
       style={{
+        ...NO_MARGIN,
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',
       }}
@@ -452,7 +489,7 @@ export default function Modal({
           //   그래서 탭 순서·접근성 트리에서 빼고, 포인터 동작만 남긴다.
           tabIndex={-1}
           aria-hidden
-          onClick={onClose}
+          onClick={requestClose}
           ref={(n) => { backdropRef.current = n; }}
           className={['absolute inset-0 bg-black/80 backdrop-blur-md cursor-default', dimIn].join(' ')}
         />
@@ -541,7 +578,7 @@ export default function Modal({
             {dismissible && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 aria-label="닫기"
                 // 44px 터치 표준 — 작아서 빗나가던 닫기 버튼 전역 교정
                 className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"

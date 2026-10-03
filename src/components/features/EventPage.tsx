@@ -437,10 +437,12 @@ function CardTile({ card, onPick, disabled }: { card: EventCard; onPick: () => v
         {m ? (
           <>
             <span className={['text-xs font-extrabold leading-none', m.text].join(' ')}>{m.short}등</span>
-            <span className="mt-0.5 text-[9px] font-semibold text-ink-muted">×{card.count}</span>
+            {/* 2026-10-04 중-1: 9px 글자라 4.5 가 기준 — ink-muted 는 2등 카드 틴트 위 라이트 4.28 이었다. */}
+            <span className="mt-0.5 text-[9px] font-semibold text-ink-secondary">×{card.count}</span>
           </>
         ) : (
-          <span className="text-[9px] font-semibold text-ink-muted/60">꽝</span>
+          // '/60' 을 뺐다 — 반투명 회색은 라이트 2.40 · 다크 2.93 이었다(작은 글자 4.5 미달).
+          <span className="text-[9px] font-semibold text-ink-muted">꽝</span>
         )}
       </div>
     );
@@ -451,7 +453,9 @@ function CardTile({ card, onPick, disabled }: { card: EventCard; onPick: () => v
       className={['foil group relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-white/10 bg-linear-to-br/srgb transition-transform',
         b.hue, disabled ? 'opacity-50' : 'hover:-translate-y-0.5 active:scale-[0.96]'].join(' ')}>
       <BackArt v={card.idx % BACKS.length} ink={b.ink} />
-      <span className="relative text-[10px] font-bold tabular-nums text-white/75">{card.idx}</span>
+      {/* 번호는 테마 글자색(ink-primary)으로. 뒷면이 반투명 색 → surface-float 라 라이트에서는 파스텔이 되고,
+          흰 글자(white/75)가 그 위에서 1.21~1.39 였다(2026-10-04 중-1). 다크에서는 거의 흰색 그대로다. */}
+      <span className="relative text-[10px] font-bold tabular-nums text-ink-primary">{card.idx}</span>
     </button>
   );
 }
