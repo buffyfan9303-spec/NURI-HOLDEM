@@ -237,8 +237,9 @@ for (const w of [320, 360, 390, 412]) {
     const firstFeed = page.locator('[data-spot-feed]').filter({ visible: true }).first();
     if (!(await firstFeed.isVisible().catch(() => false))) {
       // 저장된 보기가 한 줄 목록이면 펼쳐보기(카드)로 바꾼다 — 라벨이 아니라 testid(라벨이 바뀌어도 조용히 안 눌리지 않게)
-      const toggle = page.getByTestId('board-view-feed');
-      if (await toggle.count()) await toggle.click();
+      //   2026-10-04: 두 슬롯 → 토글 하나(board-view-toggle). 지금 보기가 compact 일 때만 누른다(feed 에서 누르면 되돌아간다).
+      const toggle = page.getByTestId('board-view-toggle');
+      if (await toggle.count() && (await toggle.getAttribute('data-view')) === 'compact') await toggle.click();
     }
     await expect(firstFeed, '피드에 SPOT 테이블이 없다').toBeVisible({ timeout: 20_000 });
 

@@ -145,7 +145,8 @@ test.describe('끌어 내려 닫기 — 필수 제외(작성 중 화면)', () =>
     // 커뮤니티 기본 하위 탭은 '홀덤펍' 이다 — 글쓰기 진입점은 '게시판' 에 있다.
     await page.getByRole('button', { name: '게시판', exact: true }).first().click();
 
-    const write = page.getByRole('button', { name: '글쓰기' }).first();
+    // 2026-10-04: 글쓰기는 게시판 오른쪽 아래 FAB(아이콘) — data-testid 로 찾는다
+    const write = page.getByTestId('board-write');
     await expect(write).toBeVisible({ timeout: 10_000 });
     await write.click();
 

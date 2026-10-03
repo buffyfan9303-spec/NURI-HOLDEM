@@ -1,16 +1,15 @@
-// 게시판 보기 전환 버튼(UI-05) + 기본 보기(N08) — 실측 게이트 (2026-09-13).
+// 게시판 보기 전환 버튼 + 기본 보기(N08) — 실측 게이트.
 //
+// 2026-10-04 오너 결정(안 A — 상단 한 줄): 예전 '두 슬롯 트랙'(UI-05 · 오너 2026-10-02 좌 모아보기/우 펼쳐보기)을
+//   **토글 버튼 하나**로 바꿨다. 지금 보기의 아이콘(☰ 모아보기 / ▭ 펼쳐보기)을 보이고, 누르면 다른 쪽으로 간다.
+//   aria-pressed = 펼쳐보기 켜짐 · data-view = 지금 보기. 찾는 것은 라벨이 아니라 data-testid(board-view-toggle)다.
 // 이 파일이 보는 것
-//   ① 두 버튼의 클릭 영역이 각각 ≥44×44 CSS px, **동일한 두 슬롯**(폭·높이·radius 같음), 아이콘 17~19px 중앙.
-//   ② 선택 배경(면)은 슬롯 안 네 방향 inset 이 대칭(오차 ≤1px)이고 2~4px 범위 — 선택한 쪽에 따라 여백이 달라지지 않는다.
-//   ③ 눌림 120ms 동안 트랙(부모)은 움직이지 않고, 놓은 뒤 60/150/300/600ms 를 지나 정지 상태에서 inset 이 원래대로다.
-//   ④ aria-pressed · 접근 가능한 이름 · 클릭 결과 · 저장값(nuri:board-view) · 실제 렌더(PostCard/PostRow)가 일치한다.
-//   ⑤ N08: 키 없음 / 손상 값 / 저장소 차단(throw) → compact(모아보기). 저장값 feed → 펼쳐보기(카드) 유지. 새로고침·탭 왕복 후 유지.
-//   ⑦ 오너 2026-10-02: 왼쪽 = 모아보기(기본), 오른쪽 = 펼쳐보기. 버튼은 라벨이 아니라 data-testid(board-view-compact/feed)로 찾는다.
-//   ⑧ 첫 프레임부터 모아보기 — 트랙이 처음 그려진 프레임부터 매 rAF 마다 선택 상태·행 종류를 기록해 펼쳐보기가 한 번도 비치지 않았는지 본다.
-//   ⑥ 폭 320~1440 × 다크/라이트에서 트랙이 넘치지 않고 inset 대칭이 유지된다.
-// 게시글은 운영 DB 읽기(_fixtures 가 쓰기를 막는다) — 글이 0건이면 렌더 판정만 skip 이 아니라 **실패**로 알린다.
-// 실행: E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/board-view-toggle.spec.ts
+//   ① 버튼 클릭 영역 ≥44×44 CSS px, 아이콘 17~19px 중앙. 폭 320~1440 × 다크/라이트에서 화면 밖으로 안 나간다.
+//   ② 눌림 120ms 동안 줄(부모)은 움직이지 않고, 놓은 뒤 정지 상태에서 버튼 크기가 원래대로다.
+//   ③ aria-pressed · data-view · 저장값(nuri:board-view) · 실제 렌더(PostCard/PostRow)가 일치한다.
+//   ④ N08: 키 없음 / 손상 값 / 저장소 차단(throw) → compact(모아보기). 저장값 feed → 펼쳐보기(카드) 유지. 새로고침·탭 왕복 후 유지.
+//   ⑤ 첫 프레임부터 모아보기 — 버튼이 처음 그려진 프레임부터 매 rAF 마다 상태·행 종류를 기록해 펼쳐보기가 한 번도 비치지 않았는지 본다.
+// 게시글은 운영 DB 읽기(_fixtures 가 쓰기를 막는다) — 글이 0건이면 렌더 판정을 skip 이 아니라 **실패**로 알린다.
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
@@ -35,131 +34,71 @@ async function openBoard(page: Page, opts: { theme?: 'dark' | 'light'; stored?: 
   const bar = page.locator('[data-community-secbar]');
   await expect(bar).toBeVisible({ timeout: 20_000 });
   await bar.getByRole('button', { name: '게시판', exact: true }).click();
-  const track = page.locator('[data-board-view-toggle]');
-  await expect(track, '보기 전환 트랙이 없다').toBeVisible({ timeout: 15_000 });
-  return track;
+  const btn = page.getByTestId('board-view-toggle');
+  await expect(btn, '보기 전환 버튼이 없다').toBeVisible({ timeout: 15_000 });
+  return btn;
 }
 
-type Geom = { track: DOMRect; btns: { x: number; y: number; w: number; h: number; radius: string; pressed: string | null; name: string | null; title: string | null; testid: string | null; icon: { w: number; h: number; cx: number; cy: number } | null; sel: { top: number; right: number; bottom: number; left: number } | null }[] };
-const geom = (page: Page): Promise<Geom> => page.evaluate(() => {
-  const track = document.querySelector<HTMLElement>('[data-board-view-toggle]')!;
-  const tr = track.getBoundingClientRect();
-  const btns = Array.from(track.querySelectorAll<HTMLButtonElement>('button')).map((b) => {
-    const r = b.getBoundingClientRect();
-    const svg = b.querySelector('svg');
-    const sr = svg?.getBoundingClientRect();
-    // 선택 면 = 배경색이 칠해진 span
-    const sel = Array.from(b.querySelectorAll<HTMLElement>('span')).find((s) => !/rgba\(0, 0, 0, 0\)|transparent/.test(getComputedStyle(s).backgroundColor));
-    const s = sel?.getBoundingClientRect();
-    return {
-      x: r.left, y: r.top, w: r.width, h: r.height, radius: getComputedStyle(b).borderRadius,
-      pressed: b.getAttribute('aria-pressed'), name: b.getAttribute('aria-label'), title: b.getAttribute('title'), testid: b.getAttribute('data-testid'),
-      icon: sr ? { w: sr.width, h: sr.height, cx: sr.left + sr.width / 2 - r.left, cy: sr.top + sr.height / 2 - r.top } : null,
-      sel: s ? { top: s.top - r.top, right: r.right - s.right, bottom: r.bottom - s.bottom, left: s.left - r.left } : null,
-    };
-  });
-  return { track: tr.toJSON(), btns };
+const geom = (page: Page) => page.evaluate(() => {
+  const b = document.querySelector<HTMLElement>('[data-testid="board-view-toggle"]')!;
+  const r = b.getBoundingClientRect();
+  const line = b.closest('[data-board-topline]')!.getBoundingClientRect();
+  const sr = b.querySelector('svg')!.getBoundingClientRect();
+  return {
+    w: r.width, h: r.height, right: r.right, line: { top: line.top, left: line.left, width: line.width },
+    icon: { w: sr.width, cx: sr.left + sr.width / 2 - r.left, cy: sr.top + sr.height / 2 - r.top },
+    pressed: b.getAttribute('aria-pressed'), view: b.getAttribute('data-view'), name: b.getAttribute('aria-label'),
+  };
 });
-
-function expectSlots(g: Geom, label: string) {
-  expect(g.btns, `${label}: 버튼 2개`).toHaveLength(2);
-  for (const b of g.btns) {
-    expect(b.w, `${label}: 클릭 폭 ${b.w}`).toBeGreaterThanOrEqual(44);
-    expect(b.h, `${label}: 클릭 높이 ${b.h}`).toBeGreaterThanOrEqual(44);
-    expect(b.icon, `${label}: 아이콘 없음`).not.toBeNull();
-    expect(b.icon!.w, `${label}: 아이콘 폭 ${b.icon!.w}`).toBeGreaterThanOrEqual(17);
-    expect(b.icon!.w).toBeLessThanOrEqual(19);
-    expect(Math.abs(b.icon!.cx - b.w / 2), `${label}: 아이콘 가로 중심`).toBeLessThanOrEqual(1);
-    expect(Math.abs(b.icon!.cy - b.h / 2), `${label}: 아이콘 세로 중심`).toBeLessThanOrEqual(1);
-  }
-  const [a, b] = g.btns;
-  expect(Math.abs(a.w - b.w), `${label}: 두 슬롯 폭 다름 ${a.w}/${b.w}`).toBeLessThanOrEqual(0.5);
-  expect(Math.abs(a.h - b.h)).toBeLessThanOrEqual(0.5);
-  expect(a.radius).toBe(b.radius);
-  // 슬롯이 트랙을 채운다 — 좌우 end cap·빈 공간 없음(보더 1px 허용)
-  expect(Math.abs(a.x - g.track.left), `${label}: 트랙 왼쪽 빈틈`).toBeLessThanOrEqual(1.5);
-  expect(Math.abs((b.x + b.w) - g.track.right), `${label}: 트랙 오른쪽 빈틈`).toBeLessThanOrEqual(1.5);
-  expect(Math.abs(a.y - g.track.top)).toBeLessThanOrEqual(1.5);
-  expect(Math.abs((a.y + a.h) - g.track.bottom)).toBeLessThanOrEqual(1.5);
-  // 선택 면은 정확히 하나, 네 방향 inset 대칭·2~4px
-  const sels = g.btns.filter((x) => x.sel);
-  expect(sels, `${label}: 선택 면이 정확히 하나여야 한다`).toHaveLength(1);
-  const s = sels[0].sel!;
-  const vals = [s.top, s.right, s.bottom, s.left];
-  for (const v of vals) { expect(v, `${label}: inset ${JSON.stringify(s)}`).toBeGreaterThanOrEqual(2); expect(v).toBeLessThanOrEqual(4); }
-  expect(Math.max(...vals) - Math.min(...vals), `${label}: inset 비대칭 ${JSON.stringify(s)}`).toBeLessThanOrEqual(1);
-  return s;
-}
 
 const listMode = (page: Page) => page.evaluate(() => ({
   cards: document.querySelectorAll('.cv-row-lg').length, rows: document.querySelectorAll('.cv-row-sm').length,
   stored: (() => { try { return localStorage.getItem('nuri:board-view'); } catch { return '(blocked)'; } })(),
 }));
 
-test.describe('보기 전환 버튼 — 두 슬롯 치수 계약(UI-05)', () => {
-  test('🔴 390: 44×44 슬롯 · 아이콘 17~19 중앙 · 선택 inset 대칭 · 양쪽 선택에서 여백 동일', async ({ page }) => {
+test.describe('보기 전환 버튼 — 치수·눌림 계약', () => {
+  test('🔴 390: 44×44 · 아이콘 17~19 중앙 · 누르면 모아보기↔펼쳐보기 · 이름 고정', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    const track = await openBoard(page, { stored: null });
+    const btn = await openBoard(page, { stored: null });
     await page.waitForTimeout(300);
     const g0 = await geom(page);
-    const s0 = expectSlots(g0, '초기(compact)');
-    // 오너 2026-10-02: 왼쪽 = 모아보기(기본 · 선택됨), 오른쪽 = 펼쳐보기 — 이름·title·testid·화면상 x 순서까지 못 박는다
-    expect(g0.btns.map((b) => b.pressed)).toEqual(['true', 'false']);
-    expect(g0.btns.map((b) => b.name)).toEqual(['모아보기', '펼쳐보기']);
-    expect(g0.btns.map((b) => b.title), 'title 이 aria-label 과 같아야 한다').toEqual(['모아보기', '펼쳐보기']);
-    expect(g0.btns.map((b) => b.testid)).toEqual(['board-view-compact', 'board-view-feed']);
-    expect(g0.btns[0].x, '모아보기가 펼쳐보기의 왼쪽이어야 한다').toBeLessThan(g0.btns[1].x);
-
-    await track.getByTestId('board-view-feed').click();
-    await page.waitForTimeout(700);
+    expect(g0.w).toBeGreaterThanOrEqual(44); expect(g0.h).toBeGreaterThanOrEqual(44);
+    expect(g0.icon.w).toBeGreaterThanOrEqual(17); expect(g0.icon.w).toBeLessThanOrEqual(19);
+    expect(Math.abs(g0.icon.cx - g0.w / 2), '아이콘 가로 중심').toBeLessThanOrEqual(1);
+    expect(Math.abs(g0.icon.cy - g0.h / 2), '아이콘 세로 중심').toBeLessThanOrEqual(1);
+    expect(g0).toMatchObject({ pressed: 'false', view: 'compact', name: '펼쳐보기' });
+    await btn.click();
+    await page.waitForTimeout(300);
     const g1 = await geom(page);
-    const s1 = expectSlots(g1, 'feed 선택');
-    expect(g1.btns.map((b) => b.pressed)).toEqual(['false', 'true']);
-    // 선택한 쪽이 바뀌어도 inset 값이 같다
-    expect(Math.abs(s1.left - s0.left)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s1.top - s0.top)).toBeLessThanOrEqual(1);
-    // 트랙 자체는 움직이지 않았다
-    expect(Math.abs(g1.track.left - g0.track.left)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(g1.track.width - g0.track.width)).toBeLessThanOrEqual(0.5);
+    expect(g1).toMatchObject({ pressed: 'true', view: 'feed', name: '펼쳐보기' });
+    expect(Math.abs(g1.w - g0.w)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(g1.line.top - g0.line.top), '줄이 움직였다').toBeLessThanOrEqual(0.5);
   });
 
-  test('🔴 눌림 120ms · 놓은 뒤 60/150/300/600ms · 정지 — 트랙 불변, 정지 시 inset 원복(좌·우 각각)', async ({ page }) => {
+  test('🔴 눌림 120ms · 놓은 뒤 정지 — 줄 불변, 정지 시 버튼 크기 원복', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    const track = await openBoard(page, { stored: 'compact' });
+    const btn = await openBoard(page, { stored: 'compact' });
     await page.waitForTimeout(300);
     const rest0 = await geom(page);
-    for (const [name, id] of [['펼쳐보기', 'board-view-feed'], ['모아보기', 'board-view-compact']] as const) {
-      const btn = track.getByTestId(id);
+    for (let k = 0; k < 2; k++) {
       const bb = (await btn.boundingBox())!;
       await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
       await page.mouse.down();
       await page.waitForTimeout(120);
       const held = await geom(page);
-      const hb = held.btns.find((b) => b.name === name)!;
-      // 전역 프레스(scale .97)는 버튼(아이콘+선택면 함께)에만 — 트랙은 제자리
-      expect(Math.abs(held.track.left - rest0.track.left), `${name} 눌림: 트랙이 움직였다`).toBeLessThanOrEqual(0.5);
-      expect(Math.abs(held.track.width - rest0.track.width)).toBeLessThanOrEqual(0.5);
-      expect(Math.abs(held.track.top - rest0.track.top)).toBeLessThanOrEqual(0.5);
-      expect(hb.w, `${name} 눌림: 버튼이 0.97 근처로 줄어야 프레스가 살아 있는 것`).toBeLessThan(rest0.btns[0].w);
+      expect(Math.abs(held.line.top - rest0.line.top), '눌림: 줄이 움직였다').toBeLessThanOrEqual(0.5);
+      expect(Math.abs(held.line.width - rest0.line.width)).toBeLessThanOrEqual(0.5);
+      expect(held.w, '눌림: 버튼이 0.97 근처로 줄어야 프레스가 살아 있는 것').toBeLessThan(rest0.w);
       await page.mouse.up();
-      const timeline: Record<number, ReturnType<typeof expectSlots> | null> = {};
-      let t = 0;
-      for (const at of [60, 150, 300, 600]) {
-        await page.waitForTimeout(at - t); t = at;
-        const g = await geom(page);
-        timeline[at] = g.btns.find((b) => b.sel)?.sel ?? null;
-        expect(Math.abs(g.track.left - rest0.track.left), `${name} +${at}ms: 트랙`).toBeLessThanOrEqual(0.5);
-      }
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(800);
       const rest = await geom(page);
-      const s = expectSlots(rest, `${name} 정지`);
-      console.log(`[${name}] held=${JSON.stringify(hb.sel)} timeline=${JSON.stringify(timeline)} rest=${JSON.stringify(s)}`);
-      for (const b of rest.btns) expect(Math.abs(b.w - rest0.btns[0].w), `${name} 정지: 버튼 폭 원복`).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(rest.w - rest0.w), '정지: 버튼 폭 원복').toBeLessThanOrEqual(0.5);
+      expect(Math.abs(rest.line.top - rest0.line.top)).toBeLessThanOrEqual(0.5);
     }
   });
 
   for (const theme of ['dark', 'light'] as const) {
-    test(`🔴 폭 8종 × ${theme}: 트랙 넘침 없음 · inset 대칭 유지 · 선택/비선택 색 구분`, async ({ page }) => {
+    test(`🔴 폭 8종 × ${theme}: 화면 안 · 44px · 아이콘 중앙`, async ({ page }) => {
       test.setTimeout(120_000);
       await page.setViewportSize({ width: 390, height: 844 });
       await openBoard(page, { theme, stored: null });
@@ -167,10 +106,10 @@ test.describe('보기 전환 버튼 — 두 슬롯 치수 계약(UI-05)', () => 
         await page.setViewportSize({ width: w, height: 900 });
         await page.waitForTimeout(250);
         const g = await geom(page);
-        expectSlots(g, `${theme} ${w}px`);
-        expect(g.track.right, `${theme} ${w}px: 트랙이 뷰포트 밖`).toBeLessThanOrEqual(w + 1);
-        const colors = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-board-view-toggle] button')).map((b) => getComputedStyle(b).color));
-        expect(colors[0], `${theme} ${w}px: 선택/비선택 글자색이 같다`).not.toBe(colors[1]);
+        expect(g.right, `${theme} ${w}px: 버튼이 뷰포트 밖`).toBeLessThanOrEqual(w + 1);
+        expect(g.w, `${theme} ${w}px`).toBeGreaterThanOrEqual(44);
+        expect(g.h, `${theme} ${w}px`).toBeGreaterThanOrEqual(44);
+        expect(Math.abs(g.icon.cx - g.w / 2)).toBeLessThanOrEqual(1);
       }
     });
   }
@@ -185,10 +124,10 @@ test.describe('기본 보기(N08) — 미선택·손상·차단은 compact, 명�
   ] as const) {
     test(`🔴 ${c.label} → ${c.expect}`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
-      const track = await openBoard(page, { stored: c.stored });
+      const btn = await openBoard(page, { stored: c.stored });
       await page.waitForTimeout(500);
-      const pressed = await track.getByTestId(c.expect === 'feed' ? 'board-view-feed' : 'board-view-compact').getAttribute('aria-pressed');
-      expect(pressed).toBe('true');
+      await expect(btn).toHaveAttribute('data-view', c.expect);
+      await expect(btn).toHaveAttribute('aria-pressed', String(c.expect === 'feed'));
       const m = await listMode(page);
       expect(m.cards + m.rows, '게시글이 0건이라 렌더 판정을 할 수 없다(운영 DB 읽기 실패?)').toBeGreaterThan(0);
       if (c.expect === 'feed') { expect(m.cards).toBeGreaterThan(0); expect(m.rows).toBe(0); }
@@ -198,11 +137,12 @@ test.describe('기본 보기(N08) — 미선택·손상·차단은 compact, 명�
 
   test('🔴 저장소 접근이 throw 해도 compact 로 뜨고 버튼이 동작한다', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    const track = await openBoard(page, { blockStorage: true });
+    const btn = await openBoard(page, { blockStorage: true });
     await page.waitForTimeout(500);
-    await expect(track.getByTestId('board-view-compact')).toHaveAttribute('aria-pressed', 'true');
-    await track.getByTestId('board-view-feed').click();
-    await expect(track.getByTestId('board-view-feed')).toHaveAttribute('aria-pressed', 'true');
+    await expect(btn).toHaveAttribute('data-view', 'compact');
+    await btn.click();
+    await expect(btn).toHaveAttribute('data-view', 'feed');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
     expect((await listMode(page)).cards).toBeGreaterThan(0);
   });
 
@@ -211,9 +151,9 @@ test.describe('기본 보기(N08) — 미선택·손상·차단은 compact, 명�
     // 첫 진입 전에만 키를 지운다(init script 에 넣으면 재진입마다 사용자의 저장값까지 지워 거짓 실패가 난다 — 실측)
     await page.goto('/');
     await page.evaluate(() => { try { localStorage.removeItem('nuri:board-view'); } catch { /* 차단 */ } });
-    const track = await openBoard(page);
-    await expect(track.getByTestId('board-view-compact')).toHaveAttribute('aria-pressed', 'true');
-    await track.getByTestId('board-view-feed').click();
+    const btn = await openBoard(page);
+    await expect(btn).toHaveAttribute('data-view', 'compact');
+    await btn.click();
     await page.waitForTimeout(300);
     let m = await listMode(page);
     expect(m.stored).toBe('feed'); expect(m.cards).toBeGreaterThan(0); expect(m.rows).toBe(0);
@@ -223,34 +163,32 @@ test.describe('기본 보기(N08) — 미선택·손상·차단은 compact, 명�
     const bar = page.locator('[data-community-secbar]');
     await expect(bar).toBeVisible({ timeout: 20_000 });
     await bar.getByRole('button', { name: '게시판', exact: true }).click();
-    await expect(page.getByTestId('board-view-feed')).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
+    await expect(btn).toHaveAttribute('data-view', 'feed', { timeout: 15_000 });
     m = await listMode(page); expect(m.cards).toBeGreaterThan(0);
     // 탭 왕복(홈 → 커뮤니티) — keep-alive 라도 상태가 그대로
     await page.getByRole('tab', { name: '홈', exact: true }).or(page.getByRole('button', { name: '홈', exact: true })).first().click();
     await page.waitForTimeout(300);
     await page.getByRole('tab', { name: '커뮤니티', exact: true }).or(page.getByRole('button', { name: '커뮤니티', exact: true })).first().click();
-    await expect(page.getByTestId('board-view-feed')).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
-    // 뒤로가기 → 앞으로가기 — 앱의 history 층은 탭/모달 단위라 게시판 하위탭이 자동 복원되지 않을 수 있다.
-    // 여기서 보는 것은 '이력 이동 뒤에도 저장된 선택(feed)이 다시 열린 게시판에 그대로 반영되는가' 다.
+    await expect(btn).toHaveAttribute('data-view', 'feed', { timeout: 15_000 });
+    // 뒤로가기 → 앞으로가기 — 이력 이동 뒤에도 저장된 선택(feed)이 다시 열린 게시판에 그대로 반영되는가
     await page.goBack();
     await page.waitForTimeout(300);
     await page.goForward();
     await page.waitForTimeout(300);
-    if (!(await page.locator('[data-board-view-toggle]').isVisible())) {
+    if (!(await btn.isVisible())) {
       await page.getByRole('tab', { name: '커뮤니티', exact: true }).or(page.getByRole('button', { name: '커뮤니티', exact: true })).first().click();
       await page.getByRole('tab', { name: '게시판', exact: true }).or(page.getByRole('button', { name: '게시판', exact: true })).first().click();
     }
-    await expect(page.getByTestId('board-view-feed')).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
+    await expect(btn).toHaveAttribute('data-view', 'feed', { timeout: 15_000 });
     // 다시 한 줄로 — 저장값도 따라간다
-    await page.getByTestId('board-view-compact').click();
+    await btn.click();
     await page.waitForTimeout(300);
     m = await listMode(page);
     expect(m.stored).toBe('compact'); expect(m.rows).toBeGreaterThan(0); expect(m.cards).toBe(0);
   });
 });
 
-// ⑧ 첫 프레임부터 모아보기 — 펼쳐보기로 그려졌다가 모아보기로 바뀌는 깜빡임이 없다.
-//   트랙이 처음 DOM 에 생긴 프레임부터 **매 rAF** 마다 선택 상태·행 종류를 기록한다(setTimeout 폴링은 중간 프레임을 놓친다).
+// ⑤ 첫 프레임부터 모아보기 — 펼쳐보기로 그려졌다가 모아보기로 바뀌는 깜빡임이 없다.
 //   대조군: 저장값 feed 는 같은 프로브에서 모든 프레임이 feed 여야 한다 — 프로브가 아무것도 못 보는 거짓 통과를 막는다.
 for (const c of [
   { label: '미선택 → 모든 프레임이 모아보기', stored: null, want: 'compact' },
@@ -260,23 +198,22 @@ for (const c of [
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
       if (window.top !== window) return;
-      const frames: { compact: string | null; feed: string | null; rows: number; cards: number }[] = [];
+      const frames: { view: string | null; rows: number; cards: number }[] = [];
       (window as unknown as { __bvFrames: typeof frames }).__bvFrames = frames;
       const tick = () => {
-        const a = document.querySelector('[data-testid="board-view-compact"]');
-        const b = document.querySelector('[data-testid="board-view-feed"]');
-        if (a && b) frames.push({ compact: a.getAttribute('aria-pressed'), feed: b.getAttribute('aria-pressed'), rows: document.querySelectorAll('.cv-row-sm').length, cards: document.querySelectorAll('.cv-row-lg').length });
+        const b = document.querySelector('[data-testid="board-view-toggle"]');
+        if (b) frames.push({ view: b.getAttribute('data-view'), rows: document.querySelectorAll('.cv-row-sm').length, cards: document.querySelectorAll('.cv-row-lg').length });
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     });
     await openBoard(page, { stored: c.stored });
     await page.waitForTimeout(1500);
-    const frames = await page.evaluate(() => (window as unknown as { __bvFrames: { compact: string | null; feed: string | null; rows: number; cards: number }[] }).__bvFrames);
-    expect(frames.length, '트랙이 그려진 프레임을 못 잡았다').toBeGreaterThan(10);
+    const frames = await page.evaluate(() => (window as unknown as { __bvFrames: { view: string | null; rows: number; cards: number }[] }).__bvFrames);
+    expect(frames.length, '버튼이 그려진 프레임을 못 잡았다').toBeGreaterThan(10);
     const bad = frames.map((f, i) => ({ i, ...f })).filter((f) => (c.want === 'compact'
-      ? f.compact !== 'true' || f.feed !== 'false' || f.cards > 0
-      : f.feed !== 'true' || f.compact !== 'false' || f.rows > 0));
+      ? f.view !== 'compact' || f.cards > 0
+      : f.view !== 'feed' || f.rows > 0));
     expect(bad, `${c.want} 가 아닌 프레임 ${bad.length}/${frames.length}: ${JSON.stringify(bad.slice(0, 3))}`).toEqual([]);
     const last = frames[frames.length - 1];
     expect(c.want === 'compact' ? last.rows : last.cards, '게시글이 0건이라 렌더 판정을 할 수 없다(운영 DB 읽기 실패?)').toBeGreaterThan(0);

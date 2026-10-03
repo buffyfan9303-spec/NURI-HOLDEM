@@ -17,6 +17,8 @@ async function openBoard(page: Page) {
   await page.locator('[data-testid="sec-tab-board"]').first().waitFor();
   // 섹션 이동 — locator.click 은 자동 스크롤로 측정을 흔들 수 있어 DOM click 으로 누른다(저장소 관행)
   await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-board"]') as HTMLElement).click());
+  // 2026-10-04 한 줄 상단: 검색칸은 🔍 를 눌러야 그 줄에 열린다(라벨이 아니라 data-testid 로 연다)
+  await page.getByTestId('board-search-open').click();
   const input = page.getByRole('searchbox', { name: /게시글 검색/ });
   await input.waitFor();
   return input;

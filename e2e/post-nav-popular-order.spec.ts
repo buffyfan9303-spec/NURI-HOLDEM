@@ -27,7 +27,9 @@ test('🔴 인기 정렬 후 이전/다음 = 화면 순서', async ({ page }) =>
   await expect(bar).toBeVisible({ timeout: 20_000 });
   await bar.getByRole('button', { name: '게시판', exact: true }).click();
   await expect(page.locator('[data-board-loaded="done"]')).toHaveCount(1, { timeout: 10_000 });
-  await page.locator('[data-board-loaded]').getByRole('button', { name: '인기', exact: true }).click();
+  // 2026-10-04 한 줄 상단: 정렬은 ⇅ 메뉴 안에 있다 — 라벨이 아니라 data-testid 로 고른다
+  await page.getByTestId('board-sort').click();
+  await page.getByTestId('board-sort-popular').click();
   await expect(page.locator('[data-board-loaded="done"]')).toHaveCount(1, { timeout: 10_000 });
   await page.waitForTimeout(500);
   const order = await page.locator('[data-board-loaded] li[role="button"]').evaluateAll((els) => els.map((e) => (e.textContent ?? '').match(/(첫째|둘째|셋째)/)?.[1]));

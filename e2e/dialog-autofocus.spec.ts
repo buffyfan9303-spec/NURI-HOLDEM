@@ -62,7 +62,8 @@ async function boot(page: Page, baseURL: string | undefined) {
 
 const form = (page: Page) => page.locator('[role="dialog"]').filter({ has: page.getByPlaceholder('내용을 입력하세요') });
 const content = (page: Page) => form(page).getByPlaceholder('내용을 입력하세요');
-const writeBtn = (page: Page) => page.getByRole('button', { name: /글쓰기$/ }).filter({ visible: true }).first();
+// 2026-10-04: 글쓰기는 게시판 오른쪽 아래 FAB(아이콘) — 라벨이 아니라 data-testid 로 찾는다
+const writeBtn = (page: Page) => page.getByTestId('board-write');
 const active = (page: Page) => page.evaluate(() => {
   const a = document.activeElement as HTMLElement | null;
   return a ? `${a.tagName}${a.getAttribute('aria-label') ? `[${a.getAttribute('aria-label')}]` : ''}${a.getAttribute('placeholder') ? `(${a.getAttribute('placeholder')})` : ''}` : 'null';
