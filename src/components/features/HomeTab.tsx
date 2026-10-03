@@ -500,6 +500,10 @@ export default function HomeTab({
   //   (실사이트 느린 망 CLS 0.0729, 3/3). 몇 행일지는 데이터 전에 알 수 없고, 기본 행 수를 줄이면 대회 있는 날이 반대로 밀린다.
   //   → **스켈레톤을 그린 마운트에서는** 빈 상태 카드가 스켈레톤이 잡았던 높이를 그대로 물려받는다(줄지 않으니 밀림 0).
   //   스냅샷으로 바로 그린 방문(스켈레톤 없음)은 0 이라 종전 그대로다. 목록 갈래(대회 있는 날)는 건드리지 않는다.
+  //   🔴 2026-10-04 재검토 H1 — 이 높이는 **첫 로드 화면 한 장**에만 쓴다. 비우지 않았더니 홈이 keep-alive 라 세션 내내 남아
+  //   날짜 칩으로 고른 다른 0건 날도 빈 카드가 322px(원래 104px)였다. → 사용자가 날짜를 바꾸는 순간 비운다(날짜 칩 onClick).
+  //   ⚠ 첫 화면이 그려진 뒤 저절로(효과·타이머·재조회) 비우면 그때 카드가 줄며 밀림이 **입력 없이** 난다 — CLS 를 미룰 뿐이다.
+  //     입력 직후 이동은 CLS 에서 빠지고, 어차피 날짜를 바꾸면 카드 내용이 통째로 바뀐다.
   const skelH = useRef(0);
 
   return (
@@ -780,7 +784,8 @@ export default function HomeTab({
                 return (
                   <button key={iso} type="button" data-date-pill={iso} aria-pressed={on} data-today={isToday ? '1' : undefined}
                     aria-label={`${mm}월 ${dd}일 ${dow}요일${isToday ? ' 오늘' : ''} 일정 보기${has ? ' · 대회 있음' : ''}`}
-                    onClick={() => setSelectedDate(iso)}
+                    // 같은 날을 다시 누르면 비우지 않는다 — 리렌더가 생략돼 비운 값이 다음 1분 틱에 입력 없이 반영된다(위 skelH 주석).
+                    onClick={() => { if (iso !== selectedDate) skelH.current = 0; setSelectedDate(iso); }}
                     className={[
                       // 폭: 모바일 = 스트립의 1/7(최소 44px) · md~ 고정 3.25rem(55px · 13px 글자 29px 의 1.9배).
                       'flex min-h-[44px] w-[calc(100%/7)] min-w-[44px] shrink-0 snap-center flex-col items-center justify-center rounded-[8px] leading-tight transition-colors md:w-13',
@@ -826,7 +831,7 @@ export default function HomeTab({
             </span>
           </header>
           {!loaded ? (
-            <div ref={(el) => { if (el) skelH.current = el.getBoundingClientRect().height; }}
+            <div ref={(el) => { if (el) skelH.current = el.getBoundingClientRect().height; }} data-testid="home-schedule-skeleton"
               className={`divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura ${HOME_LIST_GRID}`} aria-busy="true">
               {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
                   스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).

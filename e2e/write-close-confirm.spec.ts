@@ -133,4 +133,68 @@ test.describe('글쓰기 — 작성 중 닫기 확인', () => {
     const ty = await sheet(page).evaluate((e) => new DOMMatrix(getComputedStyle(e).transform).m42);
     expect(Math.abs(ty), `취소했는데 시트가 제자리로 안 돌아왔다(translateY=${ty})`).toBeLessThanOrEqual(1);
   });
+
+  // 2026-10-04 재검토 H2 — 푸터 '취소' 가 onClose 를 직접 불러 확인 없이 닫혔다(X·ESC 와 다른 길).
+  // 음성 대조: PostFormModal 푸터 onClick 을 `onClose` 로 되돌리면 실패한다.
+  test('푸터 취소도 같은 확인을 지난다(빈 창은 바로 닫힘)', async ({ page, baseURL }) => {
+    await boot(page, baseURL);
+    const asked: string[] = [];
+    let answer: 'accept' | 'dismiss' = 'dismiss';
+    page.on('dialog', (d) => { asked.push(d.message()); void (answer === 'accept' ? d.accept() : d.dismiss()); });
+    const cancel = () => sheet(page).getByRole('button', { name: '취소', exact: true });
+
+    await open(page);
+    await cancel().click();
+    await expect(sheet(page), '빈 창이 푸터 취소로 안 닫혔다').toHaveCount(0);
+    expect(asked, '빈 창인데 확인을 물었다').toEqual([]);
+
+    await open(page);
+    await titleBox(page).fill('푸터로 닫으려던 제목');
+    await cancel().click();
+    await expect.poll(() => asked.length, '푸터 취소: 확인을 묻지 않았다').toBe(1);
+    expect(asked[0]).toBe(ASK);
+    await page.waitForTimeout(400);
+    await expect(sheet(page), '푸터 취소: 확인을 취소했는데 창이 닫혔다').toBeVisible();
+    await expect(titleBox(page)).toHaveValue('푸터로 닫으려던 제목');
+
+    answer = 'accept'; asked.length = 0;
+    await cancel().click();
+    await expect(sheet(page), '확인했는데 안 닫혔다').toHaveCount(0);
+    expect(asked).toEqual([ASK]);
+  });
+
+  // 2026-10-04 재검토 H2 — 확인 조건이 제목·내용만 봐서 사진·투표만 채운 초안은 묻지 않고 사라졌다.
+  // 음성 대조: hasDraft 를 제목·내용만 보게 되돌리면 실패한다.
+  test('글자 없이 사진만 채운 초안도 닫기 전에 묻는다', async ({ page, baseURL }) => {
+    await boot(page, baseURL);
+    let asked = 0;
+    page.on('dialog', (d) => { asked++; void d.dismiss(); });
+    const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+
+    await open(page);
+    await sheet(page).locator('input[type="file"]').setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: PNG });
+    await expect(sheet(page).getByRole('img', { name: '첨부 이미지 1' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect.poll(() => asked, '사진만 있는 초안: 확인을 묻지 않았다').toBe(1);
+    await page.waitForTimeout(400);
+    await expect(sheet(page), '사진만 있는 초안이 닫혔다').toBeVisible();
+    // 사진을 지우면 다시 빈 창 — 묻지 않고 닫힌다
+    await sheet(page).getByRole('button', { name: '이미지 제거' }).click();
+    await page.keyboard.press('Escape');
+    await expect(sheet(page), '빈 창으로 돌아갔는데 안 닫혔다').toHaveCount(0);
+    expect(asked).toBe(1);
+  });
+
+  test('글자 없이 투표 질문만 채운 초안도 닫기 전에 묻는다', async ({ page, baseURL }) => {
+    await boot(page, baseURL);
+    let asked = 0;
+    page.on('dialog', (d) => { asked++; void d.dismiss(); });
+    await open(page);
+    await sheet(page).getByRole('button', { name: '+ 투표 추가' }).click();
+    await sheet(page).getByPlaceholder('예: 이 스팟, 콜? 폴드?').fill('콜? 폴드?');
+    await sheet(page).getByRole('button', { name: '닫기' }).first().click();
+    await expect.poll(() => asked, '투표만 있는 초안: 확인을 묻지 않았다').toBe(1);
+    await page.waitForTimeout(400);
+    await expect(sheet(page), '투표만 있는 초안이 닫혔다').toBeVisible();
+  });
 });
