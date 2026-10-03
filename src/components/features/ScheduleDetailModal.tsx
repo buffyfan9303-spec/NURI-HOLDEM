@@ -1094,7 +1094,7 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
 function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: string }) {
   const { user } = useAuth();
   const toast = useToast();
-  // '' = 생성 중(자리만 예약) · null = 생성 실패(칸 없음)
+  // '' = 생성 중(자리만 예약) · null = 생성 실패(자리는 그대로 두고 작은 안내 — 자리를 지우면 버튼이 85px 튄다)
   const [qr, setQr] = useState<string | null>('');
   const [sending, setSending] = useState(false);
   useEffect(() => { QRCode.toDataURL(buyinRequestUrl(venueId), { width: 200, margin: 1 }).then(setQr).catch(() => setQr(null)); }, [venueId]);
@@ -1109,10 +1109,12 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   };
   return (
     <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/5 p-2.5">
-      {/* QR 은 비동기로 만들어진다 — 오기 전에도 72×72 자리를 잡아 둔다. 안 그러면 도착 순간 글 칸이 84px 좁아져
-          '꾹 눌러 참가 신청' 줄이 다시 감기며 20px 밀렸다(재점검 1회차 L1-1). */}
+      {/* QR 은 비동기로 만들어진다 — 오기 전에도, 만들기에 실패해도 72×72 자리를 잡아 둔다. 안 그러면 도착 순간 글 칸이 84px
+          좁아져 '꾹 눌러 참가 신청' 줄이 다시 감기며 20px 밀렸고(재점검 1회차 L1-1), 실패 때 자리를 지우면 버튼이 85px 튄다(하-1). */}
       {qr ? <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />
-        : qr === '' && <div aria-hidden className="h-[72px] w-[72px] shrink-0 rounded-input bg-white/10" />}
+        : <div aria-hidden={qr === ''} data-testid="buyin-qr-slot" className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-input bg-white/10 p-1 text-center text-2xs leading-tight text-ink-muted">
+            {qr === null && 'QR을 만들지 못했어요'}
+          </div>}
       <div className="min-w-0 flex-1">
         {/* 🔴 2026-09-22 오너 — 제목을 `참가 신청` 한 마디로 줄였다(종전: '지금 매장에서 참가 신청 · 오늘 · 현장').
             정보는 안 잃는다: 이 박스는 `isEventToday` 일 때만 렌더되므로 '오늘'은 원래 중복이고,

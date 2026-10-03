@@ -118,6 +118,10 @@ function reclass(html) {
   });
 }
 
+// 본문의 도박문제 상담 번호도 하단 고지처럼 한 덩어리로 둔다 — 360 에서 '·' 뒤로 갈라졌다(재점검 1회차 하-2).
+// 글자는 그대로, <span class="nw"> 로 감싸기만 한다(TSX 원문은 건드리지 않는다).
+const keepHelpline = (html) => html.replace(/1336 ?\(24시간·무료\)/g, '<span class="nw">$&</span>');
+
 // ── 3) 사업자 정보는 손으로 다시 쓰지 않는다 ────────────────────────────────
 // LegalNotice(사행성 공지)가 렌더한 '사업자 정보' 블록에서 값을 뽑아 4개 페이지 푸터에 재사용한다.
 // 손으로 옮겨 적으면 그것 자체가 또 하나의 사본이 되어 언젠가 어긋난다. 못 찾으면 즉시 실패시킨다.
@@ -269,7 +273,7 @@ if (process.argv.includes('--archive')) {
 
 const files = new Map();
 for (const doc of DOCS) {
-  const body = reclass(rendered[doc.slug]).split('\n').map((l) => '      ' + l).join('\n');
+  const body = keepHelpline(reclass(rendered[doc.slug])).split('\n').map((l) => '      ' + l).join('\n');
   files.set(join(OUT_DIR, doc.slug + '.html'), page(doc, body, biz));
 }
 
