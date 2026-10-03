@@ -1,5 +1,5 @@
 -- 20261003h — 마감 뒤 미수 회수(Q2) · 직원 매출 합계 서버 차단(Q3)
--- ⏳ 적용 전 — 리드 적용 예정(화면 PR 병합 직전). 라이브 미적용. (store-team 2026-10-03 v4, critical-reviewer F1·F2·v3 재검토 · verifier 반영)
+-- ✅ 적용 완료 2026-10-03 밤(리드, Management API 단일 트랜잭션 HTTP 201) — critical v4 재검토 적용 가능 · 리허설 REHEARSAL_OK 66항목. (store-team 2026-10-03 v4, critical-reviewer F1·F2·v3 재검토 · verifier 반영)
 -- 리허설: Documents\누리홀덤_영상분석_0930\settle-auth-1003 — node rehearse.mjs R0_helpers_baseline.sql <이 파일> R1_tests.sql → REHEARSAL_OK(66항목), 음성 변형 11종 전부 실패 확인.
 -- 요구: 오너 2026-10-03
 --   Q2 "게임이 완전히 마감된 뒤의 손님 미수는 직원도 받을 수 있지만 비밀번호를 입력해야 한다."
