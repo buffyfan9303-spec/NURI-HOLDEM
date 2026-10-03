@@ -924,7 +924,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   //   그 밖의 마감 장부는 미수 행만 온다 → 바인 수·티켓·클락 대조 같은 횟수를 그리면 틀린 숫자가 정상처럼 보인다.
   //   경계는 숨기는 쪽으로 1시간 당긴다(17시간) — 기기 시계가 앞서 서버는 이미 숨겼는데 화면이 전체값이라 믿지 않게.
   const staffPartial = !canManage && closed && date < businessDateOf(venueId)
-    && !(session.closedAt && Date.now() - Date.parse(session.closedAt) < 17 * 3_600_000);
+    && !(session.closedAt && Date.now() - Date.parse(session.closedAt) < 17 * 3_600_000
+      && date >= kstToday(Date.now() - 86_400_000)); // 서버 v4 날짜 하한(KST 어제 이후)과 같게
 
   // B1 — 영업일을 **따라가던** 화면만 새 영업일로 옮긴다. 첫 렌더는 캐시가 없어 달력 오늘로 열리고,
   //   서버 답(어제 영업일)이 오면 그리로 옮겨 앉는다. 사용자가 다른 날짜를 골랐으면(date ≠ 직전 영업일) 건드리지 않고,
