@@ -2237,7 +2237,7 @@ html.light .text-teal-400   { color: #0F766E; }
 html.light .text-purple-400 { color: #7E22CE; }
 html.light .text-pink-400   { color: #BE185D; }
 html.light .text-green-400  { color: #15803D; }
-html.light .text-orange-400 { color: #B45309; }
+html.light .text-orange-400 { color: #9A3412; }  /* 종전 #B45309 는 surface-high 위 4.47(관리자 '정지 중', 재점검 1회차 L1-12) → 6.50 */
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #5C3BBF; }
 html.light .text-pink-300 { color: #BE185D; }

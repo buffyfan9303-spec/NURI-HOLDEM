@@ -1250,13 +1250,15 @@ function PwField({ label, value, onChange, show, onToggle, placeholder, autoComp
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoComplete={autoComplete}
-          className="input pr-10"
+          className="input pr-12"
         />
+        {/* 44×44 누름면 — 가입 창(AuthModal PasswordField)과 같은 규격. 종전 아이콘 크기 16×16 은 WCAG 2.5.8(24px) 미달이었다(재점검 1회차 N-5). */}
         <button
           type="button"
           onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-secondary transition-colors focus:outline-hidden"
+          className="absolute right-0 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded-input text-ink-muted transition-colors hover:text-ink-secondary"
           aria-label={show ? '비밀번호 숨기기' : '비밀번호 보기'}
+          aria-pressed={show}
         >
           {show ? <EyeOffIcon /> : <EyeIcon />}
         </button>
