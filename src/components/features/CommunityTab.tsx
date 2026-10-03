@@ -856,6 +856,8 @@ function FeedSection({
   }, [hasPosts]);
   // 글쓰기 — 예전 '글쓰기' 바와 같은 갈래: 로그인이면 글쓰기(본인인증 게이트는 App 의 onOpenWrite 가 그대로 건다), 아니면 로그인 유도.
   const write = () => (user ? onOpenWrite() : promptLogin());
+  // 비로그인 안내 문구(예전 '로그인하면 게시글을 작성할 수 있습니다' 바)는 버튼 이름·툴팁으로 보존한다
+  const writeLabel = user ? '글쓰기' : '글쓰기 — 로그인하면 글을 쓸 수 있어요';
   const pencil = (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
@@ -981,18 +983,8 @@ function FeedSection({
           </div>
         )}
         {/* PC(lg+) 글쓰기 — 떠 있는 버튼 대신 이 줄 끝에 선다. 2-pane 오른쪽 상세(댓글 입력·등록)를 FAB 가 덮지 않게. */}
-        <button type="button" data-testid="board-write-inline" aria-label="글쓰기" title="글쓰기" onClick={write}
+        <button type="button" data-testid="board-write-inline" aria-label={writeLabel} title={writeLabel} onClick={write}
           className="hidden h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-accent-300 text-white lg:flex">
-          {pencil}
-        </button>
-        {/* 모바일 글쓰기 FAB — 오른쪽 아래. 위치는 '맨 위로'(App ScrollTopButton: bottom --tabbar-float · right-4 · 42.5px)의
-            바로 위 같은 세로축(right-3 + 51px → 중심 x 일치)이고, 아래 4rem 은 하단 중앙 토스트(1줄 44.5 · 2줄 65.75px)를 비켜 선다.
-            스크롤에 따라 접거나 숨기지 않는다 — 아이콘만 있는 원이라 접을 것이 없고, 움직이지 않는 편이 누르기 쉽다.
-            [data-sec="board"] 안에 있어 다른 하위 탭·다른 탭에서는 display:none 으로 같이 사라진다.
-            ⚠ 이 flex 줄 **안**에 둔다 — 바깥 space-y-2 의 직계 자식이면 margin-bottom 이 붙어 fixed 위치가 8.5px 뜬다. */}
-        <button type="button" data-testid="board-write" aria-label="글쓰기" title="글쓰기" onClick={write}
-          style={{ bottom: 'calc(var(--tabbar-float) + 4rem)' }}
-          className="fixed right-3 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent-300 text-white shadow-dialog lg:hidden">
           {pencil}
         </button>
       </div>
@@ -1103,6 +1095,20 @@ function FeedSection({
           )}
         </>
       )}
+      {/* 모바일 글쓰기 FAB — 피드 컨테이너 **맨 아래 칸**(51px)에 sticky 로 선다(리드 결정 2026-10-04).
+          · 목록을 읽는 동안은 화면 오른쪽 아래(bottom = --tabbar-float + 4rem)에 떠 있다 — '맨 위로'(42.5px) 위, 토스트 2줄(65.75px) 위.
+          · 피드 끝이 올라오면 이 칸에 내려앉아 피드와 함께 올라간다 → 아래 푸터(계정 삭제 안내·공지·소개문·사업자 정보)를 절대 덮지 않는다.
+            예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
+          · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).
+          · 스크롤에 따라 접거나 숨기지 않는다 — 아이콘만 있는 원이라 접을 것이 없다.
+          · [data-sec="board"] 안이라 다른 하위 탭·다른 탭에서는 display:none 으로 같이 사라진다. PC 는 위 한 줄 끝 버튼. */}
+      <div style={{ bottom: 'calc(var(--tabbar-float) + 4rem)' }}
+        className="pointer-events-none sticky z-40 flex justify-end lg:hidden">
+        <button type="button" data-testid="board-write" aria-label={writeLabel} title={writeLabel} onClick={write}
+          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-300 text-white shadow-dialog">
+          {pencil}
+        </button>
+      </div>
     </div>
   );
 }

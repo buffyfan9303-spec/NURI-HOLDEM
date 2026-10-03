@@ -189,8 +189,40 @@ for (const w of [390, 360]) {
       expect(p.vh - p.fab.b, `${at}: 토스트 2줄 자리와 겹친다`).toBeGreaterThanOrEqual(p.tf + 65.75);
       if (at === 'max' && p.last) expect(ov(p.fab, p.last), '최대 스크롤에서 마지막 글을 가린다').toBe(false);
     }
+    // 예전 비로그인 바 문구('로그인하면 게시글을 작성할 수 있습니다')는 버튼 이름·툴팁으로 남는다
+    await expect(page.getByTestId('board-write')).toHaveAttribute('aria-label', /로그인하면 글을 쓸 수 있어요/);
+    await expect(page.getByTestId('board-write')).toHaveAttribute('title', /로그인하면 글을 쓸 수 있어요/);
     await page.getByTestId('board-write').click();
     expect(await page.evaluate(() => (window as unknown as { __login: number }).__login), '비로그인 FAB 가 로그인 유도를 안 띄웠다').toBe(1);
+  });
+}
+
+// ⑧ 리드 결정(2026-10-04): 맨 끝까지 스크롤해도 FAB 가 푸터 문구(계정 삭제 안내·공지·소개문·사업자 정보)를 덮지 않는다.
+//    예전 fixed FAB 는 360 맨 끝에서 '계정 삭제 안내'·'공지'·소개문 오른쪽을 덮었다 — 그 빌드에서 360·320 이 실패한다.
+for (const w of [390, 360, 320]) {
+  test(`⑧ ${w}: 맨 끝 스크롤에서 FAB 가 푸터 글자와 겹치지 않는다(겹침 0)`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: 844 });
+    await openBoard(page);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(600);
+    const r = await page.evaluate(() => {
+      const fab = document.querySelector('[data-testid="board-write"]')!.getBoundingClientRect();
+      const foot = document.querySelector('[data-testid="business-footer"]');
+      const hits: string[] = [];
+      const tw = document.createTreeWalker(foot!, NodeFilter.SHOW_TEXT);
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+        if (!n.textContent?.trim()) continue;
+        const rg = document.createRange(); rg.selectNodeContents(n);
+        for (const b of rg.getClientRects()) {
+          if (b.width > 0 && !(b.right <= fab.left || b.left >= fab.right || b.bottom <= fab.top || b.top >= fab.bottom)) { hits.push(n.textContent.trim().slice(0, 24)); break; }
+        }
+      }
+      return { hits, atEnd: Math.abs(scrollY - (document.documentElement.scrollHeight - innerHeight)) <= 2, fabH: fab.height, footer: !!foot };
+    });
+    expect(r.footer, '푸터(business-footer)가 없다 — 검사 대상이 사라졌다').toBe(true);
+    expect(r.atEnd, '맨 끝까지 못 내렸다').toBe(true);
+    expect(r.fabH, 'FAB 가 그려지지 않았다').toBeGreaterThanOrEqual(44);
+    expect(r.hits, `FAB 가 푸터 글자를 덮는다: ${JSON.stringify(r.hits)}`).toEqual([]);
   });
 }
 
