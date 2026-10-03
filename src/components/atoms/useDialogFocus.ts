@@ -56,6 +56,7 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
     //   예: 글쓰기 '내용')이든, 50ms 안에 사용자가 누른 요소든 그쪽이 이긴다.
     //   · F1(2026-10-03): 방금 누른 `…` 메뉴(summary)에서 포커스를 '닫기'로 뺏어 그 blur 가 메뉴를 곧바로 닫았다.
     //   · autoFocus(2026-10-03 리드 결정): 글쓰기 '내용' 칸이 ~58ms 뒤 '닫기'로 뺏겨 열자마자 쓸 수 없었다.
+    //   ⚠ dev 서버(StrictMode)에서는 effect 이중 실행의 정리가 포커스를 opener 로 돌려 autoFocus 존중이 안 보인다 — 판정은 프로덕션 빌드로.
     const t = window.setTimeout(() => {
       if (!isTop() || el.contains(document.activeElement)) return;
       (focusables()[0] ?? el).focus({ preventScroll: true });
@@ -84,9 +85,11 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
       if (!isTop()) return; // 위에 다른 다이얼로그가 열려 있으면 그쪽 포커스다 — 뺏지 않는다
       // ⚠ 막 뜬 위 창의 autoFocus 는 그 창이 스택에 올라가기(effect) **전**, 커밋 중에 포커스를 잡는다 —
       //   그 순간엔 아직 이 창이 '맨 위'라서 위 창의 첫 칸을 끌어왔다(2026-10-03 실측: 상세 위 글쓰기 '내용' → 상세 버튼).
-      //   포커스가 들어간 곳이 **이 창을 품지 않은 다른 모달 대화상자** 안이면 그 창의 몫으로 둔다.
+      //   포커스가 들어간 곳이 **아직 스택에 안 올라간 다른 모달 대화상자** 안이면 그 창의 몫으로 둔다.
+      //   ⚠ 이미 스택에 있는 창(= 아래 창) 안으로의 포커스는 양보하지 않는다 — 위 창이 떠 있는 동안 아래 창 요소에
+      //     프로그램 focus() 가 걸려도 위 창이 되잡아야 한다(verifier 2026-10-03 회귀 지적).
       const host = (target as Element).closest?.('[aria-modal="true"]');
-      if (host && !host.contains(el)) return;
+      if (host && !host.contains(el) && !openDialogs.some((d) => host.contains(d))) return;
       (focusables()[0] ?? el).focus({ preventScroll: true });
     };
     document.addEventListener('focusin', onFocusIn);

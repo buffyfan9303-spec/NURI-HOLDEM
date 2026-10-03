@@ -108,6 +108,12 @@ test.describe('대화상자 autoFocus 존중 · 닫으면 연 버튼으로', () 
     await page.waitForTimeout(SETTLE);
     await expect(content(page), `아래 상세 창 또는 첫 포커스 타이머가 autoFocus 칸을 뺏었다(지금 포커스: ${await active(page)})`).toBeFocused();
 
+    // 위 창이 떠 있는 동안 아래 창 요소에 프로그램 focus() → 위 창(맨 위)이 되잡아야 한다(겹친 창 양보가 아래 창까지 넓어지면 안 된다).
+    await page.evaluate(() => (document.querySelector('summary[aria-label="게시글 메뉴"]') as HTMLElement).focus());
+    await expect.poll(() => form(page).evaluate((d) => d.contains(document.activeElement)),
+      { message: '위 창이 열린 동안 아래 창으로 샌 포커스를 되잡지 않았다' }).toBe(true);
+    await content(page).focus();
+
     await page.keyboard.press('Escape');
     await expect(form(page), 'Escape 로 위 시트가 안 닫혔다').toBeHidden();
     await expect(root, 'Escape 가 아래 상세까지 닫았다').toBeVisible();
