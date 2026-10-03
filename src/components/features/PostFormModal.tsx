@@ -320,7 +320,10 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="글쓰기" maxWidth="md" variant="sheet">
+    // 작성 중 닫기 확인(2026-10-04 재점검 2회차 하-4 · 리드 결정): 제목이나 내용이 비어 있지 않으면 묻는다(취소 = 계속 쓰기).
+    // 빈 창은 그대로 바로 닫힌다. 게시 성공 뒤의 닫기는 onClose 를 직접 부르므로 묻지 않는다.
+    <Modal open={open} onClose={onClose} title="글쓰기" maxWidth="md" variant="sheet"
+      confirmClose={() => (!title.trim() && !content.trim()) || window.confirm('작성 중인 내용이 있어요. 닫을까요?')}>
       <form onSubmit={handleSubmit}>
         {/* 입력부 — 액션바(하단 고정)와 분리해야 sticky 가 스크롤포트 바닥에 붙는다 */}
         <div className="p-4 space-y-4">

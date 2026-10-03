@@ -52,11 +52,14 @@ export interface OpenResult {
   voucherTitle: string;
 }
 
-/** 등급별 표시 규격 — 화면 여러 곳이 같은 색·라벨을 쓰도록 한 곳에 둔다. */
+/** 등급별 표시 규격 — 화면 여러 곳이 같은 색·라벨을 쓰도록 한 곳에 둔다.
+ *  ⚠ `text` 는 **라이트 오버라이드가 있는 클래스**만 쓴다(gold-200·accent-200·emerald-300 은 index.css 의 `html.light` 규칙,
+ *    3등은 `stat-cyan` 다크 #22D3EE · 라이트 #0E7490). 2026-10-04 재점검 2회차 중-1: 3등이 `text-cyan-300` 이라
+ *    라이트에서 범례 1.35 · 확률 공개 표 1.45 · 열린 카드 1.26 이었다(고지 표의 줄 이름이 안 읽혔다). */
 export const TIER_META: Record<number, { label: string; short: string; ring: string; text: string; glow: string; bg: string; dot: string }> = {
   1: { label: '1등', short: '1', ring: 'border-gold-300/70',    text: 'text-gold-200',    glow: 'shadow-[0_0_28px_-4px_rgb(255_209_0/0.6)]',  bg: 'bg-gold-300/10',    dot: 'bg-gold-300' },
   2: { label: '2등', short: '2', ring: 'border-accent-300/70',  text: 'text-accent-200',  glow: 'shadow-[0_0_22px_-6px_rgb(88_80_236/0.65)]', bg: 'bg-accent-300/10',  dot: 'bg-accent-300' },
-  3: { label: '3등', short: '3', ring: 'border-cyan-400/60',    text: 'text-cyan-300',    glow: '',                                            bg: 'bg-cyan-400/10',    dot: 'bg-cyan-400' },
+  3: { label: '3등', short: '3', ring: 'border-cyan-400/60',    text: 'stat-cyan',        glow: '',                                            bg: 'bg-cyan-400/10',    dot: 'bg-cyan-400' },
   4: { label: '4등', short: '4', ring: 'border-emerald-400/55', text: 'text-emerald-300', glow: '',                                            bg: 'bg-emerald-400/10', dot: 'bg-emerald-400' },
 };
 

@@ -1249,8 +1249,11 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           ⚠ 2026-09-22 에 그쪽 제목이 '지금 매장에서 참가 신청 · 오늘 · 현장' → '참가 신청' 로 짧아졌다.
             두 제목이 가까워졌으므로 여기 '참가 예약' 과 그쪽 설명줄이 역할을 가르는 유일한 단서다. */}
       <div className="flex items-center gap-2 px-3 py-2">
+        {/* min-h-[2.4rem] = 오른쪽 '예약하기'(.btn 의 최소 높이)와 같은 값. 그 버튼은 예약 조회가 끝나야(mine === null) 생겨서,
+            로그인 회원은 첫 그림 ~90ms 뒤 이 줄이 자라고 아래 '참가 신청' 카드가 19.5px 밀렸다(2026-10-04 재점검 2회차 하-2).
+            줄 높이를 처음부터 버튼 높이로 잡는다 — 조회 중·예약 완료·종료·비로그인 어느 상태든 같은 높이다. */}
         <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
-          className="tap-44 flex min-w-0 flex-1 items-center gap-2 text-left">
+          className="tap-44 flex min-h-[2.4rem] min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           {/* truncate → 줄바꿈(2026-09-12): 360px 에서 '미리 자리 잡아두기'가 87/102 로 잘렸다.
               예약 상태·실패 안내가 들어가는 자리라 잘라 숨기면 안 된다(§5-2). */}
@@ -1268,9 +1271,12 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         </button>
         {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다.
             펼친 뒤에는 **자리를 남긴 채** 감춘다(invisible) — 빼면 줄 높이가 줄어 누른 '더보기'가 9.76px 올라갔다(2026-09-29 감사 #3). */}
-        {mine === null && !ended && (
-          <button type="button" onClick={() => setExpanded(true)} tabIndex={expanded ? -1 : undefined} aria-hidden={expanded || undefined}
-            className={['tap-44 btn-primary shrink-0 px-3 py-1.5 text-xs', expanded ? 'invisible' : ''].join(' ')}>
+        {/* 예약 조회 중(mine === undefined, 오류 아님)에도 같은 버튼을 **보이지 않게** 세워 가로 자리까지 잡는다 —
+            조회 뒤 버튼이 생기며 왼쪽 요약·'더보기'가 옆으로 밀리던 이동(하-2 의 가로 성분)을 없앤다. */}
+        {(mine === null || (mine === undefined && mineErr === null)) && !ended && (
+          <button type="button" onClick={() => setExpanded(true)} tabIndex={expanded || mine === undefined ? -1 : undefined}
+            aria-hidden={expanded || mine === undefined || undefined}
+            className={['tap-44 btn-primary shrink-0 px-3 py-1.5 text-xs', expanded || mine === undefined ? 'invisible' : ''].join(' ')}>
             예약하기
           </button>
         )}

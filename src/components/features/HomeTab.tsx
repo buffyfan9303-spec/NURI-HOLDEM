@@ -495,6 +495,12 @@ export default function HomeTab({
   if (loaded) {
     writeSeenCount(UPCOMING_SEEN, (useFallback ? nextUp : dayVisible).length, { min: 1, max: 8 });
   }
+  // 🔴 2026-10-04 재점검 2회차 하-3 — 콜드 첫 방문은 지난 줄 수가 없어 스켈레톤이 기본 4행을 잡는다(실측 390: 목록 칸 포함 홈 795px).
+  //   그날 대회가 0건이면 빈 상태 카드 한 칸(577px)으로 줄어 아래 '오늘의 운' 줄과 푸터가 218px 올라왔다
+  //   (실사이트 느린 망 CLS 0.0729, 3/3). 몇 행일지는 데이터 전에 알 수 없고, 기본 행 수를 줄이면 대회 있는 날이 반대로 밀린다.
+  //   → **스켈레톤을 그린 마운트에서는** 빈 상태 카드가 스켈레톤이 잡았던 높이를 그대로 물려받는다(줄지 않으니 밀림 0).
+  //   스냅샷으로 바로 그린 방문(스켈레톤 없음)은 0 이라 종전 그대로다. 목록 갈래(대회 있는 날)는 건드리지 않는다.
+  const skelH = useRef(0);
 
   return (
     // (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다.
@@ -820,7 +826,8 @@ export default function HomeTab({
             </span>
           </header>
           {!loaded ? (
-            <div className={`divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura ${HOME_LIST_GRID}`} aria-busy="true">
+            <div ref={(el) => { if (el) skelH.current = el.getBoundingClientRect().height; }}
+              className={`divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura ${HOME_LIST_GRID}`} aria-busy="true">
               {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
                   스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).
                   ⚠ **몇 개**가 붙을지는 데이터 전에 모른다(그룹 수는 배열을 봐야 나온다).
@@ -851,7 +858,9 @@ export default function HomeTab({
                같은 정본(LoadErrorCard)을 쓴다. compact: 홈에서는 이 섹션 하나가 화면을 다 먹으면 안 된다. */
             <LoadErrorCard compact error={schedulesError} what="대회 목록" onRetry={onRetrySchedules} />
           ) : daySchedules.length === 0 && !useFallback ? (
-            <div className="rounded-aura border card-aura px-3 py-4">
+            // 스켈레톤 높이를 물려받을 때 문구·버튼은 가운데에 둔다(위에 붙고 아래가 비면 '덜 그려진 카드'로 읽힌다).
+            <div className="flex flex-col items-start justify-center rounded-aura border card-aura px-3 py-4"
+              style={skelH.current ? { minHeight: skelH.current } : undefined}>
               {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — 이제 여기까지 오는 것은
                   '오늘·내일도 없고 앞으로도 없다' 는 뜻이다(다음 일정이 하나라도 있으면 아래 갈래로 간다). */}
               {/* 🔴 어느 날짜가 비었는지 **말한다.** 종전 문구는 '예정된 대회가 없어요' 라
