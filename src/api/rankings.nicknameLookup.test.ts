@@ -7,7 +7,7 @@
 // 어떻게 읽는가" 라서, 필터가 '호출됐는지'가 아니라 '무엇이 걸러졌는지'를 검사한다.
 // 라이브 venue_rankings 는 0행(2026-09-17 실측)이라 데이터로는 재현되지 않는다 — 여기서 증명한다.
 // 대소문자 무시는 **의도된** 동작이다(서버 규칙이 전부 lower(nickname)=lower(x): 20260905g·20260910b) → eq 로 바꾸면 안 된다.
-// 음성 대조: rankings.ts / loyalty.ts 의 `likeLiteral(` 을 벗기면 '섞임' 케이스 3개가 빨개진다.
+// 음성 대조: rankings.ts 의 `likeLiteral(` 을 벗기면 '섞임' 케이스 2개가 빨개진다.
 // 실행: npx vitest run src/api/rankings.nicknameLookup.test.ts
 import { describe, it, expect, vi } from 'vitest';
 
@@ -82,11 +82,7 @@ describe('D7 — 닉네임의 %·_ 는 와일드카드가 아니라 글자다', 
     expect(rows.map((r) => r.venueName)).toEqual(['D']);
   });
 
-  it('🔴 getMyBadgeStats("kim_01"): 머니인 2회·최고 1위 — 남의 2위 행이 최고 등수를 바꾸지 않는다', async () => {
-    const { getMyBadgeStats } = await load();
-    const s = await getMyBadgeStats('kim_01', 0);
-    expect(s).toMatchObject({ moneyin: 2, bestPosition: 1 });
-  });
+  // getMyBadgeStats 는 20261004a(오너 10-04 Q1)부터 닉네임 ilike 대신 서버 my_ranking_history 를 쓴다 → src/lib/loyalty.myRecords.test.ts
 
   it('양성 대조: 대소문자만 다른 "Kim_01" 도 같은 사람이다(서버 lower()=lower() 규칙과 동일)', async () => {
     const { getMyRankingHistory } = await load();

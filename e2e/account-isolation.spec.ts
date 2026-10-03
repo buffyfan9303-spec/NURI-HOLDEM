@@ -101,6 +101,8 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     //   PGRST301 로 거절하는데, 예전엔 그 실패를 `.catch(() => {})` 가 삼켜 우연히 통과했다(UI-08 이후 실패가 오류 카드로 드러남).
     //   위조 세션으로 나가는 인증 읽기는 전부 route 로 받아야 한다 — 두 계정 모두 입상 없음.
     await page.route(/\/rest\/v1\/venue_rankings\?/, (r) => r.fulfill(json([])));
+    // 20261004a: '내 업적' 입상은 my_ranking_history(서버 이름 소유 판정)로 읽고 실패를 던진다 — 위조 세션이라 여기도 route.
+    await page.route(/\/rest\/v1\/rpc\/my_ranking_history/, (r) => r.fulfill(json([])));
     await bootAsA(page);
 
     const openMe = async (menu: string) => {

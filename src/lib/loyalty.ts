@@ -5,7 +5,6 @@ import { supabase, IS_MOCK } from './supabase';
 //   (setEquippedMark 만 currentUser 를 그대로 둔다 — 실패해도 서버 RPC 가 auth.uid() 로 최종 판정하고, 호출부가 '로그인이 필요합니다' 로 말한다.)
 import { currentUser, currentUserStrict } from '../api/_session';
 import { countVisitDays } from '../api/checkins';
-import { likeLiteral } from '../api/rankings';   // D7: 닉네임의 `_`·`%` 를 와일드카드가 아니라 글자로(정본은 rankings.ts)
 import type { IconName } from '../components/atoms/Icon';
 
 import { mustAffect } from '../api/_mustAffect';
@@ -117,8 +116,10 @@ export async function getMyBadgeStats(nickname: string | null, points: number): 
   const uid = u?.id;
   if (!uid) return empty;
   const [vr, ck, pf] = await Promise.all([
+    // 20261004a(오너 10-04 Q1): 내 입상 = 서버가 '그 이름의 주인이 된 뒤' 행만 고른 my_ranking_history — 지금 닉네임 ilike 는
+    //   가입 전 같은 이름 워크인 행까지 '내 머니인·챔피언' 으로 셌다. ponytail: 서버 상한 200행 — 최고 등수는 최근 200건 안에서. 더 필요하면 집계 RPC.
     nickname
-      ? supabase.from('venue_rankings').select('position').ilike('nickname', likeLiteral(nickname))
+      ? supabase.rpc('my_ranking_history', { p_limit: 200 })
       : Promise.resolve({ data: [] as { position: number }[] }),
     // 방문 = 매장별 KST 날짜 distinct(getMyVisitStats·my_visited_venues 와 같은 단위, 점검 #8) — raw count 면 뱃지 임계가 어긋난다
     supabase.from('checkins').select('venue_id, created_at').eq('user_id', uid),
