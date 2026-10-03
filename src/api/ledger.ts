@@ -995,13 +995,25 @@ export interface LedgerSessionListItem {
   closed: boolean;
   buyinAmount: number;
   operators: string[];
+  /** 마감 시각(서버 now() — 20261003h v4). 직원이 이 장부의 바인 행을 다 보는 창(마감 18시간)을 가르는 데 쓴다. */
+  closedAt?: string | null;
+}
+
+/** 20261003h·20261003i — 직원(can_manage_pos 아님)에게 서버가 이 장부의 바인 행을 **다** 주는가, 그리고 클락을 연결할 수 있는가.
+ *  서버 경계(lb_select v4 · _clock_states_ledger_stats): 미마감 · 영업일(biz) 이후 · KST 오늘 · 마감 18시간 이내이면서 KST 어제 이후.
+ *  화면은 1시간 당겨(17시간) 숨기는 쪽으로 판정한다 — 기기 시계가 앞서 서버는 이미 막았는데 화면이 열려 있다고 믿지 않게.
+ *  ⚠ 서버 정책을 바꾸면 이 함수도 같이 바꾼다(20261003h lb_select · 20261003i 트리거). */
+export function staffSeesSession(s: { sessionDate: string; closed: boolean; closedAt?: string | null }, biz: string, kstToday: string, nowMs: number = Date.now()): boolean {
+  if (!s.closed || s.sessionDate >= kstToday || s.sessionDate >= biz) return true;
+  const kstYesterday = new Date(Date.parse(`${kstToday}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  return !!s.closedAt && nowMs - Date.parse(s.closedAt) < 17 * 3_600_000 && s.sessionDate >= kstYesterday;
 }
 
 /** 매장의 게임(세션) 목록 — 최신 날짜순(같은 날은 game_seq 오름차순). 장부 진입 시 리스트업 용. */
 export async function getLedgerSessionList(venueId: string, limit = 90): Promise<LedgerSessionListItem[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_sessions')
-    .select('session_date, game_seq, title, opened_at, reg_closed, closed, buyin_amount, operators')
+    .select('session_date, game_seq, title, opened_at, reg_closed, closed, closed_at, buyin_amount, operators')
     .eq('venue_id', venueId).order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1010,6 +1022,7 @@ export async function getLedgerSessionList(venueId: string, limit = 90): Promise
     openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed,
     buyinAmount: d.buyin_amount ?? 0,
     operators: Array.isArray(d.operators) ? d.operators : [],
+    closedAt: d.closed_at ?? null,
   }));
 }
 

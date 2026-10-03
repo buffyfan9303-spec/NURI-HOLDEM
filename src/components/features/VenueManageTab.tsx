@@ -1497,7 +1497,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </LazyBox>)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} canSeeAll={manageOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {/* 🔴 2026-09-28 오너 "마스터 계정에 직원 탭" — 관리자는 직원 본인 화면(내 근무 정보 + 출퇴근)을 **보기만** 한다.
                     서버(my_staff_wage·set_my_shift_time·_is_active_venue_staff)에 관리자 분기를 만들지 않는다 — 접근표·인건비 조작면이 생긴다. */}
                 {visited.includes('attendance') && box('attendance', <div className="space-y-3">
