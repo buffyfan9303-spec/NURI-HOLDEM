@@ -612,6 +612,6 @@ describe('대시보드 돈 배선(F1)', () => {
     expect(src).not.toMatch(/unpaid \+= f\.unpaid/);
   });
   it('미수 배너는 애드온 포함 day.unpaid 로 뜬다', () => {
-    expect(src).toMatch(/dayStarted && day\.unpaid > 0 && \(\s*<button[^>]*data-testid="unpaid-cta"/);
+    expect(src).toMatch(/dayStarted && day\.unpaid > 0 && !todoOwedShown && \(\s*<button[^>]*data-testid="unpaid-cta"/);
   });
 });

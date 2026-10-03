@@ -39,10 +39,12 @@ interface MyPostersTabProps {
   /** 이 판이 실제로 보이는가('내 매장' 탭 + 게임관리 → 게임 스텝). keep-alive(display:none) 로
    *  숨은 동안은 구독을 끊고, 다시 보일 때 한 번 재검증한다(StoreDashboard 와 같은 배선). */
   active?: boolean;
+  /** 금액을 보여도 되는가 = can_manage_pos(업주·공동운영자·관리자). false(직원)면 포스터 매출 칩·지난 장부 바인 수·손님 누적액을 **빼고** 그리지 않는다(오너 Q3). */
+  canSeeMoney?: boolean;
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, venueId: venueIdProp = null, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, venueId: venueIdProp = null, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true, canSeeMoney = true }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
@@ -86,8 +88,8 @@ export default function MyPostersTab({ schedules, venueId: venueIdProp = null, o
   const reloadOps = useCallback(() => {
     if (!venueId || !onOpenLedger) return;
     const v = venueId;
-    getPosterOpsSummaries(v).then((o) => { if (opsOwner.current === v) setOps(o); }).catch(() => {});
-  }, [venueId, onOpenLedger]);
+    getPosterOpsSummaries(v, { money: canSeeMoney }).then((o) => { if (opsOwner.current === v) setOps(o); }).catch(() => {});
+  }, [venueId, onOpenLedger, canSeeMoney]);
   useEffect(() => { if (active) reloadOps(); }, [active, reloadOps]);
   // 순위 저장은 장부 테이블을 건드리지 않으므로 구독으로는 오지 않는다 — 그 갱신은 위 active 상승분이 맡는다
   // F(2026-09-28) — 바인 취소(DELETE)도 받는다. 행 id 를 들고 있지 않은 요약 화면이라 **이 매장 여부를 모른 채** 다시 읽는다
@@ -139,6 +141,7 @@ export default function MyPostersTab({ schedules, venueId: venueIdProp = null, o
                 <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts}
                   onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
                   ops={ops[p.id] ?? null}
+                  money={canSeeMoney}
                   resCounts={resCounts}
                   checkinNonce={checkinNonce}
                   onLedgerAt={onOpenLedger ? (t) => onOpenLedger(p, t) : undefined}
@@ -171,7 +174,8 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCounts, checkinNonce, onLedgerAt, onRanking, onOpenSchedule, gameDates }: {
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, money = true, resCounts, checkinNonce, onLedgerAt, onRanking, onOpenSchedule, gameDates }: {
+  money?: boolean;
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
   /** 손님이 보는 이 포스터의 상세 — 행 액션이 예약관리/장부/순위/수정/삭제뿐이라 손님 화면으로 가는 길이 없었다(2026-09-17 감사) */
@@ -322,8 +326,8 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
               )}
               {ops && (
                 <>
-                  <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">바인 {ops.buyinCount}</span>
-                  <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-accent-300">매출 {ops.revenueMan.toLocaleString()}만</span>
+                  {ops.buyinCount != null && <span data-testid="poster-ops-buyins" className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">바인 {ops.buyinCount}</span>}
+                  {ops.revenueMan != null && <span data-testid="poster-ops-revenue" className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-accent-300">매출 {ops.revenueMan.toLocaleString()}만</span>}
                   {ops.closed && ops.hasRankings && (
                     <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-muted">마감 · 순위 ✓</span>
                   )}
@@ -489,7 +493,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             <>
               <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
               {reservations.map((r, i) => (
-                <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
+                <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId} money={money}
                   visited={isVisited(r)}
                   regular={(reserverCounts[r.displayName] ?? 0) >= 5}
                   reserveCount={reserverCounts[r.displayName] ?? 0}
@@ -504,8 +508,8 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
 }
 
 // ── 예약자 1명 + (단골 5회+) 고객 활동내역 ────────────────────────────────────
-function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, onDelete, onRename }: {
-  visited?: boolean;
+function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, onDelete, onRename, money = true }: {
+  visited?: boolean; money?: boolean;
   idx: number; res: OwnerReservation; venueId?: string; regular: boolean; reserveCount: number;
   onDelete: () => void; onRename: () => void;
 }) {
@@ -517,7 +521,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
   const run = useVenueScope(venueId ?? '');
   const openCustomer = () => {
     const next = !showCustomer; setShowCustomer(next);
-    if (next && !act && venueId) run('act', (v) => getCustomerActivity(v, res.displayName), setAct);
+    if (next && !act && venueId) run('act', (v) => getCustomerActivity(v, res.displayName, { money }), setAct);
   };
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low">
@@ -550,17 +554,20 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
       {showCustomer && (
         <div className="border-t border-border-subtle px-2.5 py-2">
           {!act ? <p className="text-2xs text-ink-muted text-center py-1">불러오는 중…</p> : (
-            <div className="grid grid-cols-3 gap-1.5 text-center">
+            <div className={`grid ${act.moneyHidden ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5 text-center`}>
               <Cell label="바인" value={`${act.buyins}회`} />
               <Cell label="방문" value={`${act.visits}회`} />
-              <Cell label="머니인" value={`${act.moneyIn}회`} />
+              <Cell label="입상" value={`${act.moneyIn}회`} />
               <Cell label="예약" value={`${act.reservations}회`} />
-              {/* '누적금액'만으론 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다 */}
-              <Cell label="완납 누적" value={`${act.amount.toLocaleString()}`} gold />
-              <Cell label="객단가" value={act.buyins ? `${Math.round(act.amount / act.buyins).toLocaleString()}` : '-'} />
-              <Cell label="미수" value={`${act.unpaid.toLocaleString()}`} />
-              <Cell label="사용 이용권" value={`${Math.round(act.ticket * 10) / 10}T`} />
-              <Cell label="가게지원" value={`${act.support}회`} />
+              {/* '누적금액'만으론 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다.
+                  직원 조회(moneyHidden, 오너 Q3)는 금액 칸 자체를 뺀다 — 0 으로 그리면 '안 낸 손님'으로 읽힌다. */}
+              {!act.moneyHidden && <>
+                <Cell label="완납 누적" value={`${act.amount.toLocaleString()}`} gold />
+                <Cell label="객단가" value={act.buyins ? `${Math.round(act.amount / act.buyins).toLocaleString()}` : '-'} />
+                <Cell label="미수" value={`${act.unpaid.toLocaleString()}`} />
+                <Cell label="사용 이용권" value={`${Math.round(act.ticket * 10) / 10}T`} />
+                <Cell label="가게지원" value={`${act.support}회`} />
+              </>}
             </div>
           )}
         </div>
