@@ -30,7 +30,8 @@ const BUDGET_FILE = 'bundle-budget.json';
 // Tailwind v4 이관(2026-09-28)으로 tailwind.config.js·postcss.config.js 는 없어졌다 — 설정은 src/index.css(@theme) 안에 있다.
 const SRC_DIRS = ['src', 'index.html', 'vite.config.ts'];
 
-const kb = (n) => +(n / 1024).toFixed(1);
+// 2026-10-04 재점검 2회차 D2: 0.1KB 반올림으로 비교하면 상한을 넘은 값(35.023 → 35.0)이 통과했다 — 비교는 바이트 단위에 가깝게(소수 셋째 자리).
+const kb = (n) => +(n / 1024).toFixed(3);
 const fail = [];
 const warn = [];
 
