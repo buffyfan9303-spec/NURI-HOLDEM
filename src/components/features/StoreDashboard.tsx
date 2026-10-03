@@ -63,8 +63,6 @@ const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 
 /** 'YYYY-MM-DD' 다음 날(달력 계산만 — 시간대 무관) */
 const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-/** E3 L-1 — 이 기기에서 이 매장의 '순위 미입력' 건수를 마지막으로 본 값(확인 중 자리 예약용). */
-const RANK_N_KEY = (venueId: string) => `nuri:dash-rank-n:${venueId}`;
 const last7 = () => lastN(7);
 const last14 = () => lastN(14);
 const last28 = () => lastN(28);
@@ -362,7 +360,6 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       getPosterOpsSummaries(venueId).then(guard((sums: Awaited<ReturnType<typeof getPosterOpsSummaries>>) => {
         const list = Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date));
         setPendingRanks(list);
-        try { localStorage.setItem(RANK_N_KEY(venueId), String(list.length)); } catch { /* 차단 환경 — 다음 확인 중 예약만 없다 */ }
       })),
       // 장부 권한이 없는 직원은 애초에 이 3종을 볼 수 없다(RLS 거절이 정상) — 그 거절을
       // 장애로 띄우면 포스터·출근 안내까지 같이 사라진다. 실패 분기는 장부를 보는 사람에게만.
@@ -774,6 +771,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     return { day, dow: DOW[new Date(day + 'T00:00:00').getDay()], entry: Math.round(entry), paid };
   });
   const weekEntry = perDay.reduce((a, x) => a + x.entry, 0);
+  /** '최근 7일 추세' 카드가 숫자 없는 빈 틀(확인 중·실패·데이터 없음)인가 — 그 카드의 렌더 분기와 이웃 높이 맞춤이 같이 쓴다. */
+  const trendBlank = caps.manage && (loading || !!rangeErr || weekEntry === 0);
+  /** 이웃('대회 클락'·'전주 대비') 높이 맞춤은 **정착 뒤** 빈 틀(데이터 없음·실패)일 때만 — 확인 중에도 늘리면 데이터 매장(대부분)에서
+   *  171 로 늘었다가 정착에 98.7/121 로 줄었다(review-mystore-followup-1003 1-d). 빈 매장은 정착 때 늘어나지만 줄 높이는 7일 카드(171)가
+   *  이미 정하고 있어 아래 줄은 움직이지 않는다. */
+  const trendFill = trendBlank && !loading;
   const weekPaid = perDay.reduce((a, x) => a + x.paid, 0);
   const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
@@ -1324,24 +1327,45 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         //   종전엔 null 이라 정착 순간 카드가 생기며 아래 격자를 PC 72px·390 104~125px 밀었다(실제 영업 매장은 거의 늘 할 일이 있다).
         //   정착 뒤 할 일이 없는 드문 경우(이력 없는 새 매장·정오 전)에만 접힌다.
         //   자리표시 문구는 실제 카드 중 가장 흔한 높이에 맞춘다(PC 한 줄 · 390 은 설명이 두 줄 — 실측 카드 91~93px).
+        // 2026-10-03 E3 후속 — 같은 보이지 않는 틀을 실제 카드 칸에도 겹쳐 세운다(grid 한 칸) → 정착한 카드는 자리표시보다 **작아지지 않는다**.
+        //   '순위 미입력' 갈래는 360 에서 자리표시(제목 두 줄 112.5px)보다 21px 작아 아래 격자가 올라갔다. 더 큰 갈래는 종전 그대로 자란다.
+        // 2026-10-03 리드 판정(review-mystore-followup-1003 FAIL) — 밀린 순위가 오늘 할 일을 가리면 안 된다. 오늘 할 일이 주 카드이고
+        //   밀린 순위는 같은 칸 안의 **보조 한 줄**이다. 그 줄 자리도 틀에 늘 잡아 두어(장부 권한) 줄이 있든 없든 칸 높이가 같다 —
+        //   줄이 없으면 주 줄이 세로 가운데에 선다. 응답 전엔 밀린 건수를 모르므로 이 고정이 정착 이동 0 의 조건이다.
+        const rankRow = (text: string, onClick?: () => void) => (
+          <span data-testid={onClick ? 'todo-rank' : undefined} className="mt-1.5 flex min-w-0 items-center gap-2 border-t border-gold-400/25 pt-1.5">
+            <Icon name="trophy" size={14} className="shrink-0 text-gold-300" />
+            <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary">{text}</span>
+            {onClick
+              ? <button type="button" onClick={onClick} className="hit shrink-0 rounded-input bg-gold-400 px-2.5 py-0.5 text-2xs font-bold text-ink-inverse hover:bg-gold-500">순위 입력</button>
+              : <span className="shrink-0 rounded-input px-2.5 py-0.5 text-2xs font-bold">순위 입력</span>}
+          </span>
+        );
+        // 틀의 버튼 글자는 가장 넓은 CTA('대회 등록하기')로 — 좁은 글자로 재면 360 에서 그 갈래 설명이 한 줄 더 꺾여 틀을 넘었다(보조 줄이 있을 때 19px).
+        const ghost = (
+          <span aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }} className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 items-center gap-3">
+              <Icon name="refresh" size={22} className="shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">지난 게임 그대로 열기 · 00/00</span>
+                <span className="mt-1 block t-desc break-keep">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
+              </span>
+              <span className="btn-primary shrink-0 px-4 py-2 text-xs">대회 등록하기</span>
+            </span>
+            {caps.ledger && rankRow('— 00건 · 00/00')}
+          </span>
+        );
         if (loading || !lastRoundReady) {
           if (!caps.ledger) return null;
           return (
-            <div aria-hidden data-testid="todo-reserve" className="skeleton flex items-center gap-3 rounded-card border border-transparent p-3">
-              <span style={{ visibility: 'hidden' }} className="flex min-w-0 flex-1 items-center gap-3">
-                <Icon name="refresh" size={22} className="shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold">지난 게임 그대로 열기 · 00/00</span>
-                  <span className="mt-1 block t-desc break-keep">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
-                </span>
-                <span className="btn-primary shrink-0 px-4 py-2 text-xs">그대로 열기</span>
-              </span>
-            </div>
+            <div aria-hidden data-testid="todo-reserve" className="skeleton grid rounded-card border border-transparent p-3">{ghost}</div>
           );
         }
         const todayPoster = schedules.some((s) => s.venueId === venueId && s.date === d && s.approved);
+        const goRanking = (p: PosterOpsSummary) => onGoto({ section: 'ranking', date: p.date, gameSeq: p.gameSeq, event: p.rankingEvent });
         const hour = new Date().getHours();
-        let todo: { icon: IconName; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok' } | null = null;
+        // clamp — 설명이 서버 값(대회 이름)이라 길이를 모르는 갈래는 두 줄에서 자른다(자리표시와 같은 높이 — 360 에서 세 줄로 21px 커졌다).
+        let todo: { icon: IconName; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok'; clamp?: boolean; rank?: true } | null = null;
         if (caps.ledger && staleOpen.length > 0) {
           // 미마감 = 순위→시즌→머니인킹→전적 하류 전체 정지. 실제 라이브에서 두 달치가 쌓여 있었다.
           const list = staleOpen.slice(0, 3).map((x) => x.sessionDate.slice(5)).join(' · ');
@@ -1359,11 +1383,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           desc: `${list} · 마감하면 장부가 잠기고 순위 입력으로 이어집니다.`, cta:'마감하기', onClick: () => onGoto({ section: 'ledger', date: first.sessionDate, gameSeq: first.gameSeq, settle: true }), tone: 'warn' };
         } else if (caps.ledger && session?.closed && hasRankToday === false) {
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부 명단으로 바로 채워요.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
+        } else if (caps.ledger && started && !session?.closed && !clockActive) {
+          // E3 L-2(2026-10-03) — 제목이 390 에서 두 줄이라 카드가 자리표시(91px)보다 21px 커져 아래를 밀었다. 제목을 한 줄로, '진행 중'은 설명으로.
+          todo = { icon: 'clock', title: '클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 진행 중 · 클락을 켜면 라이브 탭에 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && started && !session?.closed) {
-          todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            // E3 L-2(2026-10-03) — 제목이 390 에서 두 줄이라 카드가 자리표시(91px)보다 21px 커져 아래를 밀었다. 제목을 한 줄로, '진행 중'은 설명으로.
-            : { icon: 'clock', title: '클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 진행 중 · 클락을 켜면 라이브 탭에 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+          todo = { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1379,18 +1403,35 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = { icon: 'plus', title: '오늘 등록된 대회가 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '대회 등록하기', onClick: onCreatePoster, tone: 'gold' };
         } else if (caps.manage && session?.closed) {
           todo = { icon: 'check-circle', title: '오늘 운영 완료', desc: '수고하셨습니다. 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
+        } else if (caps.ledger && pendingRanks.length > 0) {
+          // 2026-10-03 E3 후속 — 밀린 '순위 미입력'(마감했지만 순위가 빈 지난 대회)은 이 칸의 한 갈래다(오늘 할 일이 없을 때만 주 카드, 있으면 아래 보조 줄).
+          //   종전엔 별도 카드라 확인 중엔 없다가 정착 순간 생기거나(첫 방문 82px) 접혀(1→0건 82px) 아래 격자를 밀었고,
+          //   1건(버튼형)↔여러 건(목록형) 높이 차로 3→1건이 122px 움직였다(review-mystore-e3-1003 L-1 대안 2).
+          //   이 칸은 확인 중에 같은 틀로 자리를 잡아 두므로(위 todo-reserve) 건수와 무관하게 높이가 같다.
+          //   대상은 서버가 준 (date, gameSeq, rankingEvent) 그대로 — 가장 최근 것을 연다. 나머지는 순위 화면에서 날짜를 골라 이어서 입력한다.
+          const p = pendingRanks[0];
+          const lbl = (x: PosterOpsSummary) => `${x.date.slice(5).replace('-', '/')}${x.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(x.gameSeq)}` : ''}`;
+          const n = pendingRanks.length;
+          todo = n === 1
+            ? { icon: 'trophy', title: '순위 미입력 대회가 있어요', desc: `${lbl(p)}${p.rankingEvent ? ` · ${p.rankingEvent}` : ''} · 마감했지만 순위가 비어 있어요.`, cta: '순위 입력', onClick: () => goRanking(p), tone: 'warn', clamp: true, rank: true }
+            : { icon: 'trophy', title: `순위 미입력 대회 ${n}개`, desc: `${pendingRanks.slice(0, 3).map(lbl).join(' · ')}${n > 3 ? ` 외 ${n - 3}건` : ''} · 최근 것부터 입력해요.`, cta: '순위 입력', onClick: () => goRanking(p), tone: 'warn', clamp: true, rank: true };
         }
         if (!todo) return null;
+        const rankPrimary = todo.rank === true;
+        const latest = pendingRanks[0];
         const toneCls = todo.tone === 'warn'
           ? 'border-gold-400/50 bg-gold-400/8'
           : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/6' : 'border-accent-400/40 bg-accent-300/6';
         const iconCls = todo.tone === 'warn' ? 'text-gold-300' : todo.tone === 'ok' ? 'text-emerald-400' : 'text-ink-secondary';
         return (
-          <div className={`flex items-center gap-3 rounded-card border p-3 ${toneCls}`}>
+          <div data-testid="todo-card" className={`grid rounded-card border p-3 ${toneCls}`}>
+          {ghost}
+          <div style={{ gridArea: '1 / 1' }} className="flex min-w-0 flex-col justify-center">
+          <div className="flex min-w-0 items-center gap-3">
             <Icon name={todo.icon} size={22} className={`shrink-0 ${iconCls}`} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-ink-primary">{todo.title}</p>
-              <p className="mt-1 t-desc break-keep text-ink-muted">{todo.desc}</p>
+              <p className={`mt-1 t-desc break-keep text-ink-muted${todo.clamp ? ' line-clamp-2' : ''}`} title={todo.clamp ? todo.desc : undefined}>{todo.desc}</p>
             </div>
             {/* 라이브 운영 현황 카드가 글로우를 쓰는 동안(liveWidget)에는 이 CTA 가 **보라 후광을 내려놓는다**.
                 btn-primary 의 그림자는 index.css:620 의 violet-500 이라, 그대로 두면 같은 화면에 같은 색
@@ -1405,78 +1446,17 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               {todo.cta}
             </button>
           </div>
+          {caps.ledger && !rankPrimary && latest && rankRow(
+            `순위 미입력 ${pendingRanks.length}건 · 최근 ${latest.date.slice(5).replace('-', '/')}${latest.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(latest.gameSeq)}` : ''}`,
+            () => goRanking(latest))}
+          </div>
+          </div>
         );
       })()}
 
       </div>
       <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-1">
-      {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외)
-          ⚠ 예전엔 카드 전체가 onGoto('ranking') 하나였다. 4개가 밀려 있어도 **오늘 메인 칩**이 열려서,
-             목록에 적힌 '08/30 사이드1' 을 보고 눌렀는데 전혀 다른 대회가 열렸다(2026-09-07 추적).
-             한 건이면 바로 그 대회로, 여러 건이면 각 행이 자기 대회를 연다 — 대상은 서버가 준
-             (date, gameSeq, rankingEvent) 그대로 쓴다(같은 규칙을 클라에서 다시 유도하지 않는다). */}
-      {caps.ledger && (() => {
-        type Row = Pick<PosterOpsSummary, 'date' | 'gameSeq' | 'rankingEvent'>;
-        const go = (p: Row) => onGoto({ section: 'ranking', date: p.date, gameSeq: p.gameSeq, event: p.rankingEvent });
-        const labelOf = (p: Row) =>
-          `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}${p.rankingEvent ? ` · ${p.rankingEvent}` : ''}`;
-        // E3 L-1(2026-10-03) — 확인 중엔 이 카드가 없다가 정착 순간 생겨 1280 미만(한 열)에서 아래 격자를 82px 밀었다.
-        //   '지금 할 일'(D1)처럼 확인 중에 같은 틀의 스켈레톤으로 자리를 잡되, 몇 건인지는 응답 전엔 모른다 — 이 매장에서 **지난번에 본 건수**
-        //   (이 기기 localStorage)만큼 잡는다. 0건 매장은 종전대로 아무것도 잡지 않는다(잡았다 접으면 D1 이 막은 반대 방향 이동이 된다).
-        //   처음 보는 매장(기록 없음)도 종전대로다 — 그 한 번의 이동은 남는다.
-        const rankCard = (list: Row[]) => {
-        if (list.length === 1) {
-          const p = list[0];
-          return (
-            <button type="button" onClick={() => go(p)}
-              className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/6 p-3 text-left transition-colors hover:bg-gold-400/10">
-              <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-ink-primary">순위 미입력 · {labelOf(p)}</p>
-                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요</p>
-              </div>
-              <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
-            </button>
-          );
-        }
-        const shown = list.slice(0, 4);
-        return (
-          <section className="rounded-card border border-gold-400/40 bg-gold-400/6 p-3" aria-label="순위 미입력 대회">
-            <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
-              <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {list.length}개
-            </p>
-            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요</p>
-            <ul className="mt-2 space-y-1">
-              {shown.map((p) => (
-                <li key={`${p.date}#${p.gameSeq}`}>
-                  <button type="button" onClick={() => go(p)}
-                    className="flex w-full items-center gap-2 rounded-input border border-gold-400/25 bg-surface-low/60 px-2.5 py-2 text-left transition-colors hover:bg-surface-low">
-                    <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary">{labelOf(p)}</span>
-                    <span className="shrink-0 text-2xs font-bold text-gold-300">순위 입력 →</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {list.length > shown.length && (
-              <p className="mt-1.5 text-2xs text-ink-muted">외 {list.length - shown.length}건 — 순위 화면에서 날짜를 골라 이어서 입력할 수 있어요.</p>
-            )}
-          </section>
-        );
-        };
-        if (loading) {
-          let n = 0;
-          try { n = Math.max(0, Number(localStorage.getItem(RANK_N_KEY(venueId))) || 0); } catch { /* 차단 환경 — 예약 없음 */ }
-          if (!n) return null;
-          const ghost: Row[] = Array.from({ length: n }, (_, i) => ({ date: '0000-00-00', gameSeq: MAIN_GAME_SEQ + i, rankingEvent: '' }));
-          return (
-            <div aria-hidden data-testid="rank-reserve" className="skeleton rounded-card">
-              <div style={{ visibility: 'hidden' }}>{rankCard(ghost)}</div>
-            </div>
-          );
-        }
-        return pendingRanks.length > 0 ? rankCard(pendingRanks) : null;
-      })()}
-
+      {/* '순위 미입력' 지난 대회는 위 '지금 할 일' 칸의 한 갈래로 옮겼다(2026-10-03 E3 후속 — 별도 카드의 정착 이동 제거). */}
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && dayStarted && day.unpaid > 0 && (
         <button type="button" onClick={gotoTodayLedger} data-testid="unpaid-cta"
@@ -1504,7 +1484,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       <div ref={cardGridRef} className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
-        <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
+        {/* 2026-10-03 E3 후속 — 7일 장부가 없는 매장(새 매장)은 '최근 7일 추세'가 자리 그대로 171px 이고(L-2: 상태가 바뀌어도 높이 불변)
+            옆 '대회 클락'·'전주 대비'는 99px 라 PC 첫 줄 아래 72px 빈 홈이 생겼다. 그 상태(확인 중·실패·데이터 없음)에서만 두 이웃을
+            줄 높이로 늘리고 본문을 세로 가운데 둔다 — 셋 다 빈 안내라 줄이 고르게 선다. 데이터가 오면 이웃은 제 높이로 돌아가지만
+            줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
+        <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gold-400/15 text-gold-300'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
@@ -1539,7 +1523,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               PC 3열의 다음 줄 카드 3장이 63px 내려갔다(1440 CLS 0.0179). 뼈대·데이터 없음·실패 줄을 **모두** 실제 본문과 같은 틀
               (막대 칸 + 두 줄, 보이지 않는 대역)에 겹쳐 세워 상태가 바뀌어도 카드 높이가 그대로다 — 뼈대만 키우면 7일 장부가 없는 매장
               (매장 전환·새 매장)에서 171→99 로 접히며 반대로 올라갔다(D1 게이트 1440 전환). 문구는 그 칸 세로 가운데. */}
-          {loading || rangeErr || weekEntry === 0 ? (
+          {trendBlank ? (
             <div className={loading ? 'skeleton grid rounded-input' : 'grid'}>
               <div aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }}>
                 <div className="mb-2 h-14" />
@@ -1580,6 +1564,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             줄간격 및 좌우 간격 조정": center(위 DashCard 참고)로 남는 높이를 받아 두 줄을 세로 중앙에 두고,
             CompareRow 내부 간격도 늘렸다(space-y-2→-4, gap-2→-3). */}
         <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
+          stretch={trendFill}
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
           {loading ? <Skeleton /> : rangeErr ? (
             <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
@@ -1882,7 +1867,7 @@ function fitLastCard(g: HTMLDivElement | null) {
   return () => ro.disconnect();
 }
 
-function DashCard({ title, badge, onClick, children, show = true, more, center = false }: {
+function DashCard({ title, badge, onClick, children, show = true, more, stretch = false, center = false }: {
   title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean;
   /** '더 보기' 칸 — useReveal 이 이 표시로 들고 나는 칸을 찾는다 */
   more?: boolean;
@@ -1893,10 +1878,12 @@ function DashCard({ title, badge, onClick, children, show = true, more, center =
    *  0 으로 수렴해 폭별 분기 없이도 동작한다(실측 필요 없음, CSS 자체 성질). 기본 false — 다른 카드는
    *  전부 지금 그대로다(공용 컴포넌트라 옵트인으로 격리했다). */
   center?: boolean;
+  /** 격자의 items-start 를 이 카드만 풀어 줄 높이로 늘린다(같은 줄 이웃과 높이 맞춤) — center 와 같이 쓴다. */
+  stretch?: boolean;
 }) {
   if (!show) return null;
   return (
-    <section data-reveal={more} className={['rounded-aura border card-aura p-3', center && 'flex flex-col'].filter(Boolean).join(' ')}>
+    <section data-reveal={more} className={['rounded-aura border card-aura p-3', center && 'flex flex-col', stretch && 'self-stretch'].filter(Boolean).join(' ')}>
       <button type="button" onClick={onClick} className={['flex w-full items-center justify-between gap-2 mb-2 group', center && 'shrink-0'].filter(Boolean).join(' ')}>
         <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">
