@@ -126,6 +126,8 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
    **`CREATE OR REPLACE` 뒤에도 그대로 불가(ACL 보존)** → **`DROP` 후 재생성하면 다시 가능(ACL 초기화)**.
    즉 ACL 이 날아가는 것은 **`DROP` + 재생성**이고, 그때 REVOKE/GRANT 를 반드시 다시 쓴다(반환 타입 변경이 이 경우다).
    `CREATE OR REPLACE` 에도 REVOKE/GRANT 를 같이 적어 두는 관행은 유지한다 — **새로 만들어지는 경우**에 필요하기 때문이다.
+   ⚠ **2026-10-04 기본 권한 fail-closed(20261004b)**: postgres 가 public 에 새로 만드는 표는 anon 이 읽기만, 새 함수는 anon·PUBLIC 실행이 없다.
+   로그인 없이 불러야 하는 **새 읽기 RPC·anon 쓰기 표는 `grant … to anon` 을 마이그레이션에 명시**해야 한다(빠뜨리면 막힌다).
    ⚠ 그리고 이 차이 때문에 **자가검사가 거짓 통과할 수 있다**: 이미 REVOKE 된 함수를 `CREATE OR REPLACE` 로 덮으면
    파일에서 REVOKE 를 빼도 ACL 이 남아 검사를 통과한다. ACL 자가검사를 음성 대조할 때는 **`DROP` 후 적용**해야 한다.
 4. **엣지 함수는 첫 분기에서 호출자를 증명한다.** `verify_jwt=true` 는 anon 키 JWT 도 통과시키므로 게이트가 아니다:
