@@ -1193,4 +1193,45 @@ describe('단계 A — 푸시·폴드 표는 폴드·올인에만, 10BB 이하�
     const sb = chart(evaluateSpot(pf('SB', ['As', 'Kh'], 10, { heroAction: 'raise', heroActionSizeBb: 9.5 })));
     expect([sb.kind, sb.verdict]).toEqual(['chart_nash', 'good']);
   });
+
+  // critical 2026-10-04 — 올인 경계는 표의 S(다툴 수 있는 칩)로 잰다. effectiveBb 로 재면 상대 BB 의 앤티만큼 어긋난다.
+  it('올인 경계 — BTN 10BB·앤티 1 은 S 9: 총 9 는 상대 BB 를 올인시키는 올인(정확), 총 8.4 는 작은 레이즈(참고)', () => {
+    const at = (tot: number) => chart(evaluateSpot(pf('BTN', ['As', 'Kh'], 10, { heroAction: 'raise', heroActionSizeBb: tot })));
+    expect([at(9).kind, at(9).verdict], '총 9 = S').toEqual(['chart_nash', 'good']);
+    expect(at(9).differences).toEqual([]);
+    expect([at(8.4).kind, at(8.4).heroFreq], '8.4 < S − 0.5').toEqual(['normalized_reference', null]);
+    expect([at(8.5).kind, at(8.5).verdict], 'S − 0.5 는 올인').toEqual(['chart_nash', 'good']);
+  });
+
+  it('올인 경계 — 앤티 0 이면 S = 스택: 9.49 는 작은 레이즈, 9.5 는 올인(여유 0.5BB 정확히)', () => {
+    const at = (tot: number) => chart(evaluateSpot(pf('BTN', ['As', 'Kh'], 10, { anteBb: 0, heroAction: 'raise', heroActionSizeBb: tot })));
+    expect(at(9.49).kind).toBe('normalized_reference');
+    expect(at(9.49).heroFreq).toBeNull();
+    expect(at(9.5).kind).toBe('chart_nash');
+  });
+
+  it('10BB 상한은 표의 S 로 잰다 — 입력 11BB·앤티 1 은 10BB 표 정확, 두 스택 따로면 짧은 쪽 S', () => {
+    const fold = { heroAction: 'fold' as const };
+    const unpaired = chart(evaluateSpot(pf('BTN', ['7c', '2d'], 11, fold)));
+    expect([unpaired.kind, unpaired.sourceLabel.includes('· 10BB ·')]).toEqual(['chart_nash', true]);
+    // 내 30 · BB 11 → BB 가 앤티를 내 S 10 → 정확 / 내 12 · BB 30 → S 12 → 참고
+    const bbShort = chart(evaluateSpot(pf('BTN', ['7c', '2d'], 11, { ...fold, heroStackBb: 30, villainStackBb: 11 })));
+    expect(bbShort.kind).toBe('chart_nash');
+    const heroShort = chart(evaluateSpot(pf('BTN', ['7c', '2d'], 12, { ...fold, heroStackBb: 12, villainStackBb: 30 })));
+    expect([heroShort.kind, heroShort.verdict]).toEqual(['normalized_reference', 'reference']);
+  });
+
+  it('100BB 차트는 올인을 판정하지 않는다 — UTG AKo 오픈 올인 100 · BB 가 UTG 오픈에 올인 99 는 참고', () => {
+    const open = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'UTG', villainPos: 'BB', effectiveBb: 100, hero: ['As', 'Kh'], heroAction: 'raise', heroActionSizeBb: 100 })));
+    expect([open.kind, open.verdict, open.heroFreq]).toEqual(['normalized_reference', 'reference', null]);
+    expect(open.differences.join(' ')).toMatch(/올인은 판정하지 않습니다/);
+    const defend = chart(evaluateSpot(base({
+      tableSize: 9, heroPos: 'BB', villainPos: 'UTG', effectiveBb: 100, hero: ['As', 'Kh'],
+      actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }], heroAction: 'raise', heroActionSizeBb: 99,
+    })));
+    expect([defend.kind, defend.verdict, defend.heroFreq]).toEqual(['normalized_reference', 'reference', null]);
+    // 양성 대조 — 정상 크기 오픈은 그대로 정확 판정
+    const sized = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'UTG', villainPos: 'BB', effectiveBb: 100, hero: ['As', 'Kh'], heroAction: 'raise', heroActionSizeBb: 2.5 })));
+    expect([sized.kind, sized.verdict]).toEqual(['chart_nash', 'good']);
+  });
 });

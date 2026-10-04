@@ -316,12 +316,27 @@ export function amountToCall(s: SpotReview): number {
 }
 
 /**
+ * **두 사람이 실제로 다툴 수 있는 칩**(BB) = 푸시·폴드 표의 S — 앤티 낸 뒤·블라인드 전, 짧은 쪽.
+ * S = min(내 스택 − 내가 BB면 앤티, 상대 스택 − 상대가 BB면 앤티). BB앤티는 죽은 돈이라 아무도 맞추지 않는다.
+ * 두 스택이 없는 옛 스팟은 둘 다 effectiveBb 로 보고, 상대 자리와 무관하게 앤티를 뺀다(f6d9598e 규약 — 누가 BB 인지 한 수로는 모른다).
+ * ⚠ lookupNash(표 고르기·10BB 상한)와 heroActionClass(올인 판정)가 **이 함수 하나**를 쓴다. 두 벌이면 어긋난다 —
+ *   2026-10-04 critical: 올인 기준만 effectiveBb 로 재서 BTN 10BB·앤티 1 의 총 9(= 상대 BB 올인)가 '작은 레이즈'로 분류됐다.
+ */
+export function contestedStackBb(s: SpotReview): number {
+  const A = s.anteBb > 0 ? s.anteBb : 0;
+  const paired = hasStackPair(s);
+  const heroS = (paired ? s.heroStackBb as number : s.effectiveBb) - (s.heroPos === 'BB' ? A : 0);
+  const vilS = (paired ? s.villainStackBb as number : s.effectiveBb) - (!paired || s.villainPos === 'BB' ? A : 0);
+  return Math.round(Math.min(heroS, vilS) * 100) / 100;
+}
+
+/**
  * 히어로가 고른 액션의 **종류** — 판정이 액션을 읽는 유일한 자리(2026-10-04 단계 A).
  *
- * `raise`·`bet` 은 크기로 둘로 갈린다: 이번에 넣은 돈까지 합친 누적이 유효 스택 − 0.5BB 이상이면 `allin`, 아니면 `raise`.
+ * `raise`·`bet` 은 크기로 둘로 갈린다: 내가 넣은 **살아 있는** 칩(블라인드 + 지금까지의 증분 + 이번 증분, BB앤티는 빼고)이
+ * `contestedStackBb − 0.5BB` 이상이면 `allin`, 아니면 `raise`.
  * 예전 `mixKeyOf` 는 둘을 같은 'raise' 칸으로 보내서 **2bb 미니레이즈가 푸시·폴드 표의 셔브 빈도로 채점됐다**
- * (UTG A8s 20BB 2bb → '개선 필요'). 유효 스택(두 사람 중 짧은 쪽)을 기준으로 재는 이유: 그보다 많이 넣어도 상대가 못 받는다
- * (`validateSpot` G1 이 누적을 유효 스택으로 막는다). 블라인드·BB앤티는 누적에 든다(SB 셔브 증분 = 스택 − 0.5).
+ * (UTG A8s 20BB 2bb → '개선 필요'). 다툴 수 있는 칩보다 더 넣어도 상대가 못 받으므로 그만큼 넣으면 올인이다.
  */
 export type HeroActionClass = 'fold' | 'check' | 'call' | 'raise' | 'allin';
 const ALLIN_SLACK_BB = 0.5;
@@ -330,7 +345,19 @@ export function heroActionClass(s: SpotReview): HeroActionClass | null {
   if (a === 'fold' || a === 'check' || a === 'call') return a;
   if (a !== 'raise' && a !== 'bet') return null;
   const add = Number.isFinite(s.heroActionSizeBb) ? (s.heroActionSizeBb as number) : 0;
-  return investedTotalByPos(s, s.heroPos) + add >= s.effectiveBb - ALLIN_SLACK_BB ? 'allin' : 'raise';
+  const deadAnte = s.heroPos === 'BB' && s.anteBb > 0 ? s.anteBb : 0;
+  const live = investedTotalByPos(s, s.heroPos) - deadAnte + add;
+  return live >= contestedStackBb(s) - ALLIN_SLACK_BB ? 'allin' : 'raise';
+}
+
+/**
+ * 100BB 레인지 차트는 **정상 크기 레이즈**의 답이다(표에 올인 갈래가 없다 — 63표 전부 raise·fourbet 키).
+ * 깊은 스택의 올인을 그 공격 칸으로 채점하면 UTG AKo 100BB 오픈 올인이 '좋은 선택'이 된다(critical 2026-10-04) →
+ * 표는 참조하되 내 선택은 판정하지 않는다(heroSilent). 정상 크기 레이즈·콜·폴드 판정은 그대로다.
+ */
+function silenceChartAllin(s: SpotReview, hit: ChartHit | null): ChartHit | null {
+  if (!hit || heroActionClass(s) !== 'allin') return hit;
+  return { ...hit, heroSilent: true, differences: [...hit.differences, '이 표는 정상 크기 레이즈의 답이라 올인은 판정하지 않습니다.'] };
 }
 
 /** 액션 종류 → 레인지 차트 칸. 100BB 차트는 공격 칸이 하나뿐이라 올인도 그 칸으로 간다(차트 판정은 단계 A 무변경). */
@@ -572,11 +599,9 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   // 2026-09-30 오너 "두 사람 스택 따로 입력" — S = min(내 스택 − 내가 BB면 A, 상대 스택 − 상대가 BB면 A).
   //   앤티는 BB 가 낸다(BB앤티). 두 스택이 없는 옛 스팟은 둘 다 effectiveBb 로 본다.
   //   ⚠ 옛 스팟은 상대가 BB 가 아니어도 뺀다(f6d9598e 판정 그대로) — 한 수로는 앤티 내는 BB 의 스택을 따로 모른다.
-  const A = s.anteBb > 0 ? s.anteBb : 0;
+  //   계산은 `contestedStackBb` 한 곳 — 올인 판정(heroActionClass)과 같은 값을 써야 한다(critical 2026-10-04).
   const paired = hasStackPair(s);
-  const heroS = (paired ? s.heroStackBb as number : s.effectiveBb) - (s.heroPos === 'BB' ? A : 0);
-  const vilS = (paired ? s.villainStackBb as number : s.effectiveBb) - (!paired || s.villainPos === 'BB' ? A : 0);
-  const S = Math.round(Math.min(heroS, vilS) * 100) / 100;
+  const S = contestedStackBb(s);
   const exact = NASH_STACKS.find((v) => Math.abs(v - S) < 0.01)
     ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
   // 🔴 G4(2026-09-20) — `find` 는 **배열 순서상 처음** 조건을 만족하는 값을 준다. `NASH_STACKS` 가
@@ -750,7 +775,7 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
   //    (가짜 표본을 넣지 않는다는 것이 이 자리의 전부다.)
 
   // ② 차트 · Nash
-  const hit = lookupPreflopChart(s, combo) ?? lookupNash(s, combo);
+  const hit = silenceChartAllin(s, lookupPreflopChart(s, combo)) ?? lookupNash(s, combo);
   if (hit) {
     const exact = hit.differences.length === 0;
     const key = chartKeyOf(heroActionClass(s));
