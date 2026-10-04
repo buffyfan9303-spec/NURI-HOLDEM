@@ -9,7 +9,7 @@ import { getMyVenueStaff } from '../../api/auth';
 // 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { avgClockHm, belowMinWage, hoursText, laborSummary, shiftHoursNote, shiftMinutes, weekStartOf, type LaborRow, type PayRules } from '../../lib/staffPay';
+import { avgClockHm, belowMinWage, hoursText, kstHm, laborSummary, selfShiftWriteError, shiftHoursNote, shiftMinutes, weekStartOf, type LaborRow, type PayRules, type SelfShiftWriteError } from '../../lib/staffPay';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
@@ -448,6 +448,15 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
 }
 
 // ── 직원 본인 출퇴근 입력(셀프) ───────────────────────────────────────────────
+/** 근무 1회 길이 규칙(selfShiftWriteError)에 막힌 이유 — 화면 안내·토스트 한 벌. */
+function selfShiftNote(field: 'checkIn' | 'checkOut', e: SelfShiftWriteError): string {
+  if (e === 'SHIFT_NO_IN') return '출근 기록이 없어 퇴근을 찍을 수 없어요 — 먼저 출근을 눌러 주세요.';
+  if (e === 'SHIFT_OUT_BEFORE_IN') return '퇴근 시각이 먼저 적혀 있어 지금 출근을 기록할 수 없어요 — 퇴근 칸을 비우거나 실제 출근 시각을 넣어 주세요.';
+  if (e === 'SHIFT_OVER_24H') return '출근 뒤 24시간이 지나 지금 시각으로는 퇴근을 기록할 수 없어요 — 퇴근 칸에 실제 퇴근 시각을 넣거나 업주에게 수정을 요청해 주세요.';
+  return field === 'checkOut'
+    ? '방금 출근했어요 — 같은 분에 퇴근하면 하루(24시간) 근무로 계산돼요. 1분 뒤에 눌러 주세요.'
+    : '출근과 퇴근이 같은 분이면 하루(24시간) 근무로 계산돼요 — 실제 시각을 넣어 주세요.';
+}
 export function StaffSelfAttendance({ venueId, active = true, readOnly = false }: {
   venueId: string; active?: boolean;
   /** 관리자(마스터) 미리보기 — 출퇴근 버튼·시각 칸을 잠근다. 서버 set_my_shift_time 에 관리자 분기를 만들지 않는다(오너 2026-09-28). */
@@ -469,7 +478,15 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
   const today = kstToday();
   const yesterday = kstToday(Date.now() - 86_400_000);
   const canSelfEdit = (d: string) => !readOnly && (d === today || d === yesterday);
-  const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  // R4-01 — '지금 출근·지금 퇴근' 은 'now' 를 보내 서버가 자기 시각으로 적는다(예전엔 기기 로컬 HH:MM).
+  //   같은 분 출퇴근(24시간으로 계산됨)·출근 뒤 24시간 초과는 서버(set_my_shift_time · punch_my_shift 공용 규칙)가 거절하고,
+  //   화면도 같은 식(selfShiftWriteError)으로 버튼을 미리 막는다. 막힘은 시간이 지나면 풀리므로 15초마다 다시 잰다.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(t);
+  }, [active]);
   // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
     let alive = true;
@@ -486,11 +503,16 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
     /* eslint-disable-next-line */
   }, [venueId, from, to, shiftTick, user, active]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
-    const prev = s[field] ?? null;
-    setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
+    const at = Date.now();
+    const blocked = selfShiftWriteError(s, field, val || null, at);
+    if (blocked) { toast.show(selfShiftNote(field, blocked), 'error'); return; }
+    const prev = { [field]: s[field] ?? null, checkInAt: s.checkInAt ?? null };
+    const shown = val === 'now' ? kstHm(at) : val || null;
+    const inAt = field !== 'checkIn' ? s.checkInAt ?? null : val === 'now' ? at : shown === s.checkIn ? s.checkInAt ?? null : null;
+    setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: shown, checkInAt: inAt } : x)));
     try { await setMyShiftTime(venueId, s.date, field, val || null); window.dispatchEvent(new CustomEvent(PUNCH_EVENT, { detail: { venueId } })); }
     catch (e) {
-      setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: prev } : x)));
+      setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, ...prev } : x)));
       toast.show(msgOf(e, '출퇴근 기록 저장 실패'), 'error');
     }
   };
@@ -518,15 +540,20 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
           {sorted.map((s) => {
             const isToday = s.date === today;
             const m = shiftMinutes(s.date, s, rules);
+            const inBlock = isToday ? selfShiftWriteError(s, 'checkIn', 'now', nowMs) : null;
+            const outBlock = selfShiftWriteError(s, 'checkOut', 'now', nowMs);
+            // 출근 전 행의 '지금 퇴근' 은 막기만 하고 안내는 띄우지 않는다(모든 새 행에 문구가 붙는다)
+            const note: [field: 'checkIn' | 'checkOut', e: SelfShiftWriteError] | null =
+              outBlock && outBlock !== 'SHIFT_NO_IN' ? ['checkOut', outBlock] : inBlock ? ['checkIn', inBlock] : null;
             return (
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
                   {canSelfEdit(s.date) && (
                     <div className="flex gap-1">
-                      {isToday && <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>}
+                      {isToday && <button type="button" disabled={!!inBlock} onClick={() => setT(s, 'checkIn', 'now')} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 disabled:opacity-50">지금 출근</button>}
                       {/* 자정을 넘긴 야간 근무 — 어제 행에도 '지금 퇴근' 을 둔다(서버가 어제까지 받는다) */}
-                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
+                      <button type="button" disabled={!!outBlock} onClick={() => setT(s, 'checkOut', 'now')} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40 disabled:opacity-50">지금 퇴근</button>
                     </div>
                   )}
                 </div>
@@ -534,6 +561,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   {m && <span data-testid="self-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hoursText(m.net)}</span>}
+                  {canSelfEdit(s.date) && note && <span data-testid="self-punch-note" data-reason={note[1]} className="basis-full text-2xs text-amber-700 dark:text-amber-300">{selfShiftNote(note[0], note[1])}</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>
               </div>
