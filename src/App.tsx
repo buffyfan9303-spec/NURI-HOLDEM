@@ -91,7 +91,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
-import { notePaneLeaving, handOffPane, warmHiddenPane } from './lib/tabCover';
+import { notePaneLeaving, handOffPane, warmHiddenPane, LEAVE_FADE_MS, LEAVE_EASE } from './lib/tabCover';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -327,12 +327,15 @@ const AppHeader = memo(function AppHeader({
   //      파생값). 그래서 탭이 바뀌는/패널이 서는 그 커밋에서 같이 내린다 — 메뉴가 새 탭 위에 한 프레임도 남지 않는다.
   //      ⚠ 렌더 중 setUserMenu(false) 로 조정하면 안 된다 — 뒤에 트랜지션 갱신이 대기 중이면 같은 태스크의 다음 동기 렌더(App layout
   //        effect)가 큐를 되감으며 그 조정을 잃어 메뉴가 **다시 열렸다**(MutationObserver 실측: 닫힘 커밋 1ms 뒤 inert 제거). 그래서 파생값이다.
-  //   걷을 때는 한 프레임 컷 대신 페이드(M4-04 부터 알림 패널과 같은 0.18s · --ease) — 탭 이동에서는 판(handOffPane) 퇴장이 시작될 때 함께 출발해
+  //   걷을 때는 한 프레임 컷 대신 **떠나는 판과 같은 퇴장**(LEAVE_FADE_MS·LEAVE_EASE, 단순 닫기만 0.18s — 아래 menuHandoff) — 탭 이동에서 판(handOffPane)과 함께 사라져
   //   '메뉴만 먼저 컷' 이 남지 않고, 전면 판 아래에서는 판 fade-in 에 덮여 보이지 않는다. 게이트: e2e/flicker-gate.spec.ts MENU-HANDOFF.
-  const leaveMenuTo = (go: () => void) => { go(); startTransition(() => setUserMenu(false)); };
+  // 🔴 PR #164 검토(2026-10-04) — 메뉴 항목으로 **다른 화면을 여는** 닫힘(handoff)은 떠나는 판과 같은 퇴장(LEAVE_FADE_MS·LEAVE_EASE)이어야 한다.
+  //   0.18s 로 끝나면 판(240ms)보다 먼저 사라져 라이트 CPU4 에서 옛 홈이 ~50ms 비쳤다(휘도 −13, 4/4). 단순 닫기(아바타 다시 누름·바깥)만 알림 패널과 같은 0.18s.
+  const [menuHandoff, setMenuHandoff] = useState(false);
+  const leaveMenuTo = (go: () => void) => { setMenuHandoff(true); go(); startTransition(() => setUserMenu(false)); };
   const [menuTab, setMenuTab] = useState(activeTab);
   const menuLive = userMenuOpen && !notifOpen && menuTab === activeTab;
-  // 1000ms = 퇴장 페이드(180ms)가 스왑 정적화 동안 멈춰 있을 수 있는 몫까지 — 끝난 뒤엔 opacity 0(forwards)·inert 라 남아 있어도 안 보인다.
+  // 1000ms = 퇴장 페이드(180·240ms)가 스왑 정적화 동안 멈춰 있을 수 있는 몫까지 — 끝난 뒤엔 opacity 0(forwards)·inert 라 남아 있어도 안 보인다.
   const userMenuShown = useDelayedUnmount(menuLive, 1000);
 
   // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(useScrollY 공용 구독 — MO-9A)
@@ -413,6 +416,10 @@ const AppHeader = memo(function AppHeader({
         // 스크롤과 겹쳐 얀크의 주범이었다. 즉시 전환 = 리레이아웃 1회. (§20.5 #1 height 애니 금지)
         'flex h-header-h items-center justify-between px-page-x',
         // M4-02 — 줄 높이는 고정, 축소 때 위 sticky 오프셋(−0.75rem)의 절반만 내려 보이는 띠(46.75) 가운데에 선다.
+        //   🔴 PR #164 검토 — 내려간 줄 상자(59.5)는 보이는 헤더 밑으로 5.4px(47.75~53.1) 삐져나와 그 띠의 누름(섹션 바 버튼·본문·검색 띠)을
+        //   가로챘다(elementFromPoint). 줄 상자 자체는 누름을 안 받고(pointer-events none) 자식 덩어리(로고·제목·우측 버튼 무리, 높이 ≤46.75 라
+        //   보이는 띠 안)만 받는다. 높이·여백으로 옮기면 줄의 레이아웃 위치가 바뀌어 layout-shift 로 집계된다(실측 0.0008~0.001/회, margin 은 접힘으로 0.014).
+        'pointer-events-none *:pointer-events-auto',
         shrunk ? 'max-md:translate-y-1.5' : '',
       ].join(' ')}>
 
@@ -517,7 +524,7 @@ const AppHeader = memo(function AppHeader({
                   44x44px로 확장(WCAG 2.5.5 최소 타깃). -mr-1로 우측 페이지 여백 정렬 보정. */}
               <button
                 type="button"
-                onClick={() => { setMenuTab(activeTab); setUserMenu(!menuLive); }}
+                onClick={() => { setMenuTab(activeTab); setMenuHandoff(false); setUserMenu(!menuLive); }}
                 aria-label={`${user.name} 메뉴`}
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-hidden"
               >
@@ -550,9 +557,10 @@ const AppHeader = memo(function AppHeader({
                   data-menu-leave={menuLive ? undefined : ''}
                   className={`absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog z-50 overflow-hidden ${
                     menuLive ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'}`}
-                  // M4-04(2026-10-04) — 닫힘은 이웃 드롭다운(알림 패널)과 같은 animate-fade-out 기본값(0.18s · --ease)이다.
-                  //   예전엔 떠나는 판 상수(240ms · (.4,0,.2,1))를 빌려 써 같은 자리의 두 드롭다운이 다르게 사라졌다.
-                  //   탭 이동으로 걷힐 때 판과 같은 순간에 출발하는 것은 index.css [data-swap-freeze] [data-menu-leave] 일시정지가 맡는다.
+                  // M4-04(2026-10-04) — 단순 닫기는 이웃 드롭다운(알림 패널)과 같은 animate-fade-out 기본값(0.18s · --ease).
+                  //   다른 화면으로 넘기는 닫힘(leaveMenuTo · 메뉴가 열린 채 탭이 바뀜)만 떠나는 판과 같은 240ms · (.4,0,.2,1) — 둘이 같이 사라져야 옛 판이 안 비친다.
+                  //   판과 같은 순간에 출발하는 것은 index.css [data-swap-freeze] [data-menu-leave] 일시정지가 맡는다.
+                  style={!menuLive && (menuHandoff || menuTab !== activeTab) ? { animationDuration: `${LEAVE_FADE_MS}ms`, animationTimingFunction: LEAVE_EASE } : undefined}
                 >
                   {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
                   <button

@@ -44,7 +44,8 @@ function probe(page: Page): Promise<Probe> {
       docH: doc.scrollHeight,
       clientH: doc.clientHeight,
       maxScroll: Math.max(0, doc.scrollHeight - doc.clientHeight),
-      headerH: header ? +header.getBoundingClientRect().height.toFixed(2) : 0,
+      // M4-02(2026-10-04) — 헤더 축소는 상자 높이가 아니라 sticky 오프셋이라 높이는 늘 60.5 다. **보이는 밑면**으로 잰다(펴짐 60.5 · 축소 47.75).
+      headerH: header ? +header.getBoundingClientRect().bottom.toFixed(2) : 0,
       secbarY: y('[data-community-secbar]'),
       secbarBottom: bar ? +bar.getBoundingClientRect().bottom.toFixed(2) : null,
       panelY: y('[data-community-secpanel]'),
@@ -113,7 +114,7 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
     const log = `\n  진입 전 ${fmt(before)}\n  rAF     ${fmt(raf)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
     for (const [name, p] of [['rAF', raf], ['+140ms', t140], ['+1000ms', t1000]] as const) {
       expect(Math.abs(p.winY - before.winY), `${name}: scrollY 가 ${before.winY} → ${p.winY} 로 움직였다(첫 방문 0 강제 회귀)${log}`).toBeLessThanOrEqual(2);
-      expect(Math.abs(p.headerH - before.headerH), `${name}: 헤더 높이가 ${before.headerH} → ${p.headerH} 로 바뀌었다(히스테리시스가 풀림)${log}`).toBeLessThanOrEqual(2);
+      expect(Math.abs(p.headerH - before.headerH), `${name}: 보이는 헤더 밑면이 ${before.headerH} → ${p.headerH} 로 바뀌었다(히스테리시스가 풀림)${log}`).toBeLessThanOrEqual(2);
       expect(Math.abs((p.secbarY ?? 0) - (before.secbarY ?? 0)), `${name}: 서브탭 바 y 가 ${before.secbarY} → ${p.secbarY}${log}`).toBeLessThanOrEqual(2);
     }
     expect(t1000.railY, '랭킹 세부 탭 바가 렌더되지 않았다').not.toBeNull();

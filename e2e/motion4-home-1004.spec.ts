@@ -180,3 +180,56 @@ test('🔴 M3-07 라이트 알림 패널 열기 — 딤이 패널보다 먼저 �
   const ahead = frames.filter((f) => f.scrim > f.panel + 0.05);
   expect(ahead, `딤이 패널보다 먼저 어두워진 프레임 ${ahead.length}개 — 반투명 패널 뒤로 어두운 딤이 비쳐 회색으로 번쩍인다: ${JSON.stringify(frames.slice(0, 6))}`).toEqual([]);
 });
+
+// ── PR #164 독립 검토 회귀(design-reviewer 2026-10-04, dr164 하네스 S·U) ─────────────────────────────────────────
+// 음성 대조: 45772069(PR 원본) 빌드에서 두 검사 모두 실패 → 수정 빌드 통과(보고 참고).
+test('🔴 M4-02 후속 — 축소된 헤더 밑 +1~+5px 은 헤더가 아니라 그 아래 요소가 누름을 받는다', async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootTools(page, false);
+  const cdp = await page.context().newCDPSession(page);
+  for (let k = 0; k < 3; k++) { await swipe(cdp, page, 200, 700, 380); await page.waitForTimeout(200); }
+  await page.waitForTimeout(800);
+  const r = await page.evaluate(() => {
+    const hd = document.querySelector<HTMLElement>('[data-stack-header]')!;
+    const hb = hd.getBoundingClientRect().bottom;
+    const hits: string[] = [];
+    for (let dy = 1; dy <= 5; dy++) for (const x of [40, 195, 350]) {
+      const e = document.elementFromPoint(x, hb + dy) as HTMLElement | null;
+      if (e && hd.contains(e)) hits.push(`+${dy}@${x}:${e.tagName}.${String(e.className).slice(0, 30)}`);
+    }
+    return { shrunk: document.documentElement.dataset.headerShrunk ?? '', hb: +hb.toFixed(2), hits };
+  });
+  expect(r.shrunk, `전제 조건: 헤더가 안 접혔다 ${JSON.stringify(r)}`).toBe('1');
+  expect(r.hits, `보이는 헤더(밑면 ${r.hb}) 아래 띠의 누름을 헤더가 가로챈다 — 섹션 바·본문·검색 띠 윗부분이 죽는다`).toEqual([]);
+});
+
+test('🔴 M4-04 후속 — 계정 메뉴 항목으로 탭을 옮길 때 메뉴가 떠나는 판보다 먼저 사라지지 않는다(옛 판 비침 없음)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootTools(page, true);
+  // 홈에서 출발 — '도구' 항목이 탭 이동(떠나는 판 handOffPane + 메뉴 handoff)이 된다.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'home' })));
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: '검증계정 메뉴' }).click();
+  await expect(page.getByRole('button', { name: '내 정보 열기' })).toBeVisible();
+  await page.waitForTimeout(600);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const frames = await page.evaluate(() => new Promise<{ menu: number; pane: number }[]>((res) => {
+    const out: { menu: number; pane: number }[] = [];
+    let n = 0;
+    const tick = () => {
+      const menu = document.querySelector<HTMLElement>('header [data-menu-leave]');
+      const pane = document.querySelector<HTMLElement>('[data-pane-leaving]');
+      if (menu && pane) out.push({ menu: +Number(getComputedStyle(menu).opacity).toFixed(3), pane: +Number(getComputedStyle(pane).opacity).toFixed(3) });
+      if (++n > 90) { res(out); return; }
+      requestAnimationFrame(tick);
+    };
+    const item = [...document.querySelectorAll<HTMLElement>('header div.w-56 button')].find((b) => (b.textContent ?? '').trim() === '도구');
+    item!.click();
+    requestAnimationFrame(tick);
+  }));
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  expect(frames.length, '메뉴 퇴장과 떠나는 판이 함께 있는 프레임을 못 모았다(측정 공허 — 판 handoff 가 안 돌았다)').toBeGreaterThan(3);
+  const early = frames.filter((f) => f.menu < f.pane - 0.05);
+  expect(early, `메뉴가 떠나는 판보다 먼저 사라진 프레임 ${early.length}개 — 메뉴 자리로 옛 판이 비친다: ${JSON.stringify(frames.slice(0, 12))}`).toEqual([]);
+});
