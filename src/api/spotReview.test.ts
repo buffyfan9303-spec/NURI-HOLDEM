@@ -171,7 +171,7 @@ describe('배선 계약', () => {
     expect(open).toContain('if (!blockedBy(fresh)) setAsking(true);');
     const run = REPORT.slice(REPORT.indexOf('const run = async'), REPORT.indexOf('return (', REPORT.indexOf('const run = async')));
     expect(run.indexOf('fresh.freeLeft <= 0'), '무료 시트에서 보내기 전 재확인이 없다').toBeGreaterThan(0);
-    expect(run.indexOf('fresh.freeLeft <= 0'), '재확인이 요청보다 뒤다').toBeLessThan(run.indexOf('requestSpotAi(id)'));
+    expect(run.indexOf('fresh.freeLeft <= 0'), '재확인이 요청보다 뒤다').toBeLessThan(run.indexOf('requestSpotAi(id, { free })'));
     expect(run, '성공 뒤 서버 값으로 다시 맞추지 않는다').toMatch(/getSpotAiStatus\(\)\.then\(\(s\) => \{ if \(s\) setStatus\(s\); \}\)/);
     expect(run, '화면이 짐작한 차감으로 상태를 고친다').not.toMatch(/available: s\.available - s\.price/);
     // 엣지는 begin 이 정한 free·free_left 를 그대로 싣고, 클라이언트는 그 값을 읽는다
@@ -319,7 +319,19 @@ describe('F3 — 환불이 확인될 때만 "돌려드렸어요"', () => {
   });
   it('클라이언트: 코드 없는 502 를 "돌려드렸어요" 로 말하지 않는다', () => {
     expect(API).toContain("status === 502 ? 'REFUND_PENDING'");
-    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*5분 안에 자동으로 돌려 드립니다/);
+    expect(API).toMatch(/case 'REFUND_PENDING': return `[^`]*5분 안에 자동으로 돌려 드립니다/);
+  });
+  // R5-04 — 무료 회차 실패는 포인트가 아니라 무료 횟수를 돌려준다(시트가 "무료 횟수를 돌려드립니다" 라고 약속).
+  it('무료 회차 실패 문구는 무료 횟수, 유료는 포인트', () => {
+    expect(spotAiMessage('AI_FAILED', { free: true })).toContain('무료 횟수를 돌려 드렸습니다');
+    expect(spotAiMessage('AI_FAILED', { free: true })).not.toContain('포인트');
+    expect(spotAiMessage('AI_FAILED', { free: false })).toContain('포인트를 돌려 드렸습니다');
+    expect(spotAiMessage('AI_FAILED')).toContain('포인트를 돌려 드렸습니다');
+    expect(spotAiMessage('REFUND_PENDING', { free: true })).toContain('무료 횟수는 5분 안에');
+    expect(spotAiMessage('REFUND_PENDING')).toContain('포인트는 5분 안에');
+  });
+  it('SpotReport 는 요청 직전 서버 재조회로 확인한 free 를 requestSpotAi 에 넘긴다', () => {
+    expect(strip(read('src/components/features/gto/SpotReport.tsx'))).toContain('requestSpotAi(id, { free })');
   });
 });
 

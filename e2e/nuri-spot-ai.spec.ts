@@ -285,4 +285,18 @@ test.describe('AI 아쉬운 포인트', () => {
       await expect(dlg.getByTestId('spot-ai-result')).toHaveCount(0);
     });
   }
+
+  // R5-04: 무료 회차에서 AI 가 실패하면 시트가 약속한 대로 '무료 횟수' 를 돌려줬다고 말한다(포인트가 아니다).
+  for (const code of ['AI_FAILED', 'REFUND_PENDING'] as const) {
+    test(`🔴 무료 회차 ${code} — 토스트가 포인트가 아니라 무료 횟수를 말한다`, async ({ page }) => {
+      const dlg = await openSpot(page, { ...ON, free_limit: 3, free_left: 3 }, (r) =>
+        r.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'x', code }) }));
+      await fillComplete(dlg);
+      await dlg.getByTestId('spot-ai-open').click();
+      await page.locator('[data-spot-ai-confirm]').getByTestId('spot-ai-confirm').click();
+      await expect(page.getByText(/AI 답변을 받지 못했습니다. 무료 횟수/).first()).toBeVisible();
+      await expect(page.getByText(/AI 답변을 받지 못했습니다.*포인트/), '무료 회차인데 포인트를 돌려줬다고 말한다').toHaveCount(0);
+      await expect(dlg.getByTestId('spot-ai-result')).toHaveCount(0);
+    });
+  }
 });
