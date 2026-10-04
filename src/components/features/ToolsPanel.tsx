@@ -536,8 +536,10 @@ export default function ToolsPanel() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // 행 높이는 행마다 정해진다(2026-10-05 오너 "GTO 박스가 너무 커"). 예전엔 모든 행을 가장 높은 타일에 맞춰서
+  //   320 에서 22개 타일이 전부 88px 이 됐다. 같은 행의 두 칸은 그리드 기본 stretch 로 여전히 같은 높이다.
   const grid = (items: typeof TOOLS) => (
-    <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((t) => (
         <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
@@ -739,7 +741,9 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
     <section
       data-main-enter
       data-testid="spot-hero"
-      className="relative rounded-card border border-border-default bg-surface-mid p-3"
+      // surface-brass: 2026-10-05 오너 "밋밋한 곳 그라데이션 일부" — 왼쪽 위 모서리에서 번지는 옅은 황동 면(index.css). 글자 대비는 가장 밝은 모서리 기준 AA.
+      // 테두리 border-strong/40: 면 대비가 낮아(mid/base) 카드 윤곽이 바탕에 묻혔다(명세 §2-4).
+      className="surface-brass relative rounded-card border border-border-strong/40 bg-surface-mid p-3"
       // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
       // 2026-09-18: 인라인 rgb 글로우 → 토큰 LED([data-aura] hero). 라이트에서 약해지고 고대비·강제색에서 꺼진다.
       data-aura data-aura-level="hero" data-aura-variant="violet"
@@ -757,14 +761,17 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
+        {/* h-9(36px): 2026-10-05 GTO 박스 축소 — 40 → 36(명세 G3). */}
+        <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/12"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2A2D31 0%, #18191C 58%, #0E0F11 100%)' /* 2026-10-04 네이비 → 무채색 */ }} aria-hidden>
-          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
-          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버. */}
-          <p className="text-2xs text-ink-muted" data-testid="spot-hero-ai">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 · 이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</p>
+          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
+              2026-10-05 오너 "글씨 작아": 2xs → xs. */}
+          {/* 두 토막은 각각 안 끊는다 — 320 에서 '… 30P ·' / '하루 3회' 로 꼬리만 떨어졌다(2026-10-05 실측). 접히면 '무료 ·' 뒤에서만 접힌다. */}
+          <p className="text-xs text-ink-muted" data-testid="spot-hero-ai"><span className="whitespace-nowrap">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 ·</span> <span className="whitespace-nowrap">이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</span></p>
           {/* ⚠ §7(2026-09-12 실측): 360px 에서 `truncate` 로 잘려 87 < 142 였다.
               이미 11.69px 라 **더 줄이면 안 되는 구간**이므로 글자를 키우지도 줄이지도 않고
               줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).
@@ -783,11 +790,12 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           100% 에서는 한 줄에 들어가므로 `whitespace-normal`·`leading-tight` 를 걷어낸다.
           ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
-      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-xs">
+      {/* 2026-10-05: 간격 10 → 8(G3) · 버튼 글자 xs → sm(오너 "글씨 작아") · 고스트 테두리 border-strong/60(mid 위 1.20 → 약 2, 명세 §2-4). */}
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm">
           새 스팟 작성
         </button>
-        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] px-2 text-xs">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm">
           내 스팟
         </button>
       </div>
@@ -810,30 +818,32 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
   return (
     <div className="relative h-full">
       {/* 세로 타일(2026-09-03 오너: "설명이 너무 길고 불완전") — 아이콘을 위로 올려 텍스트 폭을 106px → 155px(390px 2열)로 넓히고,
-          설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 auto-rows-fr + h-full 이 맞춘다.
+          설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 행 stretch + h-full 이 맞춘다.
           아이콘 행 오른쪽 자리는 즐겨찾기 별(형제 버튼, 우상단). 레퍼런스 aura-ui 피처 카드 문법(아이콘 타일 위 · 제목 · 한 줄 설명). */}
       {/* 🔴 2026-09-18 오너 지시로 **가로 배치**가 됐다 — 아이콘 왼쪽, 제목 오른쪽, 설명줄 없음.
           예전 주석(세로 타일·설명 ≤13자)은 그 지시로 폐기됐다. 남은 계약은 이것뿐이다:
-            · 제목 칸은 **늘 2줄 자리를 예약**한다(min-h-[2.5em] + leading-tight) — 그래야 한 줄짜리 제목이
-              섞여도 같은 행의 카드들이 **같은 높이**가 된다(오너: "열을 맞춰서 정렬").
-              2026-09-18 2차(한 줄 제목 허용) 뒤로는 예약 칸 안에서 **세로 가운데**(flex-col justify-center) —
-              한 줄 제목이 예약 칸 위에 붙으면 아이콘보다 7px 높이 떠 보였고 아래가 빈 줄로 남았다(360 실측 스크린샷).
-              두 줄 제목은 2.5em 을 꽉 채우므로 가운데 정렬로 위치가 바뀌지 않는다.
+            · 같은 행의 카드들은 **같은 높이**다(오너: "열을 맞춰서 정렬") — 그리드 행 stretch + h-full 이 맞춘다.
+              2026-10-05 부터 2줄 자리 예약은 없다(한 줄 제목만 있는 행이 쓸데없이 높았다). 한 줄 제목은 칸 안에서
+              **세로 가운데**(flex-col justify-center + 버튼 items-center)라 아이콘과 같은 중심선에 앉는다.
             · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이) — 단 **70px 에 한 줄로
               들어가는 이름은 표에 없다**(TITLE_LINES 주석의 실측표). 그 이름들은 한 줄이다.
-            · 오른쪽 `pr-7` 은 우상단 즐겨찾기 별(h-8 w-8 · right-1)을 피하는 자리다.
+            · 오른쪽 `pr-7` 은 오른쪽 즐겨찾기 별(h-8 w-8 · right-1, 별 글리프 14px 이 오른쪽 13~27px 에 그려진다)을 피하는 자리다.
           ⚠ `flex-wrap` + 제목 칸 `flex‑[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
             확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
             그때 제목 칸이 **스스로 아이콘 아래로 내려가** 카드 전폭을 쓴다(예전 세로 배치로 자동 복귀).
             실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.
           ⚠ `aria-label={name}` — 두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히게 한다.
           ⚠ `title={desc}` — 화면에서 뺀 설명을 **버리지는 않는다**(PC 호버 툴팁). 검색은 계속 t.desc 를 읽는다. */}
+      {/* 🔴 2026-10-05 오너 "GTO 쪽은 박스가 너무 커 — 위아래 여백 재판단"(명세 typo-spacing-1005 §2-2 v2):
+            세로 10→8 · 아이콘 32→28 · 별 자리 32→28 · 제목 칸 basis 4rem→3rem · 2줄 자리 예약 제거 · 제목 행간 16px 고정.
+            320 에서 제목 칸(58px)이 4rem(64px)보다 좁아 **제목이 아이콘 아래로 내려가** 타일이 88px 였다 — basis 를 줄여 같은 줄에 둔다.
+            실측(가짜 env 빌드): 54/88 → 46(한 줄 제목)/50(두 줄 제목), 320 카탈로그 문서 길이 −472px 추정. */}
       <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
-        className="flex h-full w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-aura border card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
+        className="flex h-full w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-aura border card-aura py-2 pl-2.5 pr-7 text-left hover:border-accent-400/40">
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
-        <span className="flex min-h-[2.5em] min-w-0 flex-[1_1_4rem] flex-col justify-center text-xs font-bold leading-tight text-ink-primary">
+        <span className="flex min-w-0 flex-[1_1_3rem] flex-col justify-center text-xs leading-4 font-bold text-ink-primary">
           {(lines ?? [name]).map((l) => (
             <span key={l} className="block wrap-anywhere">{l}</span>
           ))}
@@ -852,7 +862,8 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
           //   inline style 로 position 을 최우선 순위로 못박아 `.hit` 의 확장(::after)은 그대로 살리고
           //   자기 배치만 되찾는다 — index.css 를 고치지 않는 최소 수정.
           style={{ position: 'absolute' }}
-          className={['hit right-1 top-1 flex h-8 w-8 items-center justify-center',
+          // inset-y-0 + my-auto: 높이가 고정(h-8)이라 transform 없이 세로 가운데 — 타일이 46/50 으로 낮아져 top-1 이면 별이 아이콘보다 3~5px 위에 떴다.
+          className={['hit inset-y-0 right-1 my-auto flex h-8 w-8 items-center justify-center',
             fav ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
           <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
         </button>

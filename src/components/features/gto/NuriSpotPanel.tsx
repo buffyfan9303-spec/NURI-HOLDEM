@@ -271,10 +271,10 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           // 2026-09-19 오너 "탭 위아래 공백이 너무 크다": 시각 높이 44 → 34. 2026-09-24 알약 통일(design-reviewer 판정): 34 → 32,
           //   히트는 CHIP_HIT 와 같은 위아래 8px(gto/chip.ts) — 32 + 16 = 48. e2e nuri-spot.spec 뷰포트 매트릭스가 elementFromPoint 로 잰다.
           //   flex-[2_1_10rem]: 줄 배치용 basis 일 뿐 최소 폭이 아니라(200% 에서도 320px 을 밀지 않는다) 남는 폭을 탭이 가져간다.
-          className="min-w-0 flex-[2_1_10rem] [&>button]:min-h-[32px] [&>button]:before:absolute [&>button]:before:inset-x-0 [&>button]:before:inset-y-[-8px] [&>button]:before:content-['']"
+          className="min-w-0 flex-[2_1_10rem] border-border-strong/50! [&>button]:min-h-[32px] [&>button]:before:absolute [&>button]:before:inset-x-0 [&>button]:before:inset-y-[-8px] [&>button]:before:content-['']"
         />
         <button type="button" onClick={gotoBoard} data-testid="spot-board-link"
-          className={`${CHIP_HIT} flex min-h-[32px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200`}>
+          className={`${CHIP_HIT} flex min-h-[32px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-strong/50 bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200`}>
           <span data-testid="spot-board-label">게시판 토론</span>
           <Icon name="chevron-right" size={12} className="block shrink-0" aria-hidden />
         </button>
@@ -349,13 +349,13 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
     //   폭은 ToolsPanel 의 max-w-2xl(714px) 고정이라 PC 도 한 열이 모바일과 같은 모양이다.
     <div className="min-w-0 space-y-3">
       <StepBar step={step} onStep={go} confirmed={confirmed} />
-      <p className="text-2xs text-ink-muted">{cur.hint}</p>
+      <p className="text-xs text-ink-muted">{cur.hint}</p>
 
       {step === 'game' && (
         // 한 카드 안에 게임(위) · 자리·스택(아래) — 가는 선 하나로 두 묶음을 가른다.
-        <div className="rounded-aura border card-aura p-3">
+        <div className="rounded-aura border border-border-strong/50! card-aura p-3">
           <GameStep spot={spot} patch={patch} />
-          <div className="my-2.5 border-t border-border-subtle" />
+          <div className="my-2.5 border-t border-border-strong/35" />
           <SeatStep spot={spot} patch={patch} />
         </div>
       )}
@@ -382,7 +382,7 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
       <IssueList issues={issues} />
       {/* 자리는 **항상** 잡아 둔다(GTO-TOOL-OPEN-JANK 2026-09-24) — 열고 400ms 뒤 첫 자동저장이 이 줄을 끼워 넣어
           본문이 439→468px 로 한 번 더 늘었다(열기 모션 중 두 번째 계단). 글자만 나중에 채운다. */}
-      <p className="min-h-lh text-2xs text-ink-muted" aria-live="polite" data-testid="spot-saved-line">
+      <p className="min-h-lh text-xs text-ink-muted" aria-live="polite" data-testid="spot-saved-line">
         {savedAt !== null && (
           <><Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다</>
         )}
@@ -397,15 +397,15 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
         className="fixed inset-x-0 bottom-0 z-10 border-t border-border-subtle bg-surface-base pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         <div className="mx-auto grid w-full max-w-2xl grid-cols-2 gap-1.5 px-page-x">
           <button type="button" onClick={prev} disabled={idx === 0}
-            className="btn-ghost min-h-[44px] text-xs disabled:opacity-40">
+            className="btn-ghost min-h-[44px] border-border-strong/60 text-sm disabled:opacity-40">
             <Icon name="chevron-left" size={13} className="mr-0.5 inline-block align-[-2px]" aria-hidden />이전
           </button>
           {idx < STEPS.length - 1 ? (
-            <button type="button" onClick={next} className="btn-primary min-h-[44px] text-xs">
+            <button type="button" onClick={next} className="btn-primary min-h-[44px] text-sm">
               다음 · {STEPS[idx + 1].label}<Icon name="chevron-right" size={13} className="ml-0.5 inline-block align-[-2px]" aria-hidden />
             </button>
           ) : (
-            <button type="button" onClick={() => go('game')} className="btn-ghost min-h-[44px] text-xs">처음 단계로</button>
+            <button type="button" onClick={() => go('game')} className="btn-ghost min-h-[44px] border-border-strong/60 text-sm">처음 단계로</button>
           )}
         </div>
       </nav>
@@ -432,9 +432,9 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
           <button
             key={s.key} type="button" aria-current={on ? 'step' : undefined}
             onClick={() => onStep(s.key)}
-            className={['flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-input border px-1 py-1 text-2xs font-bold transition-colors',
+            className={['flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-input border px-1 py-1 text-xs font-bold transition-colors',
               on ? 'border-accent-300 bg-accent-300 text-white'
-                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
+                : 'border-border-strong/60 bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
           >
             {/* 체크는 번호 옆 — 라벨 줄에 두면 320px 좁은 칸에서 라벨이 밀려 넘친다. */}
             <span className={['flex items-center gap-0.5 tabular-nums', on ? 'text-white/80' : 'text-ink-muted'].join(' ')}>
@@ -458,7 +458,7 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
 function Row({ label, children, wrap = false }: { label: string; children: React.ReactNode; wrap?: boolean }) {
   return (
     <div className="flex flex-col items-stretch gap-1 py-0.5">
-      <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
+      <span className="shrink-0 text-sm font-semibold text-ink-secondary">{label}</span>
       <div className={['flex min-w-0 items-center gap-1.5', wrap ? 'flex-wrap' : ''].join(' ')}>{children}</div>
     </div>
   );
@@ -472,7 +472,7 @@ function Row({ label, children, wrap = false }: { label: string; children: React
 function RowInline({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-h-[32px] items-center justify-between gap-3">
-      <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
+      <span className="shrink-0 text-sm font-semibold text-ink-secondary">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">{children}</div>
     </div>
   );
@@ -497,9 +497,9 @@ function Pick<T extends string | number>({ value, options, onChange, fmt, end = 
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
           // 보이는 32px · 누르는 44px(CHIP_HIT) — 2026-09-24 전: 36px · 실효 46px
           // 2026-09-25 스윕: 사이징 칩 '2'·'3'·'4' 가 가로 26~29px 라 min-w-[44px] — 가로도 44. 이웃과 gap-x-1 이라 가로 확장은 겹쳐서 못 쓴다.
-          className={[CHIP_HIT, 'min-h-[32px] min-w-[44px] rounded-input border px-2 text-2xs font-bold transition-colors',
+          className={[CHIP_HIT, 'min-h-[32px] min-w-[44px] rounded-input border px-2 text-xs font-bold transition-colors',
             o === value ? 'border-accent-300 bg-accent-300 text-white'
-              : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              : 'border-border-strong/60 bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
           {fmt ? fmt(o) : String(o)}
         </button>
       ))}
@@ -589,13 +589,13 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           <Pick value={v.pos} options={seats}
             onChange={(p) => patch({ extra: spot.extra.map((x, k) => (k === i ? { ...x, pos: p as SpotPosition } : x)) })} />
           <button type="button" onClick={() => removeVillain(i)} aria-label={`상대 ${EXTRA_LETTERS[i]} 삭제`}
-            className={`${CHIP_HIT} flex h-[32px] shrink-0 items-center gap-1 rounded-input border border-border-default px-2 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger`}>
+            className={`${CHIP_HIT} flex h-[32px] shrink-0 items-center gap-1 rounded-input border border-border-strong/60 px-2 text-xs font-semibold text-ink-muted transition-colors hover:text-danger`}>
             <Icon name="close" size={12} aria-hidden />빼기
           </button>
         </Row>
       ))}
       {canAdd && (
-        <button type="button" onClick={addVillain} className="btn-ghost mt-1 min-h-[44px] w-full text-xs">
+        <button type="button" onClick={addVillain} className="btn-ghost mt-1 min-h-[44px] w-full border-border-strong/60 text-sm">
           <Icon name="plus" size={13} className="mr-1 inline-block align-[-2px]" aria-hidden />상대 추가 (빌런 {EXTRA_LETTERS[spot.extra.length]})
         </button>
       )}
@@ -608,7 +608,7 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           onChange={(e) => setStacks(Number(e.target.value), vilStack)}
           className="input min-h-[44px] w-28 text-right" aria-label="내 스택 BB 직접 입력"
         />
-        <span className="text-2xs text-ink-muted">BB</span>
+        <span className="text-xs text-ink-muted">BB</span>
       </Row>
       <Row label={spot.extra.length > 0 ? '상대 A 스택' : '상대 스택'}>
         <input
@@ -616,9 +616,9 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           onChange={(e) => setStacks(heroStack, Number(e.target.value))}
           className="input min-h-[44px] w-28 text-right" aria-label="상대 스택 BB 직접 입력"
         />
-        <span className="text-2xs text-ink-muted">BB</span>
+        <span className="text-xs text-ink-muted">BB</span>
       </Row>
-      <p className="text-2xs tabular-nums text-ink-muted">유효 스택 {spot.effectiveBb}BB · 둘 중 짧은 쪽</p>
+      <p className="text-xs tabular-nums text-ink-muted">유효 스택 {spot.effectiveBb}BB · 둘 중 짧은 쪽</p>
     </div>
   );
 }
@@ -668,10 +668,10 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
     .filter((g) => g.rows.length > 0);
 
   return (
-    <div className="rounded-aura border card-aura p-3">
+    <div className="rounded-aura border border-border-strong/50! card-aura p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-xs font-bold text-ink-primary">액션 순서</p>
-        <p className="text-2xs tabular-nums text-ink-muted">팟 {potBb(spot)}BB</p>
+        <p className="text-sm font-bold text-ink-primary">액션 순서</p>
+        <p className="text-xs tabular-nums text-ink-muted">팟 {potBb(spot)}BB</p>
       </div>
 
       {grouped.length === 0 ? (
@@ -706,7 +706,7 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
       )}
 
       {/* 추가 줄 — 버튼으로 빠르게, 필요하면 숫자를 직접 */}
-      <div className="mt-2.5 space-y-1 border-t border-border-subtle pt-2.5">
+      <div className="mt-2.5 space-y-1 border-t border-border-strong/35 pt-2.5">
         <Row label="누가">
           <Pick value={who} options={whoOptions} onChange={setWho} fmt={whoLabel} />
         </Row>
@@ -724,18 +724,18 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
               className="input min-h-[36px] w-16 text-right"
               aria-label={`이번에 추가로 넣는 BB 직접 입력 (총액이 아니라 추가액). 지금 값이면 투입 총액 ${totalAfter}BB`}
             />
-            <span className="text-2xs text-ink-muted">BB</span>
+            <span className="text-xs text-ink-muted">BB</span>
           </Row>
         )}
         {sized && (
           // 프리셋 숫자는 '추가액' 인데 포커 관례는 총액이라, 블라인드 자리에서만 조용히 어긋난다.
           // 고르는 순간 결과 총액을 보여 주면 그 함정이 사라진다(2026-09-18 실측: SB 프리셋 3 → 3.5BB).
-          <p className="text-2xs leading-relaxed text-ink-muted">
+          <p className="text-xs leading-relaxed text-ink-muted">
             투입 총액 <b className="tabular-nums text-ink-secondary">{totalAfter}BB</b>
             {already > 0 && <> — {whoLabel(who)}가 이미 낸 {already}BB 포함</>}
           </p>
         )}
-        <button type="button" onClick={add} className="btn-ghost mt-1 min-h-[44px] w-full text-xs">
+        <button type="button" onClick={add} className="btn-ghost mt-1 min-h-[44px] w-full border-border-strong/60 text-sm">
           <Icon name="plus" size={13} className="mr-1 inline-block align-[-2px]" />액션 추가
         </button>
       </div>
@@ -752,7 +752,7 @@ function ChoiceStep({ spot, patch }: {
 }) {
   const sized = spot.heroAction === 'call' || spot.heroAction === 'bet' || spot.heroAction === 'raise';
   return (
-    <div className="rounded-aura border card-aura p-3">
+    <div className="rounded-aura border border-border-strong/50! card-aura p-3">
       <Row label="그때 나는">
         <Pick value={spot.heroAction ?? ('' as SpotActionType)} options={ACTION_TYPES}
           onChange={(v) => patch({ heroAction: v })} fmt={actionLabel} />
@@ -766,18 +766,18 @@ function ChoiceStep({ spot, patch }: {
             className="input min-h-[44px] w-24 text-right"
             aria-label="내가 이번에 추가로 넣은 BB (총액이 아니라 추가액)"
           />
-          <span className="text-2xs text-ink-muted">BB</span>
+          <span className="text-xs text-ink-muted">BB</span>
         </Row>
       )}
-      <div className="mt-2 border-t border-border-subtle pt-2">
-        <label className="mb-1 block text-xs font-medium text-ink-secondary" htmlFor="spot-note">메모 (선택)</label>
+      <div className="mt-2 border-t border-border-strong/35 pt-2">
+        <label className="mb-1 block text-sm font-semibold text-ink-secondary" htmlFor="spot-note">메모 (선택)</label>
         <textarea
           id="spot-note" rows={2} value={spot.note ?? ''} maxLength={300}
           onChange={(e) => patch({ note: e.target.value })}
           placeholder="왜 그렇게 했는지 · 무엇이 고민이었는지"
           className="input resize-none text-sm"
         />
-        <p className="mt-1 text-2xs text-ink-muted">
+        <p className="mt-1 text-xs text-ink-muted">
           상대 이름·매장명은 적지 마세요 — 스팟에는 개인정보를 담지 않습니다.
         </p>
       </div>

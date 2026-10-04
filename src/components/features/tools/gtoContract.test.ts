@@ -386,10 +386,16 @@ describe('NURI SPOT — GTO 홈 통합', () => {
       expect(PANEL, "'딜' 검색이 ICM 계산기에 닿아야 한다").toMatch(/key: 'icm'[^\n]*keywords: '[^']*딜 계산기/);
     });
 
-    it('제목 칸이 2줄 자리를 늘 예약한다 — 한 줄짜리가 섞여도 열이 맞는다', () => {
-      const card = [PANEL.slice(PANEL.indexOf('function ToolCard'), PANEL.indexOf('function ToolCard') + 3000)];
-      expect(card![0], '2줄 예약(min-h)이 없으면 카드마다 높이가 달라 열이 안 맞는다')
-        .toMatch(/min-h-\[2\.5em\]/);
+    // 2026-10-05 오너 "GTO 박스가 너무 커" — 2줄 자리 예약(모든 타일을 두 줄 높이로)을 걷었다(명세 typo-spacing-1005 §2-2).
+    //   남는 계약은 '같은 **행**의 두 칸은 같은 높이' 하나다: 그리드 행 stretch 가 칸(div)을 늘리고, 칸·버튼의 h-full 이
+    //   그 높이를 버튼까지 전달한다. 둘 중 하나라도 빠지면 한 줄 제목 칸만 낮아져 열이 안 맞는다.
+    //   제목 행간은 고정(leading-4)이라 한 줄 46 · 두 줄 50 으로 폭과 무관하게 정해진다(실측 390/360/320).
+    it('같은 행의 타일은 같은 높이다 — 칸과 버튼이 행 높이를 끝까지 받는다', () => {
+      const at = PANEL.indexOf('function ToolCard');
+      const card = PANEL.slice(at, at + 9000);
+      expect(card, '칸(div)이 h-full 이 아니면 버튼이 행 높이를 못 받는다').toMatch(/<div className="relative h-full">/);
+      expect(card, '버튼이 h-full 이 아니면 한 줄 제목 타일만 낮아진다').toMatch(/data-testid=\{testId\}[^>]*\n\s*className="flex h-full w-full/);
+      expect(card, '제목 행간이 고정이어야 타일 높이가 폭마다 흔들리지 않는다').toMatch(/flex-col justify-center text-xs leading-4/);
     });
   });
 
