@@ -127,7 +127,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     const forUid = uid;
 
     if (!uid) { setLoaded(true); setErr(null); setBankrollErr(null); return; }
-    setErr(null); setBankrollErr(null);
+    // ⚠ 여기서 err·bankrollErr 를 비우지 않는다 — 탭으로 돌아올 때마다 reload 가 도는데, 시작하자마자 지우면 오류 카드가
+    //   걷혔다가 같은 실패 응답에 다시 서며 화면이 190px 튄다(CLS 0.226). 기존 오류는 결과가 올 때까지 두고, 결과로 교체한다.
     const r = await Promise.allSettled([
       getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300),
       // 스팟은 날짜 칸에 올리는 보조 표시 — listMySpots 는 실패하면 throw 하지만 여기서는 빈 목록으로 받는다.
@@ -142,10 +143,10 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     if (sp.status === 'fulfilled') setSpots(sp.value);
     if (l.status === 'fulfilled') setLikes(l.value);
     if (rv.status === 'fulfilled') setReservations(rv.value);
-    if (w.status === 'fulfilled') setBankroll(w.value); else setBankrollErr(w.reason);
-    // 하나라도 실패하면 드러낸다 — 조회 실패를 '기록 없음'으로 보여주면 유저가 영원히 원인을 모른다.
+    if (w.status === 'fulfilled') { setBankroll(w.value); setBankrollErr(null); } else setBankrollErr(w.reason);
+    // 하나라도 실패하면 드러낸다 — 조회 실패를 '기록 없음'으로 보여주면 유저가 영원히 원인을 모른다. 성공했을 때만 지운다.
     const failed = r.find((x) => x.status === 'rejected');
-    if (failed && failed.status === 'rejected') setErr(failed.reason);
+    setErr(failed && failed.status === 'rejected' ? failed.reason : null);
     setLoaded(true);
   }, [uid]);
 

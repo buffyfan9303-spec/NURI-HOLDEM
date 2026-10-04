@@ -374,7 +374,8 @@ export function handOffPane(to: string): void {
   place(el, l.box);
   // 푸터는 판 밖 형제라 새 판을 따라 내려간다 — 떠나기 직전 자리를 **복제본**이 지킨다(없으면 그 자리가 첫 프레임에 새 판으로 컷된다).
   //   판과 같은 부모(앱 셸) 안에 넣어 같은 쌓임 맥락에 둔다 — body 에 붙이면 헤더·하단바(셸 안 z-50) 위로 올라간다.
-  const foot = l.foot?.el.isConnected && el.parentElement ? cloneFooter(l.foot, el.parentElement, el.nextSibling) : null;
+  //   푸터는 탭마다 새 노드(App.tsx key=activeTab)라 떠나는 시점의 옛 푸터는 이미 떨어져 있다 — cloneNode 는 떨어진 노드도 복제하므로 isConnected 를 보지 않는다.
+  const foot = l.foot && el.parentElement ? cloneFooter(l.foot, el.parentElement, el.nextSibling) : null;
   // 재방문은 이미 그려진 판이다 — 판 안의 새로고침 표시(aria-busy)를 기다리며 붙잡지 않는다(실측: 라이브 재방문이 300ms 늦게 보였다).
   fadeAfterFirstFrame(foot ? [el, foot] : [el], () => {
     el.removeAttribute('data-pane-leaving'); // React 가 준 display:none 이 그대로 다시 이긴다
