@@ -323,6 +323,8 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ key: string; body: string } | null>(null);
+  /** 받은 코칭 조회를 끝낸 (스팟·저장 id) — 이게 지금 값과 다르면 '이미 받았는가' 를 아직 모른다(M5-01). */
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
   const resultRef = useRef<HTMLElement>(null);
   const userId = user?.id ?? null;
   const key = spotKey(spot);
@@ -342,10 +344,12 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
     if (!ready) return;
     let alive = true;
     (async () => {
-      const id = savedId ?? await findSavedSpotId(spot);
-      if (!id || !alive) return;
-      const body = (await listSpotAiReviews([id])).get(id);
-      if (alive && body) setResult((r) => (r?.key === key ? r : { key, body }));
+      try {
+        const id = savedId ?? await findSavedSpotId(spot);
+        if (!id || !alive) return;
+        const body = (await listSpotAiReviews([id])).get(id);
+        if (alive && body) setResult((r) => (r?.key === key ? r : { key, body }));
+      } finally { if (alive) setCheckedFor(`${key}|${savedId ?? ''}`); }
     })().catch(() => { /* 위 주석 */ });
     return () => { alive = false; };
     // spot 은 key(spotKey) 로 대표한다 — 객체 정체성이 바뀔 때마다 다시 읽지 않는다.
@@ -365,7 +369,9 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const shown = result?.key === key ? result.body : null;
   /** 이 스팟은 이미 코칭을 받았다 — 다시 보기는 무료라 포인트·한도로 막지 않는다(서버와 같은 규칙). */
   const prior = shown !== null;
-  const disabled = prior ? busy : (!complete.ok || blocked || outOfDay || poor || busy);
+  /** M5-01: 조회가 끝나기 전엔 '처음 받는 스팟' 문구·시트를 확정하지 않는다 — 받은 스팟이 0.6초간 '무료 n/3 남음' 으로 보이고, 그때 누르면 잘못된 시트가 열렸다. */
+  const checking = !prior && checkedFor !== `${key}|${savedId ?? ''}`;
+  const disabled = prior ? busy : (!complete.ok || blocked || outOfDay || poor || busy || checking);
 
   /** 지금 서버 기준으로 새 요청이 막히는가(하루 한도 · 무료 소진 뒤 포인트 부족) — 버튼의 disabled 와 같은 규칙. */
   const blockedBy = (s: SpotAiStatus) => s.usedToday >= s.limit || (s.freeLeft <= 0 && s.available < s.price);
@@ -435,9 +441,9 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
           if (prior) { resultRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
           void openSheet();
         }}
-        data-testid="spot-ai-open"
+        data-testid="spot-ai-open" aria-busy={checking || undefined}
         className="btn-ghost flex min-h-[44px] w-full items-center justify-center gap-1.5 whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'}
+        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : checking ? 'AI 코칭 기록 확인 중…' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'}
       </button>
       {!prior && poor && (
         <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-poor">{spotAiPoorText(status.available, status.price)}</p>
