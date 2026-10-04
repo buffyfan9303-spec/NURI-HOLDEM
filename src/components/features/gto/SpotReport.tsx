@@ -11,7 +11,7 @@
 //
 // ⚠ 지운 것은 **판정 표시**뿐이다. 입력 검증(IssueList)·저장 스냅샷(`evaluation`)·
 //   공유 확인 시트(F16 계약)·트레이너 도구는 전부 그대로다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import Modal from '../../atoms/Modal';
 import { ensureLogin } from '../../../lib/requireLogin';
@@ -23,7 +23,7 @@ import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { kstToday } from '../../../lib/kst';
 import { clampSpotDate } from '../../../lib/spotDate';
 import {
-  getSpotAiStatus, requestSpotAi, findSavedSpotId, spotCompleteness, SpotAiError, spotAiMessage, type SpotAiStatus,
+  getSpotAiStatus, requestSpotAi, findSavedSpotId, listSpotAiReviews, spotCompleteness, SpotAiError, spotAiMessage, spotAiPoorText, type SpotAiStatus,
 } from '../../../api/spotReview';
 import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
@@ -322,7 +322,10 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ key: string; body: string } | null>(null);
+  const resultRef = useRef<HTMLElement>(null);
   const userId = user?.id ?? null;
+  const key = spotKey(spot);
+  const ready = status !== null;
 
   useEffect(() => {
     if (!userId) { setStatus(null); return; }
@@ -331,15 +334,33 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
     return () => { alive = false; };
   }, [userId]);
 
+  // 이미 받은 코칭(오너 2026-10-04 D) — 저장된 같은 스팟에 끝난 코칭이 있으면 먼저 보여 주고 버튼은 '무료로 다시 보기'.
+  //   서버도 같은 스냅샷(spot_hash)은 한도·포인트 검사 **전에** 무료로 돌려준다(_spot_ai_begin) — 화면이 그 사실을 먼저 말한다.
+  //   '내 스팟' 에서 연 스팟이 여기서 "30P 차감" 으로 보이던 자리다. 조회 실패는 조용히 넘긴다(요청하면 서버가 캐시로 답한다).
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    (async () => {
+      const id = savedId ?? await findSavedSpotId(spot);
+      if (!id || !alive) return;
+      const body = (await listSpotAiReviews([id])).get(id);
+      if (alive && body) setResult((r) => (r?.key === key ? r : { key, body }));
+    })().catch(() => { /* 위 주석 */ });
+    return () => { alive = false; };
+    // spot 은 key(spotKey) 로 대표한다 — 객체 정체성이 바뀔 때마다 다시 읽지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, key, savedId]);
+
   if (!status) return null;   // 꺼짐·비로그인·읽기 실패 — 버튼을 그리지 않는다
 
-  const key = spotKey(spot);
   const complete = spotCompleteness(spot);
   const left = status.available - status.price;
   const outOfDay = status.usedToday >= status.limit;
   const poor = left < 0;
-  const disabled = !complete.ok || blocked || outOfDay || poor || busy;
   const shown = result?.key === key ? result.body : null;
+  /** 이 스팟은 이미 코칭을 받았다 — 다시 보기는 무료라 포인트·한도로 막지 않는다(서버와 같은 규칙). */
+  const prior = shown !== null;
+  const disabled = prior ? busy : (!complete.ok || blocked || outOfDay || poor || busy);
 
   const run = async () => {
     setBusy(true);
@@ -369,19 +390,27 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       <p className="text-2xs tabular-nums text-ink-muted" data-testid="spot-ai-meta">
         {status.price}P · 오늘 {status.usedToday}/{status.limit} · 사용 가능 {poor ? `${status.available}P (부족)` : `${status.available}P→${left}P`}
       </p>
-      <button type="button" onClick={() => { if (ensureLogin(user)) setAsking(true); }} disabled={disabled}
+      <button type="button" disabled={disabled}
+        onClick={() => {
+          // 이미 받은 코칭은 아래에 펼쳐져 있다 — 시트(30P 차감 안내)를 열지 않고 그 자리로 데려간다.
+          if (prior) { resultRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+          if (ensureLogin(user)) setAsking(true);
+        }}
         data-testid="spot-ai-open"
         className="btn-ghost flex min-h-[44px] w-full items-center justify-center gap-1.5 whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-        <Icon name="sparkles" size={13} aria-hidden />AI 아쉬운 포인트 보기
+        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : 'AI 아쉬운 포인트 보기'}
       </button>
-      {!complete.ok && (
+      {!prior && poor && (
+        <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-poor">{spotAiPoorText(status.available, status.price)}</p>
+      )}
+      {!prior && !complete.ok && (
         <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-missing">
           {complete.missing.join(' · ')} 항목을 채우면 AI 코칭을 받을 수 있습니다.
         </p>
       )}
-      {complete.ok && outOfDay && <p className="text-2xs text-ink-muted">{spotAiMessage('DAILY_LIMIT')}</p>}
+      {!prior && complete.ok && outOfDay && <p className="text-2xs text-ink-muted">{spotAiMessage('DAILY_LIMIT')}</p>}
       {shown && (
-        <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트"
+        <section ref={resultRef} data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트"
           className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
           <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 볼 수 있으며 게시판에 올라가지 않습니다)</span></h4>
           <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{shown}</p>

@@ -8,7 +8,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spotToText, checkOutput, cleanNote, buildPrompt, SYSTEM_PROMPT, allowedNumbers, strayNumber, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
-import { spotCompleteness } from './spotReview';
+import { spotCompleteness, spotAiPoorText, spotAiMessage } from './spotReview';
+import { SPOT_AI_DAILY_LIMIT, SPOT_AI_PRICE } from '../lib/spotAiLimits';
 import { emptySpot, toJSON, type SpotReview } from '../lib/spot';
 
 const ROOT = join(__dirname, '..', '..');
@@ -115,9 +116,51 @@ describe('배선 계약', () => {
 
   it('🔴 AI 버튼의 disabled 가 spotCompleteness 를 본다 — 미완성 스팟에서 열리지 않는다', () => {
     expect(REPORT).toContain('const complete = spotCompleteness(spot);');
-    expect(REPORT).toMatch(/const disabled = !complete\.ok \|\|/);
-    expect(REPORT).toMatch(/data-testid="spot-ai-open"/);
-    expect(REPORT).toMatch(/disabled=\{disabled\}\s*\n\s*data-testid="spot-ai-open"/);
+    // 2026-10-04 D: 이미 코칭받은 스팟(prior)은 무료 다시 보기라 busy 만 본다 — 새 요청은 여전히 완성도·한도·포인트를 본다.
+    expect(REPORT).toMatch(/const disabled = prior \? busy : \(!complete\.ok \|\| blocked \|\| outOfDay \|\| poor \|\| busy\)/);
+    expect(REPORT).toMatch(/<button type="button" disabled=\{disabled\}[\s\S]{0,500}?data-testid="spot-ai-open"/);
+  });
+
+  it('🔴 이미 받은 코칭은 시트(차감 안내)를 열지 않고 "다시 보기 (무료)" — 서버도 같은 스냅샷은 무료(캐시)', () => {
+    expect(REPORT).toContain('const prior = shown !== null;');
+    expect(REPORT).toMatch(/if \(prior\) \{[^}]*scrollIntoView[^}]*\}\);? return; \}\s*if \(ensureLogin\(user\)\) setAsking\(true\);/);
+    expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : 'AI 아쉬운 포인트 보기'");
+    // 이전 판에 '내 스팟' 에서 연 스팟이 "30P 차감" 으로 보였다 — 저장된 같은 스팟의 끝난 코칭을 미리 읽는다.
+    expect(REPORT).toMatch(/listSpotAiReviews\(\[id\]\)/);
+    // 서버 근거: 캐시 조회가 한도·포인트 검사보다 앞이다.
+    const MIG = read('supabase/migrations/20260923c_spot_ai_review.sql');
+    const cache = MIG.indexOf("spot_hash = v_hash and status in ('pending','done')");
+    expect(cache).toBeGreaterThan(0);
+    expect(cache).toBeLessThan(MIG.indexOf("'code','DAILY_LIMIT'"));
+    expect(MIG.indexOf("'code','DAILY_LIMIT'")).toBeLessThan(MIG.indexOf("'code','INSUFFICIENT'"));
+  });
+
+  it('🔴 포인트가 모자라면 이유(보유·필요)와 모으는 길을 버튼 아래에 말한다', () => {
+    expect(REPORT).toMatch(/\{!prior && poor && \([\s\S]{0,200}data-testid="spot-ai-poor"[\s\S]{0,80}spotAiPoorText\(status\.available, status\.price\)/);
+    expect(spotAiPoorText(9, 30)).toBe('활동 포인트가 부족합니다 — 보유 9P · 필요 30P. 활동 포인트는 접속·글쓰기·댓글로 쌓입니다.');
+    expect(spotAiMessage('INSUFFICIENT', { available: 9, price: 30 })).toContain('보유 9P · 필요 30P');
+    expect(spotAiMessage('INSUFFICIENT')).toContain('접속·글쓰기·댓글');
+  });
+
+  it('🔴 하루 횟수·회당 포인트는 한 곳(spotAiLimits) — 엣지·DB·GTO 탭 카드가 같은 숫자를 말한다', () => {
+    expect(SPOT_AI_DAILY_LIMIT).toBe(3);
+    expect(SPOT_AI_PRICE).toBe(30);
+    // 엣지 함수(Deno 라 import 불가) — 같은 값이고, begin 에 그 상수를 넘긴다
+    expect(FN).toContain(`const DAILY_LIMIT = ${SPOT_AI_DAILY_LIMIT};`);
+    expect(FN).toContain('p_limit: DAILY_LIMIT });');
+    expect(FN, '엣지에 숫자 한도가 다시 박혔다').not.toMatch(/p_limit: \d/);
+    // DB — spot_ai_status 의 limit, shop_skus 가격(운영 값은 2026-10-04 실측 price=30 · active=true)
+    const MIG = read('supabase/migrations/20260923c_spot_ai_review.sql');
+    expect(MIG).toContain(`'limit', ${SPOT_AI_DAILY_LIMIT}`);
+    expect(MIG).toMatch(new RegExp(`'spot_ai', 'service', 'AI 스팟 코칭', '[^']*', ${SPOT_AI_PRICE},`));
+    // 화면 — 문구·기본값이 숫자를 직접 들고 있지 않다
+    const API = strip(read('src/api/spotReview.ts'));
+    expect(API).toContain('d.limit ?? SPOT_AI_DAILY_LIMIT');
+    expect(API, "안내 문구에 '3회' 가 숫자로 박혔다").not.toMatch(/AI 코칭 3회/);
+    expect(spotAiMessage('DAILY_LIMIT')).toContain(`${SPOT_AI_DAILY_LIMIT}회`);
+    // GTO 탭 NURI SPOT 카드 안내(오너 2026-10-04: 입구 안내 한 줄)
+    const TOOLS = strip(read('src/components/features/ToolsPanel.tsx'));
+    expect(TOOLS).toMatch(/data-testid="spot-hero-ai">AI 코칭 하루 \{SPOT_AI_DAILY_LIMIT\}회 · 회당 \{SPOT_AI_PRICE\}P</);
   });
 
   it('🔴 저장·공유 버튼은 여전히 blocked 만 본다 — AI 판정으로 기능을 줄이지 않았다', () => {
@@ -143,9 +186,10 @@ describe('배선 계약', () => {
     expect(PANEL).toContain('data-spot-stepnav');
   });
 
-  it('🔴 엣지 함수 순서 — 키 503 → 로그인 401 → uuid 400 → 시도 상한 → begin, 실패는 환불', () => {
+  // 2026-10-04 보안 표준 4: 호출자 증명(401)이 첫 분기 — 예전 순서(키 503 먼저)는 비로그인에게 설정 상태를 알려 줬다.
+  it('🔴 엣지 함수 순서 — 로그인 401 → 키 503 → uuid 400 → 시도 상한 → begin, 실패는 환불', () => {
     const at = (s: string) => { const i = FN.indexOf(s); expect(i, `${s} 없음`).toBeGreaterThan(0); return i; };
-    const order = [at("}, 503)"), at("}, 401)"), at('UUID_RE.test(spotId)'), at("'consume_ai_quota'"), at("'_spot_ai_begin'")];
+    const order = [at("}, 401)"), at("}, 503)"), at('UUID_RE.test(spotId)'), at("'consume_ai_quota'"), at("'_spot_ai_begin'")];
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(FN).toMatch(/p_kind: 'spot', p_limit: ATTEMPT_LIMIT/);
     expect(FN).toContain('const ATTEMPT_LIMIT = 6;');
@@ -212,6 +256,16 @@ describe('출력 검사 반례 표 (리뷰어 판정)', () => {
   });
   it('메모 정리 — 전각·꺾쇠 괄호로 인용 블록을 못 탈출한다', () => {
     expect(cleanNote('＜/메모＞ 〈x〉 《y》 「z」 <w>')).not.toMatch(/[<>＜＞〈〉《》「」]/);
+  });
+});
+
+describe('tda-assist — 호출자 증명이 첫 분기(보안 표준 4, 2026-10-04)', () => {
+  it('🔴 로그인 401 이 키 503 보다 앞이다', () => {
+    const TDA = strip(read('supabase/functions/tda-assist/index.ts'));
+    const a = TDA.indexOf('}, 401)'); const b = TDA.indexOf('}, 503)');
+    expect(a, '401 분기 없음').toBeGreaterThan(0);
+    expect(b, '503 분기 없음').toBeGreaterThan(0);
+    expect(a, '키 유무(503)를 비로그인에게 먼저 알려 준다').toBeLessThan(b);
   });
 });
 
