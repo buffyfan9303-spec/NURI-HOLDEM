@@ -50,6 +50,18 @@ async function serveAds(page: import('@playwright/test').Page, urls: string[]) {
 const shownSheet = (page: import('@playwright/test').Page) =>
   page.getByTestId('clk-prize-track').locator(':scope > div:not([aria-hidden])');
 
+// page.clock.install 은 시계를 멈추지 않는다 — 설치 뒤에도 페이지 시간은 실제 시간만큼 흐른다(스크린샷 3장이 7~9초).
+// runFor 합계만으로 "지금 바퀴의 몇 초인가" 를 세면 느린 러너에서 8초 넘게 앞서가 광고 칸(10초 폭)을 지나친다(main CI 22/22 갈림, 2026-10-04).
+// 그래서 바퀴 시작(wheelStart) 기준 절대 위치로 센다 — 페이지 현재 시각을 읽고 목표까지 남은 만큼만 감는다. 단언은 그대로다.
+function clockAdvancer(page: import('@playwright/test').Page, wheelStart: number) {
+  let at = 1_000;   // 바퀴 안 위치(ms) — 스펙은 바퀴 시작 1초 뒤에서 출발한다
+  return async (ms: number) => {
+    at += ms;
+    const now = await page.evaluate(() => Date.now());
+    await page.clock.runFor(Math.max(0, wheelStart + at - now));
+  };
+}
+
 test.describe('클락 TV — K단계 슬라이드', () => {
   test('시상 30초 → 바운티 30초 → 팀 점수 30초 → 광고 10초 → 시상, 못 불러오는 광고는 건너뜀', async ({ page }) => {
     test.setTimeout(120_000);
@@ -57,6 +69,7 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     // 한 바퀴 = 30 + 30 + 30 + 10 = 100초. 바퀴 시작 1초 뒤에서 시작한다(시상 칸).
     const T0 = Math.floor(Date.now() / 100_000) * 100_000 + 100_000 + 1_000;
     await page.clock.install({ time: T0 });
+    const advance = clockAdvancer(page, T0 - 1_000);
     await serveClock(page, row({
       extraPages: [
         { kind: 'bounty', title: '바운티 안내', rows: [{ label: '헤드 바운티', content: '1만 칩', note: '탈락시킨 사람에게' }] },
@@ -81,16 +94,16 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     await expect(page.getByTestId('clk-prize-page')).toHaveText('1 / 4');
     await page.screenshot({ path: 'test-results/clock-shots/k-1-prize.png' });
 
-    await page.clock.runFor(30_000);
+    await advance(30_000);
     await expect(aside.locator('p').first()).toHaveText(/bounty/i);
     await expect(shownSheet(page)).toContainText('헤드 바운티');
     await expect(aside).toContainText('바운티 안내');
     await expect(page.getByTestId('clk-prize-page')).toHaveText('2 / 4');
-    await page.clock.runFor(1_000);
+    await advance(1_000);
     await page.screenshot({ path: 'test-results/clock-shots/k-2-bounty.png' });
 
     // ③ 팀 점수 — C 19 · A 16 · B 15
-    await page.clock.runFor(30_000);
+    await advance(30_000);
     await expect(aside.locator('p').first()).toHaveText(/team score/i);
     const lis = shownSheet(page).locator('li');
     await expect(lis).toHaveCount(3);
@@ -102,22 +115,22 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     await page.screenshot({ path: 'test-results/clock-shots/k-3-team.png' });
 
     // ④ 광고 — 404 주소는 빠지고 살아 있는 한 장만 건다(10초)
-    await page.clock.runFor(30_000);
+    await advance(30_000);
     await expect(aside.locator('p').first()).toHaveText(/sponsor/i);
     const img = shownSheet(page).locator('img');
     await expect(img).toHaveAttribute('src', AD_OK);
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
     await page.screenshot({ path: 'test-results/clock-shots/k-4-ad.png' });
 
-    await page.clock.runFor(10_000);
+    await advance(10_000);
     await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
     await expect(page.getByTestId('clk-prize-page')).toHaveText('1 / 4');
 
     // 머리말 높이가 장마다 같다 — 들썩임 없음
     const topY = async () => (await page.getByTestId('clk-prize-track').boundingBox())!.y;
     const y0 = await topY();
-    await page.clock.runFor(30_000);
-    await page.clock.runFor(1_000);
+    await advance(30_000);
+    await advance(1_000);
     expect(Math.abs((await topY()) - y0), '장이 바뀌며 트랙이 세로로 움직였다').toBeLessThanOrEqual(2);
     expect(errors, `페이지 오류: ${errors.join(' | ')}`).toEqual([]);
     await page.screenshot({ path: 'test-results/clock-shots/k-slides.png' });
@@ -149,6 +162,7 @@ test.describe('클락 TV — K단계 검토 반영', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     const T0 = Math.floor(Date.now() / 40_000) * 40_000 + 40_000 + 1_000;   // 시상 30 + 광고 10 = 40초 바퀴
     await page.clock.install({ time: T0 });
+    const advance = clockAdvancer(page, T0 - 1_000);
     await serveClock(page, row({}, T0 + 15 * 60_000));
     await serveAds(page, [AD_OK]);
     await page.route(AD2, (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG_1PX }));
@@ -156,13 +170,13 @@ test.describe('클락 TV — K단계 검토 반영', () => {
     await page.goto(`/?display=${VENUE}&g=1&auto=0`);
     await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
     const adImg = page.getByTestId('clk-prize-track').locator('[data-ad-sheet] img');
-    await page.clock.runFor(30_000);                       // 광고 칸
+    await advance(30_000);                       // 광고 칸
     await expect(page.getByTestId('clk-prizes').locator('p').first()).toHaveText(/sponsor/i);
     const shown = await adImg.getAttribute('src');
-    await page.clock.runFor(10_000);                       // 시상으로 — 빠지는 첫 프레임부터 같은 광고여야 한다
+    await advance(10_000);                       // 시상으로 — 빠지는 첫 프레임부터 같은 광고여야 한다
     await expect(page.getByTestId('clk-prizes').locator('p').first()).toHaveText(/prize pool/i);
     expect(await adImg.getAttribute('src'), '광고가 빠지는 동안 다음 광고로 바뀌었다(번쩍)').toBe(shown);
-    await page.clock.runFor(30_000);                       // 다음 바퀴 광고 칸에서만 다음 광고로
+    await advance(30_000);                       // 다음 바퀴 광고 칸에서만 다음 광고로
     expect(await adImg.getAttribute('src')).not.toBe(shown);
   });
 
