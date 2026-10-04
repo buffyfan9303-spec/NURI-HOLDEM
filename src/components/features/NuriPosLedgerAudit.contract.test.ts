@@ -29,8 +29,9 @@ describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스
   //   지킬 것은 같다 — 새 클락은 emptyClockState 를 펼치고, SessionForm 은 그 함수로만 행을 만든다.
   it('🔴 emptyClockState 를 import 하고 SessionForm 의 새 클락이 그것을 펼친다', () => {
     expect(LIB).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/api\/clock';/);
-    expect(LIB).toMatch(/return \{ \.\.\.emptyClockState\(venueId, cfg, gameSeq\), title \};/);
-    expect(code).toMatch(/const row = clockStartRow\(action, fresh, cfg, base\.venueId, base\.gameSeq, base\.title \?\? ''\);/);
+    expect(LIB).toMatch(/return \{ \.\.\.emptyClockState\(venueId, cfg, gameSeq\), title, sessionDate \};/);
+    // F4-01(2026-10-04) — 장부 날짜를 넘겨야 클락이 장부와 연동된다(값 검사는 lib/chipRules.test.ts 'F4-01').
+    expect(code).toMatch(/const row = clockStartRow\(action, fresh, cfg, base\.venueId, base\.gameSeq, base\.title \?\? '', base\.sessionDate\);/);
   });
 
   // 🔴 F2b (2026-09-17) — 새로 생긴 계약이다. 여기서 쓰던 clockState 는 폼 마운트 시 한 번 읽은 스냅샷이라

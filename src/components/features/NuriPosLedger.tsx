@@ -1722,7 +1722,8 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
         <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <span className="min-w-0 max-w-full truncate text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
-          {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
+          {/* F4-04(2026-10-04) — 기록은 결제수단과 무관하게 현금단가다(2026-09-11 오너 규칙, 아래 dueOf). '카드 6만원' 은 틀린 안내였다. */}
+          {' · 카드·이체 동일'}{session.cardAmount && session.cardAmount > 0 ? ` · 카드단가 ${wonToMan(session.cardAmount)}만원(참고용)` : ''}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
         {/* 대회명은 글자로만 있었다 — 업주가 자기 포스터의 손님 화면으로 갈 길이 장부엔 없었다(2026-09-17 감사). */}
         {scheduleTitle(session.scheduleId) && (onOpenSchedule
@@ -3260,7 +3261,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           // W-14 — 지난 날 멈춘 채 남은 클락(연결 장부 날짜·마지막 쓰기가 오늘이 아님)은 포스터 설정으로 새로 채운다.
           //   오늘 대회로 돌고 있거나 멈춘 클락은 예전처럼 보호한다(clockHasProgress). 판정은 lib/ledgerStart 한 곳.
           const action = clockStartAction(fresh, base.sessionDate);
-          const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '');
+          const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '', base.sessionDate);
           if (!row) {
             formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
             return;
@@ -3444,10 +3445,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <Field label="현금단가(만원) *">
           <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(cash)} onChange={(e) => setCash(parseMan(e.target.value))} placeholder="10" className="input w-full text-sm tabular-nums" />
         </Field>
-        <Field label="카드단가(만원) · 선택">
-          <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(card)} onChange={(e) => setCard(parseMan(e.target.value))} placeholder="미입력=현금단가" className="input w-full text-sm tabular-nums" />
+        <Field label="카드단가(만원) · 참고용">
+          <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(card)} onChange={(e) => setCard(parseMan(e.target.value))} placeholder="선택" className="input w-full text-sm tabular-nums" />
         </Field>
       </div>
+      {/* F4-04(2026-10-04) — 카드 6 을 넣어도 카드 완납은 현금단가로 기록된다(2026-09-11 오너 규칙). 안내만 사실대로 바꾼다. */}
+      <p className="text-2xs text-ink-muted">바인은 현금·카드·이체 모두 현금단가로 기록합니다. 카드단가는 기록에 쓰지 않습니다.</p>
       </fieldset>
 
       <Field label="할인 이벤트 (최대 5) · 선택">

@@ -13,7 +13,7 @@ import {
 import { computeLiveStats, deriveClockCounts, emptyClockState, defaultClockConfig, withDerivedEarly, applyEarlyEdit, clockIsLeftover, type ClockConfig, type ClockLevel, type ClockState } from '../api/clock';
 import { discountAllowed, autoDiscountIndex, earlyTypeOf, type LedgerBuyin, type LedgerSession } from '../api/ledger';
 import { settlementReport } from './ledgerSettlement';
-import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction } from './ledgerStart';
+import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from './ledgerStart';
 import { prizeTotalOf } from '../components/features/clock/prizeFit';
 import type { Schedule } from '../api/schedules';
 
@@ -192,6 +192,19 @@ describe('W-14 · 지난 날 멈춘 채 남은 클락만 새로 채운다', () =
   it('흔적 없는 행 = update · 행 없음 = new', () => {
     expect(clockStartAction(st({}), '2026-09-30')).toBe('update');
     expect(clockStartAction(null, '2026-09-30')).toBe('new');
+  });
+});
+
+// F4-01(2026-10-04 dummy-1004 실연) — 장부 시작이 만든 클락 행의 session_date 가 null 이라 '단독 클락' 이 됐고 TV 가 0/0 을 송출했다.
+// 음성 대조: ledgerStart.clockStartRow 의 `, sessionDate` 두 곳을 지우면(이전 상태) 아래 세 단언이 빨개진다.
+describe('F4-01 · 장부 시작이 쓰는 클락 행은 그 장부 날짜에 연동된다', () => {
+  const cfg = defaultClockConfig();
+  it('new · reset · update 모두 sessionDate = 장부 날짜, protect 는 쓰지 않는다', () => {
+    expect(clockStartRow('new', null, cfg, 'v', 1, '메인', '2026-10-04')?.sessionDate).toBe('2026-10-04');
+    const left = { ...emptyClockState('v'), eliminations: 3, sessionDate: '2026-10-01', updatedAt: '2026-10-01T12:00:00.000Z' };
+    expect(clockStartRow('reset', left, cfg, 'v', 1, '메인', '2026-10-04')).toMatchObject({ sessionDate: '2026-10-04', eliminations: 0 });
+    expect(clockStartRow('update', emptyClockState('v'), cfg, 'v', 1, '메인', '2026-10-04')?.sessionDate).toBe('2026-10-04');
+    expect(clockStartRow('protect', left, cfg, 'v', 1, '메인', '2026-10-04')).toBeNull();
   });
 });
 

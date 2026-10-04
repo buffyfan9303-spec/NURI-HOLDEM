@@ -123,6 +123,23 @@ test('🔴 클락 END 순위 저장 — 이름은 갈라서, 대회 이름은 �
   expect(body.p_event).not.toBe(CLOCK_TITLE);
 });
 
+// F4-06(2026-10-04 dummy-1004 실연) — 순위를 저장한 뒤 '토너 종료' 창이 빈 칸을 다시 받아 같은 대회를 또 적게 했다.
+test('🔴 F4-06 — 이 게임에 이미 저장한 순위가 있으면 토너 종료 창이 그 순위로 채워져 열린다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const saved: { body: unknown }[] = [];
+  await bootOwnerAtClock(page, saved, [
+    { ...rankRow(1, '길동', LEDGER_TITLE), real_name: '홍길동' }, rankRow(2, '박민수', LEDGER_TITLE),
+    rankRow(1, '다른게임', '나이트 사이드'),   // 다른 게임(사이드) 행은 채우지 않는다
+  ]);
+  await page.getByRole('button', { name: '토너 종료' }).click({ timeout: 20_000 });
+  const modal = page.getByRole('dialog').filter({ hasText: '입상 순위 입력' });
+  await expect(modal).toBeVisible({ timeout: 10_000 });
+  const inputs = modal.locator('input[list="clk-finish-players"]');
+  await expect(inputs.nth(0), '저장된 1위가 채워지지 않았다 — F4-06').toHaveValue('홍길동(길동)', { timeout: 10_000 });
+  await expect(inputs.nth(1)).toHaveValue('박민수');
+  await expect(inputs.nth(2)).toHaveValue('');
+});
+
 test("🔴 그날 순위가 이미 기본 칩('')으로 저장돼 있으면 '' 로 저장한다 — 경고가 센 수와 서버가 지우는 수가 같다", async ({ page }) => {
   test.setTimeout(90_000);
   const saved: { body: unknown }[] = [];

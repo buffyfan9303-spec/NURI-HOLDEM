@@ -54,11 +54,14 @@ export function clockStartAction(fresh: ClockState | null, sessionDate: string):
   return clockIsLeftover(fresh, sessionDate) ? 'reset' : 'protect';
 }
 
-/** clockStartAction 이 정한 대로 저장할 행을 만든다. 'protect' 는 null(쓰지 않는다). */
+/** clockStartAction 이 정한 대로 저장할 행을 만든다. 'protect' 는 null(쓰지 않는다).
+ *  🔴 F4-01(2026-10-04 dummy-1004 실연) — 행에 **장부 날짜(sessionDate)를 싣는다**. 예전엔 emptyClockState 의 null 그대로라
+ *    장부가 만든 클락이 '단독 클락' 이 됐다: 클락 탭은 행이 있어 연동 화면을 건너뛰고, 그대로 시작하면 TV 가 PLAYERS 0/0 을 송출했다
+ *    (장부엔 8 바인). session_date 가 있어야 서버 트리거(20260929t)가 live_stats.ledger 를 채우고 클락 화면이 장부 바인을 읽는다. */
 export function clockStartRow(
-  action: ClockStartAction, fresh: ClockState | null, cfg: ClockConfig, venueId: string, gameSeq: number, title: string,
+  action: ClockStartAction, fresh: ClockState | null, cfg: ClockConfig, venueId: string, gameSeq: number, title: string, sessionDate: string,
 ): ClockState | null {
   if (action === 'protect') return null;
-  if (action === 'update' && fresh) return { ...fresh, config: cfg };
-  return { ...emptyClockState(venueId, cfg, gameSeq), title };
+  if (action === 'update' && fresh) return { ...fresh, config: cfg, sessionDate };
+  return { ...emptyClockState(venueId, cfg, gameSeq), title, sessionDate };
 }
