@@ -1679,6 +1679,7 @@ export default function App() {
     const load = () => ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(forAccount(setMyBuyinReqs)).catch(() => {});
     load();
     window.addEventListener('focus', load);
+    window.addEventListener('nuri:buyin-request-sent', load); // 포스터 상세 '참가 신청' 성공(R4-03) — QR·홈 시트 경로는 보낸 자리에서 직접 다시 읽는다
     // 모듈이 지연 로드라 구독 해제 함수가 **나중에** 온다. 그 사이 언마운트되면 구독이 미아로 남으므로
     // cancelled 플래그로 늦게 도착한 구독을 즉시 되돌린다.
     let unsub: (() => void) | undefined;
@@ -1687,7 +1688,7 @@ export default function App() {
       if (cancelled) return;
       unsub = m.subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
     }).catch(() => {});
-    return () => { cancelled = true; window.removeEventListener('focus', load); unsub?.(); };
+    return () => { cancelled = true; window.removeEventListener('focus', load); window.removeEventListener('nuri:buyin-request-sent', load); unsub?.(); };
     // (A3) user.id 로만 의존 — user 객체 참조 변경(일일점수 갱신 등)마다 채널 재구독되던 churn 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
