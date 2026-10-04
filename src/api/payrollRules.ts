@@ -19,9 +19,21 @@ export async function getPayRules(venueId: string): Promise<PayRules | null | 'm
   const { data, error } = await supabase.from('venue_payroll_rules')
     .select('early_credit, auto_break, five_plus, weekly_holiday').eq('venue_id', venueId).maybeSingle();
   if (error) { if (isMissingTable(error)) return 'missing'; throw error; }
-  if (!data) return null;
-  return { earlyCredit: !!data.early_credit, autoBreak: !!data.auto_break, fivePlus: !!data.five_plus, weeklyHoliday: !!data.weekly_holiday };
+  if (data) return rulesOf(data);
+  // 표 SELECT 는 매장 관리자만 된다(RLS can_manage_pos) — 직원은 0행이 와서 기본값으로 셌다(review-r3-03 §4).
+  // 20261004c 의 직원용 읽기 RPC 로 한 번 더 묻는다. 함수 적용 전(PGRST202)·권한 없음(42501)은 종전대로 기본값.
+  const rpc = await supabase.rpc('my_venue_pay_rules', { p_venue_id: venueId });
+  if (rpc.error) {
+    const c = (rpc.error as { code?: string }).code;
+    if (c === 'PGRST202' || c === '42501') return null;
+    throw rpc.error;
+  }
+  const row = (rpc.data ?? [])[0];
+  return row ? rulesOf(row) : null;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rulesOf = (d: any): PayRules => ({ earlyCredit: !!d.early_credit, autoBreak: !!d.auto_break, fivePlus: !!d.five_plus, weeklyHoliday: !!d.weekly_holiday });
 
 export async function savePayRules(venueId: string, r: PayRules): Promise<void> {
   if (IS_MOCK) return;
