@@ -16,9 +16,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
-  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT, posHasPassword,
+  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT, posHasPassword, getVoucherUsesForDate, staffSeesSession,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
+import { ticketCheck, type TicketCheck } from '../../lib/ticketCheck';
+import { kstToday } from '../../lib/kst';
 import UnpaidCollectList from './UnpaidCollect';
 import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { businessDateOf } from '../../lib/businessDate';
@@ -50,6 +52,8 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
   //   옛 보고서 → 스켈레톤 ~300ms → 보고서로 깜빡였다(오너 "정산 탭 깜빡임"). 같은 키면 보고서를 그대로 둔 채
   //   조용히 다시 읽고, 매장·날짜가 바뀐 경우에만 비운다(다른 날 숫자가 한 프레임이라도 보이면 안 된다).
   const [data, setData] = useState<{ key: string; sessions: LedgerSession[]; buyins: LedgerBuyin[]; players: LedgerPlayer[] } | null>(null);
+  // F4-02(2026-10-04) — 그날 실제로 들어온 매장이용권(1행 = 1장). 실패는 정산 전체를 막지 않고 티켓 대조 카드에만 알린다(0장으로 삼키지 않는다).
+  const [uses, setUses] = useState<{ key: string; rows: { playerName: string }[] | null } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const reqKey = useRef('');
   const key = `${venueId}|${day}`;
@@ -58,6 +62,9 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
     if (!venueId) return;
     reqKey.current = key;
     setData((d) => (d && d.key === key ? d : null)); setErr(null);
+    getVoucherUsesForDate(venueId, day)
+      .then((rows) => { if (reqKey.current === key) setUses({ key, rows }); })
+      .catch(() => { if (reqKey.current === key) setUses({ key, rows: null }); });
     getLedgerRange(venueId, day, day)
       .then(async ({ sessions, buyins }) => {
         // 명단은 게임별 조회밖에 없다. 하루의 게임은 보통 1~3개라 그대로 병렬로 부른다.
@@ -86,6 +93,14 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
     () => (data && data.key === key ? settlementReport(day, data.sessions, data.buyins, data.players) : null),
     [data, day, key],
   );
+  // 직원은 서버(20261003h lb_select)가 지난 마감 장부의 완납 행을 주지 않는다 — 그 날짜로 대조하면 장부 티켓이 작게 나와 '부족 0' 으로 거짓 안심한다.
+  //   그래서 그날 게임이 전부 직원 창 안(staffSeesSession — 서버 경계의 화면 쌍둥이)일 때만 숫자를 낸다. 레지 마감 직후(마감 17시간 안)는 창 안이다.
+  const tc: TicketCheck | 'staffOld' | 'error' | null = useMemo(() => {
+    if (!data || data.key !== key || !uses || uses.key !== key) return null;
+    if (!canManage && !data.sessions.every((s) => staffSeesSession(s, businessDateOf(venueId), kstToday()))) return 'staffOld';
+    if (!uses.rows) return 'error';
+    return ticketCheck(data.sessions, data.buyins, uses.rows);
+  }, [data, uses, key, canManage, venueId]);
 
   return (
     <section className="space-y-4">
@@ -125,9 +140,10 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
         </div>
       )}
 
-      {!err && r && r.games.length > 0 && data && (canManage ? <Report r={r} /> : (
+      {!err && r && r.games.length > 0 && data && (canManage ? <Report r={r} ticket={tc} /> : (
         <div data-testid="settle-staff" className="space-y-3 rounded-aura border card-aura p-3">
-          <p className="text-xs text-ink-secondary">매출·결제 합계는 업주만 볼 수 있어요. 여기서는 <b className="text-ink-primary">받을 미수</b>만 보여 드려요.</p>
+          <p className="text-xs text-ink-secondary">매출·결제 합계는 업주만 볼 수 있어요. 여기서는 <b className="text-ink-primary">티켓 대조</b>와 <b className="text-ink-primary">받을 미수</b>를 보여 드려요.</p>
+          <TicketCheckCard tc={tc} />
           {(() => {
             // 마감 전 게임의 미수는 여기서 받지 않는다(verifier 2026-10-03 경고 — 비밀번호를 넣은 뒤에야 '마감 전' 안내가 나왔다).
             //   열린 게임은 장부 칸에서 결제 수단을 바로 바꾼다.
@@ -146,7 +162,7 @@ export default function LedgerSettlementPanel({ venueId, date, active = true, ca
   );
 }
 
-function Report({ r }: { r: SettlementReport }) {
+function Report({ r, ticket }: { r: SettlementReport; ticket: TicketCheck | 'staffOld' | 'error' | null }) {
   const t = r.total;
   // 기준 대비 — 기준 엔트리가 없으면 아무 말도 하지 않는다(0 대비 퍼센트는 의미가 없다).
   const hasTarget = t.targetEntries > 0;
@@ -251,6 +267,8 @@ function Report({ r }: { r: SettlementReport }) {
         )}
       </Card>
 
+      <TicketCheckCard tc={ticket} />
+
       {/* ── ④ 손님 구성 ── */}
       <Card title="손님 구성" icon="users" note="유형을 안 적은 손님은 '미분류'로 모입니다">
         <ul className="flex flex-wrap gap-2">
@@ -347,6 +365,50 @@ function Report({ r }: { r: SettlementReport }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+// ── 티켓 대조(F4-02) ─────────────────────────────────────────────────────────
+// 장수만 보인다(금액 없음) — 장부 권한 직원도 레지 마감 때 확인한다(오너 2026-10-04). 정의는 lib/ticketCheck.ts 머리.
+function TicketCheckCard({ tc }: { tc: TicketCheck | 'staffOld' | 'error' | null }) {
+  const n = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const short = tc && typeof tc === 'object' ? tc.rows.filter((x) => x.shortT > 0) : [];
+  return (
+    <section data-testid="ticket-check" className="rounded-aura border card-aura p-3.5">
+      <div className="mb-2.5 flex items-center gap-2 border-b border-border-subtle pb-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
+          <Icon name="ticket" size={14} />
+        </span>
+        <h3 className="text-sm font-bold text-ink-primary">티켓 대조</h3>
+      </div>
+      {tc === null && <div className="skeleton h-16 rounded-input" aria-busy="true" />}
+      {tc === 'error' && <p role="alert" className="text-xs text-danger-light">들어온 이용권 기록을 불러오지 못했어요 · 새로고침해 주세요</p>}
+      {tc === 'staffOld' && <p className="text-xs text-ink-muted">지난 마감 장부의 티켓 대조는 업주가 볼 수 있어요. 오늘 장부(마감 뒤 17시간까지)는 여기서 확인할 수 있어요.</p>}
+      {tc && typeof tc === 'object' && (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <Tile label="장부 티켓" value={`${n(tc.ledgerT)}장`} sub={`티켓 바인 ${tc.ticketBuyins}회`} />
+            <Tile label="들어온 이용권" value={`${n(tc.receivedT)}장`} sub={tc.extraT > 0 ? `장부 미기록 ${n(tc.extraT)}장` : '손님 지갑에서 차감'} />
+            <div data-testid="ticket-short"><Tile label="부족" value={`${n(tc.shortT)}장`} tone={tc.shortT > 0 ? 'danger' : 'emerald'}
+              sub={tc.shortT > 0 ? '장부에 적었는데 안 들어온 이용권' : '장부와 맞아요'} /></div>
+          </div>
+          {short.length > 0 && (
+            <ul className="mt-2.5 space-y-1 text-xs" aria-label="확인할 손님">
+              {short.map((x) => (
+                <li key={x.name} className="flex items-center justify-between gap-2 rounded-input border card-aura-sub px-3 py-1.5 tabular-nums">
+                  <span className="min-w-0 truncate font-semibold text-ink-primary">{x.name}</span>
+                  <span className="shrink-0 text-ink-muted">장부 {n(x.ledgerT)}장 · 들어옴 {x.receivedT}장 · <b className="text-danger-light">부족 {n(x.shortT)}장</b></span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <p className="mt-2.5 text-2xs leading-relaxed text-ink-muted">
+        장부 티켓 = 장부에 이용권으로 받았다고 적은 장수(바인 + 애드온, 가불 제외). 들어온 이용권 = 이 날짜에 이 매장에서 실제로 사용된 이용권(승인 대기 포함).
+        손님은 이름으로 맞춰요 — 장부에 다른 이름으로 적었으면 따로 보일 수 있어요.
+      </p>
+    </section>
   );
 }
 

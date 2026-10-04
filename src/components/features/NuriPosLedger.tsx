@@ -3787,7 +3787,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   return (
     <Modal open onClose={onClose} title={`${cell.entryNo}바인 · ${cell.playerName}`} variant="center" maxWidth="md">
         <div className="p-3 space-y-2">
-          {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·미수 전환처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다 */}
+          {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다(완납 → 미수는 비밀번호 없이 — 오너 2026-10-04 F4-02) */}
           {reduceAsk && onReduceConfirm && (
             <div role="alert" data-testid="ledger-reduce-pw" className="space-y-1.5 rounded-input border border-danger/40 bg-danger/10 px-2.5 py-2">
               <p className="text-2xs font-bold text-danger-light">

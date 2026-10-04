@@ -54,6 +54,8 @@ describe('ticketUsedT — 이용권 사용 T 는 한 곳에서만 더한다', ()
       'components/features/NuriPosLedger.tsx': 2,
       // 2026-10-01: 정산 바인 이용권 장수(g.ticketT += f.ticketPaid) — 원에서 거꾸로 만들지 않으려고 장수를 직접 모은다.
       'lib/ledgerSettlement.ts': 1,
+      // 2026-10-04(F4-02 티켓 대조): '티켓 바인 N회' 를 세는 판정(f.ticketPaid > 0)뿐 — 장수 합은 ticketUsedT 를 부른다.
+      'lib/ticketCheck.ts': 1,
     });
     expect(perFile(/\bticketWon\b/)).toEqual({
       'api/ledger.ts': 10,   // 2026-10-01: ticketUsedT 가 원 대신 장수(ticketT)를 더해 2개 줄었다

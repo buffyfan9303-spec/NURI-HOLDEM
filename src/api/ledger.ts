@@ -432,12 +432,17 @@ export function buyinTiers(b: LedgerBuyin, s: { buyinAmount: number; cardAmount:
 }
 
 /** 이 수정이 매출을 줄이는가 — 세 겹 중 **하나라도** 줄면 true. 이때는 취소 비밀번호가 필요하다.
- *  통과(false): 증액 · 현금↔카드↔이체 같은 금액 교체 · 미수→완납 · 얼리만 변경.
- *  감액(true) : 금액 축소/0원 · 가게지원 전환 · 완납→미수 · 현금→이용권 · 할인 자리 추가 · 미수 탕감. */
+ *  통과(false): 증액 · 현금↔카드↔이체 같은 금액 교체 · 미수→완납 · 얼리만 변경 ·
+ *               **완납→미수**(오너 2026-10-04 F4-02 — 받을 가치 [2] 그대로, 이용권 몫은 늘지 않고 줄어든 만큼이 미수로만 간다.
+ *               "매장이용권 확인이 늦으면 미수로 두었다가 완납으로 바꾼다" — 미수로 돌리는 쪽은 비밀번호 없이).
+ *  감액(true) : 금액 축소/0원 · 가게지원 전환 · 현금→이용권 · 할인 자리 추가 · 미수 탕감.
+ *  서버 쌍둥이: _ledger_buyins_client_guard(20261004e) — 같은 식이다. 한쪽만 고치면 판정이 갈린다. */
 export function isRevenueReduction(before: LedgerBuyin, after: LedgerBuyin,
   s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): boolean {
   const o = buyinTiers(before, s), n = buyinTiers(after, s);
-  return n[0] < o[0] || n[1] < o[1] || n[2] < o[2];
+  const reduced = n[0] < o[0] || n[1] < o[1] || n[2] < o[2];
+  const toUnpaidOnly = n[2] === o[2] && n[1] - n[0] <= o[1] - o[0];
+  return reduced && !toUnpaidOnly;
 }
 
 /** 서버가 감액 수정을 비밀번호 없이 받지 않았다(또는 클라가 미리 감액으로 판정했다) — 호출측이 비밀번호를 묻는다.
@@ -1766,6 +1771,20 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null, voucherId: r.voucher_id ?? null }));
+}
+/** 그날(영업일) 이 매장에 **실제로 들어온 매장이용권** — 1행 = 1장(오너 2026-10-04 F4-02 티켓 대조).
+ *  원천: 이용권이 '사용'되면 서버 트리거(voucher_redeem_to_ledger_request)가 장마다 요청 1행을 만든다(voucher_id · session_date = 영업일).
+ *  거절(rejected)·되돌림(바인 취소 → _restore_voucher_for_request 가 voucher_id 를 비운다)은 이용권이 지갑으로 돌아간 것이라 빼고,
+ *  승인 대기(pending)는 이미 손님 지갑에서 빠진 장이라 센다. 장부 권한 직원도 읽는다(lbr_select = can_access_ledger) — 금액 없음.
+ *  실패를 0장으로 삼키지 않는다(throw) — '0장 들어옴'은 부족 경보를 띄우는 숫자라 '못 불러옴'과 갈라야 한다. */
+export async function getVoucherUsesForDate(venueId: string, date: string): Promise<{ playerName: string }[]> {
+  if (IS_MOCK) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await fetchAllPaged<any>(() => supabase.from('ledger_buyin_requests')
+    .select('id, player_name').eq('venue_id', venueId).eq('session_date', date)
+    .not('voucher_id', 'is', null).neq('status', 'rejected').order('id'));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return data.map((r: any) => ({ playerName: String(r.player_name ?? '') }));
 }
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved.
  *  discountIndex(1~5, 0=없음): 접수대 결제 모달과 같은 할인 자리번호. 서버(20260905d)가 정가−할인을

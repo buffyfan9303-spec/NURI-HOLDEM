@@ -5,6 +5,8 @@
 //
 // 음성 대조: ledger.ts isRevenueReduction 의 비교를 `n[0] < o[0]` 하나로 줄이면 🔴 표시 5건이 실패한다
 //   (이용권 가불 전환 · 이용권 행 할인 · 분납 이용권 축소 · 미수 탕감 · 분납 통로) — 2026-09-24 실측 5 failed | 20 passed.
+// 2026-10-04(오너 F4-02) — 완납→미수(이용권→가불 포함)는 통과로 바뀌었다. toUnpaidOnly 를 지우면 '10-04 통과' 🔴 2건이,
+//   이용권 몫 조건(n[1]-n[0] <= o[1]-o[0])을 지우면 '현금 → 이용권 2T + 미수' 가, 받을 가치 조건을 지우면 '할인 자리' 가 빨개진다.
 // 실행: npx vitest run src/api/ledger.reduce.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { buyinTiers, isRevenueReduction, REDUCE_NEEDS_PW, type LedgerBuyin } from './ledger';
@@ -40,15 +42,19 @@ describe('isRevenueReduction — 감액이면 비밀번호', () => {
     ['현금 → 카드(같은 금액)', cash, b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000 }), false],
     ['현금 → 이체(같은 금액)', cash, b({ paymentMethod: 'transfer', cashAmount: 0, transferAmount: 100_000 }), false],
     ['증액 10만 → 11만', cash, b({ cashAmount: 110_000 }), false],
-    ['완납 → 미수', cash, b({ isUnpaid: true }), true],
+    // 오너 2026-10-04 F4-02 — 완납 → 미수는 비밀번호 없이(받을 가치 그대로 · 줄어든 몫이 미수로만 간다). 예전(09-24)엔 감액이었다.
+    ['🔴 완납 → 미수(10-04 통과)', cash, b({ isUnpaid: true }), false],
     ['미수 → 완납', b({ isUnpaid: true }), cash, false],
     ['현금 → 이용권', cash, ticket, true],
     ['이용권 → 현금', ticket, cash, false],
-    ['🔴 이용권 → 가불 이용권', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    ['🔴 이용권 → 가불 이용권(티켓 확인 늦음 — 10-04 통과)', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), false],
     ['가불 이용권 → 이용권(회수)', b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), ticket, false],
     ['🔴 이용권 행에 할인 자리(10T → 5T)', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, discountIndex: 1 }), true],
     ['현금 할인 적용(스냅샷 10만 → 5만)', cash, b({ cashAmount: 50_000, discountIndex: 1 }), true],
-    ['🔴 분납 이용권 5T → 3T + 미수 2만', split, b({ isSplit: true, cashAmount: 50_000, ticketCount: 3, unpaidAmount: 20_000 }), true],
+    ['분납 이용권 5T → 3T + 미수 2만(줄어든 몫이 미수로만 — 10-04 통과)', split, b({ isSplit: true, cashAmount: 50_000, ticketCount: 3, unpaidAmount: 20_000 }), false],
+    ['🔴 현금 → 이용권 2T + 미수 8만(이용권 몫이 늘었다 — 감액)', cash, b({ isSplit: true, cashAmount: 0, ticketCount: 2, unpaidAmount: 80_000 }), true],
+    ['🔴 완납 → 미수 + 할인 자리(받을 가치가 줄었다 — 감액)', cash, b({ cashAmount: 50_000, discountIndex: 1, isUnpaid: true }), true],
+    ['분납 현금 10만 → 현금 4만 + 미수 6만(10-04 통과)', b({ isSplit: true, cashAmount: 100_000 }), b({ isSplit: true, cashAmount: 40_000, unpaidAmount: 60_000 }), false],
     ['분납 현금 6만+미수 4만 → 현금 10만', b({ isSplit: true, cashAmount: 60_000, unpaidAmount: 40_000 }), b({ isSplit: true, cashAmount: 100_000 }), false],
     ['🔴 분납 미수 4만 탕감', b({ isSplit: true, cashAmount: 60_000, unpaidAmount: 40_000 }), b({ isSplit: true, cashAmount: 60_000 }), true],
     ['분납 → 비분납 현금 같은 금액', b({ isSplit: true, cashAmount: 100_000 }), cash, false],
@@ -112,6 +118,13 @@ describe('upsertBuyin 수정 경로 — 감액은 직접 UPDATE 하지 않는다
     expect(m.calls.rpc).toEqual([]);
   });
 
+  it('🔴 완납 → 미수(오너 10-04)는 비밀번호 없이 직접 UPDATE — 비밀번호 시트로 가지 않는다', async () => {
+    const m = mock(); const { upsertBuyin } = await load(m);
+    await upsertBuyin({ ...base, paymentMethod: 'cash', isUnpaid: true, reduce: { before: cash, session: S } });
+    expect(m.calls.update).toBe(1);
+    expect(m.calls.rpc).toEqual([]);
+  });
+
   it('서버 가드가 hint 로 거절하면 같은 REDUCE_NEEDS_PW 로 바꾼다(클라 판정과 갈려도 비밀번호 시트로 간다)', async () => {
     const m = mock({ updateError: { message: '매출이 줄어드는 수정은 업주 취소 비밀번호가 필요합니다', code: '42501', hint: REDUCE_NEEDS_PW } });
     const { upsertBuyin } = await load(m);
@@ -119,10 +132,11 @@ describe('upsertBuyin 수정 경로 — 감액은 직접 UPDATE 하지 않는다
       .rejects.toThrow(REDUCE_NEEDS_PW);
   });
 
-  it('🔴 분납 이용권 축소도 같은 통로', async () => {
+  // 10-04: 예전 사례(이용권 5T → 3T + 미수 2만)는 '완납 → 미수' 라 이제 통과다 — 여전히 감액인 분납(할인 자리 추가)으로 통로를 본다.
+  it('🔴 분납 감액(할인 자리 추가)도 같은 통로', async () => {
     const m = mock(); const { upsertBuyinSplit } = await load(m);
     await expect(upsertBuyinSplit({ venueId: 'v', sessionDate: '2026-09-24', playerName: 'p', entryNo: 1, existingId: 't',
-      cashAmount: 50_000, cardAmount: 0, transferAmount: 0, ticketCount: 3, unpaidAmount: 20_000,
+      cashAmount: 0, cardAmount: 0, transferAmount: 0, ticketCount: 5, unpaidAmount: 0, discountIndex: 1,
       reduce: { before: split, session: S } })).rejects.toThrow(REDUCE_NEEDS_PW);
     expect(m.calls.update).toBe(0);
   });
