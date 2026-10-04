@@ -54,14 +54,45 @@ describe('게시판 글쓰기 FAB 는 탭바 바로 위 오른쪽에 선다', ()
   });
 
   it("게시판에서 '맨 위로'가 FAB 왼쪽 같은 줄로 비켜선다 — 신호와 규칙이 짝으로 있다", () => {
-    expect(TAB).toMatch(/toggleAttribute\('data-board-fab', boardFab\)/);
     expect(TAB).toMatch(/const boardFab = active && section === 'board'/);
-    const rule = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transform: ([^;]+); \} \}/)?.[1] ?? '';
-    expect(rule, "게시판 '맨 위로' 규칙을 못 찾았다").not.toBe('');
+    // M5-03: 신호는 '게시판이 보임' 만이 아니라 'FAB 가 떠 있음' — 피드 끝에서 FAB 가 올라가 자리를 떠나면 '맨 위로'가 원래 기둥으로 돌아온다
+    // PR #171 P3: 판정은 scroll 이벤트 안에서 칸의 실제 위치로 **동기** 한다(IO→React 상태 경로는 8프레임 늦어 빠른 플링에서 겹쳤다).
+    //   오른쪽 기둥 복귀 기준 = FAB_RISEN_PX + 방금 프레임 스크롤 거리 × FAB_LEAD_FRAMES (빨리 튕길수록 더 멀리 떠난 뒤에만)
+    const block = TAB.slice(TAB.indexOf('const boardFab = active'), TAB.indexOf('}, [boardFab]);'));
+    expect(block.length, '신호 effect 블록을 못 찾았다').toBeGreaterThan(200);
+    expect(block).not.toMatch(/IntersectionObserver/);
+    expect(TAB).not.toMatch(/setFabRisen/);
+    expect(TAB).toMatch(/window\.addEventListener\('scroll', onScroll, \{ passive: true \}\)/);
+    expect(TAB).toMatch(/const lift = r && r\.height > 0 && Number\.isFinite\(stuck\) \? root\.clientHeight - stuck - r\.bottom : 0/);
+    expect(TAB).toMatch(/const FAB_LEAD_FRAMES = [2-9]/);
+    expect(TAB).toMatch(/settle = window\.setTimeout\(\(\) => sync\(0\), \d+\)/);   // 멈춘 자리에서 속도 0 으로 다시 판정
+    // PR #171 검토 P2: 방향 있는 dy · 앞서보기는 FAB 가 다가올 때(dy<0)만 · 왼쪽→오른쪽은 다가오는 중이 아닐 때 + 여유(히스테리시스).
+    //   방향 없는 |dy| 를 기준에 더하면 내림 스크롤 속도 흔들림에 기준이 출렁여 왕복했다(실화면 단언은 e2e/board-fab-press.spec.ts ⑮).
+    expect(TAB).toMatch(/const dy = y - lastY;/);
+    expect(TAB).not.toMatch(/Math\.abs\(y - lastY\)/);
+    expect(TAB).toMatch(/const FAB_HYST_PX = [1-9]\d*;/);
+    expect(TAB).toMatch(/\? !\(dy >= 0 && lift > FAB_RISEN_PX \+ FAB_HYST_PX\)\s*: lift <= FAB_RISEN_PX \+ FAB_LEAD_FRAMES \* Math\.max\(0, -dy\);/);
+    expect(TAB).toMatch(/root\.toggleAttribute\('data-board-fab', left\)/);
+    // scroll 마다 getComputedStyle 을 부르지 않는다(검토 실측 +0.6ms/이벤트@CPU4) — 달라붙은 bottom 은 measure() 에서만 잰다
+    const sync = block.slice(block.indexOf('const sync ='), block.indexOf('const onScroll ='));
+    expect(sync.length, 'sync 본문을 못 찾았다').toBeGreaterThan(100);
+    expect(sync).not.toMatch(/getComputedStyle/);
+    const m = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ --tw-translate-x: ([^;]+); --tw-translate-y: ([^;]+); transition: ([^;]+); transform: ([^;]+); \} \}/);
+    expect(m, "게시판 '맨 위로' 규칙을 못 찾았다").not.toBeNull();
+    const [, tx = '', ty = '', tr = '', tf = ''] = m ?? [];
+    // 왼쪽(FAB 옆)으로 가는 움직임은 즉시여야 한다 — transform 전환이 남으면 미끄러지는 동안 FAB 와 겹친다
+    expect(tr, "게시판 '맨 위로' 규칙의 transition 은 opacity 만이다").toMatch(/^opacity [^,]+$/);
+    // PR #171 검토 P1: 이동량은 --tw-translate-x/-y 에 싣는다 — 전역 button:active 가 같은 변수로 transform 을 갈아 쓴다.
+    //   transform 에 직접 쓰면 손을 떼는 순간(:active 확정) 오른쪽 기둥으로 순간이동해 click 이 빈자리에 떨어졌다(실터치 0/9, e2e ⑭).
+    expect(tf).toBe('translate(var(--tw-translate-x), var(--tw-translate-y))');
+    expect(CSS).toMatch(/button:active:not\(:disabled\)[^{]*\{[^}]*transform: translate\(var\(--tw-translate-x, 0\), var\(--tw-translate-y, 0\)\)/);
     // 옆 칸: 가로로 FAB 지름(3rem)+간격만큼 왼쪽 — 세로로만 비키면 피드 끝에서 sticky FAB 가 쓸려 올라와 겹친다(PR #155 P1)
-    expect(rule).toMatch(/^translate\(-3\.5rem, /);
+    expect(tx).toBe('-3.5rem');
     // 세로 중심 맞춤 — 두 버튼의 safe-area 항(맨 위로 = max(…,12px), FAB = min(…,0.5rem))을 같이 따라간다
-    expect(rule).toContain('max(env(safe-area-inset-bottom), 12px)');
-    expect(rule).toContain(`- ${SAFE}`);
+    expect(ty).toContain('max(env(safe-area-inset-bottom), 12px)');
+    expect(ty).toContain(`- ${SAFE}`);
+    // 탭바 숨김 자리도 같은 이유로 변수에 싣는다(누르는 동안 76px 위로 튀었다) · PC 는 변수까지 0 으로 되돌린다
+    expect(CSS).toContain('html[data-tabbar-hidden] .scroll-top-fab { --tw-translate-y: calc(4.5rem + var(--tabbar-lift)); transform: translate(var(--tw-translate-x), var(--tw-translate-y)); }');
+    expect(CSS).toContain('@media (min-width: 1024px) { html[data-tabbar-hidden] .scroll-top-fab { --tw-translate-y: 0px; transform: none; } }');
   });
 });

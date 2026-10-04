@@ -449,6 +449,63 @@ for (const [w, h] of [[390, 844], [390, 640], [360, 800], [320, 640], [412, 915]
   });
 }
 
+// ⑫-d M5-03(audit5-motion-1004): 피드 끝에서 FAB 는 '마지막 글 아래'로 피드와 함께 올라가는데 '맨 위로'는 FAB 옆 칸(x 271@390)에 혼자 남았다
+//      (다른 화면은 x 330.5). 이제는 FAB 가 자리를 떠나 충분히 올라가면 '맨 위로'도 다른 화면과 같은 오른쪽 기둥으로 돌아온다 —
+//      단 두 버튼이 같은 기둥에서 겹치거나 누름을 가로채지 않는다. 피드 중간(FAB 가 떠 있는 동안)은 예전처럼 FAB 옆 칸이다.
+for (const [w, h] of [[390, 844], [360, 740], [390, 640]] as const) {
+  test(`⑫-d ${w}×${h}: 피드 끝에서 '맨 위로'가 오른쪽 기둥으로 돌아온다 · FAB 와 안 겹침 · 누름 가로채지 않음`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await longFeed(page);
+    await openBoard(page);
+    const probe = () => page.evaluate(() => {
+      const fab = document.querySelector('[data-testid="board-write"]')!.getBoundingClientRect();
+      const stEl = document.querySelector<HTMLElement>('.scroll-top-fab')!;
+      const st = stEl.getBoundingClientRect();
+      const hit = (x: number, y: number) => { const e = document.elementFromPoint(x, y); return e?.closest('.scroll-top-fab') ? 'top' : e?.closest('[data-testid="board-write"]') ? 'write' : (e?.closest('[data-testid]')?.getAttribute('data-testid') ?? e?.tagName ?? 'none'); };
+      return {
+        y: Math.round(scrollY), max: document.documentElement.scrollHeight - innerHeight,
+        sig: document.documentElement.hasAttribute('data-board-fab'),
+        shown: getComputedStyle(stEl).opacity !== '0' && getComputedStyle(stEl).pointerEvents !== 'none',
+        tx: new DOMMatrix(getComputedStyle(stEl).transform).m41,
+        stRight: innerWidth - st.right, stT: st.top, stB: st.bottom, stL: st.left,
+        fabT: fab.top, fabB: fab.bottom, fabL: fab.left, fabR: fab.right,
+        lift: (innerHeight - 80.75) - fab.bottom,
+        stHit: hit(st.left + st.width / 2, st.top + st.height / 2),
+        fabHit: hit(fab.left + fab.width / 2, fab.top + fab.height / 2),
+      };
+    });
+    const go = async (y: number | 'end') => {
+      await page.evaluate((t) => window.scrollTo({ top: t === 'end' ? document.documentElement.scrollHeight : t, behavior: 'instant' }), y);
+      await page.waitForTimeout(600);   // 맨 위로 transform 전환(--dur-panel)이 끝난 정착 상태를 잰다
+      return probe();
+    };
+    // 피드 한가운데 — FAB 는 탭바 위에 떠 있고 '맨 위로'는 그 옆 칸
+    const mid = await go(610);
+    expect(mid.lift, `전제: 피드 중간에서 FAB 가 떠 있다(들림 ${mid.lift}px)`).toBeLessThan(2);
+    expect(mid.shown, "전제: 중간에서 '맨 위로'가 보인다").toBe(true);
+    expect(mid.sig, '피드 중간: FAB 옆 칸 신호').toBe(true);
+    expect(mid.tx, "피드 중간: '맨 위로'가 FAB 옆(왼쪽)으로 비켜서 있다").toBeLessThan(-40);
+    // 피드 끝 — FAB 는 마지막 글 아래로 올라갔다
+    const end = await go('end');
+    expect(end.lift, `전제: 맨 끝에서 FAB 가 자리를 떠나 올라갔다(들림 ${end.lift}px)`).toBeGreaterThan(120);
+    expect(end.shown, "전제: 맨 끝에서 '맨 위로'가 보인다").toBe(true);
+    expect(end.sig, '피드 끝: FAB 가 떠난 뒤에는 옆 칸 신호가 꺼진다').toBe(false);
+    // 가로 이동 0 = 다른 화면과 같은 기둥(세로는 탭바 자동 숨김 규칙이 따로 움직일 수 있어 보지 않는다)
+    expect(Math.abs(end.tx), `피드 끝: '맨 위로'가 FAB 옆 칸에 혼자 남았다(가로 이동 ${end.tx}px)`).toBeLessThan(0.5);
+    expect(Math.abs(end.stRight - 16), `피드 끝: '맨 위로' 오른쪽 여백 ${end.stRight}px (다른 화면 16px)`).toBeLessThanOrEqual(1.5);
+    const overlap = !(end.stB <= end.fabT || end.stT >= end.fabB || end.stL >= end.fabR || (innerWidth - end.stRight) <= end.fabL);
+    expect(overlap, `피드 끝: '맨 위로'(${end.stT}–${end.stB})와 FAB(${end.fabT}–${end.fabB})가 겹친다`).toBe(false);
+    expect(end.stHit, "피드 끝: '맨 위로' 중심 누름").toBe('top');
+    if (end.fabT > 120 && end.fabB < h - 80.75 - 60) expect(end.fabHit, '피드 끝: FAB 중심 누름').toBe('write');
+    // 다시 위로 — 옆 칸으로 돌아오고 겹치지 않는다
+    const back = await go(610);
+    expect(back.sig, '다시 위로: 옆 칸 신호가 돌아온다').toBe(true);
+    expect(back.tx).toBeLessThan(-40);
+    expect(back.stHit).toBe('top');
+    expect(back.fabHit).toBe('write');
+  });
+}
+
 test("⑫-b '맨 위로'는 게시판 밖(다른 하위 탭)·PC 1440 에서 예전 자리 그대로", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await openBoard(page);

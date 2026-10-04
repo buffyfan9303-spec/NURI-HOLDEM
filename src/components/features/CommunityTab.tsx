@@ -87,6 +87,13 @@ interface CommunityTabProps {
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
+// 글쓰기 FAB 가 달라붙은 자리에서 이만큼 올라가면 '떠났다' — '맨 위로'(높이·자리 포함 윗변 ≈ 탭바 위 9rem)보다 충분히 위.
+const FAB_RISEN_PX = 120;
+// 위 기준에 더하는 '앞서보기' — FAB 가 다가올 때만, 방금 프레임 스크롤 거리 × 이 값. scroll 이벤트·렌더가 한두 프레임 늦는 것을 덮는다.
+const FAB_LEAD_FRAMES = 2;
+// 왼쪽(FAB 옆)에 간 뒤 오른쪽 기둥으로 돌아가려면 기준보다 이만큼 더 떠야 한다 — 기준 근처에서 멈췄다 움직일 때 왕복하지 않게(히스테리시스).
+// 피드 끝 최대 들림(24글 목킹 실측 427~467px, 390·360·320)보다 충분히 작아 끝에서는 기둥으로 돌아간다(board-oneline ⑫-d).
+const FAB_HYST_PX = 8;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
@@ -141,10 +148,66 @@ function CommunityTab({
   useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
   // 게시판 글쓰기 FAB 가 탭바 바로 위 오른쪽 칸을 쓰는 동안 문서에 알린다 — '맨 위로'(App.tsx .scroll-top-fab)가
   // CSS 만으로 FAB 왼쪽 같은 줄로 비켜선다(index.css html[data-board-fab]). App 의 data-tabbar-hidden 과 같은 조리법.
+  //
+  // 피드 끝에서 FAB 가 '마지막 글 아래'로 올라가 자리를 떠나면(오너 2026-10-04) '맨 위로'는 혼자 비켜선 채 남지 않고 다른 화면과 같은
+  // 오른쪽 기둥(x 330.5@390)으로 돌아간다(M5-03). 신호 = 게시판이 보이고 **FAB 가 떠 있는 동안**.
+  //
+  // 규칙(PR #171 독립 검증 P3, 2026-10-05): **두 버튼이 세로로 겹칠 수 있는 동안 '맨 위로'는 가로로 움직이지 않는다.**
+  //   ① 판정은 scroll 이벤트 안에서 칸의 실제 위치로 **동기** 한다(예전엔 관찰자 콜백→React 상태→속성이라 8프레임 늦었다).
+  //   ② FAB 가 다가오는 중(위로 스크롤)이면 기준 FAB_RISEN_PX + 방금 프레임 거리 × FAB_LEAD_FRAMES 안에 들어오는 즉시 왼쪽으로 간다(왼쪽은 어디서나 안전).
+  //      오른쪽으로 돌아가는 것은 FAB 가 멀어지거나 멈췄을 때 기준 + FAB_HYST_PX 를 넘은 뒤에만 — 한 방향 스크롤에서 전환은 최대 1회다
+  //      (검토 P2: 방향 없이 |dy| 를 더했더니 내림 스크롤 속도 흔들림에 기준이 출렁여 왼쪽↔오른쪽을 왕복했다).
+  //   ③ 왼쪽으로 가는 것은 CSS 가 **전환 없이 즉시**(index.css 규칙) — 오른쪽 기둥에서 미끄러지는 동안 FAB 가 돌아와 겹치는 구간이 없다.
+  //   ④ 스크롤이 멈추면 120ms 뒤 속도 0 으로 다시 판정한다(멈춘 자리에서 돌아가야 하는 경우).
   const boardFab = active && section === 'board';
   useEffect(() => {
-    document.documentElement.toggleAttribute('data-board-fab', boardFab);
-    return () => document.documentElement.removeAttribute('data-board-fab');
+    const root = document.documentElement;
+    if (!boardFab) { root.removeAttribute('data-board-fab'); return; }
+    let lastY = window.scrollY;
+    let settle = 0;
+    let left = true;                                  // 지금 '맨 위로'가 FAB 옆(왼쪽)에 있나 = data-board-fab
+    let slot: HTMLElement | null = null;
+    let stuck = NaN;
+    // 칸과 달라붙은 자리의 bottom(px)은 레이아웃이 바뀔 때만 잰다 — scroll 마다 getComputedStyle 을 부르지 않는다(검토 실측 +0.6ms/이벤트@CPU4).
+    // bottom 은 env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC)·칸 없음 → 들림 0 → 신호 유지.
+    const measure = () => {
+      slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
+      stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
+    };
+    // dy = 방금 스크롤 변화(부호 있음). dy < 0(위로 스크롤)이면 FAB 가 '맨 위로' 쪽으로 **내려오는** 중이다.
+    const sync = (dy: number) => {
+      if (!slot?.isConnected) measure();
+      const r = slot?.getBoundingClientRect();
+      const lift = r && r.height > 0 && Number.isFinite(stuck) ? root.clientHeight - stuck - r.bottom : 0;
+      // 왼쪽 → 오른쪽: FAB 가 다가오는 중이 아니고(멀어지거나 멈춤) 기준 + 여유(FAB_HYST_PX)를 넘었을 때만.
+      // 오른쪽 → 왼쪽: 기준 + 앞서보기 — 앞서보기는 FAB 가 다가올 때만 더한다(멀어질 때 더하면 속도 흔들림에 기준이 출렁여 왕복했다 — PR #171 검토 P2).
+      left = left
+        ? !(dy >= 0 && lift > FAB_RISEN_PX + FAB_HYST_PX)
+        : lift <= FAB_RISEN_PX + FAB_LEAD_FRAMES * Math.max(0, -dy);
+      root.toggleAttribute('data-board-fab', left);
+    };
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+      sync(dy);
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => sync(0), 120);
+    };
+    const onLayout = () => { lastY = window.scrollY; measure(); sync(0); };
+    sync(0);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onLayout);
+    // 스크롤 없이 문서 높이만 바뀌는 경우(글 로드·접기)에도 칸 위치가 바뀐다.
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onLayout);
+    ro?.observe(root);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onLayout);
+      ro?.disconnect();
+      window.clearTimeout(settle);
+      root.removeAttribute('data-board-fab');
+    };
   }, [boardFab]);
   // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
   // 헤더 높이도 같이 저장한다: 인플로우 sticky 헤더가 축소/복원되면 그 차이만큼 스크롤 앵커링이 scrollY 를 되민다
@@ -1134,7 +1197,7 @@ function FeedSection({
             bottom = 탭바 높이(65.75px ≈ 3.875rem) + 15px(0.875rem) + 탭바 nav 와 **같은** safe-area 항(App.tsx nav paddingBottom).
             뷰포트 높이(vh·svh·lvh·dvh·innerHeight·visualViewport)를 쓰지 않는다 — 탭바(fixed bottom-0)와 같은 '레이아웃 뷰포트 아래'
             기준이라 주소창이 위/아래·접힘/펼침이어도 탭바와 같이 움직인다(communityFab.contract.test.ts).
-            '맨 위로'는 게시판에서만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 토스트(z-120)는 잠깐 FAB 위를 덮는다.
+            '맨 위로'는 게시판에서 FAB 가 떠 있는 동안만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 피드 끝으로 FAB 가 올라가면 원래 기둥으로 돌아간다. 토스트(z-120)는 잠깐 FAB 위를 덮는다.
           · 피드 끝이 올라오면 이 칸에 내려앉아 피드와 함께 올라간다 → 아래 푸터(계정 삭제 안내·공지·소개문·사업자 정보)를 절대 덮지 않는다.
             예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
           · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).
