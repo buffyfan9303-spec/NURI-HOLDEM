@@ -770,7 +770,8 @@ test('🔴 R2 — 1024 → 390 으로 좁힌 뒤에는 스냅샷도 마커도 �
 // 여기에 버튼 `pb-1.5 → pb-1`(6.375 → 4.25px)을 더해 라벨 하단→nav 하단이 11.625 → 약 7.4px 다.
 // 이 검사는 **그 값이 다시 벌어지는 것**과 **안전영역·터치 표적 계약이 깨지는 것**을 같이 잡는다.
 //
-// 음성 대조: `mb-[calc(0.125rem+…)]` 을 `0.25rem` 으로 되돌리면 gap 이 4.25 가 되어 상한(3)을 넘고,
+// (2026-10-04 평평한 바로 바뀌며 '알약 아래 여백'은 0 이 계약이다 — 바에 mb 를 다시 주면 gap 상한 0.5 를 넘는다.)
+// 음성 대조(종전): `mb-[calc(0.125rem+…)]` 을 `0.25rem` 으로 되돌리면 gap 이 4.25 가 되어 상한(3)을 넘고,
 //   버튼 `pb-1` 을 `pb-1.5` 로 되돌리면 라벨 하단→nav 하단이 9.5px 가 되어 상한(8)을 넘는다.
 test('🔴 B1 — 하단바 알약 아래 여백과 라벨 하단 여백이 목표 범위이고 안전영역 계약은 그대로다', async ({ page }) => {
   await stabilizeBackstack(page);
@@ -816,8 +817,9 @@ test('🔴 B1 — 하단바 알약 아래 여백과 라벨 하단 여백이 목�
   expect(m, '하단바 구조를 못 찾았다').not.toBeNull();
   expect(m!.position, '하단바가 fixed 가 아니다').toBe('fixed');
   expect(m!.navBottomOffset, '하단바가 화면 바닥에 붙어 있지 않다 — bottom:0 계약이 깨졌다').toBeLessThanOrEqual(0.5);
-  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 1.5~3px 범위를 벗어났다`).toBeGreaterThanOrEqual(1.5);
-  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 너무 떠 있다(4.25px/8.5px 회귀)`).toBeLessThanOrEqual(3);
+  // 2026-10-04 오너 결정 'E+황동' — 떠 있는 알약 → 바닥에 붙은 평평한 바. 바(inner)가 nav 아래(안전영역 padding 제외)까지 닿는다:
+  //   종전 '알약 아래 1.5~3px' 단언을 '틈 0'(≤0.5)으로 바꿨다. 라벨 하단→바닥 6~8px(아래)은 그대로 — 바 안쪽 pb-[3px] 가 맡는다.
+  expect(m!.gap, `바 아래 틈이 ${m!.gap}px 다 — 평평한 바가 화면 바닥에서 떠 있다(옛 알약 회귀)`).toBeLessThanOrEqual(0.5);
   // FINAL-UX#NAV-GAP 수용 기준 — **모든 칸**의 라벨 하단→nav 하단 6~8px(safe-area 0).
   expect(m!.labelGaps.length, '하단바 칸을 못 찾았다').toBeGreaterThanOrEqual(4);
   expect(Math.min(...m!.labelGaps), `라벨 하단→nav 하단 최소 ${Math.min(...m!.labelGaps)}px — 6~8px 범위를 벗어났다: ${JSON.stringify(m!.labelGaps)}`)

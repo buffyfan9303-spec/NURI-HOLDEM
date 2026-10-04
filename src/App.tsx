@@ -907,8 +907,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
       // U06: 억제되면 보조기술·Tab 순서에서도 빠진다. 래퍼의 pointer-events 만으로는 키보드를 못 막는다.
       aria-hidden={suppressed || undefined}
       // 2026-10-04 오너 결정 'E+황동' — 떠 있는 유리 알약 → **바닥에 붙은 평평한 바**. 면·윗선은 nav 자신이 칠한다
-      //   (아래 safe-area 상한 padding 까지 같은 면이라 바와 화면 끝 사이 틈이 없다). 높이는 종전 알약(60 + 테두리 2 + mb 2)보다
-      //   3px 낮은 61 + min(safe, .5rem) — --tabbar-safe/--tabbar-float·글쓰기 FAB·맨 위로·토스트 기준선은 그대로 둬도 겹치지 않는다.
+      //   (아래 safe-area 상한 padding 까지 같은 면이라 바와 화면 끝 사이 틈이 없다). 높이는 종전 nav 와 **같은** 62 + min(safe, .5rem)
+      //   (윗선 1 + 버튼 58 + 아래 3) — --tabbar-safe/--tabbar-float·글쓰기 FAB·맨 위로·토스트 기준선이 한 치도 안 움직인다.
       className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none border-t border-border-default bg-surface-base transition-transform duration-(--dur-panel)',
         hidden ? 'translate-y-[120%]' : 'translate-y-0',
         suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
@@ -947,7 +947,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           남았고 라벨 span 만 82% 가려져 "아이콘 아래 빈 공간" 으로 보였다(아이콘 위 9.5px vs 아래 24.4px).
           → `relative` 한 단어. 이제 레일 전체(배경·테두리·라벨)가 커튼 위에 그려진다 — 커튼의 설계 의도
           ('알약 **뒤**는 불투명 커튼')가 비로소 맞는다. 라벨이 보이면 아래 24.4px 는 빈 공간이 아니라 라벨 행이다. */}
-      <div className="pointer-events-auto relative mb-(--tabbar-lift) flex">
+      {/* pb-[3px] = 종전 알약의 아래 테두리 1 + mb 2 — nav 높이(62 @safe 0)·라벨 하단→화면 바닥(7px)·글쓰기 FAB 간격을 종전 그대로 둔다
+          (없으면 바가 3px 낮아져 FAB–탭바 간격 17 > 16 · 라벨이 바닥에서 4px — e2e board-oneline ⑫ · mobile-tab-transition B1 실측). */}
+      <div className="pointer-events-auto relative mb-(--tabbar-lift) flex pb-[3px]">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
