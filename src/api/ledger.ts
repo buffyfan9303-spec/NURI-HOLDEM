@@ -437,21 +437,35 @@ function payClassOf(b: LedgerBuyin): 'cash' | 'ticket' | 'support' | null {
   return b.paymentMethod === 'ticket' ? 'ticket' : b.paymentMethod === 'support' ? 'support' : 'cash';
 }
 
-/** 이 수정에 취소 비밀번호가 필요한가(이름은 호출부 호환으로 그대로 — 2026-10-04 v2 부터는 '감액' 만이 아니다).
- *  오너 2026-10-04(F4-02, critical 반증 뒤): "같은 결제 수단으로만 자유". true ⇔ 아래 하나라도
- *   ① 감액(세 겹 중 하나라도 줄었다)이고, 줄어든 몫이 전부 미수로 간 것(받을 가치 그대로 · 이용권 몫 안 늚)이 아니다
- *   ② 이용권 몫이 늘었고, 비분납 티켓 행 → 비분납 티켓 행(가불 → 회수)이 아니다 — 현금 완납 → 미수 → 티켓 완납 두 단계 우회를 막는다
- *   ③ 비분납 → 비분납인데 결제 수단 분류(현금성·이용권·가게지원)가 바뀌었다(미수 상태 포함)
- *  자유(false): 현금 완납 ↔ 현금 미수 · 현금↔카드↔이체 · 티켓 완납 ↔ 티켓 가불 · 분납 현금 몫 ↔ 미수 · 분납 미수 → 현금성 · 증액 · 얼리만.
- *  서버 쌍둥이: _ledger_buyins_client_guard(20261004e) — 같은 세 조건이다. 한쪽만 고치면 판정이 갈린다. */
+/** 행의 상태량 — v = 받을 가치(바인 세 겹[2] + 애드온 금액), c = 현금성 몫(현금성 완납 + 티켓 가불이 아닌 미수(분납 미수 포함) + 애드온 현금성 몫).
+ *  v = c + 이용권 몫 항등식(가게지원은 어느 몫에도 없다). 서버 _ledger_buyins_client_guard(20261004e v3)의 v_oc·v_oa 와 같은 식. */
+function valueAndCashOf(b: LedgerBuyin, s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): { v: number; c: number } {
+  const t = buyinTiers(b, s);
+  const cb = t[0] + (payClassOf(b) === 'ticket' ? 0 : t[2] - t[1]);
+  const m = b.addonMethod;
+  const valid = m === 'cash' || m === 'card' || m === 'transfer' || m === 'ticket';
+  const amt = valid ? Math.max(0, b.addonAmount ?? 0) : 0;
+  const ca = valid && m !== 'ticket' ? amt - Math.min(amt, Math.max(0, b.addonTicketCount ?? 0) * TICKET_WON) : 0;
+  return { v: t[2] + amt, c: cb + ca };
+}
+
+/** 이 수정에 취소 비밀번호가 필요한가(이름은 호출부 호환으로 그대로 — 2026-10-04 부터는 '감액' 만이 아니다).
+ *  오너 2026-10-04(F4-02): "같은 결제 수단으로만 자유". v3(critical 재반증 — 분납을 징검다리로 쓴 세 단계 우회)부터
+ *  전이 하나가 아니라 **행의 상태량**으로 본다. true ⇔ 아래 하나라도
+ *   ① 받을 가치(바인 + 애드온)가 줄었다 — 금액 축소·가게지원·할인·미수 탕감·애드온 제거
+ *   ② 현금성 몫이 줄었다 — 현금(미수 포함)이 이용권으로 가거나 사라진다. 몇 단계를 거쳐도 비밀번호 없이는 현금성 몫이 줄지 않는다
+ *   ③ 바인 분류가 티켓에 닿게 바뀌었거나(분납 ↔ 티켓 포함) 비분납끼리 바뀌었다 — 오너 원문 '분류 변경은 비밀번호'(티켓 → 현금 포함)
+ *   ③' 애드온 수단 분류(현금성 ↔ 티켓)가 바뀌었다
+ *  자유(false): 현금 완납 ↔ 현금 미수 · 현금↔카드↔이체 · 티켓 완납 ↔ 티켓 가불 · 현금성 ↔ 분납 · 분납 현금 몫 ↔ 미수 · 증액 · 얼리만.
+ *  서버 쌍둥이: _ledger_buyins_client_guard(20261004e v3) — 같은 네 조건이다. 한쪽만 고치면 판정이 갈린다. */
 export function isRevenueReduction(before: LedgerBuyin, after: LedgerBuyin,
   s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): boolean {
-  const o = buyinTiers(before, s), n = buyinTiers(after, s);
-  const reduced = n[0] < o[0] || n[1] < o[1] || n[2] < o[2];
-  const toUnpaidOnly = n[2] === o[2] && n[1] - n[0] <= o[1] - o[0];
+  const o = valueAndCashOf(before, s), n = valueAndCashOf(after, s);
   const co = payClassOf(before), cn = payClassOf(after);
-  const ticketUp = n[1] - n[0] > o[1] - o[0];
-  return (reduced && !toUnpaidOnly) || (ticketUp && !(co === 'ticket' && cn === 'ticket')) || (co !== null && cn !== null && co !== cn);
+  const buyinClassChanged = co !== cn && (co === 'ticket' || cn === 'ticket' || (co !== null && cn !== null));
+  const ao = before.addonMethod ?? null, an = after.addonMethod ?? null;
+  const addonClassChanged = ao !== null && an !== null && (ao === 'ticket') !== (an === 'ticket');
+  return n.v < o.v || n.c < o.c || buyinClassChanged || addonClassChanged;
 }
 
 /** 서버가 감액 수정을 비밀번호 없이 받지 않았다(또는 클라가 미리 감액으로 판정했다) — 호출측이 비밀번호를 묻는다.
@@ -1561,8 +1575,16 @@ export async function setBuyinEarly(buyinId: string, override: EarlyType | null)
 /** 이미 기록된 바인 행의 애드온만 바꾼다(2026-09-28). null = 애드온 지움.
  *  바인 금액 칸(BuyinFields)과 **따로** 쓴다 — 감액 비밀번호 RPC(update_ledger_buyin_reduce)는 애드온 칸을 모른다.
  *  금액은 서버 트리거(20260928g)가 세션 애드온 가격으로 다시 맞춘다 — 여기서 보내는 값은 초안일 뿐이다. */
-export async function setBuyinAddon(buyinId: string, addon: { method: AddonMethod; unpaid: boolean; amount: number } | null): Promise<void> {
+export async function setBuyinAddon(buyinId: string, addon: { method: AddonMethod; unpaid: boolean; amount: number } | null, password?: string): Promise<void> {
   if (IS_MOCK) return;
+  // 20261004e v3 — 애드온 제거·현금 → 티켓·티켓 → 현금은 서버 가드가 LEDGER_REDUCE_NEEDS_PASSWORD 로 거절한다(→ REDUCE_NEEDS_PW).
+  //   호출측이 비밀번호를 받아 다시 부르면 비밀번호 RPC 로 보낸다(서버가 권한·마감·비밀번호를 다시 본다).
+  if (password !== undefined) {
+    const { error } = await supabase.rpc('update_ledger_addon_with_password',
+      { p_id: buyinId, p_method: addon?.method ?? null, p_unpaid: addon?.unpaid ?? false, p_password: password });
+    if (error) throw error;
+    return;
+  }
   const fields = addon
     ? { addon_method: addon.method, addon_unpaid: addon.unpaid, addon_amount: Math.max(0, Math.round(addon.amount)) }
     : { addon_method: null, addon_unpaid: false, addon_amount: 0 };

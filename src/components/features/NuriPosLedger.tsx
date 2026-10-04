@@ -2454,15 +2454,21 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           onSetAddon={async (addon) => {
             if (!selected.buyin) return;
             setPayBusy(true);
+            const amount = session.addonAmount ?? 0;
+            const buyinId = selected.buyin.id;
+            // 20261004e v3 — 애드온 제거·수단 분류 변경은 비밀번호(서버 hint → REDUCE_NEEDS_PW). 비밀번호를 받으면 같은 값을 비밀번호 RPC 로.
+            const save = (pw?: string) => setBuyinAddon(buyinId, addon ? { ...addon, amount } : null, pw);
             try {
-              const amount = session.addonAmount ?? 0;
-              await setBuyinAddon(selected.buyin.id, addon ? { ...addon, amount } : null);
+              await save();
               toast.show(addon ? '애드온을 기록했습니다' : '애드온을 지웠습니다', 'success');
               setSelected((cur) => cur && cur.buyin ? { ...cur, buyin: { ...cur.buyin,
                 addonMethod: addon?.method ?? null, addonUnpaid: !!addon?.unpaid, addonAmount: addon ? amount : 0 } } : cur);
               reload();
             }
-            catch (e) { toast.show(ledgerErrorText(e, '애드온 저장 실패'), 'error', { durationMs: 7000 }); }
+            catch (e) {
+              if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
+              else toast.show(ledgerErrorText(e, '애드온 저장 실패'), 'error', { durationMs: 7000 });
+            }
             finally { setPayBusy(false); }
           }}
           onSetEarly={async (override) => {

@@ -153,6 +153,47 @@ for (const c of [{ to: '현금', free: true }, { to: '티켓', free: false }]) {
   });
 }
 
+// ── ①-v3 애드온 제거는 비밀번호(오너 2026-10-04 · 리드 결정 2) ──────────────────────────────────────────────
+//   서버 가드가 PATCH 를 LEDGER_REDUCE_NEEDS_PASSWORD 로 거절 → 비밀번호 시트 → update_ledger_addon_with_password(p_method null, p_password).
+test('①-v3 1440 직원 · 비밀번호 설정 — 애드온 제거는 비밀번호 시트를 거쳐 애드온 비밀번호 RPC 로 간다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const w: World = {
+    sessions: [sess(MOCK_DAY, { is_addon: true, addon_amount: 50_000 })],
+    buyins: [buy(MOCK_DAY, 0, '철수', { cash_amount: 100_000, addon_method: 'cash', addon_unpaid: false, addon_amount: 50_000 })],
+    players: [player(MOCK_DAY, 0, '철수')], voucherUses: [],
+  };
+  const addonCalls: R[] = [];
+  const probe = await boot(page, w, { staff: true, hasPw: true });
+  // 서버 가드 흉내: 애드온 칸을 지우는 PATCH 는 42501 + hint
+  await page.route(/\/rest\/v1\/ledger_buyins\?/, (r) => {
+    if (r.request().method() === 'PATCH') {
+      probe.patches.push(JSON.parse(r.request().postData() || '{}'));
+      return r.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({
+        code: '42501', message: '매출이 줄거나 결제 수단 분류(현금·이용권·가게지원)가 바뀌는 수정은 업주 취소 비밀번호가 필요합니다', details: null, hint: 'LEDGER_REDUCE_NEEDS_PASSWORD' }) });
+    }
+    return r.fallback();
+  });
+  await page.route(/\/rest\/v1\/rpc\/update_ledger_addon_with_password/, (r) => {
+    addonCalls.push(JSON.parse(r.request().postData() || '{}'));
+    return r.fulfill({ status: 204, body: '' });
+  });
+  await page.goto('/');
+  await openMyStore(page);
+  await openLedger(page);
+  const led = page.locator('[data-pane="ledger"]');
+  await led.locator('td button:visible').filter({ hasText: /^현/ }).first().click({ timeout: 20_000 });
+  const dlg = page.getByRole('dialog', { name: /철수/ });
+  await expect(dlg.getByTestId('ledger-addon-row'), '애드온 줄(전제)').toBeVisible();
+  await dlg.getByTestId('ledger-addon-row').getByRole('button', { name: '없음', exact: true }).click();
+  const sheet = page.getByTestId('ledger-reduce-pw');
+  await expect(sheet, '애드온 제거인데 비밀번호 시트가 없다').toBeVisible({ timeout: 10_000 });
+  expect(probe.patches.length, '먼저 직접 PATCH 를 시도한다(서버가 판정)').toBe(1);
+  await sheet.getByLabel('취소 비밀번호').fill('4826');
+  await sheet.getByRole('button', { name: '수정 확정' }).click();
+  await expect.poll(() => addonCalls.length, { message: '애드온 비밀번호 RPC 가 불리지 않았다', timeout: 10_000 }).toBe(1);
+  expect(addonCalls[0]).toMatchObject({ p_method: null, p_unpaid: false, p_password: '4826' });
+});
+
 // ── ② 정산 판 티켓 대조 ────────────────────────────────────────────────────────────────────────────
 // 오늘 열린 장부: 영희 티켓 완납(직접 기록) 10장 + 지훈 할인 티켓 5장 · 철수 현금. 들어온 이용권: 영희 4장 → 장부 15 · 들어옴 4 · 부족 11.
 const todayWorld = (): World => ({

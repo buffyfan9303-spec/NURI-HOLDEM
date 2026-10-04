@@ -9,6 +9,8 @@
 //   이용권 몫 조건(n[1]-n[0] <= o[1]-o[0])을 지우면 '현금 → 이용권 2T + 미수' 가, 받을 가치 조건을 지우면 '할인 자리' 가 빨개진다.
 // 2026-10-04 v2('같은 결제 수단으로만 자유') — ② 이용권 몫 증가 조건을 지우면 '분납 우회' 가(비분납 '두 단계 우회' 는 ③도 막는다 — 겹친 방어),
 //   ③ 분류 변경 조건을 지우면 '이용권 → 현금'·'티켓 가불 → 현금'·'가게지원 → 현금' 이 빨개진다.
+// 2026-10-04 v3(상태량: 받을 가치 v · 현금성 몫 c) — c 조건을 지우면 '현금 → 이용권 2T + 미수'·'분납 우회' 가(K2 는 분류 조건이 겹쳐 막는다), v 조건을 지우면 '이용권 행 할인' 이(나머지 감액은 c 가 겹쳐 막는다),
+//   애드온 분류 조건을 지우면 '애드온 티켓 → 현금' 이 빨개진다.
 // 실행: npx vitest run src/api/ledger.reduce.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { buyinTiers, isRevenueReduction, REDUCE_NEEDS_PW, type LedgerBuyin } from './ledger';
@@ -68,6 +70,18 @@ describe('isRevenueReduction — 감액이면 비밀번호', () => {
     ['🔴 가게지원 → 현금(분류 변경 — v2 비밀번호)', b({ paymentMethod: 'support', cashAmount: 0 }), cash, true],
     ['현금 미수 → 카드 완납(같은 현금성 — 자유)', b({ isUnpaid: true }), b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000 }), false],
     ['분납 현금 4만 + 미수 6만 → 비분납 현금 10만(미수 회수 — 자유)', b({ isSplit: true, cashAmount: 40_000, unpaidAmount: 60_000 }), cash, false],
+    // v3 — critical 재반증 K(분납을 징검다리로 쓴 세 단계): 현금 완납 → 분납 미수 10만(자유) → 티켓 가불(비밀번호) → 티켓 완납(자유)
+    ['K1 현금 완납 → 분납 미수 10만(현금성 몫 그대로 — 자유)', cash, b({ isSplit: true, cashAmount: 0, unpaidAmount: 100_000 }), false],
+    ['🔴 K2 분납 미수 10만 → 비분납 티켓 가불(현금성 몫 10만 → 0 — v3 비밀번호)', b({ isSplit: true, cashAmount: 0, unpaidAmount: 100_000 }), b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    ['🔴 분납 이용권 5T + 현금 5만 → 비분납 티켓 10T(분납 → 티켓 — v3 비밀번호)', split, ticket, true],
+    ['🔴 현금 미수 → 카드 미수 → 티켓 가불 의 2단계(L2 — 비밀번호)', b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000, isUnpaid: true }), b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    // v3 — 애드온도 같은 규칙(리드 결정 2)
+    ['🔴 애드온 현금 → 티켓(현금성 몫 감소 — 비밀번호)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'ticket', addonUnpaid: false, addonAmount: 50_000 }), true],
+    ['🔴 애드온 제거(받을 가치 감소 — 비밀번호)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: null, addonUnpaid: false, addonAmount: 0 }), true],
+    ['🔴 애드온 티켓 → 현금(분류 변경 — 비밀번호)', b({ addonMethod: 'ticket', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), true],
+    ['애드온 현금 완납 ↔ 미수(같은 수단 — 자유)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'cash', addonUnpaid: true, addonAmount: 50_000 }), false],
+    ['애드온 현금 → 카드(같은 현금성 — 자유)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'card', addonUnpaid: false, addonAmount: 50_000 }), false],
+    ['새 애드온 추가(증액 — 자유)', cash, b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), false],
     ['얼리만 변경', cash, b({ earlyOverride: 'double' }), false],
     ['레거시(금액 미저장) 행에 할인', b({ cashAmount: 0, buyinAt: '2026-08-01T00:00:00Z' }), b({ cashAmount: 0, buyinAt: '2026-08-01T00:00:00Z', discountIndex: 1 }), true],
   ];
