@@ -9,7 +9,7 @@
 // 정적 말줄임으로 되돌린다(여기서 따로 분기하지 않는다).
 //
 // 원래 ScheduleDetailModal 안에만 있던 것을 원자로 올렸다(외치기 전광판·게시판 제목이 같은 것을 쓴다).
-import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 
 export default function MarqueeText({ text, children, className = '', testId }: {
   /** 측정·재판정의 기준이 되는 문자열. children 을 줄 때도 반드시 같은 내용을 넘긴다. */
@@ -25,7 +25,11 @@ export default function MarqueeText({ text, children, className = '', testId }: 
   const viewportRef = useRef<HTMLSpanElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const [loopW, setLoopW] = useState(0); // 0 = 넘치지 않음(정적)
-  useEffect(() => {
+  // 🔴 2026-10-04 오너 "문구가 끝나면 뚝 끊긴 다음 다시 흐른다" — 외치기 방송이 다음 차례로 바뀌면 같은 트랙 span 이 재사용돼
+  //   애니메이션이 이어서 돌았다: 새 문구가 **중간(−235px)부터** 들어오고 주기(15s→17s)만 바뀌어 위치가 튀었다(실측 marq2).
+  //   ① 트랙에 key={text} — 문구가 바뀌면 처음(x=0)부터 다시 흐른다. 같은 문구 안의 순환은 2벌 복제 + −50% 라 이음새가 없다.
+  //   ② 판정은 페인트 **전**(layout effect) — 새 문구 첫 프레임이 옛 폭·옛 주기로 그려졌다가 바뀌지 않게.
+  useLayoutEffect(() => {
     const vp = viewportRef.current, ms = measureRef.current;
     if (!vp || !ms) return;
     const check = () => setLoopW(ms.offsetWidth > vp.clientWidth + 1 ? ms.offsetWidth : 0);
@@ -47,6 +51,7 @@ export default function MarqueeText({ text, children, className = '', testId }: 
       <span ref={measureRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{body}</span>
       {loopW > 0 ? (
         <span
+          key={text}
           className="marquee-loop flex w-max"
           style={{ '--marquee-dur': `${Math.max(6, Math.round((loopW + GAP) / 28))}s` } as CSSProperties}
         >

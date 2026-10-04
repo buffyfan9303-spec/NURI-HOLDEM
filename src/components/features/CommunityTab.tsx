@@ -139,6 +139,13 @@ function CommunityTab({
   // 재방문 마운트 비용이 0이라 전환 커밋 프레임이 가벼워지고, 스냅샷 뒤 동기 커밋(flushSync)이 가능해진다.
   const [visitedSecs] = useState(() => new Set<Section>([section]));
   useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
+  // 게시판 글쓰기 FAB 가 탭바 바로 위 오른쪽 칸을 쓰는 동안 문서에 알린다 — '맨 위로'(App.tsx .scroll-top-fab)가
+  // CSS 만으로 FAB 왼쪽 같은 줄로 비켜선다(index.css html[data-board-fab]). App 의 data-tabbar-hidden 과 같은 조리법.
+  const boardFab = active && section === 'board';
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-board-fab', boardFab);
+    return () => document.documentElement.removeAttribute('data-board-fab');
+  }, [boardFab]);
   // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
   // 헤더 높이도 같이 저장한다: 인플로우 sticky 헤더가 축소/복원되면 그 차이만큼 스크롤 앵커링이 scrollY 를 되민다
   // (lib/headerShrink 주석·실측). 복원 목표값은 restoreScrollTop 이 그 되밀림을 고려해 정한다.
@@ -419,7 +426,10 @@ function CommunityTab({
           래퍼에 붙이는 이유: `CommunityShoutBar` 의 내용은 비동기로 도착하지만 래퍼는 첫 커밋부터 있고
           컴포넌트가 `min-h` 로 자리를 미리 잡아(위 주석) 도착 시 아래를 밀지 않는다 — 즉 cohort 에
           안정적으로 들어온다. sticky 서브바·fixed·모달의 조상이 아니라 순수 일반 흐름 블록이다. */}
-      <div data-main-enter className="mx-auto w-full max-w-3xl">
+      {/* 🔴 2026-10-04 오너 "외치기 칸 위아래 공백을 줄여라" — 위(하위 탭 바)·아래(본문) 간격 12.75 → 6.375.
+          부모 space-y-3 은 `> :not([hidden]) ~ :not([hidden])`(특이도 0,3,0)로 margin-top 12.75·margin-bottom 0 을 박으므로 ! 로 이긴다:
+          위 = 이 래퍼 margin-top 6.375 / 아래 = 이 래퍼 margin-bottom −6.375 가 본문 칸의 margin-top 12.75 와 상쇄돼 6.375. */}
+      <div data-main-enter className="mx-auto mt-1.5! -mb-1.5! w-full max-w-3xl">
         <CommunityShoutBar />
       </div>
 
@@ -1119,7 +1129,12 @@ function FeedSection({
         </>
       )}
       {/* 모바일 글쓰기 FAB — 피드 컨테이너 **맨 아래 칸**(51px)에 sticky 로 선다(리드 결정 2026-10-04).
-          · 목록을 읽는 동안은 화면 오른쪽 아래(bottom = --tabbar-float + 4rem)에 떠 있다 — '맨 위로'(42.5px) 위, 토스트 2줄(65.75px) 위.
+          · 목록을 읽는 동안은 **하단 탭바 바로 위 15px · 오른쪽 16px** 에 떠 있다(오너 2026-10-04 15시 "너무 중간 — 우측 하단으로").
+            예전 bottom = --tabbar-float + 4rem(≈178px)은 '맨 위로'·토스트 2줄 자리를 비워 두느라 탭바 위 ~104px 에 떠 있었다.
+            bottom = 탭바 높이(65.75px ≈ 3.875rem) + 15px(0.875rem) + 탭바 nav 와 **같은** safe-area 항(App.tsx nav paddingBottom).
+            뷰포트 높이(vh·svh·lvh·dvh·innerHeight·visualViewport)를 쓰지 않는다 — 탭바(fixed bottom-0)와 같은 '레이아웃 뷰포트 아래'
+            기준이라 주소창이 위/아래·접힘/펼침이어도 탭바와 같이 움직인다(communityFab.contract.test.ts).
+            '맨 위로'는 게시판에서만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 토스트(z-120)는 잠깐 FAB 위를 덮는다.
           · 피드 끝이 올라오면 이 칸에 내려앉아 피드와 함께 올라간다 → 아래 푸터(계정 삭제 안내·공지·소개문·사업자 정보)를 절대 덮지 않는다.
             예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
           · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).
@@ -1127,7 +1142,7 @@ function FeedSection({
           · z-20: 하위 탭 바(sticky z-30) **밑**이다. 짧은 화면(×640)에서 맨 끝까지 올라오면 바 밑으로 들어가 '딜러'·'장터' 누름을
             가로채지 않는다(z-40 이던 391c5a78 에서 가로챘다 — 검토 P1). 정렬 메뉴(z-40)·토스트·맨 위로(fixed z-40)는 여전히 위다.
           · [data-sec="board"] 안이라 다른 하위 탭·다른 탭에서는 display:none 으로 같이 사라진다. PC 는 위 한 줄 끝 버튼. */}
-      <div style={{ bottom: 'calc(var(--tabbar-float) + 4rem)' }}
+      <div data-board-fab-slot="" style={{ bottom: 'calc(4.75rem + min(env(safe-area-inset-bottom), 0.5rem))' }}
         className="pointer-events-none sticky z-20 flex justify-end lg:hidden">
         <button type="button" data-testid="board-write" aria-label={writeLabel} title={writeLabel} onClick={write}
           className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-300 text-white shadow-dialog">

@@ -747,9 +747,11 @@ export default function CommunityShoutBar({ className }: { className?: string })
 
   return (
     // min-h 로 자리를 미리 잡는다 — 로딩→도착에서 아래 콘텐츠가 밀리지 않게(CLS 0)
-    // 57px = py-2.5(20) + 테두리(2) + h-8 버튼 줄(32)+3. 등급이 바뀌어도 높이를 버튼이 지배하므로 고정이다.
+    // 48.75px = py-1.5(6.375×2) + 테두리(2) + h-8 버튼 줄(34). 등급이 바뀌어도 높이를 버튼이 지배하므로 고정이다.
+    // 🔴 2026-10-04 오너 "외치기 칸 위아래 공백을 줄여라" — 세로 패딩 10.625 → 6.375, 예약 높이 60.56 → 48.875.
+    //   바깥 간격(하위 탭 바 ↔ 외치기 ↔ 본문)은 CommunityTab 래퍼가 12.75 → 6.375 로 줄인다.
     // 예전 3.25rem(52px)은 **덜 잡고 있었다** — 카드가 실측 57px 이라 도착할 때 5px 만큼 아래가 밀렸다.
-    <div ref={rootRef} className={['min-h-14.25', className ?? ''].join(' ')}>
+    <div ref={rootRef} className={['min-h-11.5', className ?? ''].join(' ')}>
       {/* 카드는 **하나뿐이다.** 방송 중 ↔ 기본 문구가 같은 DOM 을 갈아 끼우므로 전환에서 리마운트도,
           높이 점프도 없다. 20초 슬롯 순환은 페이드로만 갈아 끼운다(캐러셀 슬라이드 아님).
           ⚠ 2026-09-05 오너 지시로 **가로 전광판**을 도입했다: 한 줄이 칸을 넘칠 때만 MarqueeText 가
@@ -760,13 +762,13 @@ export default function CommunityShoutBar({ className }: { className?: string })
           빈 자리·만료·로딩은 Aura 0: 이 컴포넌트는 오류를 빈 배열로 삼키므로(api/community.ts)
           idle 에 빛을 주면 서버가 죽은 상태를 '강조'하게 된다.
           색은 이 외침이 이미 쓰는 등급/선택 색 토큰 그대로(새 팔레트 없음).
-          레이아웃 영향 0 — box-shadow 라 래퍼의 min-h-14.25 계약을 건드리지 않는다. */}
+          레이아웃 영향 0 — box-shadow 라 래퍼의 min-h 예약 계약을 건드리지 않는다. */}
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
         data-aura={drawShout ? '' : undefined}
         data-aura-level={drawShout ? 'hero' : undefined}
         data-aura-variant={drawShout ? 'violet' : undefined}
-        className={['rounded-aura border px-3 py-2.5',
+        className={['rounded-aura border px-3 py-1.5',
           skin ? skin.box : 'card-aura'].join(' ')}
         style={drawShout ? { ...colorBoxStyle(drawShout.tier, drawShout.color), ...ledVarStyle(drawShout.tier, drawShout.color) } : undefined}
       >
@@ -787,11 +789,14 @@ export default function CommunityShoutBar({ className }: { className?: string })
                 <span className="ml-1.5 text-2xs text-ink-muted">· 방송 중</span>
               </MarqueeText>
             ) : (
-              <MarqueeText className="w-full" testId="shout-idle-line" text={`누리홀덤 안내 · ${drawLine}`}>
+              // 🔴 2026-10-04 오너 캡처 "ㅏ디를 20초 동안 방송합니다" — 안내 문구가 전광판으로 흐르다 앞이 잘린 채 보였다.
+              //   안내 문구는 우리가 쓴 짧은 도움말이라 정적 한 줄 말줄임(…)으로 둔다(게시판 제목과 같은 원칙). 전체는 title.
+              //   유료 방송(위 drawShout)은 최대 60자라 말줄임하면 산 내용이 잘린다 — 오너 결정 전까지 전광판 유지.
+              <span data-testid="shout-idle-line" title={`누리홀덤 안내 · ${drawLine}`} className="block w-full min-w-0 truncate">
                 <span className="text-2xs font-bold text-accent-300">누리홀덤 안내</span>
                 <span className="mx-1.5 text-2xs text-ink-muted">·</span>
                 <span className="text-sm font-semibold leading-snug text-ink-secondary">{drawLine}</span>
-              </MarqueeText>
+              </span>
             )}
           </div>
           {drawShout && (isAdmin || user?.id === drawShout.userId) && (
