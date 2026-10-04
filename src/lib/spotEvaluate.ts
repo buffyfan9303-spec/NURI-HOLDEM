@@ -117,8 +117,10 @@ export type SpotEvaluation =
   | (Base & { kind: 'math_only'; })
   | (Base & { kind: 'unsupported'; reason: string; });
 
-/** 데이터가 바뀌면 이 값을 올린다 — 게시글에 저장돼 '그때의 기준'을 증명한다. */
-export const DATASET_VERSION = 'nuri-charts-2026-09-11';
+/** 데이터가 바뀌면 이 값을 올린다 — 게시글에 저장돼 '그때의 기준'을 증명한다.
+ *  2026-10-04 단계 A: 푸시·폴드 표는 폴드·올인에만, S ≤ 10BB 에서만 정확 판정(판정이 바뀌어 올렸다).
+ *  저장된 옛 행의 coverage_kind·dataset_version 은 그대로 남고, 재열기 화면은 스팟 원장으로 **다시 평가**한다. */
+export const DATASET_VERSION = 'nuri-charts-2026-10-04';
 
 // ── 차트 조회 ─────────────────────────────────────────────────────────────────
 
@@ -313,7 +315,64 @@ export function amountToCall(s: SpotReview): number {
   return Math.round(Math.max(0, diff) * 100) / 100;
 }
 
+/**
+ * **두 사람이 실제로 다툴 수 있는 칩**(BB) = 푸시·폴드 표의 S — 앤티 낸 뒤·블라인드 전, 짧은 쪽.
+ * S = min(내 스택 − 내가 BB면 앤티, 상대 스택 − 상대가 BB면 앤티). BB앤티는 죽은 돈이라 아무도 맞추지 않는다.
+ * 두 스택이 없는 옛 스팟은 둘 다 effectiveBb 로 보고, 상대 자리와 무관하게 앤티를 뺀다(f6d9598e 규약 — 누가 BB 인지 한 수로는 모른다).
+ * ⚠ lookupNash(표 고르기·10BB 상한)와 heroActionClass(올인 판정)가 **이 함수 하나**를 쓴다. 두 벌이면 어긋난다 —
+ *   2026-10-04 critical: 올인 기준만 effectiveBb 로 재서 BTN 10BB·앤티 1 의 총 9(= 상대 BB 올인)가 '작은 레이즈'로 분류됐다.
+ */
+export function contestedStackBb(s: SpotReview): number {
+  const A = s.anteBb > 0 ? s.anteBb : 0;
+  const paired = hasStackPair(s);
+  const heroS = (paired ? s.heroStackBb as number : s.effectiveBb) - (s.heroPos === 'BB' ? A : 0);
+  const vilS = (paired ? s.villainStackBb as number : s.effectiveBb) - (!paired || s.villainPos === 'BB' ? A : 0);
+  return Math.round(Math.min(heroS, vilS) * 100) / 100;
+}
+
+/**
+ * 히어로가 고른 액션의 **종류** — 판정이 액션을 읽는 유일한 자리(2026-10-04 단계 A).
+ *
+ * `raise`·`bet` 은 크기로 둘로 갈린다: 내가 넣은 **살아 있는** 칩(블라인드 + 지금까지의 증분 + 이번 증분, BB앤티는 빼고)이
+ * `contestedStackBb − 0.5BB` 이상이면 `allin`, 아니면 `raise`.
+ * 예전 `mixKeyOf` 는 둘을 같은 'raise' 칸으로 보내서 **2bb 미니레이즈가 푸시·폴드 표의 셔브 빈도로 채점됐다**
+ * (UTG A8s 20BB 2bb → '개선 필요'). 다툴 수 있는 칩보다 더 넣어도 상대가 못 받으므로 그만큼 넣으면 올인이다.
+ */
+export type HeroActionClass = 'fold' | 'check' | 'call' | 'raise' | 'allin';
+const ALLIN_SLACK_BB = 0.5;
+export function heroActionClass(s: SpotReview): HeroActionClass | null {
+  const a = s.heroAction;
+  if (a === 'fold' || a === 'check' || a === 'call') return a;
+  if (a !== 'raise' && a !== 'bet') return null;
+  const add = Number.isFinite(s.heroActionSizeBb) ? (s.heroActionSizeBb as number) : 0;
+  const deadAnte = s.heroPos === 'BB' && s.anteBb > 0 ? s.anteBb : 0;
+  const live = investedTotalByPos(s, s.heroPos) - deadAnte + add;
+  return live >= contestedStackBb(s) - ALLIN_SLACK_BB ? 'allin' : 'raise';
+}
+
+/**
+ * 100BB 레인지 차트는 **정상 크기 레이즈**의 답이다(표에 올인 갈래가 없다 — 63표 전부 raise·fourbet 키).
+ * 깊은 스택의 올인을 그 공격 칸으로 채점하면 UTG AKo 100BB 오픈 올인이 '좋은 선택'이 된다(critical 2026-10-04) →
+ * 표는 참조하되 내 선택은 판정하지 않는다(heroSilent). 정상 크기 레이즈·콜·폴드 판정은 그대로다.
+ */
+function silenceChartAllin(s: SpotReview, hit: ChartHit | null): ChartHit | null {
+  if (!hit || heroActionClass(s) !== 'allin') return hit;
+  return { ...hit, heroSilent: true, differences: [...hit.differences, '이 표는 정상 크기 레이즈의 답이라 올인은 판정하지 않습니다.'] };
+}
+
+/** 액션 종류 → 레인지 차트 칸. 100BB 차트는 공격 칸이 하나뿐이라 올인도 그 칸으로 간다(차트 판정은 단계 A 무변경). */
+function chartKeyOf(c: HeroActionClass | null): keyof ActionMix | null {
+  if (c === 'fold' || c === 'call') return c;
+  if (c === 'raise' || c === 'allin') return 'raise';
+  return null;   // check 는 프리플랍 차트에 대응 갈래가 없다
+}
+
+/** 푸시·폴드(Nash) 표를 **정확 판정**에 쓰는 깊이 상한(표의 S — 앤티 낸 뒤·블라인드 전). 오너 2026-10-04 결정. */
+export const PUSH_FOLD_EXACT_MAX_BB = 10;
+
 interface ChartHit {
+  /** 표가 내 선택을 **말하지 않는다**(푸시·폴드 표 앞의 작은 레이즈·림프). heroFreq 를 비우고 판정하지 않는다. */
+  heroSilent?: boolean;
   sourceLabel: string;
   mix: ActionMix;
   /** 그 표가 주장하지 않는 갈래 — `mix` 의 0 과 구별된다 */
@@ -540,11 +599,9 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   // 2026-09-30 오너 "두 사람 스택 따로 입력" — S = min(내 스택 − 내가 BB면 A, 상대 스택 − 상대가 BB면 A).
   //   앤티는 BB 가 낸다(BB앤티). 두 스택이 없는 옛 스팟은 둘 다 effectiveBb 로 본다.
   //   ⚠ 옛 스팟은 상대가 BB 가 아니어도 뺀다(f6d9598e 판정 그대로) — 한 수로는 앤티 내는 BB 의 스택을 따로 모른다.
-  const A = s.anteBb > 0 ? s.anteBb : 0;
+  //   계산은 `contestedStackBb` 한 곳 — 올인 판정(heroActionClass)과 같은 값을 써야 한다(critical 2026-10-04).
   const paired = hasStackPair(s);
-  const heroS = (paired ? s.heroStackBb as number : s.effectiveBb) - (s.heroPos === 'BB' ? A : 0);
-  const vilS = (paired ? s.villainStackBb as number : s.effectiveBb) - (!paired || s.villainPos === 'BB' ? A : 0);
-  const S = Math.round(Math.min(heroS, vilS) * 100) / 100;
+  const S = contestedStackBb(s);
   const exact = NASH_STACKS.find((v) => Math.abs(v - S) < 0.01)
     ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
   // 🔴 G4(2026-09-20) — `find` 는 **배열 순서상 처음** 조건을 만족하는 값을 준다. `NASH_STACKS` 가
@@ -575,7 +632,15 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   if (s.anteBb > 0 && Math.abs(s.anteBb - 1) > 0.01) {
     diffs.push(`이 표는 BB앤티 1BB 기준인데 입력 앤티는 ${s.anteBb}BB 입니다.`);
   }
+  // 단계 A(2026-10-04) — 이 표는 올인·폴드 두 갈래만 푸는 게임의 답이다. 작은 레이즈·림프는 표가 말하지 않는다.
+  const cls = heroActionClass(s);
+  const heroSilent = cls === 'raise' || cls === 'call' || cls === 'check';
+  if (heroSilent) diffs.push('이 표는 올인·폴드 두 갈래만 푸는 게임의 답이라 작은 레이즈·림프는 판정하지 않습니다.');
+  if (S > PUSH_FOLD_EXACT_MAX_BB) {
+    diffs.push(`푸시·폴드 표는 올인·폴드만 할 때의 답입니다 — ${PUSH_FOLD_EXACT_MAX_BB}BB 보다 깊으면 실제로는 작은 레이즈가 주력이라 참고로만 봅니다.`);
+  }
   return {
+    heroSilent,
     // 2026-09-30 critical: 입력은 '짧은 쪽' 한 숫자라 누가 짧은지 모른다. 앤티를 뺀 표는 BB 가 짧거나 같을 때가 정확하고,
     //   내가(셔버) 더 짧으면 한 칸 위 표가 맞다. 오너 "1bb 까지는 신경 쓸 필요 없어" — 판정은 두되 어떤 기준인지 라벨에 드러낸다.
     //   두 스택을 따로 받은 스팟은 누가 짧은지 알므로 이 가정 표시가 필요 없다.
@@ -666,14 +731,6 @@ function verdictFromFreq(freq: number | null, exact: boolean): Verdict {
   return 'improve';
 }
 
-/** heroAction → 차트 갈래. 이 앱의 차트는 fold/call/raise 세 갈래다. */
-function mixKeyOf(a: SpotActionType): keyof ActionMix | null {
-  if (a === 'fold') return 'fold';
-  if (a === 'call') return 'call';
-  if (a === 'raise' || a === 'bet') return 'raise';
-  return null;   // check 는 프리플랍 차트에 대응 갈래가 없다
-}
-
 export interface EvaluateOptions {
   /** 워커가 계산한 히어로 에퀴티(0~1). 없으면 수학 지표에서 에퀴티 항목이 비어 나온다. */
   heroEquity?: number | null;
@@ -718,21 +775,22 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
   //    (가짜 표본을 넣지 않는다는 것이 이 자리의 전부다.)
 
   // ② 차트 · Nash
-  const hit = lookupPreflopChart(s, combo) ?? lookupNash(s, combo);
+  const hit = silenceChartAllin(s, lookupPreflopChart(s, combo)) ?? lookupNash(s, combo);
   if (hit) {
     const exact = hit.differences.length === 0;
-    const key = s.heroAction ? mixKeyOf(s.heroAction) : null;
+    const key = chartKeyOf(heroActionClass(s));
     // **빈도 0 과 "표가 말하지 않음" 은 다르다.** 0 은 "하지 마라"(→ 개선 필요)지만,
     // 표가 그 갈래를 담지 않았으면 판정할 근거가 아예 없다(→ 참고). 3벳 23표와 SB 얼리 수비
     // 3표에는 콜 갈래가 없어, 구별하지 않으면 **같은 플랫콜이 BB 에서는 '좋은 선택',
     // CO 에서는 '개선 필요'** 가 된다 — 라우팅이 판정을 뒤집는다.
-    const silent = key !== null && hit.absent.includes(key);
+    // 푸시·폴드 표 앞의 작은 레이즈·림프(heroSilent)도 같은 침묵이다 — 이유 문장은 differences 에 있다.
+    const silent = hit.heroSilent === true || (key !== null && hit.absent.includes(key));
     const heroFreq = key !== null && !silent ? hit.mix[key] : null;
     const notes: string[] = [hit.sourceLabel];
-    if (s.heroAction && !key) {
+    if (s.heroAction && !key && !hit.heroSilent) {
       notes.push(`이 표에는 '${s.heroAction}' 갈래가 없어 내 선택과 직접 비교하지 않았습니다.`);
     }
-    if (silent) {
+    if (silent && !hit.heroSilent) {
       notes.push(`이 표는 '${s.heroAction}' 갈래를 담지 않습니다 — 나머지가 콜인지 폴드인지 표가 말하지 않아 판정하지 않았습니다.`);
     }
     if (!exact) notes.push(...hit.differences);
