@@ -906,7 +906,10 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
     <nav
       // U06: 억제되면 보조기술·Tab 순서에서도 빠진다. 래퍼의 pointer-events 만으로는 키보드를 못 막는다.
       aria-hidden={suppressed || undefined}
-      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-(--dur-panel)',
+      // 2026-10-04 오너 결정 'E+황동' — 떠 있는 유리 알약 → **바닥에 붙은 평평한 바**. 면·윗선은 nav 자신이 칠한다
+      //   (아래 safe-area 상한 padding 까지 같은 면이라 바와 화면 끝 사이 틈이 없다). 높이는 종전 알약(60 + 테두리 2 + mb 2)보다
+      //   3px 낮은 61 + min(safe, .5rem) — --tabbar-safe/--tabbar-float·글쓰기 FAB·맨 위로·토스트 기준선은 그대로 둬도 겹치지 않는다.
+      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none border-t border-border-default bg-surface-base transition-transform duration-(--dur-panel)',
         hidden ? 'translate-y-[120%]' : 'translate-y-0',
         suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
       // 🔴 B2(2026-09-21 오너) — 실기기에서 **알약 아래만 크게 벌어진다.** 실측(운영 375×812 에
@@ -925,11 +928,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
       style={{ paddingBottom: 'min(env(safe-area-inset-bottom), 0.5rem)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
-      {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 알약 뒤는 **불투명** 커튼, 그 위 12px 만 짧게 페이드.
-          예전엔 '아래 불투명 → 위 완전 투명' 한 장이라 상단 30px 가 거의 유리였고 푸터 글자가 그대로 비쳐
-          "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
-      <div aria-hidden className="absolute inset-0 glass-strong" />
-      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-linear-to-t/srgb from-surface-base/80 to-transparent" />
+      {/* (알약 뒤 불투명 커튼·위 12px 페이드 — 2026-10-04 평평한 바로 바꾸며 삭제. 바 자체가 화면 끝까지 불투명 면이다) */}
       {/* 🔴 B1(2026-09-21) — 하단바 알약 **아래 여백**. 운영 390×844 실측에서 `nav` 는 bottom:0 · 높이 74.25 CSS px 인데
           알약 아래가 8.5 CSS px 남아 "하단바가 너무 위에 떠 있다" 로 보였다(safe-area 0 환경).
           ⚠ 루트 폰트가 **17px** 이라 0.5rem = 8.5px 다(16px 가정하면 계산이 틀린다 — 이 저장소 고유 함정).
@@ -948,7 +947,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           남았고 라벨 span 만 82% 가려져 "아이콘 아래 빈 공간" 으로 보였다(아이콘 위 9.5px vs 아래 24.4px).
           → `relative` 한 단어. 이제 레일 전체(배경·테두리·라벨)가 커튼 위에 그려진다 — 커튼의 설계 의도
           ('알약 **뒤**는 불투명 커튼')가 비로소 맞는다. 라벨이 보이면 아래 24.4px 는 빈 공간이 아니라 라벨 행이다. */}
-      <div className="pointer-events-auto relative mx-2.5 mb-[calc(0.125rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
+      <div className="pointer-events-auto relative mb-(--tabbar-lift) flex">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
@@ -999,7 +998,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
                     // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
                     // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-mid">
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base">
                     {count![tab]}
                   </span>
                 )}
