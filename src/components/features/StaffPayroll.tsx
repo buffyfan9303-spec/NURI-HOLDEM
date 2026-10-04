@@ -542,9 +542,11 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
             const m = shiftMinutes(s.date, s, rules);
             const inBlock = isToday ? selfShiftWriteError(s, 'checkIn', 'now', nowMs) : null;
             const outBlock = selfShiftWriteError(s, 'checkOut', 'now', nowMs);
-            // 출근 전 행의 '지금 퇴근' 은 막기만 하고 안내는 띄우지 않는다(모든 새 행에 문구가 붙는다)
+            // 출근 전 행의 '지금 퇴근' 은 막기만 하고 안내는 띄우지 않는다(모든 새 행에 문구가 붙는다).
+            // R5-02: 이미 적힌 칸에도 안내를 띄우지 않는다 — 퇴근이 있으면 '퇴근 칸에 실제 퇴근 시각을' 안내가,
+            //   출근이 있으면 '퇴근 시각이 먼저 적혀 있어' 안내가 끝난 근무 카드마다 붙었다. 버튼 막힘은 그대로(덮어쓰기라 무해).
             const note: [field: 'checkIn' | 'checkOut', e: SelfShiftWriteError] | null =
-              outBlock && outBlock !== 'SHIFT_NO_IN' ? ['checkOut', outBlock] : inBlock ? ['checkIn', inBlock] : null;
+              outBlock && outBlock !== 'SHIFT_NO_IN' && !s.checkOut ? ['checkOut', outBlock] : inBlock && !s.checkIn ? ['checkIn', inBlock] : null;
             return (
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
