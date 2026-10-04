@@ -21,9 +21,14 @@ import { GEO_REQUIRED_CODES } from './checkinGeo';
 const ROOT = path.join(__dirname, '../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf8');
 const sql = read('supabase/migrations/20261004d_checkin_geo_required_after_notice.sql');
+// 20261005a 가 check_in·request_checkin·staff_check_in 을 다시 정의한다 — **가장 나중 정의**(5a → 4d 순)를 본다.
+const sql5 = read('supabase/migrations/20261005a_checkin_geo_codes_business_day.sql');
 const fnBody = (name: string) => {
-  const i = sql.indexOf(`create or replace function public.${name}(`);
-  return sql.slice(i, sql.indexOf('$function$;', i));
+  for (const s of [sql5, sql]) {
+    const i = s.indexOf(`create or replace function public.${name}(`);
+    if (i >= 0) return s.slice(i, s.indexOf('$function$;', i));
+  }
+  return '';
 };
 const DAY = 86_400_000;
 
@@ -138,13 +143,19 @@ describe('critical 반증 반영 — 권한·대체 경로·배너·보존본', 
     expect(st).toContain('public._apply_checkin(p_venue_id, p_user_id)');
     expect(st).toContain('p_user_id = auth.uid()');
     // v3(오너 B 2026-10-05) — 오늘 이 매장의 출석 요청(대기)·참가 신청이 있는 손님만, 그리고 그 검사는 출석 기록보다 앞
-    expect(st).toMatch(/from public\.checkin_requests r\s+where r\.venue_id = p_venue_id and r\.user_id = p_user_id and r\.request_date = v_today and r\.status = 'pending'/);
-    expect(st).toMatch(/from public\.ledger_buyin_requests b\s+where b\.venue_id = p_venue_id and b\.user_id = p_user_id and b\.voucher_id is null/);
+    // 20261005a P3-c — 요청·참가 신청 날짜는 KST 오늘 또는 영업일(ledger_business_date)
+    expect(st).toMatch(/from public\.checkin_requests r\s+where r\.venue_id = p_venue_id and r\.user_id = p_user_id and r\.request_date in \(v_today, v_biz\) and r\.status = 'pending'/);
+    expect(st).toMatch(/from public\.ledger_buyin_requests b\s+where b\.venue_id = p_venue_id and b\.user_id = p_user_id and b\.voucher_id is null\s+and b\.session_date in \(v_today, v_biz\)/);
+    expect(st).toContain('v_biz := public.ledger_business_date(p_venue_id);');
     expect(st.indexOf('from public.checkin_requests r')).toBeLessThan(st.indexOf('v_res := public._apply_checkin'));
     const rq = fnBody('request_checkin');
     expect(rq).toContain("if v_geo is distinct from true then raise exception");
     expect(rq).toContain("if v_cnt >= 5 then raise exception");
     expect(rq).toContain("interval '4 hours'");
+    // 20261005a P3-d — 운영자는 요청 불가(운영자끼리 서로 승인) · 요청 날짜 = 영업일
+    expect(rq).toContain("if coalesce(public.can_manage_pos(p_venue_id), false) then raise exception '매장 운영자는");
+    expect(rq.indexOf('can_manage_pos(p_venue_id)')).toBeLessThan(rq.indexOf('insert into public.checkin_requests'));
+    expect(rq).toContain('values (p_venue_id, auth.uid(), v_disp, v_biz)');
     expect(sql).toContain('constraint checkin_requests_one_per_day unique (venue_id, user_id, request_date)');
     expect(sql).toMatch(/revoke all on table public\.checkin_requests from public, anon, authenticated;\r?\ngrant select on table public\.checkin_requests to authenticated;/);
     expect(sql).toMatch(/revoke all on function public\.request_checkin\(uuid\) from public, anon;\r?\ngrant execute on function public\.request_checkin\(uuid\) to authenticated, service_role;/);

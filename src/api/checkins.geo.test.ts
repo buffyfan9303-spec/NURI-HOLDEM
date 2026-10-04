@@ -170,8 +170,20 @@ describe('checkIn — 위치정보 이용 동의(LOCATION-READY)', () => {
     rpcReply.data = { error: '매장 근처에서만 출석할 수 있어요' };
     const e = await checkIn('v-1').catch((x) => x);
     expect(e).toBeInstanceOf(Error);
-    expect(e).not.toBeInstanceOf(CheckinGeoRequiredError); // 반경 밖은 종전 토스트
+    expect(e).not.toBeInstanceOf(CheckinGeoRequiredError); // code 없는 거부(20261005a 이전 서버)는 종전 토스트
     expect(e.message).toBe('매장 근처에서만 출석할 수 있어요');
+  });
+  it('20261005a — 반경 밖·정확도 낮음 거부에 code 가 오면 CheckinGeoRequiredError(out_of_range·low_accuracy) · 문구 그대로', async () => {
+    stubGeo((ok) => ok(pos(37.5, 127, 10)));
+    rpcReply.data = { code: 'geo_out_of_range', error: '매장 근처에서만 출석할 수 있어요' };
+    const e1 = await checkIn('v-1').catch((x) => x);
+    expect(e1).toBeInstanceOf(CheckinGeoRequiredError);
+    expect(e1.reason).toBe('out_of_range');
+    expect(e1.message).toBe('매장 근처에서만 출석할 수 있어요');
+    rpcReply.data = { code: 'geo_low_accuracy', error: '위치 정확도가 낮아요. 매장 안에서 다시 시도해 주세요' };
+    const e2 = await checkIn('v-1').catch((x) => x);
+    expect(e2).toBeInstanceOf(CheckinGeoRequiredError);
+    expect(e2.reason).toBe('low_accuracy');
   });
 });
 

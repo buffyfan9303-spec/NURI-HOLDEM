@@ -151,7 +151,10 @@ test('🔴 O4 업주 1440 — 「출석·QR 명단」의 출석 요청을 승인
   await expect(box.getByTestId('staff-checkin-req')).toContainText('위치거부손님');
   await expect(box, '요청 뒤 이미 출석한 손님이 승인 대기에 남았다').not.toContainText('이미온손님');
   await expect(box.getByRole('textbox'), '전 회원 검색 칸이 남았다').toHaveCount(0);
-  expect(calls.reqReads.some((u) => u.includes(`venue_id=eq.${MOCK_VENUE}`) && u.includes('status=eq.pending') && /request_date=eq\.\d{4}-\d{2}-\d{2}/.test(u)), '오늘·이 매장·대기 요청만 읽어야 한다').toBe(true);
+  // 20261005a P3-c — 요청 날짜는 영업일이라 KST 어제·오늘 두 날짜 + 12시간 안의 요청만 읽는다
+  expect(calls.reqReads.some((u) => u.includes(`venue_id=eq.${MOCK_VENUE}`) && u.includes('status=eq.pending')
+    && /request_date=in\.%28\d{4}-\d{2}-\d{2}%2C\d{4}-\d{2}-\d{2}%29|request_date=in\.\(\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}\)/.test(u)
+    && /created_at=gte\./.test(u)), '어제·오늘 영업일·이 매장·대기 요청만 읽어야 한다').toBe(true);
   if (SHOT) await page.screenshot({ path: `${SHOT}/owner-staff-checkin.png` });
   const reads0 = calls.listReads;
   const req0 = calls.reqReads.length;

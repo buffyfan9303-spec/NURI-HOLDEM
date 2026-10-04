@@ -131,7 +131,7 @@ export default function CheckinLocationSection({ venueId, canToggleGeo = false }
     <section data-testid="checkin-location" className="rounded-aura border card-aura p-3 space-y-3">
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">출석 위치</h3>
-        <p className="text-2xs text-ink-muted">아래 「위치 확인 출석」을 켜면 손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>에서 출석 QR로 출석합니다{geoOn ? '' : ' (운영 스위치가 켜진 뒤부터)'}.</p>
+        <p className="text-2xs text-ink-muted">아래 「위치 확인 출석」을 켜면 손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>(휴대폰 측위 오차는 최대 200m까지 보정)에서 출석 QR로 출석합니다{geoOn ? '' : ' (운영 스위치가 켜진 뒤부터)'}.</p>
       </div>
       {loadErr ? (
         <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">출석 위치를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>

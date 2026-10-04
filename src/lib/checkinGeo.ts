@@ -63,10 +63,14 @@ export class CheckinGeoError extends Error {
 
 /** 20261004d — 위치 확인을 켠 매장(시행일 뒤)에서 서버가 출석을 받지 않은 이유. 서버 응답 {error, code} 의 code 와 1:1.
  *  'consent' = 위치정보 이용 동의(현재 판)가 없음 · 'position' = 동의는 있는데 좌표가 안 왔음. 판정은 서버만 한다. */
-export type CheckinGeoRequiredReason = 'consent' | 'position';
+//  20261005a(critical P2): 좌표를 쓴 판정의 거부에도 code 가 붙는다 — 'out_of_range'(반경 밖) · 'low_accuracy'(측위 오차 1km 초과).
+//  그전에는 code 없이 와서 토스트만 떴고, 재시도 시트의 '출석 요청 보내기'(대체 경로)가 보이지 않았다.
+export type CheckinGeoRequiredReason = 'consent' | 'position' | 'out_of_range' | 'low_accuracy';
 export const GEO_REQUIRED_CODES: Record<string, CheckinGeoRequiredReason> = {
   geo_consent_required: 'consent',
   geo_position_required: 'position',
+  geo_out_of_range: 'out_of_range',
+  geo_low_accuracy: 'low_accuracy',
 };
 export class CheckinGeoRequiredError extends Error {
   readonly reason: CheckinGeoRequiredReason;

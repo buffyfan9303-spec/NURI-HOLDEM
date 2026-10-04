@@ -13,7 +13,8 @@ import { CHECKIN_GEO_MESSAGE, CheckinGeoError, CheckinGeoRequiredError, type Che
 import { CHECKIN_ALT_PATH } from './locationTerms';
 import { msgOf } from './dbError';
 
-export type CheckinRetryCode = CheckinGeoErrorCode | 'consent';
+/** 'out_of_range'·'low_accuracy' = 좌표를 보냈는데 서버가 반경 밖·정확도 낮음으로 거부(20261005a code). */
+export type CheckinRetryCode = CheckinGeoErrorCode | 'consent' | 'out_of_range' | 'low_accuracy';
 export type CheckinFailureAction =
   | { kind: 'sheet'; code: CheckinRetryCode }
   | { kind: 'toast'; message: string };
@@ -21,7 +22,8 @@ export type CheckinFailureAction =
 export function checkinFailureAction(e: unknown): CheckinFailureAction {
   if (e instanceof CheckinGeoError) return { kind: 'sheet', code: e.code };
   // 서버가 '좌표 없음'으로 거부했는데 클라가 위치를 시도하지 않은 경우(동의 창을 닫음 등)도 시트 — 버튼이 다시 묻고 위치를 받는다.
-  if (e instanceof CheckinGeoRequiredError) return { kind: 'sheet', code: e.reason === 'consent' ? 'consent' : 'unavailable' };
+  // 20261005a — 반경 밖·정확도 낮음 거부도 시트(위치 다시 시도 + 출석 요청 보내기). 그전에는 토스트만 떠 대체 경로가 안 보였다(critical P2).
+  if (e instanceof CheckinGeoRequiredError) return { kind: 'sheet', code: e.reason === 'position' ? 'unavailable' : e.reason };
   return { kind: 'toast', message: msgOf(e, '출석 실패') };
 }
 
@@ -39,6 +41,8 @@ export function requestCheckinRetrySheet(venueId: string, e: unknown): boolean {
 export const isKakaoInApp = (ua: string) => /KAKAOTALK/i.test(ua);
 
 const CONSENT_REASON = '이 매장은 위치 확인 출석 매장입니다. 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다';
+const OUT_OF_RANGE_REASON = '매장 근처에서만 출석할 수 있습니다. 매장 안이라면 휴대폰 위치(GPS)를 켜고 다시 시도해 주세요';
+const LOW_ACCURACY_REASON = '위치 정확도가 낮아 매장 안인지 확인하지 못했습니다. 휴대폰 위치(GPS)를 켜고 매장 안에서 다시 시도해 주세요';
 
 /** 시트 '출석 요청' 버튼 결과 문구(오너 B 2026-10-05) — request_checkin 반환 {status, already}. */
 export function checkinRequestToast(r: { status: string; already: boolean }): string {
@@ -50,7 +54,7 @@ export function checkinRequestToast(r: { status: string; already: boolean }): st
 export function checkinGeoRetryCopy(code: CheckinRetryCode, ua: string): { reason: string; hint: string | null; alt: string; action: string } {
   const alt = `동의하기 어렵거나 위치를 켤 수 없어도 ${CHECKIN_ALT_PATH}`;
   if (code === 'consent') return { reason: CONSENT_REASON, hint: null, alt, action: '동의하고 출석' };
-  const reason = CHECKIN_GEO_MESSAGE[code];
+  const reason = code === 'out_of_range' ? OUT_OF_RANGE_REASON : code === 'low_accuracy' ? LOW_ACCURACY_REASON : CHECKIN_GEO_MESSAGE[code];
   const action = '위치 확인 후 출석';
   if (isKakaoInApp(ua)) {
     return { reason, hint: '카카오톡 안에서는 위치 확인이 막힐 수 있습니다. 오른쪽 아래(또는 위) 메뉴에서 ‘다른 브라우저로 열기’를 누른 뒤 다시 출석해 주세요', alt, action };
