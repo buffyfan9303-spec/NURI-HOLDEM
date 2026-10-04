@@ -76,7 +76,7 @@ test.describe('①-b 느린 망', () => {
   test('미리 받기 전에 눌러도 폴백 0 — 모듈이 온 뒤 연다(ToolsPanel whenToolReady)', async ({ page }) => {
     test.setTimeout(60_000);
     await bootOwner(page, { viewport: { width: 390, height: 844 } });
-    // 느린 망 재현 — 무거운 도구 묶음 청크를 **누른 뒤 600ms** 에 놓아 준다(대기 상한 1초 안).
+    // 느린 망 재현 — 무거운 도구 묶음 청크를 **누른 뒤 300ms** 에 놓아 준다(대기 상한 1초 안).
     //   고정 지연만 걸면 병렬 부하에서 클릭이 늦어 청크가 먼저 도착해 '모듈이 온 뒤 연다' 를 지워도 초록이었다(2026-10-04 음성 대조).
     let hits = 0;
     let release!: () => void;
@@ -86,12 +86,50 @@ test.describe('①-b 느린 망', () => {
     await expect(page.locator('[data-testid="tool-pushfold"]')).toBeVisible({ timeout: 30_000 });
     // 유휴 미리 받기(requestIdleCallback)를 기다리지 않고 바로 누른다 — 청크가 아직 없는 순간이다.
     const recording = openAndRecord(page, 'tool-pushfold', 1800);
-    setTimeout(release, 600);
+    setTimeout(release, 300);
     const frames = await recording;
     const fb = frames.filter((f) => f.fb);
     expect(hits, '느린 망 재현이 안 걸렸다 — 이 검사는 아무것도 안 본 것이다').toBeGreaterThan(0);
     expect(frames.some((f) => f.open && f.h > 150 && !f.fb), '푸시폴드 본문이 그려지지 않았다').toBe(true);
     expect(fb.length, `폴백 ${fb.length}프레임(${fb[0]?.t}~${fb.at(-1)?.t}ms) — 모듈 도착 전에 판을 열었다`).toBe(0);
+  });
+
+  // critical-reviewer PR #156 이 찾은 경합 — 청크를 기다리는 사이 하단 탭을 옮기면, 늦게 도착한 '열기' 가
+  //   숨은 GTO 판에 모달을 열어 다른 탭의 스크롤이 잠기고 URL 에 #tool= 이 남았다(Modal 은 판 안에 있다).
+  const nav = (page: Page, name: string) => page.getByRole('navigation', { name: '하단 내비게이션' }).getByRole('button', { name, exact: true });
+  const leftovers = (page: Page) => page.evaluate(() => ({
+    dialogs: document.querySelectorAll('[role="dialog"][aria-modal="true"]').length,
+    htmlOverflow: getComputedStyle(document.documentElement).overflowY,
+    hash: location.hash,
+  }));
+  test('①-c 청크 대기 중 다른 탭으로 가면 — 숨은 판에 모달이 열리지 않는다(스크롤 잠김·#tool= 없음)', async ({ page }) => {
+    test.setTimeout(60_000);
+    await bootOwner(page, { viewport: { width: 390, height: 844 } });
+    let hits = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    await page.route(/\/assets\/gtoHeavyTools-[^/]+\.js$/, async (r) => { hits++; await gate; await r.continue(); });
+    await page.goto('/?tab=tools');
+    await expect(page.locator('[data-testid="tool-pushfold"]')).toBeVisible({ timeout: 30_000 });
+    await page.evaluate(() => document.querySelector<HTMLElement>('[data-testid="tool-pushfold"]')!.click());
+    await nav(page, '홈').click();
+    await page.waitForTimeout(300);
+    release();
+    await page.waitForTimeout(1_800);
+    expect(hits, '느린 망 재현이 안 걸렸다').toBeGreaterThan(0);
+    expect(await leftovers(page)).toEqual({ dialogs: 0, htmlOverflow: expect.not.stringMatching(/hidden/), hash: '' });
+  });
+
+  test('①-d 루트 딥링크 /#tool=pushfold — 숨은 채 예열된 판에 모달을 열지 않고, GTO 탭을 열면 그때 연다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await bootOwner(page, { viewport: { width: 390, height: 844 } });
+    await page.goto('/#tool=pushfold');
+    // App 유휴 예열이 GTO 판을 숨긴 채 마운트할 때까지 기다린다(실측 ~8초).
+    await expect(page.locator('main[data-tab="tools"]')).toBeAttached({ timeout: 45_000 });
+    await page.waitForTimeout(3_000);
+    expect(await leftovers(page)).toEqual({ dialogs: 0, htmlOverflow: expect.not.stringMatching(/hidden/), hash: '' });
+    await nav(page, 'GTO').click();
+    await expect(page.locator('[data-testid="pushfold-positions"]')).toBeVisible({ timeout: 15_000 });
   });
 });
 

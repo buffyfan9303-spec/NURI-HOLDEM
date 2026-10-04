@@ -340,22 +340,25 @@ export const renderCalendarTool = (k: CalendarToolKey): ReactNode => renderTool(
  *  레인은 접이식 금지 — 비접이 소제목 + 상단 필터 칩 행(전체/학습/분석/계산기/매장운영). */
 export default function ToolsPanel() {
   const toast = useToast();
-  // 지연 도구의 딥링크는 모듈이 온 뒤 연다(아래 마운트 이펙트 → setActive → whenToolReady).
-  const deepLinkLazy = useRef<ToolKey | null>(null);
+  // 딥링크(#tool=key — 공유·재방문, 하위호환 계약)는 마운트 이펙트가 setActive 로 연다. 판이 숨어 있으면 보일 때 연다.
+  const deepLink = useRef<ToolKey | null>(null);
   const [active, setActiveNow] = useState<ToolKey | null>(() => {
-    // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문) — 하위호환 계약, 변경 금지
     const m = window.location.hash.match(/^#tool=([a-z]+)/);
-    const k = m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
-    if (k && LAZY_TOOL[k]) { deepLinkLazy.current = k; return null; }
-    return k;
+    deepLink.current = m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
+    return null;
   });
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** 이 판이 지금 화면에 나와 있나 — 탭 keep-alive 는 display:none 으로 숨기므로 getClientRects 가 빈다. */
+  const shown = () => (rootRef.current?.getClientRects().length ?? 0) > 0;
   // 여는 경로(카드·딥링크·해시·도구 간 링크·로그인 대기)는 전부 여기를 지난다. 마지막 요청만 산다 —
   //   A 를 받는 동안 B 를 누르거나 닫으면 늦게 도착한 A 가 판을 덮지 않는다.
+  // 🔴 열 때 판이 숨어 있으면 열지 않는다(critical-reviewer PR #156): 청크를 기다리는 사이 하단 탭을 옮기면
+  //   숨은 판에 모달이 열려 다른 탭의 스크롤이 잠기고 URL 에 #tool= 이 남았다. Modal 은 포털이 아니라 판 안에 있다.
   const openSeq = useRef(0);
   const setActive = (k: ToolKey | null) => {
     const seq = ++openSeq.current;
     if (!k) { setActiveNow(null); return; }
-    whenToolReady(k, () => { if (openSeq.current === seq) startTransition(() => setActiveNow(k)); });
+    whenToolReady(k, () => { if (openSeq.current === seq && shown()) startTransition(() => setActiveNow(k)); });
   };
   // GTO 도구는 로그인 회원 전용(오너 지시 2026-08-27) — 카탈로그는 보이되 실행에 게이트
   //
@@ -411,24 +414,29 @@ export default function ToolsPanel() {
   const activeRef = useRef<ToolKey | null>(active);
   activeRef.current = active;
   useLayoutEffect(() => { stripToolHash(); }, []); // 딥링크 진입 항목 정규화(1회)
+  // 딥링크 진입 — 판이 보이면 바로, 숨어 있으면 **판이 보일 때** 연다(아래 관찰자). 루트 `/#tool=` 는 홈에 머문 채
+  //   이 판이 숨은 채 마운트되고 해시도 숨은 판에 도착한다 — 종전엔 숨은 판에 모달을 열어 홈 스크롤이 잠겼다(사전 결함 A15).
   useEffect(() => {
-    const k = deepLinkLazy.current;
-    if (!k) return;
-    deepLinkLazy.current = null;
+    const k = deepLink.current;
+    if (!k || !shown()) return;
+    deepLink.current = null;
     setActive(k);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회(딥링크 진입). setActive 는 ref 만 읽는다
   }, []);
   // 무거운 도구 미리 받기 — ⚠ **마운트가 아니라 '보일 때'** 다. 이 패널은 App 의 유휴 예열로 GTO 탭을 열기 전에
   //   display:none 인 채 마운트될 수 있다. 그때 받으면 GTO 를 안 쓰는 사람까지 수백 KB 를 받는다.
   //   IntersectionObserver 는 display:none 조상 아래에서 교차하지 않으므로 '실제로 화면에 나왔다' 의 신호가 된다.
-  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    let idleId = 0; let timerId = 0;
+    let idleId = 0; let timerId = 0; let preloaded = false;
+    // 계속 관찰한다 — 판이 다시 보일 때마다 숨은 동안 도착한 딥링크를 연다. 미리 받기는 처음 한 번만.
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      io.disconnect();
+      const k = deepLink.current;
+      if (k) { deepLink.current = null; setActive(k); }
+      if (preloaded) return;
+      preloaded = true;
       const run = () => { for (const f of Object.values(PRELOAD)) f?.(); };
       if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(run, { timeout: 3000 });
       else timerId = window.setTimeout(run, 1200);
@@ -518,6 +526,8 @@ export default function ToolsPanel() {
       // 위 ① 과 같은 이유 — 해시를 갖고 도착한 이 항목에서 해시를 걷어내고,
       // 도구가 열린 뒤 그 도구의 항목에 다시 얹는다(닫을 때 되살아나지 않게).
       stripToolHash();
+      // 숨은 판에 도착한 해시(루트 `/#tool=` 부팅)는 판이 보일 때 연다 — 위 관찰자가 꺼낸다.
+      if (!shown()) { deepLink.current = m[1] as ToolKey; return; }
       setActive(m[1] as ToolKey);
     };
     window.addEventListener('hashchange', onHash);

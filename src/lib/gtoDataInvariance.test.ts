@@ -6,6 +6,8 @@
 //   ② 레인지 표 — 전 시나리오의 액션별 169핸드 빈도 + 색·그룹
 //   ③ 드릴 문제 — 복원 가능한 모든 키(차트 4모드 · 푸시 · 콜)의 정답 빈도
 //   ④ SPOT 판정 — 인원 4종 × 자리 쌍 × 스택 × 앤티 × 액션 줄 × 169핸드의 등급·빈도·판정·수치
+//      ⚠ 콜에는 크기(amountToCall)를 꼭 싣는다 — 빠지면 입력 오류(blocker)로 전부 '범위 밖'이 돼 수비·3벳·vs 3벳 표를
+//        한 번도 안 지난다(critical-reviewer PR #156: 그 상태로 판정 뮤턴트에 47/47 초록이었다). 줄마다 실제 판정이 나오는지 따로 단언한다.
 // 구역마다 sha256 을 따로 둔다 — 깨지면 **어느 표가** 바뀌었는지 이름이 나온다.
 // 지문을 다시 뽑는 것은 값이 **의도적으로** 바뀔 때뿐이다:  GTO_GOLDEN_WRITE=1 npx vitest run src/lib/gtoDataInvariance.test.ts
 import { describe, it, expect } from 'vitest';
@@ -18,7 +20,7 @@ import {
 import { RANGE_SCENARIOS, RANGE_GROUPS, ACTION_COLORS } from './ranges.data';
 import { buildFreq, gridName } from './ranges';
 import { makeQuiz, MODES, KEY_PREFIX, PUSH_POS, PUSH_STACKS_AVAILABLE, type Mode } from './preflopQuiz';
-import { evaluateSpot } from './spotEvaluate';
+import { evaluateSpot, amountToCall } from './spotEvaluate';
 import { emptySpot, positionsFor, type SpotReview, type SpotAction } from './spot';
 
 const GOLDEN = new URL('./gtoDataInvariance.golden.json', import.meta.url);
@@ -32,6 +34,7 @@ const cardsOf = (h: string): string[] => {
 };
 
 let SPOT_KINDS: [string, number][] = [];
+let SPOT_LINE_KINDS: Record<string, Record<string, number>> = {};
 function sections(): Record<string, { n: number; s: string }> {
   const out: Record<string, string[]> = {};
   const add = (sec: string, line: string) => (out[sec] ??= []).push(line);
@@ -79,25 +82,41 @@ function sections(): Record<string, { n: number; s: string }> {
 
   // ④ SPOT 판정 — 등급·판정·빈도·수치(문장은 빼고 구조만: 문구 수정이 지문을 흔들지 않게)
   const kinds: Record<string, number> = {};
+  const lineKinds: Record<string, Record<string, number>> = {};
+  const raise = (actor: 'hero' | 'villain', sizeBb: number): SpotAction => ({ street: 'preflop', actor, type: 'raise', sizeBb });
   for (const tableSize of [2, 6, 9, 10]) {
     const seats = positionsFor(tableSize);
     for (const heroPos of seats) for (const villainPos of seats) {
       if (heroPos === villainPos) continue;
-      for (const eff of [100, 40, 20, 15, 12, 10, 8, 6, 5, 3, 2]) for (const anteBb of [0, 1]) {
-        const lines: [string, SpotAction[], Partial<SpotReview>][] = [
-          ['open', [], { heroAction: 'raise', heroActionSizeBb: 2.5 }],
-          ['vsOpen', [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }], { heroAction: 'call' }],
-          ['vs3bet', [{ street: 'preflop', actor: 'hero', type: 'raise', sizeBb: 2.5 }, { street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 9 }], { heroAction: 'call' }],
-          ['vsShove', [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: eff }], { heroAction: 'call' }],
-          ['shove', [], { heroAction: 'raise', heroActionSizeBb: eff }],
-          ['shove2stk', [], { heroAction: 'raise', heroActionSizeBb: eff, heroStackBb: eff, villainStackBb: eff * 2 }],
-        ];
-        for (const [name, actions, over] of lines) {
+      // 줄을 두 무리로 나눈다 — 차트 조회는 호출마다 레인지를 펼쳐 비싸다(실측 9~26µs, Nash 2~4µs).
+      //   차트 줄(100bb 표): 100 = 정확 · 80 = 유사 스팟(70~150 띠) · 69 = 띠 밖. 앤티는 차이 문구 하나라 0·1.
+      //   Nash 줄: 표 깊이 + 사이 스택(13·9.8·9.5 — 가까운 표·동률 규칙) · 앤티 0.5(1BB 표와 다른 총액).
+      const groups: [number[], number[], [string, (eff: number) => SpotAction[], (eff: number) => Partial<SpotReview>][]][] = [
+        [[100, 80, 69], [0, 1], [
+          ['open', () => [], () => ({ heroAction: 'raise', heroActionSizeBb: 2.5 })],
+          ['vsOpen', () => [raise('villain', 2.5)], () => ({ heroAction: 'call' })],
+          ['vsOpenFold', () => [raise('villain', 2.5)], () => ({ heroAction: 'fold' })],
+          ['vs3bet', () => [raise('hero', 2.5), raise('villain', 9)], () => ({ heroAction: 'call' })],
+          ['vs3betFold', () => [raise('hero', 2.5), raise('villain', 9)], () => ({ heroAction: 'fold' })],
+        ]],
+        [[20, 15, 13, 10, 9.8, 9.5, 5, 2], [0, 0.5, 1], [
+          ['vsShove', (eff) => [raise('villain', eff)], () => ({ heroAction: 'call' })],
+          ['shove', () => [], (eff) => ({ heroAction: 'raise', heroActionSizeBb: eff })],
+          ['shove2stk', () => [], (eff) => ({ heroAction: 'raise', heroActionSizeBb: eff, heroStackBb: eff, villainStackBb: eff * 2 })],
+        ]],
+      ];
+      for (const [stacks, antes, lines] of groups) for (const eff of stacks) for (const anteBb of antes) {
+        for (const [name, mkActions, mkOver] of lines) {
+          const actions = mkActions(eff);
+          const over = mkOver(eff);
           const sec = `spot:${tableSize}:${name}`;
+          const lk = (lineKinds[name] ??= {});
           for (const h of HANDS) {
             const s: SpotReview = { ...emptySpot(), tableSize, heroPos, villainPos, effectiveBb: eff, anteBb, actions, hero: cardsOf(h), ...over };
+            if (s.heroAction === 'call') s.heroActionSizeBb = amountToCall(s);
             const e = evaluateSpot(s);
             kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
+            lk[e.kind] = (lk[e.kind] ?? 0) + 1;
             const c = e as Partial<{ mix: unknown; absent: unknown; heroFreq: unknown; differences: unknown[]; drill: unknown }>;
             add(sec, `${heroPos}|${villainPos}|${eff}|${anteBb}|${h}|${e.kind}|${e.verdict}|${JSON.stringify([c.mix, c.absent, c.heroFreq, c.differences?.length, c.drill, e.math, e.issues.length])}`);
           }
@@ -105,6 +124,7 @@ function sections(): Record<string, { n: number; s: string }> {
       }
     }
   }
+  SPOT_LINE_KINDS = lineKinds;
   SPOT_KINDS = Object.entries(kinds).sort();
   add('spot:kinds', JSON.stringify(SPOT_KINDS));
 
@@ -127,9 +147,22 @@ describe('GTO 데이터 불변 — 분할 전 지문과 전수 비교', () => {
 
   it('SPOT 그리드가 실제 표 조회를 지나간다(전부 범위 밖이면 이 비교는 아무것도 안 본 것이다)', () => {
     const k = Object.fromEntries(SPOT_KINDS) as Record<string, number>;
-    // 2026-10-04 실측: chart_nash 1,087,177 · normalized_reference 107,991 · math_only 553,306 · unsupported 2,579,278
-    expect(k.chart_nash ?? 0).toBeGreaterThan(500_000);
-    expect(k.normalized_reference ?? 0).toBeGreaterThan(50_000);
-    expect(k.math_only ?? 0).toBeGreaterThan(100_000);
+    const msg = JSON.stringify(k);
+    // 2026-10-04 실측(콜 크기 반영 뒤): chart_nash 444,132 · normalized_reference 767,598 · math_only 1,521,338 · unsupported 611,104
+    expect(k.chart_nash ?? 0, msg).toBeGreaterThan(200_000);
+    expect(k.normalized_reference ?? 0, msg).toBeGreaterThan(300_000);
+    expect(k.math_only ?? 0, msg).toBeGreaterThan(500_000);
+  });
+
+  it.each(['open', 'vsOpen', 'vsOpenFold', 'vs3bet', 'vs3betFold', 'shove', 'shove2stk'])(
+    'SPOT 줄 %s — 입력 오류로 전부 막히지 않고 차트·Nash 판정이 실제로 나온다', (name) => {
+      const lk = SPOT_LINE_KINDS[name] ?? {};
+      expect((lk.chart_nash ?? 0) + (lk.normalized_reference ?? 0), `${name}: ${JSON.stringify(lk)}`).toBeGreaterThan(0);
+    });
+
+  // 셔브에 콜하는 표는 SPOT 판정에 없다(Nash 는 첫 진입 셔브만) — 대신 입력 오류 없이 수학 판정까지는 가야 한다.
+  it('SPOT 줄 vsShove — 입력 오류로 전부 막히지 않는다(수학 판정이 나온다)', () => {
+    const lk = SPOT_LINE_KINDS.vsShove ?? {};
+    expect(lk.math_only ?? 0, JSON.stringify(lk)).toBeGreaterThan(0);
   });
 });

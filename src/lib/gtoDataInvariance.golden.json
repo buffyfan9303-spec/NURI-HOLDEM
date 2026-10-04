@@ -80,103 +80,135 @@
   "s": "a3d7b3c04c334defe5a99d0c7044ea20671d023ebdcb3ce878a5e24c2c26af6c"
  },
  "spot:2:open": {
-  "n": 7436,
-  "s": "03109f7a47f27ca9e389a5f66e9d10ef3a12a48480c0169e04006f226dc97437"
+  "n": 2028,
+  "s": "da71f42f7b1f6315c8156f5e43da79d91bf6920a25fdbebad244ab9b07b30708"
  },
  "spot:2:vsOpen": {
-  "n": 7436,
-  "s": "ac628c09a311231e9c18c6957745567aa71bfbe625a73c8f62df29c7e6a7ac67"
+  "n": 2028,
+  "s": "1535e060823690c21cecfd04b37a97ffa605f1a93887511b982175ea331cefda"
+ },
+ "spot:2:vsOpenFold": {
+  "n": 2028,
+  "s": "5ece5d81c13f8a7dece5cfab78341782dd9e16f3052c77cd09c638ae58bba213"
  },
  "spot:2:vs3bet": {
-  "n": 7436,
-  "s": "54d61448b69c5f2b5263615732211af4fcdc1952587a9abc617a18def7addbf9"
+  "n": 2028,
+  "s": "c3e4c1705a643c4abd7297763c04d88d9347b25363980b411c129eeffac084f8"
+ },
+ "spot:2:vs3betFold": {
+  "n": 2028,
+  "s": "79fd8c6b5f52aedff6cde9f8894fc45590218c125b505bb91ec9a36db1e59628"
  },
  "spot:2:vsShove": {
-  "n": 7436,
-  "s": "f4ed400614b2f72d97e4f7a11b883a1aa3b4f40195632e34ddd93a02b6c4a289"
+  "n": 8112,
+  "s": "0f4b438ab0c2a4d9c5f80b2118410341bd76f05a5499e7b93ea94cb151659861"
  },
  "spot:2:shove": {
-  "n": 7436,
-  "s": "2699f7b07d2f6f6c8a51fe546568af71af3bee486004dd6753bcfc8fe24abba9"
+  "n": 8112,
+  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
  },
  "spot:2:shove2stk": {
-  "n": 7436,
-  "s": "2699f7b07d2f6f6c8a51fe546568af71af3bee486004dd6753bcfc8fe24abba9"
+  "n": 8112,
+  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
  },
  "spot:6:open": {
-  "n": 111540,
-  "s": "e7dd06c0de649d2be8ebc41e0ad9fe9a93b53cac1a2ad3aadd1594711258f7a0"
+  "n": 30420,
+  "s": "edabb13696c02c2877fbf7465532c6cfb4daecb8f46ec81dcd28fd320d5016a2"
  },
  "spot:6:vsOpen": {
-  "n": 111540,
-  "s": "bd1e1f900ea59779409b6d01961413e8418a92ce2c12b457315fa3ea70440eca"
+  "n": 30420,
+  "s": "fbce2bad9096dba6cc522d414a0e753eb836460448e8e46ff1d82a1d131c9f1d"
+ },
+ "spot:6:vsOpenFold": {
+  "n": 30420,
+  "s": "222eba6a5c46998ad3b1f895b6cc66ffbd66fb097ac5a509036ace55b44080ef"
  },
  "spot:6:vs3bet": {
-  "n": 111540,
-  "s": "8e64a27261a753b8b4d315be5a0a33da3b8c1b987a506607d5b22f2ea095c8e2"
+  "n": 30420,
+  "s": "4a9d591eb889ae82269b4ffdf91a58f3b53550896bcfb67ccae4a854ccaa2b48"
+ },
+ "spot:6:vs3betFold": {
+  "n": 30420,
+  "s": "1bd95120cb4e21a87631cf48ef5868a5724cc9ca61daa7dca7f5c7715a3a6395"
  },
  "spot:6:vsShove": {
-  "n": 111540,
-  "s": "6c81d71cb5cdfc1a2eb9725742d32de0ee666da5a8fec13b3e48e88dbb92f343"
+  "n": 121680,
+  "s": "97232a5ace575d761d2f64cf1045e49dbb89010ff1be7f76b0ea1b5630de4fe4"
  },
  "spot:6:shove": {
-  "n": 111540,
-  "s": "c0542bac6dfa6d9d0cff2d9c187396fc2d66cbd7a6618f0a23c8ada71b7b8aec"
+  "n": 121680,
+  "s": "f35596b14444eb2ecee1c4290e6a243179f2b475253fbed0e329af340dcdd1e8"
  },
  "spot:6:shove2stk": {
-  "n": 111540,
-  "s": "ae202863801bbeacf039f85fd2e2b2fdd05b79737e5be214133d3c3d3c3f3b8b"
+  "n": 121680,
+  "s": "4546320072f5a828d9cfcd6359e5199cb5852650740cb138e03036d3f53602e4"
  },
  "spot:9:open": {
-  "n": 267696,
-  "s": "27482d92128dc6ed953545d661e55e1e5a7ea2d59e08487f89de02a852cdd0cc"
+  "n": 73008,
+  "s": "0e42d505a5b11b830fe8f31f3ec469cafc6413f6d1927dcfce678427a11f9298"
  },
  "spot:9:vsOpen": {
-  "n": 267696,
-  "s": "9182b05f9b0aea0525189d88e3744b06ecd69e5043f4c0a1eebe66d915b04a4a"
+  "n": 73008,
+  "s": "3d08f3f80f1104c8c63ba86b201b03756e822ded66625ff12eca6a1abf52b81f"
+ },
+ "spot:9:vsOpenFold": {
+  "n": 73008,
+  "s": "4b0d6149d326b98f173e31b52fd3f723f1b03f26004d070bc3d23258f2155f8d"
  },
  "spot:9:vs3bet": {
-  "n": 267696,
-  "s": "115ac6b18598919af9a4448a3abc9c6df4ae040b82645a8b4c19645ba6feea15"
+  "n": 73008,
+  "s": "3a311b773884186777b1d01b6f8aa59663618a26d92eb32848ef755ebc9e391c"
+ },
+ "spot:9:vs3betFold": {
+  "n": 73008,
+  "s": "960aeeb9c27d04c4bf63fef010a1e0cc5c205b0937ed76aa63f20fee2ae9e002"
  },
  "spot:9:vsShove": {
-  "n": 267696,
-  "s": "de0d00a0b5293dde9ff69e13f8d55632ec2cbcfe9752913869e5cf1497f5e739"
+  "n": 292032,
+  "s": "0fc4de6124b8fbfbea2075044fad3b228900efaacc1145afaf8a23228e6d3ac5"
  },
  "spot:9:shove": {
-  "n": 267696,
-  "s": "939a38d44306f548eb07a68d4611386c492114f6ea692e46b718f10712f03d68"
+  "n": 292032,
+  "s": "28276294cbb8303f5b048b7d177f6e98150a86793b63edd9fe0094cc8c53b505"
  },
  "spot:9:shove2stk": {
-  "n": 267696,
-  "s": "d36010648fd3c14bcfa0819faaf4e14b1d595649dda648b14d381f7b07dafc59"
+  "n": 292032,
+  "s": "bf16559fc070d3e1d544e5b2a9fb4ec1fc2d348a0c5da6e94612059ad03dd00a"
  },
  "spot:10:open": {
-  "n": 334620,
-  "s": "ae82c6eaf80f7c606947d2f0387a9a03e908d8caf7c4eb09f6cb63448b8df60d"
+  "n": 91260,
+  "s": "bf983673e9ee9bf8c54c345c346d13435e92ed2780db359c5e4b4999c3831402"
  },
  "spot:10:vsOpen": {
-  "n": 334620,
-  "s": "c07b43820f8316c3b0b6cfac1844a5ace99bef678f07fa45a32cc38c9edab64f"
+  "n": 91260,
+  "s": "a896740ac62471b0444ad553746822bc3a254aac834082f96e97187f2bd8e6fa"
+ },
+ "spot:10:vsOpenFold": {
+  "n": 91260,
+  "s": "48fc287dd32e9909eb72250afbb2fc28849fa62353102dfa3b689d1feaf0e5d9"
  },
  "spot:10:vs3bet": {
-  "n": 334620,
-  "s": "0c890de72922e4bbfadd942d802174e29c9c6bc5cfb5ae9c42103b8765348149"
+  "n": 91260,
+  "s": "1bd2c67d4d6111a5971cf6758c6e6c6434c2f53f87c4b3214387b589abf1404e"
+ },
+ "spot:10:vs3betFold": {
+  "n": 91260,
+  "s": "cb5bd98f591656c6b364a02a726caf0f3fae2a8f05642a1518f9aed0b4673c92"
  },
  "spot:10:vsShove": {
-  "n": 334620,
-  "s": "d0518f44d6e20f284e6473339f846bba9820fc968915350d7d6ecdb62446e4a2"
+  "n": 365040,
+  "s": "d70924a96e846e3830cfed73912248bcfa96a63a43f0ee3cc9b93d4b5c997f0d"
  },
  "spot:10:shove": {
-  "n": 334620,
-  "s": "531e4e8d93c670ceceeb87635a7e25ddb707bf8620af287fd5aff4e7f270857e"
+  "n": 365040,
+  "s": "ca9a62ca9cd170dfd19d8e1cd62d8ea4e2506833c6d219fd53797c97069adfb6"
  },
  "spot:10:shove2stk": {
-  "n": 334620,
-  "s": "ccee755b7a7b44239f27f48c53328d6e10068d027eedbcfff522750396d08727"
+  "n": 365040,
+  "s": "567243e5678892fea5ca0a6ac324c0dd15cee8be4d959afc317fbe781482caea"
  },
  "spot:kinds": {
   "n": 1,
-  "s": "50710d55ef143a57fa9b3ed9e127d000b506b32d813645637adb30a62cb563d4"
+  "s": "a3800ee212b25d46e029172e1641618eb0f2256d9ddb40b1f2ce6dd6836af649"
  }
 }
