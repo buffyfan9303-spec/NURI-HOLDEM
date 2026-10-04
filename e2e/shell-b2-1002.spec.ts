@@ -111,8 +111,11 @@ test.describe('B2 알림 창', () => {
     await expect(dlg, '입력 중 Esc 가 창을 닫아 쓰던 글이 사라졌다').toBeVisible();
     await expect(inp).toHaveValue('검색어');
     await expect(inp, '첫 Esc 뒤에도 칸에 머문다').not.toBeFocused();
+    // M4-03(audit4-motion-1004): 하위 화면(새 쪽지·대화)은 뒤로가기·Esc 한 번에 한 단계다 — 칸을 벗어난 뒤 Esc 는 쪽지 목록, 그다음 Esc 가 창을 닫는다.
     await page.keyboard.press('Escape');
-    await expect(dlg, '칸을 벗어난 뒤의 Esc 는 창을 닫아야 한다').toHaveCount(0, { timeout: 2_000 });
+    await expect(dlg.locator('button', { hasText: '새 쪽지' }), '칸을 벗어난 뒤의 Esc 는 쪽지 목록으로 한 단계 돌아가야 한다').toBeVisible({ timeout: 2_000 });
+    await page.keyboard.press('Escape');
+    await expect(dlg, '목록에서 Esc 는 창을 닫아야 한다').toHaveCount(0, { timeout: 2_000 });
   });
 
   test('목록 스크롤은 그대로 된다(끌기 막음이 목록까지 막지 않는다) 390', async ({ page }) => {

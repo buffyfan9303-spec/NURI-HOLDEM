@@ -124,3 +124,51 @@ test('🔴 전송 중 다른 상대를 열면 보낸 쪽지가 그 상대의 대
     '전송 중 다른 상대를 열었는데 보낸 쪽지가 그 대화에 붙었다(handleSend 결과에 수신자 비교 없음)').toHaveCount(0);
   await expect(page.getByText('X2 대화')).toBeVisible();
 });
+
+// M4-03(audit4-motion-1004) — 대화(스레드)에서 뒤로가기를 누르면 쪽지 목록이 아니라 알림 패널 전체가 닫혔다.
+//   대화 보기 전환이 뒤로가기 스택에 겹으로 올라가지 않아 패널 겹 하나만 있었다. 다른 겹친 창과 같은 계약:
+//   뒤로가기·Esc 한 번에 한 단계(대화 → 목록 → 패널 닫힘), 닫힌 뒤 다시 열리지 않는다.
+//   목록 판정은 '상대X2' 행이다 — X1 대화 화면에는 X2 가 없다.
+test.describe('M4-03 쪽지 대화 뒤로가기 — 한 번에 한 단계', () => {
+  const dlg = (page: Page) => page.getByRole('dialog', { name: '알림' });
+  async function openX1(page: Page) {
+    const g = { x1: gate(), send: gate() };
+    g.x1.release();
+    await boot(page, g);
+    await threadRow(page, '상대X1').click();
+    await expect(page.getByText('X1 대화')).toBeVisible();
+    await expect(threadRow(page, '상대X2')).toHaveCount(0);
+  }
+
+  test('🔴 뒤로가기: 대화 → 쪽지 목록(패널 유지) → 패널 닫힘, 다시 열리지 않는다', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openX1(page);
+    await page.evaluate(() => history.back());
+    await expect(threadRow(page, '상대X2'), '대화에서 뒤로가기 — 쪽지 목록으로 돌아오지 않았다').toBeVisible();
+    await expect(dlg(page), '대화에서 뒤로가기 한 번에 알림 패널 전체가 닫혔다').toBeVisible();
+    await page.evaluate(() => history.back());
+    await expect(dlg(page), '목록에서 뒤로가기 — 패널이 닫히지 않았다').toHaveCount(0);
+    await page.waitForTimeout(800);
+    await expect(dlg(page), '닫힌 패널이 다시 열렸다').toHaveCount(0);
+  });
+
+  test('🔴 Esc: 대화 → 쪽지 목록 → 패널 닫힘', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openX1(page);
+    await page.keyboard.press('Escape');
+    await expect(threadRow(page, '상대X2'), '대화에서 Esc — 쪽지 목록으로 돌아오지 않았다').toBeVisible();
+    await expect(dlg(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dlg(page)).toHaveCount(0);
+  });
+
+  test('🔴 패널 안 [뒤로] 버튼으로 목록에 온 뒤에는 뒤로가기 한 번에 패널이 닫힌다(남은 칸 없음)', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openX1(page);
+    await page.getByRole('button', { name: '뒤로' }).click();
+    await expect(threadRow(page, '상대X2')).toBeVisible();
+    await page.waitForTimeout(300);   // 대화 겹 정리(go(-1))가 끝날 시간
+    await page.evaluate(() => history.back());
+    await expect(dlg(page), '[뒤로] 버튼 뒤 뒤로가기가 죽은 칸을 소비했다(패널이 안 닫힘)').toHaveCount(0);
+  });
+});

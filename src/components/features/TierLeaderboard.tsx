@@ -44,7 +44,7 @@ import {
   BADGES, getMyBadgeStats, type BadgeStats,
   getMyEquippedMark, setEquippedMark as saveEquippedMark,
 } from '../../lib/loyalty';
-import { msgOf } from '../../lib/dbError';
+import { msgOf, isDenied } from '../../lib/dbError';
 
 // 시상대 색 — 👑🥈🥉 이모지는 OS 마다 금·은·동 색조가 달라 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 1·2·3위 서열을 앱이 통제한다(AdminTab 명예의 전당과 같은 규약).
@@ -1100,23 +1100,41 @@ export default function TierLeaderboard() {
             <div className="space-y-2">
               {/* 상점 정보(가격표·소장 목록·시즌 뱃지·잔액·장착) 조회 실패 — '판매 준비 중'·'미보유'·잔액 미도착으로 위장하지 않는다(UI-08-4).
                   기존 보호 유지: 잔액 미도착이면 누적 점수를 잔액으로 대신 쓰지 않고, SKU 없으면 구매 비활성. */}
-              {shopErr != null && (
-                <LoadErrorCard error={shopErr} what="상점 정보" compact
-                  onRetry={() => { clearErr('skus', 'owned', 'cosmetics', 'season', 'balance', 'equip'); setEquippedMark(undefined); }} />
-              )}
+              {/* M3-09(audit4-motion-1004): 예전엔 오류가 위 별도 카드(약 163px)로 판이 그려진 뒤에 끼어 아래 전부를 밀었다(입력 없는 CLS).
+                  이제 '내 활동점수' 줄 자리 안에서 말한다 — 두 겹을 같은 칸(grid 1/1)에 겹치고 원래 내용은 invisible 로 높이만 남긴다.
+                  오류 쪽은 한 줄씩 잘라(truncate) 원래 줄보다 높아지지 않는다. 제목(권한 없음 구분)·서버 사유·다시 시도는 그대로다. */}
               {/* 누적 / 사용 가능을 함께 — 마크는 '도달'(누적)로 해금되고, 외치기는 '사용 가능'을 깎는다 */}
-              <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
-                <span className="text-xs text-ink-secondary">
-                  내 활동점수
-                  <span className="ml-1 text-2xs text-ink-muted">누적 {(user.activityPoints ?? 0).toLocaleString()}점 · 등급 기준</span>
-                </span>
-                <span className="text-right">
-                  {/* 잔액 미도착·실패면 '—'. 누적 점수로 대신 채우면 실제보다 크게 보여 서버가 '점수 부족'으로 거절한다(#19) */}
-                  <span className="block text-sm font-extrabold tabular-nums text-accent-300">
-                    {balance ? `${balance.available.toLocaleString()}점` : '—'}
+              <div className={['grid rounded-card border px-3 py-2', shopErr != null ? 'border-danger/30 bg-danger/6' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                {shopErr != null && (
+                  <div role="alert" className="col-start-1 row-start-1 flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-semibold text-danger-light">
+                        {isDenied(shopErr) ? '상점 정보 열람 권한이 없습니다' : '상점 정보를 불러오지 못했습니다'}
+                      </span>
+                      <span className="block truncate text-2xs text-ink-secondary" title={msgOf(shopErr, '') || undefined}>
+                        {msgOf(shopErr, '') || (isDenied(shopErr) ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '없는 것이 아니라 못 불러왔습니다.')}
+                      </span>
+                    </span>
+                    <button type="button"
+                      onClick={() => { clearErr('skus', 'owned', 'cosmetics', 'season', 'balance', 'equip'); setEquippedMark(undefined); }}
+                      className="hit shrink-0 rounded-input border border-danger/40 bg-danger/10 px-3 py-1 text-xs font-bold text-danger-light active:scale-95 transition">
+                      다시 시도
+                    </button>
+                  </div>
+                )}
+                <div className={['col-start-1 row-start-1 flex items-center justify-between', shopErr != null ? 'invisible' : ''].join(' ')} aria-hidden={shopErr != null || undefined}>
+                  <span className="text-xs text-ink-secondary">
+                    내 활동점수
+                    <span className="ml-1 text-2xs text-ink-muted">누적 {(user.activityPoints ?? 0).toLocaleString()}점 · 등급 기준</span>
                   </span>
-                  <span className="block text-2xs text-ink-muted">사용 가능</span>
-                </span>
+                  <span className="text-right">
+                    {/* 잔액 미도착·실패면 '—'. 누적 점수로 대신 채우면 실제보다 크게 보여 서버가 '점수 부족'으로 거절한다(#19) */}
+                    <span className="block text-sm font-extrabold tabular-nums text-accent-300">
+                      {balance ? `${balance.available.toLocaleString()}점` : '—'}
+                    </span>
+                    <span className="block text-2xs text-ink-muted">사용 가능</span>
+                  </span>
+                </div>
               </div>
 
               {/* ── 점수로 사는 것 ─────────────────────────────────────────────────
