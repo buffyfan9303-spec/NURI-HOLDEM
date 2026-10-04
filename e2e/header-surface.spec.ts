@@ -90,17 +90,19 @@ for (const theme of ['dark', 'light'] as const) {
       expect(before[2], '라이트: 옅은 인디고 기운(b ≥ r)').toBeGreaterThanOrEqual(before[0]);
       expect(before[0] + before[1] + before[2], '라이트: 밝은 면').toBeGreaterThan(720);
     }
-    expect(s.host.h, '헤더 높이 60.5 불변').toBeCloseTo(60.5, 0);
+    // 3.5rem + 테두리 1px — 루트 16px 에서 57(17px 시절 60.5)
+    expect(s.host.h, '헤더 높이 57 불변').toBeCloseTo(3.5 * 16 + 1, 0);
     expect(s.logo?.x).toBeLessThan(40); expect(s.bell).toBeTruthy();
     // 스크롤 축소 뒤에도 표면색 그대로
     await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(300);
     const s2 = await surfaces(page);
     expect(s2.before).toBe(s.before);
-    // M4-02(2026-10-04) — 축소는 레이아웃을 안 바꾼다(sticky 오프셋 −0.75rem). 상자 높이는 그대로, **보이는 밑면**이 47.75 다.
-    expect(s2.host.bottom, '축소 상태 보이는 밑면 h-11(46.75) + border 1 = 47.75 (N09 전과 동일 실측)').toBeCloseTo(47.75, 0);
-    expect(s2.host.h, '축소가 상자 높이를 바꿨다 — 본문이 12.75px 밀리는 입력 없는 CLS 가 돌아온다(M4-02)').toBeCloseTo(60.5, 0);
+    // M4-02(2026-10-04) — 축소는 레이아웃을 안 바꾼다(sticky 오프셋 −0.75rem). 상자 높이는 그대로, **보이는 밑면**이 h-11 + border 1 이다.
+    //   루트 16px(2026-10-04): h-11 = 44 → 밑면 45 · 상자 3.5rem + 1 = 57 (17px 시절 47.75 / 60.5).
+    expect(s2.host.bottom, '축소 상태 보이는 밑면 h-11(44) + border 1 = 45').toBeCloseTo(2.75 * 16 + 1, 0);
+    expect(s2.host.h, '축소가 상자 높이를 바꿨다 — 본문이 0.75rem 밀리는 입력 없는 CLS 가 돌아온다(M4-02)').toBeCloseTo(3.5 * 16 + 1, 0);
     await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(300);
-    expect((await surfaces(page)).host.bottom).toBeCloseTo(60.5, 0);
+    expect((await surfaces(page)).host.bottom).toBeCloseTo(3.5 * 16 + 1, 0);
   });
 }
 

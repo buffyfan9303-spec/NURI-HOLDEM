@@ -130,8 +130,8 @@ test('① 하단 탭바 아이콘이 루트 확대를 따라간다 (알약과 �
   const r100 = at100!.icon / at100!.pill, r200 = at200!.icon / at200!.pill;
   expect(Math.abs(r100 - r200), `아이콘/알약 비율이 배율마다 다르다 (${r100.toFixed(3)} vs ${r200.toFixed(3)})`)
     .toBeLessThan(0.02);
-  // 100% 렌더 크기는 종전과 같아야 한다(시각 회귀 0) — 21px.
-  expect(Math.abs(at100!.icon - 21)).toBeLessThan(0.3);
+  // 100% 렌더 크기는 종전 설계값 그대로 — 17px 루트에서 21px 이던 rem 아이콘이라 16px 루트에서 21 × 16/17 ≈ 19.76px.
+  expect(Math.abs(at100!.icon - 21 * 16 / 17)).toBeLessThan(0.3);
 });
 
 test('② 다크에서 액센트 글자가 본문 AA 를 넘는다 (버튼 면 색과 분리)', async ({ page, context }) => {
@@ -191,8 +191,9 @@ test('④ 버튼 크기 사다리 3단 — 그리고 .btn 기본값은 그대로
   console.log('BTN ' + JSON.stringify(m));
 
   // .btn 기본값 고정 — 다른 팀의 호출부 241곳이 이 값 위에 서 있다. 바뀌면 그 자체가 회귀다.
-  expect(m.md.h, '.btn 기본 높이가 40.8 에서 움직였다').toBeCloseTo(40.8, 1);
-  expect(m.md.fs, '.btn 기본 글자 크기가 14.875 에서 움직였다').toBeCloseTo(14.875, 2);
+  //   2026-10-04 루트 17→16px: min-h 2.4rem·font 0.875rem 그대로라 40.8 → 38.4 · 14.875 → 14(rem 값은 안 바꿨다).
+  expect(m.md.h, '.btn 기본 높이가 2.4rem(38.4px) 에서 움직였다').toBeCloseTo(2.4 * 16, 1);
+  expect(m.md.fs, '.btn 기본 글자 크기가 0.875rem(14px) 에서 움직였다').toBeCloseTo(0.875 * 16, 2);
 
   // 세 단은 '위계'로 읽혀야 한다 — 1.7px 차는 위계가 아니라 '대충 만든 것'이다.
   expect(m.sm.h, `btn-sm(${m.sm.h})과 btn(${m.md.h}) 차이가 6px 미만이다`).toBeLessThanOrEqual(m.md.h - 6);

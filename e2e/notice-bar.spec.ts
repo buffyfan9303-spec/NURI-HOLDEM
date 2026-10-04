@@ -176,7 +176,8 @@ test.describe('공지 상세 — 문단·번호 구조(UI-01) + 아우라 구분
     await ok.scrollIntoViewIfNeeded();
     await expect(ok).toBeVisible();
     const bb = (await ok.boundingBox())!;
-    expect(bb.height).toBeGreaterThanOrEqual(40);
+    // .btn 기본 높이(min-h 2.4rem) 아래로 눌리지 않았다 — 루트 16px 에서 38.4(17px 시절 40.8 → 종전 하한 40)
+    expect(bb.height).toBeGreaterThanOrEqual(38);
     // 공지 바도 간격 재정의에서 내용이 사라지지 않는다
     await ok.click();
     await expect(sec.getByRole('listitem').first().getByRole('button')).toBeVisible();

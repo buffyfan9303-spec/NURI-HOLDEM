@@ -130,13 +130,14 @@
   --text-8xl: 6rem;       --text-8xl--line-height: 1;
   --text-9xl: 8rem;       --text-9xl--line-height: 1;
 
-  /* ── 간격 토큰 ── 🔴 루트 폰트 17px 이라 rem 은 전부 6.25% 크다. 44px 계약이 필요하면 h-[44px] 를 써라. */
-  --spacing-page-x: 1rem;       /* 17px   (모바일 좌우 여백) */
-  --spacing-page-x-md: 1.5rem;  /* 25.5px (md 이상 좌우 여백) */
-  --spacing-header-h: 3.5rem;   /* 59.5px (헤더 고정 높이) */
-  --spacing-tab-h: 2.75rem;     /* 46.75px(날짜 탭바 높이) — 44px 이 아니다 */
-  --spacing-card-gap: 0.75rem;  /* 12.75px(카드 간격) */
-  --spacing-section: 1.5rem;    /* 25.5px (섹션 간 여백) */
+  /* ── 간격 토큰 ── 🔴 루트 폰트 16px(2026-10-04 까지 17px). 코드 주석에 남은 12.75·46.75 같은 값은 17px 시절 실측이다.
+     44px 처럼 정확한 픽셀이 계약이면 rem 유틸이 아니라 h-[44px] 를 써라(루트가 또 바뀌어도 안 깨진다). */
+  --spacing-page-x: 1rem;       /* 16px   (모바일 좌우 여백) */
+  --spacing-page-x-md: 1.5rem;  /* 24px   (md 이상 좌우 여백) */
+  --spacing-header-h: 3.5rem;   /* 56px   (헤더 고정 높이) */
+  --spacing-tab-h: 2.75rem;     /* 44px   (날짜 탭바 높이) */
+  --spacing-card-gap: 0.75rem;  /* 12px   (카드 간격) */
+  --spacing-section: 1.5rem;    /* 24px   (섹션 간 여백) */
 
   /* ── 모서리 ── (v4 이름 체계: v3 rounded → rounded-sm, rounded-sm → rounded-xs 는 변환 도구가 호출부를 바꿨다) */
   --radius-card: 0.75rem;   /* v6 aura-ui 실측 rounded-aura-lg = 12px(카드) */
@@ -1356,8 +1357,10 @@ video {
 
   /* 테마 전환 시 색상 트랜지션 (깜빡임 없이 부드럽게) */
   html {
-    /* 50대 이용자 가독성: 기본 16px → 17px (rem 기반 글자·간격 전체 ~6% 확대) */
-    font-size: 17px;
+    /* 2026-10-04 오너 "덜 넉넉해도 되니까 경쟁 앱처럼 한 화면에 더 많이 — 전체 6% 줄이기": 17px → 16px.
+       (예전 17px 은 "50대 이용자 가독성" 결정이었다. rem 기반 글자·간격이 전부 1/17 줄어든다.
+        44px 처럼 정확한 픽셀이 계약인 값은 rem 유틸이 아니라 h-[44px] 로 박는다. 클락 TV 는 cqmin 이라 영향 없음.) */
+    font-size: 16px;
     transition: background-color 0.2s ease, color 0.2s ease;
     /* 콘텐츠 높이에 따라 세로 스크롤바가 생겼다 사라지며 가로폭이 흔들리는 현상 방지 */
     scrollbar-gutter: stable;
@@ -1728,7 +1731,10 @@ video {
   /* 탭 타깃 확장 — 보이는 높이는 그대로(32px 칩), 누르는 영역만 위아래 6px 씩 늘려 44px(WCAG 2.5.5 / Apple HIG).
      가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */
   .tap-y-44 { position: relative; }
-  .tap-y-44::before { content: ''; position: absolute; inset: -6px 0; }
+  /* 2026-10-04 루트 17→16px: h-8(34→32px)에 테두리 1px 가 있으면 padding 상자가 30px 라 ±6px 로는 42px 였다
+     (inset % 의 기준은 padding 상자다 — 외치기·장부 칩 실측 44 → 42). 모자란 만큼만 더 내밀되 최대 8px 로 묶는다:
+     padding 상자 32px 이상은 종전과 똑같이 ±6px, 30px 은 ±7px(=44), 그보다 작은 것도 ±8px 까지만(이웃 침범 상한 +2px). */
+  .tap-y-44::before { content: ''; position: absolute; inset: clamp(-8px, calc((100% - 44px) / 2), -6px) 0; }
   /* HIT-1(2026-09-22) — **위로만** 넓히는 히트 확장. 아래는 0 이다.
      왜 tap-y-44 를 쓰면 안 되나: 그건 위아래 6px 양방향이라, 바로 아래에 세로 간격 0 으로 붙어 있는
      일정 카드 제목을 덮는다. 그러면 매장명 링크가 카드 탭을 가로채고(목적지가 매장 페이지 ≠ 일정 상세),
@@ -1750,6 +1756,10 @@ video {
      ⚠ 확장부는 위치 지정 요소라 **흐름상 앞의 비위치 요소 위를 덮는다** — 붙인 곳마다 위 이웃의 누름면을 elementFromPoint 로 재라. */
   .tap-44 { position: relative; }
   .tap-44::before { content: ''; position: absolute; inset: min(0px, calc(100% - 44px)) 0 0 0; }
+  /* 상단 헤더 안에서는 위아래 **가운데로** 넓힌다(2026-10-04 루트 17→16px). 헤더가 3.5rem = 56px 로 낮아져
+     h-7(28px) 로그인 버튼이 위쪽 14px 에 앉고, 위로만 16px 내밀면 화면 위 2px 밖으로 나가 실효 42px 였다(elementFromPoint 실측).
+     헤더 안은 스크롤 넘침 게이트와 무관하고 56px 안에서 위아래 8px 씩 들어간다(아이콘 36px 은 4px 씩). */
+  [data-stack-header] .tap-44::before { inset: min(0px, calc((100% - 44px) / 2)) 0; }
   html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
   @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }
   .text-grad-violet {
@@ -2602,9 +2612,12 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
      320 → 86.7~118.6(가운데 96px 라 제목·매장명이 접힌다).
    그래서 360~ 69 · 360 미만 87. 이 토큰의 소비처는 **시간표형** 둘(HomeTab·App 일정 스켈레톤)과 그 카드의 cis 다.
    ⚠ 라이브 탭은 행형 ListCard(더 높다)라 cis 를 아래 `--card-h-row` 로 따로 준다 — 한 값으로 둘을 대표하면 한쪽이 13~33px 틀린다. */
-:root { --card-h-list: 87px; --card-h-row: 102px; }
+/* 🔴 2026-10-04 루트 17→16px 재실측(scratchpad r16/heights.cjs · 목 데이터 프로덕션 빌드 · 320~1440):
+     시간표형은 로고 56px·py 가 px 라 거의 그대로(68.8 → 68, 320 110.5 → 105) — --card-h-list 유지.
+     행형 ListCard 는 75.5 → 71.1(×0.942) — --card-h-row 를 같은 비율로 82 → 77 · 102 → 96. */
+:root { --card-h-list: 87px; --card-h-row: 96px; }
 @media (min-width: 360px) { :root { --card-h-list: 69px; } }
-@media (min-width: 390px) { :root { --card-h-row: 82px; } }
+@media (min-width: 390px) { :root { --card-h-row: 77px; } }
 
 /* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
    inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.

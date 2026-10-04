@@ -193,7 +193,7 @@ function MarketplaceTab({
               aria-pressed={active}
               onClick={() => goSubTab('market-cat', CAT_ORDER, category, cat.id, () => setCategory(cat.id))}
               className={[
-                'shrink-0 inline-flex h-11 items-center px-[11px] whitespace-nowrap text-xs transition-colors',
+                'shrink-0 inline-flex h-11 min-w-[44px] justify-center items-center px-[11px] whitespace-nowrap text-xs transition-colors',
                 active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary',
               ].join(' ')}
             >
@@ -206,8 +206,10 @@ function MarketplaceTab({
 
       {/* ── 정렬·필터 바 ────────────────────────────────────────────── */}
       {/* !mt 18.7px(종전 12.75) — 위 분류 칩(46.75px 누름 면)과 아래 정렬·거래완료(44px) 누름 면이 겹치지 않게 중심 간격 ≥ 44.
-          (겹치면 뒤에 오는 정렬 칩이 분류 칩 아래쪽 15px 를 가로챘다 — 2026-09-27 elementFromPoint 실측). 이 줄부터 아래는 약 16px 내려간다. */}
-      <div className="mt-[1.1rem]! flex items-center justify-between gap-2 text-2xs">
+          (겹치면 뒤에 오는 정렬 칩이 분류 칩 아래쪽 15px 를 가로챘다 — 2026-09-27 elementFromPoint 실측). 이 줄부터 아래는 약 16px 내려간다.
+          🔴 px 로 고정(2026-10-04 루트 17→16px): 1.1rem 은 17.6px 가 되어 중심 간격이 43.95 로 44 아래 — '기타' 칩 아래 1px 를
+          '거래완료 포함'(44px 고정)이 가로챘다. 18.7px 이면 16px 루트에서 중심 간격 45.05. */}
+      <div className="mt-[18.7px]! flex items-center justify-between gap-2 text-2xs">
         <div className="flex items-center gap-1">
           <SortPill active={sortBy === 'recent'}  onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'recent',  () => setSortBy('recent'))}  label="최신순"   />
           <SortPill active={sortBy === 'popular'} onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'popular', () => setSortBy('popular'))} label="조회수순" />

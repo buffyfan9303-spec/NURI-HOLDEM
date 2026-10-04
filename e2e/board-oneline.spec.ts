@@ -426,8 +426,8 @@ for (const [w, h] of [[390, 844], [390, 640], [360, 800], [320, 640], [412, 915]
           const e = document.elementFromPoint(cx, cy);
           if (!e?.closest('[data-testid="board-write"]')) bad.fabHit.push(`${tag}: FAB 중심 누름이 ${e?.closest('.scroll-top-fab') ? "'맨 위로'" : (e?.closest('[data-testid]')?.getAttribute('data-testid') ?? e?.tagName)}`);
         }
-        // 떠 있는 FAB(뷰포트 아래 기준 80.75px 자리)와 '맨 위로' 세로 중심
-        if (Math.abs((innerHeight - f.bottom) - 80.75) < 1) {
+        // 떠 있는 FAB(뷰포트 아래 기준 4.75rem 자리 — 루트 16px 에서 76px, 17px 시절 80.75)와 '맨 위로' 세로 중심
+        if (Math.abs((innerHeight - f.bottom) - 4.75 * 16) < 1) {
           floatSteps++;
           const d = Math.abs(cy - (s.top + s.height / 2));
           if (d > 1) bad.align.push(`${tag}: 세로 중심 차 ${d.toFixed(2)}px`);

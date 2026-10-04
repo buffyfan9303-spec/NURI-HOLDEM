@@ -39,7 +39,8 @@ export default function SegmentedTabs<T extends string>({
             onClick={() => onChange(it.key)}
             className={[
               hitUp ? 'tap-44' : 'relative',
-              'shrink-0 rounded-[6px] leading-none transition-colors duration-(--dur-fast) focus:outline-hidden',
+              // min-w-[44px]: 두 글자 라벨(쪽지·알림·전체)은 루트 16px 에서 폭 40.75px 라 가로 누름면이 44 아래였다(2026-10-04).
+              'shrink-0 min-w-[44px] rounded-[6px] leading-none transition-colors duration-(--dur-fast) focus:outline-hidden',
               grow ? 'flex-1' : '',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab). 굵기는 위 줄의 font-bold 가 이긴다.
               size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-1.5 t-tab',
