@@ -66,7 +66,9 @@ export function spotAiPoorText(available: number, price: number): string {
 }
 
 /** 코드별 안내 — 서버 문구보다 이쪽이 우선이다(화면 문구를 한곳에서 고친다). */
-export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; price?: number }): string {
+export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; price?: number; free?: boolean }): string {
+  // free: 이 요청이 무료 회차로 나갔는가(요청 시점 서버 상태). 무료 회차 실패는 포인트가 아니라 무료 횟수를 돌려준다(R5-04).
+  const refunded = extra?.free ? '무료 횟수' : '포인트';
   switch (code) {
     case 'INSUFFICIENT':
       return `포인트가 부족합니다${extra?.available !== undefined && extra?.price !== undefined ? ` (보유 ${extra.available}P · 필요 ${extra.price}P)` : ''}. 포인트는 차감되지 않았습니다. ${SPOT_AI_EARN_HINT}`;
@@ -76,8 +78,8 @@ export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; pr
     case 'SANCTIONED': return '이용이 제한된 계정입니다.';
     case 'PENDING': return '이 스팟의 코칭을 만드는 중입니다. 잠시 후 다시 열어 주세요.';
     // 'AI_FAILED' 는 서버가 환불 RPC 의 true 를 확인했을 때만 온다(F3). 확인 못 하면 REFUND_PENDING.
-    case 'AI_FAILED': return 'AI 답변을 받지 못했습니다. 포인트를 돌려 드렸습니다.';
-    case 'REFUND_PENDING': return 'AI 답변을 받지 못했습니다. 포인트는 5분 안에 자동으로 돌려 드립니다. 결과가 저장되었다면 내 스팟에서 확인할 수 있습니다.';
+    case 'AI_FAILED': return `AI 답변을 받지 못했습니다. ${refunded}를 돌려 드렸습니다.`;
+    case 'REFUND_PENDING': return `AI 답변을 받지 못했습니다. ${refunded}는 5분 안에 자동으로 돌려 드립니다. 결과가 저장되었다면 내 스팟에서 확인할 수 있습니다.`;
     case 'ATTEMPT_LIMIT': return '오늘 AI 코칭 요청이 너무 많습니다. 내일 다시 이용해 주세요.';
     case 'LOGIN': return '로그인이 필요합니다.';
     default: return 'AI 코칭을 받지 못했습니다. 잠시 후 다시 시도해 주세요.';
@@ -87,7 +89,7 @@ export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; pr
 const KNOWN: readonly SpotAiCode[] = ['INSUFFICIENT', 'DAILY_LIMIT', 'DISABLED', 'NOT_OWNER', 'SANCTIONED', 'PENDING', 'AI_FAILED', 'REFUND_PENDING', 'ATTEMPT_LIMIT'];
 
 /** 저장된 스팟 하나에 AI 코칭을 요청한다. 같은 스팟의 재요청은 서버가 무료로 돌려준다(cached). */
-export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean; free?: boolean; freeLeft?: number }> {
+export async function requestSpotAi(spotReviewId: string, opts?: { free?: boolean }): Promise<{ body: string; cached: boolean; free?: boolean; freeLeft?: number }> {
   if (IS_MOCK) throw new SpotAiError('DISABLED', spotAiMessage('DISABLED'));
   const { data, error } = await supabase.functions.invoke('spot-review', { body: { spotId: spotReviewId } });
   if (error) {
@@ -104,6 +106,7 @@ export async function requestSpotAi(spotReviewId: string): Promise<{ body: strin
     throw new SpotAiError(code, spotAiMessage(code, {
       available: typeof j?.available === 'number' ? j.available : undefined,
       price: typeof j?.price === 'number' ? j.price : undefined,
+      free: opts?.free,
     }));
   }
   const body = typeof data?.body === 'string' ? data.body.trim() : '';

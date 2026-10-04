@@ -405,7 +405,8 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         toast.show('내 스팟에 저장했습니다', 'success');
       }
       onSaved({ id, key });
-      const r = await requestSpotAi(id);
+      // 무료 회차 여부는 요청 직전 서버 재조회가 확인한 free 다 — 실패 안내가 돌려주는 것(무료 횟수/포인트)을 가른다.
+      const r = await requestSpotAi(id, { free });
       setResult({ key, body: r.body });
       setAsking(false);
       // 무엇이 실제로 쓰였는지는 서버 응답(free·free_left)이 말한다 — 화면이 짐작한 값으로 안내하지 않는다.
