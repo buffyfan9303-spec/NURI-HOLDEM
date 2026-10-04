@@ -4796,7 +4796,9 @@ export default function App() {
       </Suspense>
 
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
-      <div className="reveal">
+      {/* key=activeTab — 탭마다 새 노드로 마운트한다. 푸터는 판 밖 단일 노드라 판 교체+스크롤 복원 프레임(뒤로가기 등 비입력 이동)에서
+          두 판 높이 차만큼 '이동'으로 잡혀 CLS 0.05~0.81 이었다(운영 [perf:cls] 634건 중 429건 @div.reveal). 새로 삽입된 노드는 이동으로 세지 않는다. */}
+      <div className="reveal" key={activeTab}>
         <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
       </div>
 
