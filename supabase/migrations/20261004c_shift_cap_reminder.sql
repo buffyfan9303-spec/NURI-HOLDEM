@@ -1,5 +1,9 @@
 -- 20261004c — 근무 1회 24시간 상한 · 18시간 미퇴근 본인 알림 · 서버 출근 시각 저장 · 직원용 급여 설정 읽기
--- ⏳ 미적용 — store-team 작성·라이브 롤백 리허설(2026-10-04). 적용은 리드만 한다.
+-- ✅ 적용 완료 2026-10-04 (리드, 오너 승인) — 커밋 0ade248d 본문(LF, md5 712e463d…)을 commit.mjs 로 적용(201).
+--    실측: punch_my_shift b757368a… · my_venue_pay_rules 2e7e0779… · _remind_open_shifts 6bc1a879… · _shift_start_at f6abf173… · _guard_staff_shift_stamps dd1debc4…
+--    ACL anon 실행 전부 false, authenticated 는 punch·my_venue_pay_rules 만 · 칸 check_in_at·checkout_reminded_at · 트리거 trg_guard_staff_shift_stamps
+--    cron staff-checkout-reminder */10 active · my_punch_state e4258817…·set_my_shift_time 66aeb2dd… 불변 · advisors 보안 ERROR 0
+--    리허설 81/81 · critical 반증 2회(review-shift-cap-1004.md) '적용 가능'.
 --   리허설 폴더: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\shift-cap-1004\ (run2.txt) · 반증: review-shift-cap-1004.md
 --
 -- 요구 원문: 리드 기억 project_autonomous_run_1004.md '오너 답(10-04)' ① + '근무 마이그레이션 묶음' ①~④,
