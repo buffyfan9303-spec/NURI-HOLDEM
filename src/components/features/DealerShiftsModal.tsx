@@ -4,7 +4,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { getDealerShifts, addDealerShift, removeDealerShift, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { belowMinWage, dealerWageShift, laborSummary, weekStartOf, workedMinutes } from '../../lib/staffPay';
+import { belowMinWage, hoursText, laborSummary, shiftHoursNote, shiftMinutes, weekStartOf } from '../../lib/staffPay';
 import { kstToday } from '../../lib/kst';
 import { wonToMan } from '../../api/ledger';
 import Icon from '../atoms/Icon';
@@ -71,7 +71,8 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
   const totalPay = summary.dealerPay;
   const monthList = (list ?? []).filter((s) => s.shiftDate >= mFrom);
   const minWage = belowMinWage(wage, kstToday()); // 저장은 막지 않는다(수습 감액 등 예외)
-  const hoursOf = (s: DealerShift) => Math.round(workedMinutes(dealerWageShift(s)) / 6) / 10;
+  // 행의 'Xh' 도 위 급여 명세와 같은 식·같은 매장 설정(R3-03 — 예전엔 휴게 공제 전 체류라 명세 시간과 갈렸다).
+  const minutesOf = (s: DealerShift) => shiftMinutes(s.shiftDate, { checkIn: s.startTime, checkOut: s.endTime }, pay.rules);
 
   return (
     <Modal open={open} onClose={onClose} title="딜러 로테이션 · 급여" maxWidth="md" variant="sheet" fillHeight>
@@ -112,7 +113,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             <ul className="space-y-1">
               {payroll.map((p) => (
                 <li key={p.name} className="flex items-center justify-between text-2xs">
-                  <span className="text-ink-secondary">{p.name} <span className="text-ink-muted">{p.days}회·{Math.round(p.netMin / 6) / 10}h</span></span>
+                  <span className="text-ink-secondary">{p.name} <span className="text-ink-muted">{p.days}회·{hoursText(p.netMin)}</span></span>
                   <span className="font-bold text-ink-primary tabular-nums">{p.total.toLocaleString()}원</span>
                 </li>
               ))}
@@ -137,7 +138,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
               <li key={s.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                 <span className="w-12 shrink-0 text-2xs text-ink-muted tabular-nums">{s.shiftDate.slice(5)}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.dealerName}</span>
-                <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.startTime && s.endTime ? `${s.startTime}~${s.endTime} · ${hoursOf(s)}h` : '-'}</span>
+                <span data-testid="dealer-shift-hours" title={shiftHoursNote(minutesOf(s))} className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.startTime && s.endTime ? `${s.startTime}~${s.endTime} · ${hoursText(minutesOf(s)?.net ?? 0)}` : '-'}</span>
                 <button type="button" onClick={() => del(s.id)} aria-label="삭제" className="-my-3 grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs text-ink-muted transition-colors hover:bg-surface-float hover:text-danger-light">✕</button>
               </li>
             ))}

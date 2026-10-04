@@ -9,7 +9,7 @@ import { getMyVenueStaff } from '../../api/auth';
 // 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { avgClockHm, belowMinWage, laborSummary, weekStartOf, type LaborRow, type PayRules } from '../../lib/staffPay';
+import { avgClockHm, belowMinWage, hoursText, laborSummary, shiftHoursNote, shiftMinutes, weekStartOf, type LaborRow, type PayRules } from '../../lib/staffPay';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
@@ -23,11 +23,6 @@ function monthRange(month: string): [string, string] {
   return [`${month}-01`, `${month}-${String(last).padStart(2, '0')}`];
 }
 function shiftMonth(month: string, d: number): string { const [y, m] = month.split('-').map(Number); return ymOf(new Date(y, m - 1 + d, 1)); }
-function hours(inHm?: string | null, outHm?: string | null): number {
-  if (!inHm || !outHm) return 0;
-  const [ih, im] = inHm.split(':').map(Number); const [oh, om] = outHm.split(':').map(Number);
-  let mins = (oh * 60 + om) - (ih * 60 + im); if (mins < 0) mins += 1440; return mins / 60;
-}
 // 평균 출/퇴근 시각은 원형 평균(staffPay.avgClockHm) — 산술 평균은 자정 넘긴 퇴근을 낮 12시로 만들었다(dummy-1003 D1).
 const avgHm = avgClockHm;
 
@@ -196,7 +191,7 @@ function extrasText(r: LaborRow): string[] {
   const parts: string[] = [];
   // 계획 시작과 출근이 6h 넘게 어긋난 교대 — 기록 오류일 수 있어 금액을 믿기 전에 확인한다(critical-reviewer 반례①).
   if (r.planMismatch) parts.push(`계획과 다른 출근 ${r.planMismatch}건 확인 필요`);
-  if (r.breakMin) parts.push(`휴게 −${(r.breakMin / 60).toFixed(1)}h`);
+  if (r.breakMin) parts.push(`휴게 −${hoursText(r.breakMin)}`);
   if (r.overtime) parts.push(`연장 ${r.overtime.toLocaleString()}`);
   if (r.night) parts.push(`야간 ${r.night.toLocaleString()}`);
   if (r.holiday) parts.push(`휴일 ${r.holiday.toLocaleString()}`);
@@ -265,7 +260,6 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
   /** 시급이 등록되지 않은 직원 — 급여 0원으로 조용히 빠진다. 합계를 믿기 전에 이름을 봐야 한다. */
   const noWage = rows.filter((r) => r.netMin > 0 && wages[r.name] == null).map((r) => r.name);
   const { staffPay, dealerPay, total: totalPay } = labor;
-  const totalHrs = labor.netMin / 60;
   const avgIn = avgHm(monthShifts.map((s) => s.checkIn));
   const avgOut = avgHm(monthShifts.map((s) => s.checkOut));
   /** 넷 중 하나라도 못 불러왔으면 합계는 숫자가 아니다 — 먼저 난 실패 문장을 보여 준다. */
@@ -293,7 +287,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
           <p className="text-2xs text-ink-muted">총 근무시간</p>
           {shiftErr || dealerErr
             ? <p className="text-base font-extrabold text-danger-light">—</p>
-            : <p className="text-xl font-extrabold text-ink-primary tabular-nums">{totalHrs.toFixed(1)}h</p>}
+            : <p className="text-xl font-extrabold text-ink-primary tabular-nums">{hoursText(labor.netMin)}</p>}
         </div>
       </div>
       {wageErr && (
@@ -337,7 +331,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
                   <tr key={r.name} data-testid="staff-pay-row" className="text-xs">
                     <td className="py-1.5 text-left pl-1 font-bold text-ink-primary">{r.name}</td>
                     <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
-                    <td className="text-right text-ink-secondary tabular-nums">{(r.netMin / 60).toFixed(1)}h</td>
+                    <td className="text-right text-ink-secondary tabular-nums">{hoursText(r.netMin)}</td>
                     {/* 좁은 폭에서 줄바꿈 지점을 준다 — 18:00/02:30 은 공백이 없어 그대로면 안 접힌다 */}
                     <td className="text-center text-ink-muted tabular-nums text-[11px]">{avgHm(list.map((x) => x.checkIn))}/<wbr />{avgHm(list.map((x) => x.checkOut))}</td>
                     <td className="text-right pr-1 text-accent-300 dark:text-accent-200 tabular-nums font-bold">{r.total.toLocaleString()}</td>
@@ -357,7 +351,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
                 <tr key={r.name} data-testid="dealer-pay-row" className="text-xs">
                   <td className="py-1 pl-1 text-left font-bold text-ink-primary">{r.name}</td>
                   <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
-                  <td className="text-right text-ink-secondary tabular-nums">{(r.netMin / 60).toFixed(1)}h</td>
+                  <td className="text-right text-ink-secondary tabular-nums">{hoursText(r.netMin)}</td>
                   <td className="pr-1 text-right font-bold text-accent-300 tabular-nums dark:text-accent-200">{r.total.toLocaleString()}</td>
                 </tr>
               ))}
@@ -406,6 +400,8 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
   const [shiftErr, setShiftErr] = useState<string | null>(null);
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
+  // 행의 'Xh' 는 급여 표와 같은 식·같은 매장 설정으로 센다(R3-03 — 예전엔 출근~퇴근을 그대로 빼서 급여 표와 갈렸다).
+  const { rules } = usePayRules(venueId);
   // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
     let alive = true;
@@ -434,14 +430,17 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
         </div>
       ) : sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
         <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-96 overflow-y-auto">
-          {sorted.map((s, i) => (
-            <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
-              <span className="w-14 shrink-0 text-2xs text-accent-300 dark:text-accent-200 tabular-nums">{s.date.slice(5)}</span>
-              <span className="flex-1 font-semibold text-ink-primary truncate">{s.name}</span>
-              <span className="text-ink-secondary tabular-nums">{s.checkIn || s.startHm || '—'}~{s.checkOut || '—'}</span>
-              <span className="w-12 text-right text-emerald-700 dark:text-emerald-400 tabular-nums">{(s.checkIn && s.checkOut) ? `${hours(s.checkIn, s.checkOut).toFixed(1)}h` : ''}</span>
-            </div>
-          ))}
+          {sorted.map((s, i) => {
+            const m = shiftMinutes(s.date, s, rules);
+            return (
+              <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                <span className="w-14 shrink-0 text-2xs text-accent-300 dark:text-accent-200 tabular-nums">{s.date.slice(5)}</span>
+                <span className="flex-1 font-semibold text-ink-primary truncate">{s.name}</span>
+                <span className="text-ink-secondary tabular-nums">{s.checkIn || s.startHm || '—'}~{s.checkOut || '—'}</span>
+                <span data-testid="worklog-hours" title={shiftHoursNote(m)} className="w-12 text-right text-emerald-700 dark:text-emerald-400 tabular-nums">{m && hoursText(m.net)}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -463,6 +462,9 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
   const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
+  // 'Xh' 는 급여 표와 같은 식(R3-03). 설정 읽기는 서버가 장부 관리자에게만 연다(vpr_select = can_manage_pos) —
+  //   일반 직원은 행이 안 보여 기본값(전부 끔)으로 센다. 휴게 자동 공제를 켠 매장이면 그 직원에게만 휴게 전 시간이 보인다.
+  const { rules } = usePayRules(venueId);
   // 20260925g N5: 서버(set_my_shift_time)는 KST 오늘·어제만 받는다 — 기기 로컬 날짜가 아니라 같은 KST 기준으로 판단한다.
   const today = kstToday();
   const yesterday = kstToday(Date.now() - 86_400_000);
@@ -515,6 +517,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
         <div className="space-y-1.5">
           {sorted.map((s) => {
             const isToday = s.date === today;
+            const m = shiftMinutes(s.date, s, rules);
             return (
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
@@ -530,7 +533,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
-                  {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
+                  {m && <span data-testid="self-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hoursText(m.net)}</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>
               </div>

@@ -82,7 +82,11 @@ export function weekStartOf(day: string): string {
 }
 
 /** HH:mm 문자열 기록(운영 staff_schedule·dealer_shifts) → PayShift.
- *  출근은 계획 시작 기준 ±12h 안으로 맞춘다(계획 23:00·출근 00:10 → 다음 날 00:10). 계획이 없으면 그날.
+ *  출근은 계획 시작 기준 ±12h 안으로 맞춘다(계획 23:00·출근 00:10 → 다음 날 00:10).
+ *  계획이 없으면 그날.
+ *  ⚠ 휴일 귀속 미정, 별도 과제 — 계획 없는 행의 00:00~01:59 출근이 '어제 근무'(오너 2026-09-30, 출근 버튼)인지 그날 근무(오늘 행 punch·손입력·딜러)인지
+ *    HH:MM 행만으로는 구별할 수 없다. 여기서 하루를 옮기면 5인 이상 매장의 휴일 가산 금액이 바뀐다(review-r3-03-1004 §3: 딜러 +41,250원 등).
+ *    서버가 출근 시각을 저장하는 마이그레이션(근무 24h 상한 과제, 리드 몫) 뒤에 정한다. 근무 분·야간 분은 어느 쪽이든 같다.
  *  퇴근·계획 종료가 시작 이하이면 다음 날(자정 넘김). */
 export function shiftFromHm(workDate: string, t: { startHm?: string | null; endHm?: string | null; checkIn?: string | null; checkOut?: string | null }): PayShift {
   const startAt = t.startHm ? kstAt(workDate, t.startHm) : null;
@@ -128,6 +132,28 @@ export function netMinutes(s: PayShift, rules: PayRules): { stay: number; brk: n
   const brk = s.breakMinutes != null ? Math.min(stay, Math.max(0, Math.floor(s.breakMinutes)))
     : rules.autoBreak ? autoBreakMinutes(stay) : 0;
   return { stay, brk, net: stay - brk };
+}
+
+// ── 화면 공용: 한 교대의 시간 표시(R3-03) ─────────────────────────────────────
+/** HH:mm 기록 한 줄의 근무 분 — **급여 표(computePay)와 같은 식**(shiftFromHm → netMinutes).
+ *  출근일지·내 출근 관리·딜러 스케줄·딜러 근무 행의 'Xh' 는 이것만 쓴다(직접 빼서 세면 급여 표와 갈린다 — R3-03).
+ *  raw = 출근~퇴근 그대로(계획 전 출근·휴게 포함). 출·퇴근 중 하나라도 없으면 null. */
+export function shiftMinutes(workDate: string, t: { startHm?: string | null; endHm?: string | null; checkIn?: string | null; checkOut?: string | null },
+  rules: PayRules): { raw: number; stay: number; brk: number; net: number } | null {
+  if (!t.checkIn || !t.checkOut) return null;
+  const s = shiftFromHm(workDate, t);
+  return { raw: workedMinutes(s, true), ...netMinutes(s, rules) };
+}
+/** 분 → '8.0'(단위 없음 — 대시보드 Stat 처럼 단위를 따로 그리는 곳) · '8.0h'. 급여 표·집계·행·대시보드가 같은 자릿수로 말한다. */
+export const hoursValue = (min: number) => (min / 60).toFixed(1);
+export const hoursText = (min: number) => `${hoursValue(min)}h`;
+/** 'Xh' 가 출근~퇴근과 다를 때 그 이유(마우스를 올리면 보이는 설명). 같으면 undefined. */
+export function shiftHoursNote(m: { raw: number; stay: number; brk: number; net: number } | null): string | undefined {
+  if (!m || m.raw === m.net) return undefined;
+  const parts = [`출근~퇴근 ${hoursText(m.raw)}`];
+  if (m.raw > m.stay) parts.push(`계획 시작 전 ${hoursText(m.raw - m.stay)} 제외`);
+  if (m.brk) parts.push(`휴게 −${hoursText(m.brk)}`);
+  return `급여 기준 ${hoursText(m.net)} (${parts.join(' · ')})`;
 }
 
 export function plannedMinutes(s: PayShift): number | null {
