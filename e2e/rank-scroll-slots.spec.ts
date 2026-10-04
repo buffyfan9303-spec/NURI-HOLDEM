@@ -154,7 +154,9 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
   //       D8 이 도는 자리가 됐다(전제 조건 단언이 잡았다). 56 = 80 − 24 로 '안 말린 자리' 의미를 그대로 둔다.
   //     ⚠ 2026-10-04 56 → 66: 56 은 headerShrink.ts nextHeaderShrunk(y > 56) 의 경계값이라 헤더 **미축소** 상태를 재고 있었다(PR #155 검토).
   //       66 = 헤더 축소(47.75)·판 간격 +11.88 로 '안 말린 자리' 의미 유지.
-  for (const c of [{ y: 66, d8: false }, { y: 130, d8: true }]) {
+  //     ⚠ 2026-10-04 130 → 80: 루트 17→16px 로 같은 운영 글 4건 문서가 짧아져 390 최대 스크롤 187 → 87(실측 scratchpad r16/curl.cjs).
+  //       16px 에서 판 윗변이 말리기 시작하는 자리는 Y≈75(gap −1) — 80 은 gap −6 으로 D8 이 도는 자리이고 최대 87 안이다. Y=66 은 gap +8(안 말림) 그대로.
+  for (const c of [{ y: 66, d8: false }, { y: 80, d8: true }]) {
     test(`짧은 섹션(별도 케이스) Y=${c.y}: ${c.d8 ? '판 윗변이 바 밑에 가려져 있으면 바 밑으로 정렬된다(D8)' : '유지할 수 없으면 새 문서 최대로 클램프되고 그 뒤 더 움직이지 않는다'}`, async ({ page }) => {
       await openCommunity(page);
       const before = await gotoBoardAt(page, c.y);

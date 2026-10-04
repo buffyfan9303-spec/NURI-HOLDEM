@@ -45,8 +45,9 @@ for (const w of [360, 390]) {
     console.log(`[tap0928 header ${w}] ${rows.map((r) => `${r.label} box=${r.w}×${r.box} hit=${r.h}`).join(' | ')}`);
     expect(rows.length, '헤더 버튼 3개를 다 못 찾았다').toBe(3);
     expect(short(rows)).toEqual([]);
-    // 가로는 늘리지 않았다 — 보이는 원 38.25·로그인 폭 그대로(360 헤더 제목 잘림 재발 방지)
-    expect(rows.slice(0, 2).map((r) => r.w)).toEqual([38.25, 38.25]);
+    // 가로는 늘리지 않았다 — 보이는 원(w-9 = 2.25rem)·로그인 폭 그대로(360 헤더 제목 잘림 재발 방지).
+    //   2026-10-04 루트 17→16px: 원 38.25 → 36. 값은 바뀌었지만 '누름면 때문에 원 폭을 키우지 않았다'는 의미는 같다.
+    expect(rows.slice(0, 2).map((r) => r.w)).toEqual([2.25 * 16, 2.25 * 16]);
     const cut = await page.locator('header [aria-current="page"]').evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(cut, '헤더 제목이 잘렸다').toBeLessThanOrEqual(0);
   });

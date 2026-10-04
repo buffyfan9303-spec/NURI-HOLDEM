@@ -199,7 +199,7 @@ test('🔴 ⑥ PC 1440 전체화면 읽기 폭 68~74ch · 1280 2-pane 인라인�
   await page.getByText('둘째 글 제목').filter({ visible: true }).first().click();
   const inlineBody = page.locator('aside [data-pd-body]');
   await expect(inlineBody).toBeVisible({ timeout: 15_000 });
-  expect((await inlineBody.boundingBox())!.width).toBeGreaterThanOrEqual(600);
+  expect((await inlineBody.boundingBox())!.width).toBeGreaterThanOrEqual(600 * 16 / 17); // 같은 글자 수 — 루트 16px 환산(post-detail-read 2-pane 과 같은 근거)
   await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
   // 2-pane 도 같은 스냅샷으로 이전/다음이 된다(컨테이너 유지)
   await page.locator('aside [data-pd-nav-dir="next"]').click();
@@ -293,7 +293,9 @@ test('🔴 ⑧ 목록 이어받기가 비행 중일 때 연 마지막 글 — "�
 //   실기기 확인은 오너 몫이고, 그 사실을 숨기지 않는다.
 test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동안 배경이 밀리지 않는다', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await install(page);
+  // 2026-10-04 루트 17→16px: 글 3개로는 문서가 844 안에 다 들어가 scrollY 가 0 이었다(아래 전제 단언이 막는다).
+  //   오래된 글 6개를 뒤에 붙여 '스크롤된 목록' 이라는 전제를 되살린다(단언은 그대로).
+  await install(page, [...POSTS(), ...Array.from({ length: 6 }, (_, k) => postRow(`old${k}`, `지난 글 ${k + 1}`, { created_at: `2026-08-2${k}T00:00:00Z` }))]);
   await openBoard(page);
   await page.evaluate(() => window.scrollTo(0, 99999));
   await page.waitForTimeout(400);

@@ -90,7 +90,7 @@ test.describe('M4-01 내 정보 — 안쪽 끝에서 더 밀어도 뒤 문서가
   });
 });
 
-test('🔴 M4-02 헤더 축소·복원 — 입력 없는 레이아웃 이동 0 · 축소는 그대로(보이는 밑면 47.75 · 아이콘 가운데)', async ({ page }) => {
+test('🔴 M4-02 헤더 축소·복원 — 입력 없는 레이아웃 이동 0 · 축소는 그대로(보이는 밑면 45 · 아이콘 가운데)', async ({ page }) => {
   test.setTimeout(120_000);
   await bootTools(page, false);
   await page.evaluate(() => {
@@ -113,7 +113,8 @@ test('🔴 M4-02 헤더 축소·복원 — 입력 없는 레이아웃 이동 0 �
   });
   // 축소 자체가 살아 있어야 한다 — 안 접혔으면 아래 CLS 0 은 아무것도 재지 않은 것이다.
   expect(down.shrunk, `전제 조건: 내렸는데 헤더가 안 접혔다 ${JSON.stringify(down)}`).toBe('1');
-  expect(down.bottom, `축소 상태 보이는 헤더 밑면이 47.75 가 아니다 ${JSON.stringify(down)}`).toBeCloseTo(47.75, 0);
+  // 보이는 밑면 = h-11 + border 1 — 루트 16px(2026-10-04) 에서 45(17px 시절 47.75). 상자 3.5rem+1 에서 −top-3(0.75rem) 를 뺀 값과 같다.
+  expect(down.bottom, `축소 상태 보이는 헤더 밑면이 45 가 아니다 ${JSON.stringify(down)}`).toBeCloseTo(2.75 * 16 + 1, 0);
   expect(Math.abs(down.bellMid - (down.top + down.bottom) / 2), `알림 버튼이 보이는 헤더 띠 가운데가 아니다 ${JSON.stringify(down)}`).toBeLessThanOrEqual(1.5);
   for (let k = 0; k < 6; k++) { await swipe(cdp, page, 200, 300, 700); await page.waitForTimeout(200); }
   await page.waitForTimeout(800);

@@ -990,11 +990,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />라이브
             </span>
           )}
-          {/* 머리 칸 action 은 버튼을 h-8(34px)로 맞춘다 — 누름 상자는 before 로 사방 5px 를 보태 44px(2026-09-24 히트영역). */}
+          {/* 머리 칸 action 은 버튼을 h-8 로 맞춘다 — 누름 상자는 before 로 사방 7px 를 보태 46px(2026-09-24 히트영역 44 · 2026-10-05 루트 16px 에서
+              h-8 이 34 → 32px 라 종전 5px 로는 42px 였다. px 고정 · 소수 좌표 반올림 여유 2px). */}
           <button type="button" title="새로고침" aria-label="대시보드 새로고침"
             disabled={refreshing || loading}
             onClick={() => { setRefreshing(true); void Promise.resolve(reload()).finally(() => setRefreshing(false)); }}
-            className="relative grid w-8 place-items-center px-0! rounded-input text-ink-muted transition-colors before:absolute before:-inset-[5px] hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
+            className="relative grid w-8 place-items-center px-0! rounded-input text-ink-muted transition-colors before:absolute before:-inset-[7px] hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
             <Icon name="refresh" size={13} className={refreshing ? 'animate-spin' : undefined} />
           </button>
         </>, refreshSlot)}

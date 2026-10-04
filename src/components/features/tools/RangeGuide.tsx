@@ -34,7 +34,7 @@ const VS_CAPTION: Record<RangeScenario['group'], string> = {
 // 그래서 한동안 박스 자체를 44px 로 키웠다(h-8 → h-[44px]).
 // 🔴 2026-09-21 오너: "버튼 pill 위아래 공백 조절" — 11.7px 글자에 44px 박스는 위아래가 16px 씩 비어 보였다.
 //   박스를 34px(h-8)로 되돌리고 44px 터치는 다시 오버행이 맡는다. 2026-09-24 G3: 32px + CHIP_HIT(gto/chip.ts) — 레일 py-1.5 에 잘려 44.75px. 잘림은 **레일 쪽**에서 푼다:
-//   레일에 `py-1.5 -my-1.5`(6.375px ≥ 6px) — 오버행이 스크롤 컨테이너의 패딩 박스 안에 들어와 안 잘리고,
+//   레일에 `py-[7px] -my-[7px]`(px 고정 — 2026-10-05 루트 16px 에서 py-1.5 는 6px 라 32+12=44 경계, 정수 탐침 43) — 오버행이 스크롤 컨테이너의 패딩 박스 안에 들어와 안 잘리고,
 //   음수 마진이 그만큼 되물려 바깥 레이아웃(캡션 간격·space-y)은 종전과 같다. 레일 ① 은 CalcCard 의
 //   `space-y-3`(특이도 0,3,0 — 자식 margin 을 덮어쓴다) 직계라 래퍼 div 로 한 겹 감싼다(마진 상쇄로 12.75px 유지).
 //   e2e/gto-tab-verify.spec.ts '상황 그룹 칩 44px 유효 표적' 이 elementFromPoint 로 오버행까지 잰다.
@@ -93,7 +93,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
           그룹을 누를 때마다 줄 수가 변해 카드 높이가 튄다(이 파일이 2026-08-30 에 이미 겪은 문제다).
           아래 '내 포지션'·'상대' 두 줄이 쓰는 방식과 같게 맞춘다 — 넘치면 옆으로 민다. */}
       <div>
-        <div data-testid="range-guide" className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none">
+        <div data-testid="range-guide" className="-my-[7px] flex gap-1 overflow-x-auto py-[7px] scrollbar-none">
           {RANGE_GROUPS.map((g) => (
             <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
               {g.label}
@@ -107,7 +107,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       {/* ② 내 포지션 — 한 행 5개 이하라 375px 에서도 접히지 않는다(넘치면 가로 스크롤) */}
       <div>
         <span className="mb-1 block text-2xs font-semibold text-ink-secondary">내 포지션</span>
-        <div className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none" role="group" aria-label="내 포지션">
+        <div className="-my-[7px] flex gap-1 overflow-x-auto py-[7px] scrollbar-none" role="group" aria-label="내 포지션">
           {heroes.map((h) => (
             <button key={h} type="button" onClick={() => pickHero(h)} aria-pressed={h === scen.hero} className={chipCls(h === scen.hero)}>
               {h}
@@ -120,7 +120,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       {hasVsRow && (
         <div>
           <span className="mb-1 block text-2xs font-semibold text-ink-secondary">{VS_CAPTION[group]}</span>
-          <div className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none" role="group" aria-label={VS_CAPTION[group]}>
+          <div className="-my-[7px] flex gap-1 overflow-x-auto py-[7px] scrollbar-none" role="group" aria-label={VS_CAPTION[group]}>
             {matchups.map((s) => (
               <button key={s.id} type="button" onClick={() => setScenId(s.id)} aria-pressed={s.id === scen.id} className={chipCls(s.id === scen.id)}>
                 {s.vs ? `vs ${s.vs}` : '상대 미지정'}

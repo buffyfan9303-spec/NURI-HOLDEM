@@ -413,7 +413,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           {/* 고객센터 1:1 문의 */}
           {onOpenSupport && (
             <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
-              className="flex w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              className="flex min-h-[44px] w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
               <Icon name="comment" size={16} className="shrink-0 text-ink-muted" />
               <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
               <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
@@ -1100,7 +1100,7 @@ function LogoutSection({ onDone }: { onDone: () => void }) {
         type="button"
         onClick={doLogout}
         disabled={busy}
-        className="flex w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-danger/40 disabled:opacity-50"
+        className="flex min-h-[44px] w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-danger/40 disabled:opacity-50"
       >
         <Icon name="log-out" size={16} className="shrink-0 text-ink-muted" />
         <span className="flex-1 min-w-0">

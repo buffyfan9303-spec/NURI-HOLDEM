@@ -183,7 +183,8 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
       className={[
         'active:scale-90 transition-transform',
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
-        'relative flex h-[2.6rem] w-[2.6rem] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
+        // 🔴 44px 고정(2026-10-04 루트 17→16px): 종전 2.6rem 은 17px 루트에서 44.2px 였고 16px 루트에선 41.6px 로 누름면이 깨진다.
+        'relative flex h-[44px] w-[44px] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
         'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
@@ -243,7 +244,7 @@ function DateSlider({ selectedDates, onToggle, onPick, eventDates }: DateSliderP
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 flex-col items-center justify-center w-[2.6rem] h-[2.6rem] rounded-[10px] border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
+        className="relative flex shrink-0 flex-col items-center justify-center w-[44px] h-[44px] rounded-[10px] border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -416,7 +417,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
            · 고빈도 이지선다(GTD/MTT/대회)는 즉시 토글 칩(탭 1회, 재탭 = 해제 → 전체)
            · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
              = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-2 pb-1">
+      {/* pt-[9px]: 칩(h-9 = 36px, 테두리 1px)의 누름면은 padding 상자 위로 10px = 칩 위 9px 까지 나간다. 이 줄은 가로 스크롤러라
+          위 여백이 그보다 작으면 잘린다 — 루트 16px 에서 pt-2(8px)는 1px 모자라 select·검색 칩 실효가 43 이었다(2026-10-04). */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-[9px] pb-1">
         <button
           type="button"
           aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
@@ -424,9 +427,10 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           onClick={() => setSearchOpen((v) => !v)}
           // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
           //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
+          //   2026-10-04 루트 17→16px: 칩이 w-9 = 36px 로 줄어 9 = 8 + 테두리 1px 로 다시 맞춘다(36 + 9 − 1 = 44).
           //   🔴 px-0 을 **덧붙이지 않고 CHIP_BASE 에서 px-3.5 를 뺀다**(2026-09-29 D3). 둘 다 두면 빌드 CSS 순서상 px-3.5 가 이겨
           //     내용 폭 6.5px 에 아이콘이 6.5×17 로 눌렸다 — 유틸 우열은 className 순서가 아니라 CSS 순서다(e2e/search-chip-icon).
-          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[9px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
         >
           <SearchIcon className="h-4 w-4" />
         </button>

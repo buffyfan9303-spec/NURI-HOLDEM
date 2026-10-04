@@ -10,8 +10,9 @@
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
-/** 허용 칸(1rem = 17px) — t-meta 11.69 · t-tab/t-desc 12.75 · t-nav/t-title 14.88 · 17 */
-const LADDER = [11.6875, 12.75, 14.875, 17];
+/** 허용 칸(1rem = 16px, 2026-10-04 루트 17→16px) — t-meta 11 · t-tab/t-desc 12 · t-nav/t-title 14 · 16.
+ *  같은 rem 사다리(0.6875/0.75/0.875/1rem)를 지금 루트로 환산한 값이다(17px 시절 11.69/12.75/14.88/17). */
+const LADDER = [0.6875, 0.75, 0.875, 1].map((r) => r * 16);
 const NAV = 'nav[aria-label="하단 내비게이션"]';
 
 const readTabbar = () => {

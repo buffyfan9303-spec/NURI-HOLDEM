@@ -129,10 +129,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
     <div className="relative" data-mystore-rail="">
       {/* 🔴 2026-09-24(리드 결정 · design-reviewer 판정) — 알약은 **보이는 32 · 누름 44** 한 기준(gto/chip.ts).
           종전 칸 h-9(38.25)·히트 39 였다. 가로 스크롤 칸(overflow-x-auto)은 세로도 잘라 칸의 위아래 히트 확장이
-          사라지므로, 스크롤 칸은 투명하게 두고 `py-1.5 -my-1.5` 로 확장이 들어갈 자리를 주고(차지하는 높이는 그대로),
+          사라지므로, 스크롤 칸은 투명하게 두고 `py-[7px] -my-[7px]`(px 고정 — 루트 16px 에서 py-1.5=6px 는 44 경계) 로 확장이 들어갈 자리를 주고(차지하는 높이는 그대로),
           트랙(테두리·배경)은 안쪽 판(w-max min-w-full)이 든다 — 스크롤하면 트랙도 함께 움직인다. */}
       <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
-        className="relative -my-1.5 overflow-x-auto py-1.5 scrollbar-none">
+        className="relative -my-[7px] overflow-x-auto py-[7px] scrollbar-none">
         <div className="relative flex w-max min-w-full items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
         <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
         {tabs.map((t) => {
@@ -1132,7 +1132,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   data-testid: 라벨이 바뀌므로 셀렉터는 이 id 로 잡는다(e2e/partners-fit.spec.ts). */}
               <div data-main-enter className="lg:hidden">
                 <button type="button" data-testid="mystore-menu-toggle" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
-                  className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
                   {/* C1 H-3(2026-10-02) — 단계 바가 없는 섹션도 바로 아래 판 제목이 '지금 어디'를 말한다('직원 관리' 토글 밑 '직원 관리' 제목 두 겹).
                       토글은 어느 섹션에서나 '전체 메뉴'(다른 섹션으로 가는 길)로 둔다. 현재 항목은 펼친 목록의 강조가 그대로 보인다. */}
                   <span className="shrink-0 text-accent-300" aria-hidden><Icon name="menu" size={16} /></span>
@@ -1331,7 +1331,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               const oneLine = 'max-lg:[&_.flex-wrap]:flex-nowrap max-lg:[&_h2]:shrink-0 max-lg:[&_.t-desc]:min-w-0 max-lg:[&_.t-desc]:truncate';
               const fold = (open: boolean) => (open ? '' : oneLine);
               const descBtn = (id: string, open: boolean) => (SECTION_DESC[id as keyof typeof SECTION_DESC] ? (
-                <button type="button" className="relative lg:hidden text-ink-muted before:absolute before:-inset-y-[5px] before:inset-x-0" data-desc-toggle=""
+                <button type="button" className="relative lg:hidden text-ink-muted before:absolute before:-inset-y-[7px] before:inset-x-0" data-desc-toggle=""
                   aria-expanded={open} aria-controls={`step-head-${id}`} aria-label={open ? '설명 접기' : '설명 펼치기'}
                   onClick={() => setDescOpenKey(open ? null : descKey)}>
                   <Icon name="info" size={16} />
@@ -1930,7 +1930,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   실제 남는 폭(≤ 레일 패딩, 즉 우측 공백 0).
   // 🔴 2026-09-24(리드 결정 · design-reviewer 판정, 오너 반복 지적 "알약 위아래 넓다") — 모바일(<768)은 **보이는 32 · 누름 44**
   //   (gto/chip.ts CHIP_HIT, ±8px). 위 '칩 자체를 44px' 로 한 이유(overflow-x-auto 가 아래 오버행을 자름)는 레일에
-  //   `max-md:py-1.5 max-md:-my-1.5`(6.375px) 로 확장이 들어갈 자리를 줘서 푼다 — 잘려도 32+6.375×2 = 44.75px.
+  //   `max-md:py-[7px] max-md:-my-[7px]`(px 고정 — 2026-10-05 루트 16px 에서 py-1.5 는 6px 라 44 경계였다) 로 확장이 들어갈 자리를 줘서 푼다 — 잘려도 32+7×2 = 46px.
   //   레일 배경은 그 패딩까지 칠하면 32 칸 위아래에 띠가 생기므로 모바일에서는 ::before 트랙(inset-y-1.5)으로 칸 높이만 칠한다.
   //   md 이상은 종전 h-[44px]·레일 그대로다(CHIP_HIT 는 ::before 뿐이라 칸 rect 를 바꾸지 않는다).
   const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-(--dur-fast) focus:outline-hidden sm:px-3 lg:text-sm',
@@ -1944,7 +1944,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
          🔴 2026-09-25 오너 실기기: 레일 오른쪽 끝에 **세로 스크롤바**. overflow-x-auto 라 overflow-y 도 auto 가 되고
          칸 누름 확장(CHIP_HIT ±8)이 레일 안쪽을 넘어 세로로 넘쳤다(실측 scrollHeight>clientHeight: 모바일 46>45 · PC 54>48).
          → `overflow-y-hidden`: 세로 스크롤·스크롤바만 없앤다. 자르는 범위는 auto 와 같아 누름 44 계약은 그대로다. */
-      className="relative flex items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:px-0 max-md:py-1.5 max-md:-my-1.5 max-md:bg-transparent max-md:before:absolute max-md:before:inset-x-0 max-md:before:inset-y-1.5 max-md:before:rounded-input max-md:before:bg-surface-high/60 max-md:before:content-['']">
+      className="relative flex items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:px-0 max-md:py-[7px] max-md:-my-[7px] max-md:bg-transparent max-md:before:absolute max-md:before:inset-x-0 max-md:before:inset-y-[7px] max-md:before:rounded-input max-md:before:bg-surface-high/60 max-md:before:content-['']">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
       {/* 탭인 것만 tablist 에 넣는다 — 요약과 1~5단계. 이용권은 '단계'가 아니라 다른 화면으로 가는
           지름길이라 탭이 아니다(그래서 원래도 role 이 없었다). 시각적으로는 같은 바 안에 남는다.
@@ -3266,14 +3266,15 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        // 행 높이는 1280 실측값(구성원 115px · 초대 101px · 머리글 17px) — 루트 17px 라 rem 유틸로 추정하지 않는다.
+        // 행 높이는 1280 실측값(루트 16px, 2026-10-05: 구성원 108.39px · 초대 95.39px · 머리글 16px · 안내 15px) — rem 유틸로 추정하지 않는다
+        // (17px 때 115 · 101 · 17 · h-4 였다 — 루트를 바꾸면 여기 숫자도 다시 재야 한다. e2e store-0929-fixes D6-1 이 잠근다).
         <div aria-busy="true" data-testid="staff-list-loading" className="space-y-4">
           {lastRows.i > 0 && (
-            <div className="space-y-1.5"><Skeleton className="h-[17px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[101px]" /></div>
+            <div className="space-y-1.5"><Skeleton className="h-[16px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[95.4px]" /></div>
           )}
-          <div className="space-y-1.5"><Skeleton className="h-[17px] w-24" /><Skeleton className="h-4" />
+          <div className="space-y-1.5"><Skeleton className="h-[16px] w-24" /><Skeleton className="h-[15px]" />
             {/* 구성원 목록(ul)은 space-y-2 라 SkeletonList(space-y-1.5)를 쓰지 않는다 — 행마다 2px 씩 모자랐다(5명 +7.9px 실측). */}
-            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[115px]" />)}</div></div>
+            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[108.4px]" />)}</div></div>
         </div>
       ) : listError != null ? (
         <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />

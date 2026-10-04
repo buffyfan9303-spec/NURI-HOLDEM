@@ -132,10 +132,11 @@ function CheckRow({
   //   "만 19세 이상" 같은 필수 동의를 이름 없는 '체크박스' 로만 읽었고, 누름 표적은 13×13 상자뿐이었다.
   //   ConsentGateModal ConsentRow 와 같은 문법으로 label 이 input 을 감싼다(이름 = 문구, 토글은 브라우저 기본 동작 —
   //   label onClick 으로 한 번 더 토글하면 두 번 바뀌어 제자리가 된다). py-3 = 한 줄 20.7 + 25.5 → 누름 46px(AA 44).
+  //   2026-10-04 루트 17→16px: 한 줄 19.5 + 24 = 43.5 로 44 아래가 됐다 → min-h-[44px] 로 하한을 픽셀에 박는다.
   //   '보기' 는 label 밖 형제 — 누르면 약관만 열리고 체크는 그대로다(종전 동작). 이름('보기')은 e2e 가 잡고 있어 그대로 둔다.
   return (
     <div className="flex items-start gap-2">
-      <label className="flex flex-1 min-w-0 cursor-pointer items-start gap-2 py-3 select-none">
+      <label className="flex min-h-[44px] flex-1 min-w-0 cursor-pointer items-start gap-2 py-3 select-none">
         <input
           type="checkbox"
           checked={checked}
@@ -324,7 +325,7 @@ function ModeSwitch({ question, action, onClick }: { question: string; action: s
     <p className="pt-2 text-center text-xs text-ink-muted">
       {question}{' '}
       <button type="button" onClick={onClick}
-        className="ml-0.5 inline-flex min-h-[44px] items-center font-bold text-accent-200 transition-colors hover:text-accent-100">
+        className="ml-0.5 inline-flex min-h-[44px] min-w-[44px] justify-center items-center font-bold text-accent-200 transition-colors hover:text-accent-100">
         {action}
       </button>
     </p>

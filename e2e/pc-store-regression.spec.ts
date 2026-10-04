@@ -90,8 +90,10 @@ test.describe('PC 내 매장 — 섹션 헤더는 액션 유무와 무관하게 
     const 높이들 = [...new Set(m.map((x) => x.높이))];
     expect(높이들, '섹션마다 헤더 높이가 다르다 — 액션 유무로 갈리던 결함이다').toHaveLength(1);
     // 예전 값 45.6 / 52 를 둘 다 벗어나는 창. 1440 실측(2026-09-21) = 47.75px.
-    expect(높이들[0], 'PC 섹션 헤더 높이가 예약된 행(min-h-8) 밖이다').toBeGreaterThanOrEqual(46);
-    expect(높이들[0], 'PC 섹션 헤더 높이가 예약된 행(min-h-8) 밖이다').toBeLessThanOrEqual(50);
+    // 2026-10-05 루트 17→16px: 헤더는 전부 rem(min-h-8·여백)이라 같은 비율로 줄었다 — 실측 main 47.75 / root16 45(=47.75×16/17).
+    //   창도 같은 rem 으로 환산한다(46·50 → ×16/17 = 43.3·47.1). 갈림 결함 값(45.6·52 → 42.9·48.9)은 여전히 창 밖이다.
+    expect(높이들[0], 'PC 섹션 헤더 높이가 예약된 행(min-h-8) 밖이다').toBeGreaterThanOrEqual(46 * 16 / 17);
+    expect(높이들[0], 'PC 섹션 헤더 높이가 예약된 행(min-h-8) 밖이다').toBeLessThanOrEqual(50 * 16 / 17);
 
     for (const x of m) {
       if (x.중심차 == null) continue;

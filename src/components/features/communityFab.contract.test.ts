@@ -40,8 +40,8 @@ describe('게시판 글쓰기 FAB 는 탭바 바로 위 오른쪽에 선다', ()
     expect(APP, 'App.tsx 탭바 nav 의 safe-area 식이 바뀌었다 — FAB 식도 같이 바꿔라').toContain(`paddingBottom: '${SAFE}'`);
     expect(bottom).toContain(SAFE);
     const rem = Number(bottom.match(/calc\(([\d.]+)rem\s*\+/)?.[1]);
-    // 탭바 nav 높이 65.75px(safe-area 0, 2026-10-04 실측) · 루트 글자 17px
-    const gap = rem * 17 - 65.75;
+    // 탭바 nav 높이 62px(safe-area 0, 2026-10-04 루트 16px 재실측 390×640 — 17px 시절 65.75) · 루트 글자 16px
+    const gap = rem * 16 - 62;
     expect(gap, `탭바 위 간격 ${gap}px`).toBeGreaterThanOrEqual(12);
     expect(gap, `탭바 위 간격 ${gap}px`).toBeLessThanOrEqual(16);
   });

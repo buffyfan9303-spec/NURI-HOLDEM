@@ -66,18 +66,18 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
             사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다. */}
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 t-desc">
           {/* PG 심사 요건: '어떤 서비스를 운영하는지' 확인 가능한 소개 페이지(정적 URL) */}
-          <a href="/about.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
+          <a href="/about.html" target="_blank" rel="noopener" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
           <span className="text-ink-muted" aria-hidden>·</span>
           {/* 이용약관 — 전자상거래법 시행규칙 §7① 단서: 초기 화면에서 '직접' 연결돼야 한다(공정위 전자상거래 소비자보호 지침 Ⅱ.15.다). 접지 않는다. */}
-          <button type="button" onClick={() => onOpenLegal?.('terms')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
+          <button type="button" onClick={() => onOpenLegal?.('terms')} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
           <span className="text-ink-muted" aria-hidden>·</span>
           {/* 개인정보처리방침 — 개인정보보호법 §30② · 시행령 §31②: 홈페이지에 '지속적으로 게재'. 접지 않는다. */}
-          <button type="button" onClick={() => onOpenLegal?.('privacy')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>
+          <button type="button" onClick={() => onOpenLegal?.('privacy')} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>
           <span className="text-ink-muted" aria-hidden>·</span>
-          <button type="button" onClick={() => onOpenLegal?.('refund')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
+          <button type="button" onClick={() => onOpenLegal?.('refund')} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
           {onOpenSupport && <>
             <span className="text-ink-muted" aria-hidden>·</span>
-            <button type="button" onClick={onOpenSupport} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>
+            <button type="button" onClick={onOpenSupport} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>
           </>}
         </nav>
 
@@ -117,18 +117,18 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
             더보기<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
+            <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
             <span aria-hidden>·</span>
-            <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
+            <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
             <span aria-hidden>·</span>
             {/* 계정 삭제 안내(공개 정적 페이지) — Google Play '계정 삭제 URL' 요건: 앱 설치·로그인 없이 열려야 한다(2026-09-25). */}
-            <a href="/legal/delete-account.html" target="_blank" rel="noopener" data-testid="footer-delete-account" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">계정 삭제 안내</a>
+            <a href="/legal/delete-account.html" target="_blank" rel="noopener" data-testid="footer-delete-account" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">계정 삭제 안내</a>
             <span aria-hidden>·</span>
-            <a href="/legal/licenses.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">오픈소스 라이선스</a>
+            <a href="/legal/licenses.html" target="_blank" rel="noopener" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">오픈소스 라이선스</a>
           </div>
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다(연결화면 허용, 위 지침).
               ⚠ 날짜가 내부 공백에서 끊겨 '2026년 9월' / '29일' 로 갈라졌다(412 실측). 상수는 그대로 — textContent 불변이라 legalVersion 검사에 영향 없다. */}
-          <p data-testid="footer-revision-notice" className="mt-2">약관·개인정보처리방침 개정 안내: <span className="whitespace-nowrap">{LEGAL_NOTICE_DATE}</span> 공지 · <span className="whitespace-nowrap">{LEGAL_EFFECTIVE_DATE}</span> 시행 (직전판 시행일 <span className="whitespace-nowrap">{LEGAL_PREV_EFFECTIVE_DATE}</span> · <a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-prev-edition" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이전판 보기</a>)</p>
+          <p data-testid="footer-revision-notice" className="mt-2">약관·개인정보처리방침 개정 안내: <span className="whitespace-nowrap">{LEGAL_NOTICE_DATE}</span> 공지 · <span className="whitespace-nowrap">{LEGAL_EFFECTIVE_DATE}</span> 시행 (직전판 시행일 <span className="whitespace-nowrap">{LEGAL_PREV_EFFECTIVE_DATE}</span> · <a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-prev-edition" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이전판 보기</a>)</p>
         </details>
 
         {/* 사행성 배제 고지 — §7 P0-C: `/80` 반투명이 라이트 3.37:1·다크 3.72:1 로 AA 미달이었다.

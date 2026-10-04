@@ -25,7 +25,8 @@ export default function SignupLocationConsent({ checked, onChange }: { checked: 
       </ul>
       <div className="flex items-start justify-between gap-2">
         {/* py-3 -my-3: 누름 높이만 46px 로 넓히고 레이아웃은 그대로(2026-09-29 D4 — 가입 동의 행과 같은 44px). 위는 설명 글, 아래는 상자 여백이라 겹칠 조작이 없다. */}
-        <label className="flex items-start gap-2 cursor-pointer py-3 -my-3">
+        {/* min-h-[44px]: 루트 16px(2026-10-04)에서 한 줄 행은 19.5 + 24 = 43.5 라 44 아래였다(1280 실측) — 하한을 픽셀로 박는다. */}
+        <label className="flex min-h-[44px] items-start gap-2 cursor-pointer py-3 -my-3">
           <input type="checkbox" data-testid="signup-location-check" checked={checked} onChange={(e) => onChange(e.target.checked)}
             className="mt-0.5 accent-accent-300 shrink-0" />
           <span className="text-xs text-ink-secondary leading-relaxed select-none">

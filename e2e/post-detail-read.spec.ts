@@ -432,7 +432,8 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     const body = page.locator('[data-pd-body]');
     await expect(body).toBeVisible();
     const bb = (await body.boundingBox())!;
-    expect(bb.width, `2-pane 본문 읽기 폭 ${bb.width}px — 목록을 남긴 가용 폭을 쓰지 못한다`).toBeGreaterThanOrEqual(600);
+    // 600 은 17px 루트 기준 읽기 폭이다. 본문 글자도 rem 이라 16px 루트에서 같은 글자 수는 600 × 16/17 ≈ 565px.
+    expect(bb.width, `2-pane 본문 읽기 폭 ${bb.width}px — 목록을 남긴 가용 폭을 쓰지 못한다`).toBeGreaterThanOrEqual(600 * 16 / 17);
     expect((await clippedNodes(page)).out, 'PC 2-pane 에서 잘린 요소가 있다').toEqual([]);
   });
 
@@ -523,7 +524,8 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
         expect(h.위 && h.아래, `«${h.칸}» 유효 터치 44px 미달(높이 ${h.h}px · 위 ${h.위} · 아래 ${h.아래})`).toBe(true);
       }
       // 폭을 글자 축소로 맞추지 않았다 — 320 에서도 같은 크기다.
-      for (const f of t.글꼴) expect(f, `트레이 글자가 ${f}px 로 줄었다`).toBeGreaterThanOrEqual(12.5);
+      //   하한 = text-xs(0.75rem) 바로 아래 — 루트 16px 에서 12px(17px 시절 12.75 에 하한 12.5). 2xs(11)로 떨어지면 걸린다.
+      for (const f of t.글꼴) expect(f, `트레이 글자가 ${f}px 로 줄었다`).toBeGreaterThanOrEqual(11.75);
     });
   }
 

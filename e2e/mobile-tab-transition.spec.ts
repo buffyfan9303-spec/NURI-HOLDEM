@@ -825,7 +825,7 @@ test('🔴 B1 — 하단바 알약 아래 여백과 라벨 하단 여백이 목�
   expect(Math.max(...m!.labelGaps), `라벨 하단→nav 하단 최대 ${Math.max(...m!.labelGaps)}px — 너무 떠 있다(종전 11.625px 회귀): ${JSON.stringify(m!.labelGaps)}`)
     .toBeLessThanOrEqual(8);
   // 아이콘 상단 간격은 변화 0 이어야 한다(pt-2 는 안 건드렸다) — 여백을 위에서 훔쳐오지 않았다는 증거.
-  for (const g of m!.iconTopGaps) expect(g, `아이콘 상단 간격이 ${g}px 다 — pt-2(8.5px)가 아니다`).toBeCloseTo(8.5, 1);
+  for (const g of m!.iconTopGaps) expect(g, `아이콘 상단 간격이 ${g}px 다 — pt-2(0.5rem = 8px @16px 루트)가 아니다`).toBeCloseTo(0.5 * 16, 1);
   expect(m!.clipped, '라벨이 세로로 잘린 칸이 있다').toBe(0);
   expect(m!.minBtnH, `가장 낮은 하단바 버튼이 ${m!.minBtnH}px 로 44px 미만이다`).toBeGreaterThanOrEqual(44);
   // 여백을 줄이면서 터치 표적을 깎지 않았는지 — 44px 계약은 별개다.
