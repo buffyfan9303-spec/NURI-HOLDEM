@@ -44,6 +44,8 @@ test('🔴 닉네임 30일 안 — 입력칸 비활성 + 다음 변경 가능 �
   await expect(page.getByTestId('nickname-input')).toBeDisabled();
   await expect(page.getByTestId('name-cooldown-notice'))
     .toContainText(`닉네임은 30일에 한 번 변경할 수 있습니다 · 다음 변경 가능: ${kstMD(changed + 30 * DAY)}`);
+  // 상점 '닉네임 즉시 변경권'은 판매 종료(2026-10-04) — 잠김 안내가 없는 상품으로 유도하지 않는다.
+  await expect(page.getByTestId('name-cooldown-notice')).not.toContainText('즉시 변경권');
 });
 
 test('🔴 닉네임 첫 변경 — 열려 있고 날짜 없이 규칙만', async ({ page }) => {

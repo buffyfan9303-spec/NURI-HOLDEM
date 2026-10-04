@@ -13,7 +13,7 @@ import {
   getActivityLeaderboard, getMyPointBalance, buyLabel, lacksPoints, getShoutRules,
   getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, BUMP_SLOTS,
   getMyCosmetics, buyCosmetic, setEquippedCosmetic, getNickColors,
-  getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge, buyNicknameReset,
+  getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge,
   type LeaderboardEntry, type PointBalance, type ShopSku, type OwnedMark,
   type OwnedCosmetic, type BuyableSeasonBadge, type OwnedSeasonBadge,
 } from '../../api/community';
@@ -406,7 +406,7 @@ export default function TierLeaderboard() {
   const [shopList, setShopList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'rent'));
   const [buying, setBuying] = useState<string | null>(null);       // 구매 중인 마크 키
   // ── 소유물형 상품(2026-08-30 · 20260830n) ──────────────────────────────────
-  //   프레임 400 · 닉네임 색 600 · 시즌 뱃지 300 · 즉시 변경권 250.
+  //   프레임 400 · 닉네임 색 600 · 시즌 뱃지 300.
   //   전부 **표현·소유·편의**뿐이다. 확률형(뽑기)·포인트 베팅·유저 간 포인트 선물·
   //   포인트↔이용권 교환·참가비 대납은 설계에서 배제했다 — 점수가 값을 갖는 순간
   //   게임산업법 §32①7(환전 알선) 위험이고 '환금성 없음' 방어선(약관 제10조)이 무너진다.
@@ -414,7 +414,6 @@ export default function TierLeaderboard() {
   const [myCosmetics, setMyCosmetics] = useState<OwnedCosmetic[] | null>(null);
   const [seasonBuyable, setSeasonBuyable] = useState<BuyableSeasonBadge[] | null>(null);
   const [seasonOwned, setSeasonOwned] = useState<OwnedSeasonBadge[] | null>(null);
-  const [nickResetBusy, setNickResetBusy] = useState(false);
   // 프로필 카드 미리보기 — 고른 프레임이 실제로 어떻게 굽히는지가 곧 400점의 근거다.
   //
   // ⚠ ref 객체(useRef)가 아니라 **콜백 ref + state** 다. 이유는 실측으로 잡힌 버그다:
@@ -442,7 +441,6 @@ export default function TierLeaderboard() {
   const frameSku  = skus.find((s) => s.key === 'card_frame') ?? null;
   const nickSku   = skus.find((s) => s.key === 'nick_color') ?? null;
   const seasonSku = skus.find((s) => s.key === 'season_badge') ?? null;
-  const nickChangeSku = skus.find((s) => s.key === 'nick_change') ?? null;
   const frameList = useMemo(() => cosmetics.filter((c) => c.kind === 'card_frame'), [cosmetics]);
   const nickList  = useMemo(() => cosmetics.filter((c) => c.kind === 'nick_color'), [cosmetics]);
   // 키 → 소장/장착. 소유 판정은 서버 my_cosmetics() 가 이미 끝냈다(화면이 다시 하지 않는다).
@@ -452,16 +450,6 @@ export default function TierLeaderboard() {
     return m;
   }, [myCosmetics]);
   const equippedFrame = (myCosmetics ?? []).find((c) => c.kind === 'card_frame' && c.equipped)?.itemKey ?? null;
-  // ⚠ 닉네임 30일 쿨다운 판정은 서버 enforce_nickname_cooldown 트리거와 **같은 식**이어야 한다.
-  //   갈리면 '샀는데 못 바꾸는' 또는 '안 사도 되는데 사게 되는' 둘 중 하나가 된다.
-  //   (최종 판정은 서버 buy_nickname_reset 이 한다 — 여기는 버튼을 보여줄지 정할 뿐이다.)
-  const nickLocked = (() => {
-    if (!user || user.role === 'admin' || !user.nameChangedAt) return false;
-    return Date.now() - new Date(user.nameChangedAt).getTime() < 30 * 24 * 3600_000;
-  })();
-  const nickFreeAt = user?.nameChangedAt
-    ? new Date(new Date(user.nameChangedAt).getTime() + 30 * 24 * 3600_000).toLocaleDateString('ko-KR')
-    : '';
   // 잔액 실패는 balance=null(미도착) 그대로 — 누적 점수를 잔액으로 대신 쓰지 않는 보호는 그대로고, 실패는 boardErr.balance 로 말한다.
   const reloadBalance = useRef(() => { scopedLoad(scopeRef, getMyPointBalance(), (b) => { setBalance(b); clearErr('balance'); }, fail('balance')); }).current;
   /**
@@ -621,21 +609,6 @@ export default function TierLeaderboard() {
     } catch (e) {
       toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
     } finally { setBuying(null); }
-  };
-
-  // 파는 것은 기능이 아니라 **기다림 면제**다. 닉네임 변경 자체는 계속 무료이고,
-  // 쿨다운이 안 걸려 있으면 서버가 '이 권한은 필요하지 않습니다'로 거절한다.
-  const handleBuyNickReset = async () => {
-    if (nickResetBusy || !nickChangeSku) return;
-    setNickResetBusy(true);
-    try {
-      await buyNicknameReset();
-      reloadBalance();
-      await refreshProfile?.();
-      toast.show('이제 설정 탭에서 닉네임을 바로 바꿀 수 있습니다', 'success');
-    } catch (e) {
-      toast.show(msgOf(e, '구매에 실패했습니다'), 'error');
-    } finally { setNickResetBusy(false); }
   };
 
   const handleSaveCard = () => {
@@ -1423,34 +1396,6 @@ export default function TierLeaderboard() {
                         );
                       })}
                     </ul>
-                  )}
-                </div>
-              )}
-
-              {/* ── 편의 ④ 닉네임 즉시 변경권 ─────────────────────────────────
-                  파는 것은 기능이 아니라 **기다림 면제**다. 닉네임 변경 자체는 계속 무료이고,
-                  쿨다운이 안 걸려 있으면 아예 팔지 않는다(아무것도 주지 않고 점수만 받는 일이 없게).
-                  그래서 잠겨 있지 않을 때는 '지금 바로 바꿀 수 있다'고만 알린다. */}
-              {nickChangeSku && (
-                <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
-                  <Icon name="edit" size={18} className="shrink-0 text-accent-300" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-bold text-ink-primary">{nickChangeSku.label}</span>
-                    <span className="block text-2xs leading-relaxed text-ink-muted">
-                      {nickLocked
-                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있습니다. 구매하면 기다리지 않고 바로 바꿉니다</>
-                        : '지금은 기다리지 않고 바로 바꿀 수 있습니다 · 변경은 원래 무료입니다'}
-                    </span>
-                  </span>
-                  {nickLocked ? (
-                    <button type="button" disabled={nickResetBusy || lacksPoints(balance, nickChangeSku.price)}
-                      onClick={handleBuyNickReset}
-                      className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
-                      {nickResetBusy ? '적용 중…'
-                        : buyLabel(balance, nickChangeSku.price, '')}
-                    </button>
-                  ) : (
-                    <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">필요 없음</span>
                   )}
                 </div>
               )}

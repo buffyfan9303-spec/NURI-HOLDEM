@@ -570,11 +570,8 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               <p className="text-2xs leading-relaxed text-ink-muted">공개 이름 · 다른 사람과 겹칠 수 없습니다</p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
             </div>
-            {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
-                상품이 있는 줄도 모르고 30일을 기다린다. 파는 것은 기능이 아니라 대기 시간 면제다. */}
             <p data-testid="name-cooldown-notice" className={['mt-0.5 text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
               {cooldownNotice('닉네임은', nameNext)}
-              {nicknameLocked && " · 기다리지 않으려면 순위 › 상점의 '닉네임 즉시 변경권'"}
             </p>
           </div>
 
