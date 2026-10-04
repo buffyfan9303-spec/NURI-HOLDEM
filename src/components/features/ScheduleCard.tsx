@@ -518,7 +518,7 @@ function ListCard({
         />
         {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
         {rating && rating.count > 0 && (
-          <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+          <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>
             ★{rating.avg.toFixed(1)}
           </span>
         )}
@@ -790,7 +790,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
             <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-sky-300"><Icon name="map-pin" size={11} className="shrink-0" />{fmtKm(distanceKm)}</span>
           ) : rating && rating.count > 0 ? (
             <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-accent-200" title={`방문 후기 ${rating.count}건 평균`}>
-              <Icon name="star-fill" size={11} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+              <Icon name="star-fill" size={11} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
             </span>
           ) : null}
         </div>
@@ -928,7 +928,7 @@ function TimetableCard({
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           {rating && rating.count > 0 && (
-            <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
+            <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}
           {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
           {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}

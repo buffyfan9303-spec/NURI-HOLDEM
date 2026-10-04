@@ -41,7 +41,7 @@ const CATEGORY_TINT_FALLBACK = 'bg-surface-high text-ink-muted';
 
 // 2026-08-29 대비 교정. 세 계열은 **한 규칙으로 못 고친다** — accent 만 CSS 변수(테마 전환)이고
 // gold·emerald 는 테마 고정 브랜드 색이라, 라이트에서는 index.css 의 unlayered 오버라이드
-// (`html.light .text-gold-300/400 → #8F6200`, `html.light .text-emerald-300/400 → #0A8F5C`)가
+// (`html.light .text‑gold‑300/400 → #8F6200`, `html.light .text-emerald-300/400 → #0A8F5C`)가
 // 실제 렌더색을 바꾼다. 그래서 계열마다 결론이 다르다. 양 테마 '틴트 위' 합성면 실측(WCAG):
 //
 //   accent  틴트 #2C2448(다크·surface-low) / #E9E3F7(라이트)
@@ -53,16 +53,17 @@ const CATEGORY_TINT_FALLBACK = 'bg-surface-high text-ink-muted';
 //     · text-emerald-700(#067A4D, 오버라이드 없음)  라이트 4.75 ✅ / 다크 2.44 ❌
 //       → 단일 값으로는 양 테마를 못 넘긴다. dark: 분기가 유일한 해(앱 전례: LiveGamesTab·PostAttachments).
 //   gold    틴트 #3E352F(다크) / #FFF9E1(라이트)
-//     · text-gold-400  다크 6.64 ✅ / 라이트 렌더값 #8F6200 5.08 ✅ → **이미 통과, 손대지 않는다**
+//     · text‑gold‑400  다크 6.64 ✅ / 라이트 렌더값 #8F6200 5.08 ✅ → **이미 통과, 손대지 않는다**
 //       (여기서 gold 까지 700 단 같은 걸로 밀면 다크가 2.39 로 무너진다)
 //   free    surface-high 위 ink-muted  다크 4.53 ✅ / 라이트 4.69 ✅ → 유지
 const CATEGORY_TINTS: Partial<Record<PostCategory, string>> = {
-  hand:     'bg-accent-300/15 text-accent-200',
-  study:    'bg-accent-300/15 text-accent-200',
+  // 2026-10-05 오너 결정: 황동은 누르는 것에만, 금색은 순위·성취에만 — 분류 라벨(핸드 분석·공부·대회·후기)은 중립. 질문·정보 초록은 신호색이라 유지.
+  hand:     CATEGORY_TINT_FALLBACK,
+  study:    CATEGORY_TINT_FALLBACK,
   question: 'bg-emerald-400/15 text-emerald-700 dark:text-emerald-400',
   info:     'bg-emerald-400/15 text-emerald-700 dark:text-emerald-400',
-  tourney:  'bg-gold-300/15 text-gold-400',
-  review:   'bg-gold-300/15 text-gold-400',
+  tourney:  CATEGORY_TINT_FALLBACK,
+  review:   CATEGORY_TINT_FALLBACK,
   free:     CATEGORY_TINT_FALLBACK,
 };
 

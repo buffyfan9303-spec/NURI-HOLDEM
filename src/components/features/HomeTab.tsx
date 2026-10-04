@@ -651,13 +651,13 @@ export default function HomeTab({
             {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-gold-300/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
                   {/* 2026-09-19 오너: "제휴 혜택 - 이벤트로 이름 변경". 목적지(onEvent)는 그대로다 —
                       이 칸은 처음부터 이벤트로 갔고, '제휴 혜택' 이라는 이름만 그 사실을 가리고 있었다. */}
-                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-gold-300" />이벤트
+                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />이벤트
                 </span>
                 {/* 2026-09-18 오너: "옆에 카드 30은 제거" — 남은 카드 수 배지를 뺐다.
                     같은 정보를 쓰는 다른 자리(캐러셀 이벤트 슬라이드)는 그대로다 — 오너가 지목한 것은 이 칸이다. */}
@@ -667,7 +667,7 @@ export default function HomeTab({
                 {/* 🔴 2026-09-25 오너 결정 — 진행 이벤트가 없는데 '이벤트 보기' 가 강조색으로 남아 있었다. 그 갈래(menu)에선
                     흐린 '진행 중 이벤트 없음' 으로 **사실을 말한다**. 진입은 그대로다(누르면 이벤트 판 — 지난 이벤트·시작 전 안내가 거기 있다).
                     응답 전(pending)·참여 가능(banner)은 종전 '이벤트 보기'. 실패는 '불러오기 실패 · 다시 시도' 가 먼저다. */}
-                <span data-testid="home-quick-event-action" className={['min-w-0 text-2xs font-bold', eventShown === 'menu' && !quickEventFailed ? 'text-ink-muted' : 'text-gold-300'].join(' ')}>{quickEventFailed ? '불러오기 실패 · 다시' : eventShown === 'menu' ? '진행 중 이벤트 없음' : '이벤트 보기'}</span>
+                <span data-testid="home-quick-event-action" className={['min-w-0 text-2xs font-bold', eventShown === 'menu' && !quickEventFailed ? 'text-ink-muted' : 'text-accent-300'].join(' ')}>{quickEventFailed ? '불러오기 실패 · 다시' : eventShown === 'menu' ? '진행 중 이벤트 없음' : '이벤트 보기'}</span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
@@ -793,7 +793,7 @@ export default function HomeTab({
                         //   (e2e home-flow-fit 이 잡았다: `(일) 1.43:1 9px rgba(252,213,53,.8) on rgb(255,255,255)`).
                         //   금색은 어두운 지면에서만 산다. 테두리·배경은 그대로 두고 **글자만** 본문색으로 돌린다
                         //   — 선택 표시는 색 하나에 의존하지 않는다(색맹 고려 · `aria-pressed` 도 같이 준다).
-                        ? 'border border-gold-300/70 bg-gold-300/10 text-ink-primary'
+                        ? 'border border-accent-300 dark:border-accent-200 bg-accent-300/10 text-ink-primary' /* 2026-10-05 오너: '오늘' = 선택과 같은 밝은 테두리(다크 9.0 · 라이트 5.6) */
                         : 'border border-transparent text-ink-secondary hover:bg-surface-high',
                     ].join(' ')}>
                     {/* 안쪽 얼굴 — 휠 피커 효과(투명도·블러·크기)는 여기에만 건다(위 효과 주석). 첫 자식이어야 한다. */}

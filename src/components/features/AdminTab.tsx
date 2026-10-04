@@ -799,7 +799,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
           {list.map((p) => (
             <li key={p.id} className="space-y-1 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
               <p className="flex items-center gap-1 min-w-0">
-                {p.pinnedAt && <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>}
+                {p.pinnedAt && <span className="shrink-0 rounded-badge bg-surface-high px-1 text-2xs font-extrabold leading-none text-ink-primary">고정</span>}
                 {p.blinded && <span className="shrink-0 rounded-badge bg-surface-float px-1 text-2xs font-extrabold leading-none text-ink-muted">블라인드</span>}
                 <span className="min-w-0 flex-1 truncate font-bold text-ink-primary">{p.title || p.content.split('\n')[0]}</span>
               </p>
@@ -809,7 +809,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
                 </span>
                 <button type="button" onClick={() => run(p, 'pin')} disabled={busy === p.id}
                   className={['min-h-8 rounded-input border px-2.5 text-2xs font-bold transition-colors disabled:opacity-60',
-                    p.pinnedAt ? 'border-gold-400/40 text-gold-400 hover:bg-gold-400/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    p.pinnedAt ? 'border-accent-300 text-accent-200 hover:bg-accent-300/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {p.pinnedAt ? '고정 해제' : '고정'}
                 </button>
                 <button type="button" onClick={() => run(p, 'blind')} disabled={busy === p.id}

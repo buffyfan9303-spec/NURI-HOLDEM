@@ -2345,7 +2345,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                     레지 마감(regClose)은 직원도 되므로 그대로 둔다. 오너 결정: 권한을 넓히지 않고 화면을 서버에 맞춘다. */}
                 {canManage && (
                   <button ref={settleBtnRef} type="button" onClick={() => setCloseOpen(true)} data-testid="ledger-settle"
-                    className={`btn-primary text-2xs px-2 py-1${settleHot ? ' ring-2 ring-gold-300 ring-offset-2 ring-offset-surface-mid' : ''}`}>정산 마감</button>
+                    className={`btn-primary text-2xs px-2 py-1${settleHot ? ' ring-2 ring-amber-600 dark:ring-amber-400 ring-offset-2 ring-offset-surface-mid' : ''}`}>정산 마감</button>
                 )}
               </div>
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
@@ -3305,7 +3305,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     <div className={embedded ? 'space-y-3' : 'rounded-card border border-border-default bg-surface-low p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
-          <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
+          <h3 className="text-sm font-bold text-ink-primary">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b></p>
           {prefilled && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />직전 게임 설정을 불러왔습니다. 바로 시작하거나 수정하세요.</p>}
           {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
@@ -3504,14 +3504,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
           <p className="text-2xs leading-relaxed text-ink-muted">
-            할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
+            할인은 <b className="text-ink-primary">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바인 <b className="text-ink-primary">1회</b> · 엔트리 <b className="text-ink-primary">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
                 할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''})보다 큽니다 —
                 단가 이하로 고쳐 주세요. (단가와 같은 100% 할인은 됩니다 = 무료 이벤트)
               </b>
             )}
-            <b className="text-accent-300">LV</b> 칸에 레벨을 적으면 <b className="text-accent-300">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
+            <b className="text-ink-primary">LV</b> 칸에 레벨을 적으면 <b className="text-ink-primary">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
           </p>
         </div>
       </Field>
@@ -3520,7 +3520,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       <Field label="대회 시작 시각 · 선택">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
-          얼리 구간은 <b className="text-accent-300">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
+          얼리 구간은 <b className="text-ink-primary">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-accent-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
       </Field>

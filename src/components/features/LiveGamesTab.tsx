@@ -202,7 +202,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 글자 중심이 390 에서 5.97px · 1440 에서 2.97px 어긋났다(새로고침이 제목보다 아래). 제목 첫 줄을
                 버튼 높이(min-h-8 = 34px)로 예약하고 가운데 정렬 — 아래 거리 안내 줄이 붙어도 첫 줄끼리 맞는다.
                 flex 는 글 끝 공백을 그리지 않으므로 개수와의 간격은 gap-1 이 맡는다(textContent·낭독은 공백 그대로). */}
-            <h2 className="flex min-h-8 items-center gap-1 text-fluid-lg font-bold text-ink-primary">진행 중 대회 {games ? <span className="text-accent-200">{games.length}</span> : null}</h2>
+            <h2 className="flex min-h-8 items-center gap-1 text-fluid-lg font-bold text-ink-primary">진행 중 대회 {games ? <span className="text-ink-secondary">{games.length}</span> : null}</h2>
             {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 대회'가 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
             {/* LOCATION-READY(2026-09-26): 가까운 순은 기기 안에서만 계산한다(위치정보지원센터 FAQ 9 — 서버 미전송) — 그 사실을 고른 사람에게만 한 줄로 알린다 */}
             {sortBy === 'distance' && geo && <p data-testid="live-distance-local-note" className="mt-0.5 text-2xs text-ink-muted">위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않습니다</p>}
@@ -349,7 +349,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         </div>
         {!listPending && upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
-            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="whitespace-nowrap font-normal">아직 클락 전</span></p>
+            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-ink-primary">{upcoming.length}</span> <span className="whitespace-nowrap font-normal">아직 클락 전</span></p>
             {/* 일정 목록 카드(ScheduleCard list) 그 자체 — 같은 대회가 일정 탭과 여기서 다른 줄 문법으로 보이지 않게(2026-09-18).
                 예전의 자체 3열(시각·제목·매장명)에는 참가비·GTD·등록 마감이 없었다 — '갈까?' 를 정하는 값이 빠진 줄이었고
                 320px 에서는 제목이 잘렸다(실측 134/190). 컨테이너 클래스는 App 의 일정 목록과 같다. */}

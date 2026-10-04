@@ -326,7 +326,7 @@ export default function ScheduleDetailModal({
               <span className="font-semibold tracking-wider">{schedule.format}</span>
               {rating && rating.count > 0 && (
                 <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                  <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  <Icon name="star-fill" size={12} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                 </span>
               )}
             </p>
@@ -732,7 +732,7 @@ export default function ScheduleDetailModal({
                 <>
                   <span className="text-ink-muted">·</span>
                   <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`}>
-                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}
+                    <Icon name="star-fill" size={12} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}
                   </span>
                   <span className="text-ink-muted">방문 후기 {rating.count}건 평균</span>
                 </>

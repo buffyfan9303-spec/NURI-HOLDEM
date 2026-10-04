@@ -25,7 +25,7 @@ function Stars({ value, size = 14, onPick }: { value: number; size?: number; onP
   //   라이트에서 한 단계 진하게 가는 쪽이 이 팔레트의 관행이라 새 규칙을 만들지 않고 따른다.
   const star = (n: number) => (
     <svg width={size} height={size} viewBox="0 0 24 24"
-      className={n <= value ? 'text-gold-400 dark:text-gold-300' : 'text-ink-muted'}
+      className={n <= value ? 'text-ink-primary' : 'text-ink-muted'}
       fill={n <= value ? 'currentColor' : 'none'} stroke="currentColor"
       strokeWidth="1.6" strokeLinejoin="round" aria-hidden>
       <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9 2.9-6z" />

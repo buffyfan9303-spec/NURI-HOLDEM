@@ -1544,7 +1544,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
 
       {/* ── 클락 시작(진입) — 맨 위: 단독 / 장부 연동 리스트 ───────────── */}
       <section className="rounded-aura border border-border-default bg-surface-low p-3 space-y-2.5">
-        <p className="text-2xs font-bold text-accent-300">클락 시작 방식</p>
+        <p className="text-2xs font-bold text-ink-secondary">클락 시작 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
             className={['rounded-input border p-2.5 text-left transition-colors', linkDate === null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
@@ -1597,7 +1597,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
 
       {/* 프리셋 — PL2c: 게임 프리셋(공용 PresetPicker)이 기본. 저장은 [내 매장 → 프리셋]으로 일원화. */}
       <section className="rounded-aura border border-accent-400/30 bg-accent-300/5 p-3 space-y-2">
-        <p className="text-base font-bold text-accent-300">프리셋 · 클릭해 불러오기</p>
+        <p className="text-base font-bold text-ink-primary">프리셋 · 클릭해 불러오기</p>
         <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
           note="프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
         {/* 구 클락 프리셋 — 불러오기·삭제만 유지(신규 저장 진입점 0), 변환 버튼으로 게임 프리셋에 흡수 */}

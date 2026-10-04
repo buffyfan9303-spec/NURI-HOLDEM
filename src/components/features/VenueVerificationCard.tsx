@@ -45,12 +45,12 @@ export default function VenueVerificationCard({ venueId, showVerification = true
 
   if (status === 'verified') {
     return (
-      <div className="flex items-center gap-2 rounded-card border-2 border-accent-300 bg-accent-300/8 px-3 py-2.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-300 text-white">
+      <div className="flex items-center gap-2 rounded-card border border-border-default bg-surface-low px-3 py-2.5">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-accent-300">인증 매장</p>
+          <p className="text-sm font-bold text-ink-primary">인증 매장</p>
           <p className="text-2xs text-ink-secondary">포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.</p>
         </div>
       </div>

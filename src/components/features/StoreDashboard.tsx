@@ -534,7 +534,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const ledgerStatusCls = loading || !started
     ? 'bg-surface-float text-ink-muted'
     : session?.closed ? 'bg-ink-muted/20 text-ink-secondary'
-    : session?.regClosed ? 'bg-gold-400/15 text-gold-300'
+    : session?.regClosed ? 'bg-amber-400/15 text-amber-400'
     : 'bg-emerald-500/15 text-emerald-400';
 
   // ── 클락 ──
@@ -1169,7 +1169,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               </div>
               {wActive && (
                 <div className="shrink-0 text-right">
-                  <p className={`text-3xl font-extrabold leading-none tabular-nums ${wClock?.running ? 'text-emerald-400' : 'text-gold-300'}`}>{fmtClock(clockRemainMs)}</p>
+                  <p className={`text-3xl font-extrabold leading-none tabular-nums ${wClock?.running ? 'text-emerald-400' : 'text-amber-400'}`}>{fmtClock(clockRemainMs)}</p>
                   <p className="mt-1 text-2xs text-ink-muted">남은 인원 <b className="tabular-nums text-ink-primary">{survivors}</b></p>
                 </div>
               )}
@@ -1395,11 +1395,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         //   xl 은 DOM 순서대로 설명과 CTA 사이에 선다. 칩이 폭을 먹으니 xl 에서 설명은 한 줄로 자른다(1024 는 가장 긴 갈래가 18px 모자라 종전 방식 유지).
         const rankRow = (text: string, onClick?: () => void) => (
           // settle-fix 후속 ① — 칩은 DOM 에서 CTA **뒤**다(Tab 순서 = xl 미만의 화면 순서: CTA → 다음 줄 칩). xl 은 CTA 를 xl:order-last 로 칩 오른쪽에 보낸다.
-          <span data-testid={onClick ? 'todo-rank' : undefined} className="mt-1.5 flex min-w-0 basis-full items-center gap-2 border-t border-gold-400/25 pt-1.5 xl:mt-0 xl:basis-auto xl:rounded-input xl:border xl:border-gold-400/40 xl:py-1 xl:pl-2 xl:pr-1">
+          <span data-testid={onClick ? 'todo-rank' : undefined} className="mt-1.5 flex min-w-0 basis-full items-center gap-2 border-t border-border-default pt-1.5 xl:mt-0 xl:basis-auto xl:rounded-input xl:border xl:border-border-default xl:py-1 xl:pl-2 xl:pr-1">
             <Icon name="trophy" size={14} className="shrink-0 text-gold-300" />
             <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary xl:flex-none">{text}</span>
             {onClick
-              ? <button type="button" onClick={onClick} className="hit shrink-0 rounded-input bg-gold-400 px-2.5 py-0.5 text-2xs font-bold text-ink-inverse hover:bg-gold-500">순위 입력</button>
+              ? <button type="button" onClick={onClick} className="hit shrink-0 rounded-input bg-accent-300 px-2.5 py-0.5 text-2xs font-bold text-white hover:bg-accent-400">순위 입력</button>
               : <span className="shrink-0 rounded-input px-2.5 py-0.5 text-2xs font-bold">순위 입력</span>}
           </span>
         );
@@ -1495,9 +1495,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         const rankPrimary = todo.rank === true;
         const latest = pendingRanks[0];
         const toneCls = todo.tone === 'warn'
-          ? 'border-gold-400/50 bg-gold-400/8'
+          ? 'border-amber-400/50 bg-amber-400/8'
           : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/6' : 'border-accent-400/40 bg-accent-300/6';
-        const iconCls = todo.tone === 'warn' ? 'text-gold-300' : todo.tone === 'ok' ? 'text-emerald-400' : 'text-ink-secondary';
+        const iconCls = todo.tone === 'warn' ? 'text-amber-400' : todo.tone === 'ok' ? 'text-emerald-400' : 'text-ink-secondary';
         return (
           <div data-testid="todo-card" className={`grid rounded-card border p-3 ${toneCls}`}>
           {ghost}
@@ -1517,7 +1517,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 골드 채움은 그대로 두고 **그림자만** 뺀다 — 위계를 낮추지 않으면서 색 경쟁만 없앤다. */}
             <button type="button" onClick={todo.onClick} data-testid="todo-cta"
               className={`${todo.tone === 'warn'
-                ? `btn-primary shrink-0 px-4 py-2 text-xs bg-none! bg-gold-400! text-ink-inverse! hover:bg-gold-500!${liveWidget ? ' shadow-none!' : ''}`
+                ? `btn-primary shrink-0 px-4 py-2 text-xs bg-none! bg-amber-400! text-ink-inverse! hover:bg-amber-500!${liveWidget ? ' shadow-none!' : ''}`
                 : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'} xl:order-last`}>
               {todo.cta}
             </button>
@@ -1567,7 +1567,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
         <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
           badge={clockActive
-            ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gold-400/15 text-gold-300'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
+            ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
           {loading ? <Skeleton /> : !clockActive || !lvl ? (
             <p className="py-3 text-center text-2xs text-ink-muted">실행 중인 클락이 없습니다.</p>
@@ -1796,7 +1796,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <li key={b.name} className="flex items-center gap-2 text-2xs">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">{b.birthday}</span>
-                  <span className={['inline-flex shrink-0 items-center gap-0.5 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', b.dday === 0 ? 'bg-gold-400/15 text-gold-300' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                  <span className={['inline-flex shrink-0 items-center gap-0.5 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', b.dday === 0 ? 'bg-amber-400/15 text-amber-400' : 'bg-surface-float text-ink-secondary'].join(' ')}>
                     {b.dday === 0 ? <><Icon name="gift" size={10} />오늘</> : `D-${b.dday}`}
                   </span>
                 </li>

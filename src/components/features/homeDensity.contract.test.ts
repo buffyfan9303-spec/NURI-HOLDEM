@@ -282,7 +282,8 @@ describe('빠른 카드 두 개', () => {
     expect(HOME).toMatch(/\{quickEventFailed \? '불러오기 실패 · 다시' : eventShown === 'menu' \? '진행 중 이벤트 없음' : '이벤트 보기'\}/);
   });
   it('진행 이벤트가 없으면 행동 줄이 흐린 글자로 사실을 말한다(2026-09-25) — 진입 버튼은 그대로', () => {
-    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-gold-300'/);
+    // 2026-10-05 오너: 이벤트 진입(누를 수 있음)은 황동 — 금색은 순위·성취 전용(종전 단언: 금색).
+    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-accent-300'/);
     expect(HOME).toMatch(/<button type="button" onClick=\{\(\) => onEvent\(\)\} data-testid="home-quick-event"/);
   });
 });

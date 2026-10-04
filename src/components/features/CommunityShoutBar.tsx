@@ -793,7 +793,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
               //   안내 문구는 우리가 쓴 짧은 도움말이라 정적 한 줄 말줄임(…)으로 둔다(게시판 제목과 같은 원칙). 전체는 title.
               //   유료 방송(위 drawShout)은 최대 60자라 말줄임하면 산 내용이 잘린다 — 오너 결정 전까지 전광판 유지.
               <span data-testid="shout-idle-line" title={`누리홀덤 안내 · ${drawLine}`} className="block w-full min-w-0 truncate">
-                <span className="text-2xs font-bold text-accent-300">누리홀덤 안내</span>
+                <span className="text-2xs font-bold text-ink-secondary">누리홀덤 안내</span>
                 <span className="mx-1.5 text-2xs text-ink-muted">·</span>
                 <span className="text-sm font-semibold leading-snug text-ink-secondary">{drawLine}</span>
               </span>

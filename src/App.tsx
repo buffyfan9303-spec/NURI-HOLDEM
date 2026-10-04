@@ -4375,7 +4375,7 @@ export default function App() {
             {(!schedulesLoaded || visibleSchedules.length > 0) && (
               <p aria-hidden={!schedulesLoaded || undefined}
                 className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary', schedulesLoaded ? '' : 'invisible'].join(' ')}>
-                대회 <span className="text-sm font-bold tabular-nums text-accent-300">{schedulesLoaded ? visibleSchedules.length : 0}</span>
+                대회 <span className="text-sm font-bold tabular-nums text-ink-secondary">{schedulesLoaded ? visibleSchedules.length : 0}</span>
               </p>
             )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
