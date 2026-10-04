@@ -775,6 +775,9 @@ video {
   html[data-tabbar-hidden] .scroll-top-fab { transform: translateY(calc(4.5rem + var(--tabbar-lift))); }
   @media (min-width: 1024px) { html[data-tabbar-hidden] .scroll-top-fab { transform: none; } }
   @media (prefers-reduced-motion: reduce) { .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); } }
+  /* 커뮤니티 게시판 글쓰기 FAB(CommunityTab.tsx, 탭바 위 15px·right-4)가 같은 오른쪽 열을 쓰는 동안만 FAB 위로 비켜선다(2026-10-04).
+     탭바 숨김 때도 내려가지 않는다 — 내려가면 FAB 와 5px 로 붙는다. 다른 화면·PC 는 위 규칙 그대로. */
+  @media (max-width: 1023.98px) { html[data-board-fab] .scroll-top-fab { transform: translateY(-2.25rem); } }
 
   /* ══ 아우라 테마 유틸 (모션 헌법 v2 §5·§6 · 오너 참조 'Aura Health AI' 2026-09-02) ═══════════════
      .glass-strong — 유리 크롬(맨 .glass 는 호출부 0 이라 2026-09-29 삭제). 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
