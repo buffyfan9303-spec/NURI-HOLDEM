@@ -316,6 +316,10 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           // 남기는 것은 **순수 재조회 하나**뿐이다(HomeTab.tsx:330 getEventBoard — 변이 RPC 0회).
           // 이용권 사용은 그 자체로 이벤트 참여 현황을 바꿀 수 있고, 안 바뀌었으면 같은 값이 다시 온다.
           window.dispatchEvent(new Event('nuri:event-board-refresh'));
+          // R5-03(2026-10-04) — 사용 요청은 매장 장부에 '대기 바인 요청'을 만든다. 홈 '참가 요청' 배너(myBuyinReqs)가
+          // 이 요청을 읽는데 여기서 신호가 없어 낡은 채로 남았다. 포스터 경로(ScheduleDetailModal)와 같은 신호 —
+          // App.tsx 가 받아 getMyBuyinRequestsToday 를 다시 읽는다(순수 재조회, 변이 RPC 0회).
+          window.dispatchEvent(new Event('nuri:buyin-request-sent'));
           // V07 — remain 은 재조회한 서버 정본에서 센다. load() 가 끝나기 전엔 아직 방금 요청을
           // 만든 그 장이 vouchers 에 active 로 남아 있을 수 있어(리렌더 타이밍), 반드시 fresh 를 기다린다.
           load().then((fresh) => {

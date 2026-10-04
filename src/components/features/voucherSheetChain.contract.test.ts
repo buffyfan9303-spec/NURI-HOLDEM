@@ -96,6 +96,8 @@ describe('FINAL-QR#CHECKIN-REFRESH — 출석/이용권 사용 뒤 정본 재조
     const onDone = WALLET.slice(WALLET.indexOf('onDone={(used) => {'), WALLET.indexOf('load().then((fresh)'));
     expect(onDone.length, 'RedeemSheet onDone 을 못 찾았다').toBeGreaterThan(50);
     expect(onDone, '1장 사용 뒤 이벤트 보드가 안 따라온다').toMatch(/new Event\('nuri:event-board-refresh'\)/);
+    expect(onDone, "R5-03 — 사용 요청은 장부에 대기 바인 요청을 만든다. 홈 '참가 요청' 배너 재조회 신호가 없다")
+      .toMatch(/new Event\('nuri:buyin-request-sent'\)/);
     expect(onDone, "이용권 사용이 '출석이 생겼다' 신호를 쏜다 — 4시간 창에 걸리면 거짓 출석 표시가 된다")
       .not.toMatch(/nuri:checkin-done/);
   });
@@ -104,6 +106,8 @@ describe('FINAL-QR#CHECKIN-REFRESH — 출석/이용권 사용 뒤 정본 재조
     const onDone = SHEET.slice(SHEET.indexOf('onDone={(msg, ok) => {'), SHEET.indexOf('/>\n            )}'));
     expect(onDone.length, 'SendVouchersSheet onDone 을 못 찾았다').toBeGreaterThan(50);
     expect(onDone, '다장 보내기 뒤 이벤트 보드가 안 따라온다').toMatch(/new Event\('nuri:event-board-refresh'\)/);
+    expect(onDone, "R5-03 — 다장 보내기 뒤 홈 '참가 요청' 배너 재조회 신호가 없다")
+      .toMatch(/new Event\('nuri:buyin-request-sent'\)/);
     expect(onDone, "다장 보내기가 '출석이 생겼다' 신호를 쏜다 — 거짓 출석 표시")
       .not.toMatch(/nuri:checkin-done/);
   });
