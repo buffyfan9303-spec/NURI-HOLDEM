@@ -183,7 +183,7 @@ export default function TdaRulesTool() {
           {sections.map((s) => (
             <button key={s} type="button" onClick={() => setSection(s)}
               className={[CHIP_HIT, 'h-[32px] shrink-0 whitespace-nowrap rounded-chip px-2.5 text-2xs font-semibold transition-colors',
-                section === s ? 'chip-aura text-white' : 'border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                section === s ? 'chip-on' : 'border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {s}
             </button>
           ))}

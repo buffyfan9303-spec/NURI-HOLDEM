@@ -1543,7 +1543,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
       </div>
 
       {/* ── 클락 시작(진입) — 맨 위: 단독 / 장부 연동 리스트 ───────────── */}
-      <section className="rounded-aura border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/6 to-transparent p-3 space-y-2.5">
+      <section className="rounded-aura border border-border-default bg-surface-low p-3 space-y-2.5">
         <p className="text-2xs font-bold text-accent-300">클락 시작 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
@@ -1658,7 +1658,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
       </section>
 
       {/* 얼리 구간 — 레벨 기준 */}
-      <section className="rounded-aura border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2">
+      <section className="rounded-aura border border-border-default bg-surface-low p-3 space-y-2">
         <p className="text-2xs font-semibold text-accent-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
         <div className="grid grid-cols-2 gap-2">
           <Field label="더블얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>

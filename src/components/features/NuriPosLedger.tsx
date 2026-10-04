@@ -3302,7 +3302,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //   2026-09-25 오너 실기기에서 바 자체가 스크롤 내내 칸·칩·카드를 덮는다고 다시 지적 → 모바일은 바를 고정하지 않는다
   //   (아래 실행 버튼 주석). 덮을 바가 없으니 포커스 보정도 필요 없어 지웠다.
   return (
-    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2.5'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-border-default bg-surface-low p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>

@@ -541,7 +541,7 @@ const AppHeader = memo(function AppHeader({
                   //   돌려주는 문자열 API 라(다른 호출부가 `${...}aa` 로 알파를 문자열 결합해 계약을 못 바꾼다)
                   //   라이트에서 이 링이 지면에 묻혔다. 이 링은 별도 배지 없이 **등급을 알리는 유일한 표시**라
                   //   안 보이면 기능이 사라진 것과 같다 → 장식용 --tier-*-vivid 토큰(테마별 정의)으로 직접 참조.
-                  style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
+                  style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}` /* 2026-10-05: 확산 후광 제거 — 등급 링(정보)만 */ }}
                   title="내 활동 등급"
                 >
                   {/* 2026-09-04: 이니셜 위에 img 를 absolute 로 얹던 패턴 제거 — contain 이미지(로고형)에서
@@ -919,7 +919,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
       //   아래를 벌리는 **지배항은 여기 `env(safe-area-inset-bottom)`** 하나다. 그래서 값을 없애지 않고 **상한**만 씌운다.
       //     safe-area 0(하네스·브라우저 모드): `min(0, 8.5) = 0` → **오늘과 완전히 동일**. 기존 계약 무손상.
       //     safe-area 24~34px(설치형 PWA·홈 인디케이터): 8.5px 로 고정 → 알약 아래 총 `mb 2.125 + 8.5 = 10.625px`.
-      //     이 값은 레일 좌우 여백 `mx-2.5`(10.625px)와 **정확히 같고** 알약 위(9.5px)와 1px 차다 — '위랑 맞춰' 가 이 지점이다.
+      //     이 값은 레일 좌우 여백 `mx‑2.5`(10.625px — 2026-10-05 평평한 바로 바뀌며 지금은 없다)와 **정확히 같고** 알약 위(9.5px)와 1px 차다 — '위랑 맞춰' 가 이 지점이다.
       //   ⚠ 대가: 라벨 행이 홈 인디케이터 예약구간 안으로 들어간다(아이콘·터치 표적 대부분은 바깥).
       //     실기기에서 답답하면 **이 상한만** 키워라(`0.75rem`=12.75px · `1.25rem`=21.25px). 다른 곳은 손대지 마라.
       //   ⚠ `--tabbar-safe`/`--tabbar-float`(index.css:65-66)는 푸터·토스트·FAB·알림패널·정산바가 공유하는

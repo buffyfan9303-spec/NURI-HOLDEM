@@ -1458,7 +1458,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
 
   return (
     <div className="space-y-3">
-      <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2">
+      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
         <h3 className="text-sm font-bold text-accent-300">홀덤펍 생성 + 관리 업주 임명</h3>
         <div className="grid grid-cols-2 gap-2">
           <label className="block">

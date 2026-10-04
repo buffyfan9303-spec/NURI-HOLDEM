@@ -273,7 +273,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   // 빈 통계와 실패는 완전히 다른 상태라, 실패는 실패로 말하고 다시 시도할 수단을 준다.
   if (loadError) {
     return (
-      <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-3">
+      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <LoadErrorCard error={loadError} what="통계"
           onRetry={() => { setLoadError(null); setLiveTick((v) => v + 1); }} />
@@ -282,7 +282,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   }
 
   return (
-    <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-3">
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <div className="flex items-center gap-1.5">
