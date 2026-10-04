@@ -44,7 +44,7 @@ import {
   BADGES, getMyBadgeStats, type BadgeStats,
   getMyEquippedMark, setEquippedMark as saveEquippedMark,
 } from '../../lib/loyalty';
-import { msgOf, isDenied } from '../../lib/dbError';
+import { msgOf, isDenied, isOffline } from '../../lib/dbError';
 
 // 시상대 색 — 👑🥈🥉 이모지는 OS 마다 금·은·동 색조가 달라 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 1·2·3위 서열을 앱이 통제한다(AdminTab 명예의 전당과 같은 규약).
@@ -1111,8 +1111,11 @@ export default function TierLeaderboard() {
                       <span className="block truncate text-xs font-semibold text-danger-light">
                         {isDenied(shopErr) ? '상점 정보 열람 권한이 없습니다' : '상점 정보를 불러오지 못했습니다'}
                       </span>
+                      {/* M5-04: 끊김 문장(msgOf)은 한 줄 truncate 에서 360 은 58px·390 은 28px 잘렸고 터치엔 title 이 안 보인다 →
+                          이 줄에서는 '다시 시도' 가 이미 말하는 뒷절을 빼고 한눈에 들어오는 짧은 말만 쓴다(전문은 title 에 그대로).
+                          줄 높이·한 줄 계약(M3-09)은 그대로. */}
                       <span className="block truncate text-2xs text-ink-secondary" title={msgOf(shopErr, '') || undefined}>
-                        {msgOf(shopErr, '') || (isDenied(shopErr) ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '없는 것이 아니라 못 불러왔습니다.')}
+                        {isOffline(shopErr) ? '네트워크가 끊겼습니다' : msgOf(shopErr, '') || (isDenied(shopErr) ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '없는 것이 아니라 못 불러왔습니다.')}
                       </span>
                     </span>
                     <button type="button"

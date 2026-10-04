@@ -87,6 +87,8 @@ interface CommunityTabProps {
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
+// 글쓰기 FAB 가 달라붙은 자리에서 이만큼 올라가면 '떠났다' — '맨 위로'(높이·자리 포함 윗변 ≈ 탭바 위 9rem)보다 충분히 위.
+const FAB_RISEN_PX = 120;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
@@ -141,11 +143,35 @@ function CommunityTab({
   useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
   // 게시판 글쓰기 FAB 가 탭바 바로 위 오른쪽 칸을 쓰는 동안 문서에 알린다 — '맨 위로'(App.tsx .scroll-top-fab)가
   // CSS 만으로 FAB 왼쪽 같은 줄로 비켜선다(index.css html[data-board-fab]). App 의 data-tabbar-hidden 과 같은 조리법.
+  //
+  // 피드 끝에서 FAB 가 '마지막 글 아래'로 올라가 자리를 떠나면(오너 2026-10-04) '맨 위로'는 혼자 비켜선 채 남지 않고 다른 화면과 같은
+  // 오른쪽 기둥(x 330.5@390)으로 돌아간다(M5-03). 신호 = 게시판이 보이고 **FAB 가 떠 있는 동안**.
+  // 돌아가는 기준은 FAB 가 제자리에서 FAB_RISEN_PX 이상 올라간 때 — '맨 위로' 윗변 위로 완전히 벗어난 뒤라 두 버튼이 같은 기둥에서
+  // 겹치거나 누름을 가로채지 않는다(첫 판 P1 의 원인은 FAB 와 같은 기둥에서 비켜서기만 한 것).
   const boardFab = active && section === 'board';
+  const [fabRisen, setFabRisen] = useState(false);
   useEffect(() => {
-    document.documentElement.toggleAttribute('data-board-fab', boardFab);
-    return () => document.documentElement.removeAttribute('data-board-fab');
+    if (!boardFab || typeof IntersectionObserver === 'undefined') { setFabRisen(false); return; }
+    const slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
+    // 달라붙은 자리의 bottom(px) — env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC) 이면 NaN → 신호 유지.
+    const stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
+    if (!slot || !Number.isFinite(stuck)) { setFabRisen(false); return; }
+    // 칸 맨 아랫변이 (달라붙은 자리 + FAB_RISEN_PX) 위로 올라오면 '떠남'. 센티넬 요소를 따로 두지 않는다(space-y 여백이 끼어든다).
+    // 임계 0·1 — 칸이 뷰포트 위로 완전히 나가도(ratio 1→0) 아랫변 비교가 그대로라 상태가 뒤집히지 않는다.
+    // ponytail: 달라붙은 bottom 은 관찰 시작 때 한 번만 잰다(safe-area 가 도중에 바뀌는 회전은 다음 섹션 진입 때 갱신).
+    const ob = new IntersectionObserver((es) => {
+      const e = es[es.length - 1];
+      if (e.boundingClientRect.height === 0 || !e.rootBounds) { setFabRisen(false); return; }
+      setFabRisen(e.boundingClientRect.bottom <= e.rootBounds.bottom);
+    }, { rootMargin: `0px 0px -${Math.round(stuck + FAB_RISEN_PX)}px 0px`, threshold: [0, 1] });
+    ob.observe(slot);
+    return () => ob.disconnect();
   }, [boardFab]);
+  const boardFabSignal = boardFab && !fabRisen;
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-board-fab', boardFabSignal);
+    return () => document.documentElement.removeAttribute('data-board-fab');
+  }, [boardFabSignal]);
   // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
   // 헤더 높이도 같이 저장한다: 인플로우 sticky 헤더가 축소/복원되면 그 차이만큼 스크롤 앵커링이 scrollY 를 되민다
   // (lib/headerShrink 주석·실측). 복원 목표값은 restoreScrollTop 이 그 되밀림을 고려해 정한다.
@@ -1134,7 +1160,7 @@ function FeedSection({
             bottom = 탭바 높이(65.75px ≈ 3.875rem) + 15px(0.875rem) + 탭바 nav 와 **같은** safe-area 항(App.tsx nav paddingBottom).
             뷰포트 높이(vh·svh·lvh·dvh·innerHeight·visualViewport)를 쓰지 않는다 — 탭바(fixed bottom-0)와 같은 '레이아웃 뷰포트 아래'
             기준이라 주소창이 위/아래·접힘/펼침이어도 탭바와 같이 움직인다(communityFab.contract.test.ts).
-            '맨 위로'는 게시판에서만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 토스트(z-120)는 잠깐 FAB 위를 덮는다.
+            '맨 위로'는 게시판에서 FAB 가 떠 있는 동안만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 피드 끝으로 FAB 가 올라가면 원래 기둥으로 돌아간다. 토스트(z-120)는 잠깐 FAB 위를 덮는다.
           · 피드 끝이 올라오면 이 칸에 내려앉아 피드와 함께 올라간다 → 아래 푸터(계정 삭제 안내·공지·소개문·사업자 정보)를 절대 덮지 않는다.
             예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
           · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).

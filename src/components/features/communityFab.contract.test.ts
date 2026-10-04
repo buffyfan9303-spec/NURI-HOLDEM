@@ -54,8 +54,12 @@ describe('게시판 글쓰기 FAB 는 탭바 바로 위 오른쪽에 선다', ()
   });
 
   it("게시판에서 '맨 위로'가 FAB 왼쪽 같은 줄로 비켜선다 — 신호와 규칙이 짝으로 있다", () => {
-    expect(TAB).toMatch(/toggleAttribute\('data-board-fab', boardFab\)/);
+    expect(TAB).toMatch(/toggleAttribute\('data-board-fab', boardFabSignal\)/);
     expect(TAB).toMatch(/const boardFab = active && section === 'board'/);
+    // M5-03: 신호는 '게시판이 보임' 만이 아니라 'FAB 가 떠 있음' — 피드 끝에서 FAB 가 올라가 자리를 떠나면 '맨 위로'가 원래 기둥으로 돌아온다
+    expect(TAB).toMatch(/const boardFabSignal = boardFab && !fabRisen/);
+    expect(TAB).toMatch(/new IntersectionObserver\([\s\S]*?rootMargin: `0px 0px -\$\{Math\.round\(stuck \+ FAB_RISEN_PX\)\}px 0px`/);
+    expect(TAB).toMatch(/e\.boundingClientRect\.bottom <= e\.rootBounds\.bottom/);
     const rule = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transform: ([^;]+); \} \}/)?.[1] ?? '';
     expect(rule, "게시판 '맨 위로' 규칙을 못 찾았다").not.toBe('');
     // 옆 칸: 가로로 FAB 지름(3rem)+간격만큼 왼쪽 — 세로로만 비키면 피드 끝에서 sticky FAB 가 쓸려 올라와 겹친다(PR #155 P1)

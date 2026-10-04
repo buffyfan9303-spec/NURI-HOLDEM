@@ -13,12 +13,14 @@ import { stabilizeBackstack, stubLogin } from './_session';
 
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 
-async function openShop(page: Page, mode: 'fail' | 'ok') {
+// 'abort' = 네트워크 끊김(fetch 자체가 실패) — 서버가 500 으로 답하는 'fail' 과 다른 문장이 나온다(M5-04)
+async function openShop(page: Page, mode: 'fail' | 'ok' | 'abort', width = 390) {
   await stubLogin(page);
   await stabilizeBackstack(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width, height: 844 });
   const slow = (body: () => ReturnType<typeof json>) => async (r: Route) => {
     await new Promise((res) => setTimeout(res, 600));
+    if (mode === 'abort') return r.abort('failed').catch(() => {});
     return r.fulfill(body()).catch(() => {});
   };
   await page.route(/\/rest\/v1\/rpc\/my_point_balance/, slow(() => (mode === 'fail' ? json({ message: 'x' }, 500) : json([{ total: 100, spent: 0, available: 100 }]))));
@@ -65,6 +67,25 @@ test('🔴 M3-09 상점 정보 조회 실패 — 오류가 늦게 와도 아래 
   expect(Math.max(...ys) - Math.min(...ys), `내 활동점수 줄 y 변동 ${JSON.stringify([...new Set(ys)])}`).toBeLessThanOrEqual(0.5);
   expect(r.cls, `입력 없는 CLS ${r.cls} · 출처 ${r.sources.join(' | ')}`).toBeLessThan(0.001);
 });
+
+// M5-04(audit5-motion-1004): 네트워크가 끊겼을 때 이 줄의 둘째 줄이 '네트워크가 끊겼습니다. 연결을 확인하고 …' 로 한 줄 truncate 에 걸려
+//   390 에서 28px·360 에서 58px 잘렸다(터치 기기엔 title 툴팁이 안 보인다). 이제는 잘리지 않고 줄 높이·CLS 계약(M3-09)도 그대로다.
+for (const width of [390, 360]) {
+  test(`🔴 M5-04 네트워크 끊김 — 상점 오류 둘째 줄이 잘리지 않는다(${width}) · CLS 0`, async ({ page }) => {
+    test.setTimeout(90_000);
+    const r = await openShop(page, 'abort', width);
+    const alert = page.getByRole('alert').filter({ hasText: '상점 정보' });
+    await expect(alert, '전제: 상점 정보 실패를 알린다').toBeVisible({ timeout: 10_000 });
+    const detail = alert.locator('span.truncate').nth(1);
+    await expect(detail, '전제: 끊김 문장이 둘째 줄에 있다').toContainText('네트워크가 끊겼');
+    const m = await detail.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, text: el.textContent }));
+    expect(m.sw - m.cw, `둘째 줄이 ${m.sw - m.cw}px 잘렸다: "${m.text}"`).toBeLessThanOrEqual(0);
+    expect(r.ys.length, '전제: 내 활동점수 줄을 프레임마다 쟀다').toBeGreaterThan(30);
+    const ys = r.ys.slice(5);
+    expect(Math.max(...ys) - Math.min(...ys), `내 활동점수 줄 y 변동 ${JSON.stringify([...new Set(ys)])}`).toBeLessThanOrEqual(0.5);
+    expect(r.cls, `입력 없는 CLS ${r.cls} · 출처 ${r.sources.join(' | ')}`).toBeLessThan(0.001);
+  });
+}
 
 test('대조군 — 같은 지연에 성공하면 오류가 없다', async ({ page }) => {
   test.setTimeout(90_000);
