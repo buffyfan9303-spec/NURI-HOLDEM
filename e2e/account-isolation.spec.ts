@@ -51,7 +51,7 @@ function gate() {
 }
 
 /** A 세션으로 부팅 — GoTrue·profiles·토큰 발급(→B)·로그아웃을 route 로 위조한다 */
-async function bootAsA(page: Page) {
+async function bootAsA(page: Page, path = '/') {
   await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
     [KEY, JSON.stringify(A)] as [string, string]);
   await stabilizeBackstack(page);
@@ -60,7 +60,7 @@ async function bootAsA(page: Page) {
   await page.route(/\/auth\/v1\/token\?grant_type=password/, (r) => r.fulfill(json(B)));
   await page.route(/\/auth\/v1\/logout/, (r) => r.fulfill({ status: 204, body: '' }));
   // 나머지 조회는 가짜 토큰이라 운영 서버가 401 로 거절한다 — 무해(이 스펙이 보는 화면은 전부 위에서 목킹).
-  await page.goto('/');
+  await page.goto(path);
   await expect(page.getByRole('button', { name: 'AAA 메뉴' }), 'A 로 부팅되지 않았다').toBeVisible({ timeout: 15_000 });
 }
 
@@ -228,6 +228,106 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     await panel.getByRole('tab', { name: '알림', exact: true }).click();   // [쪽지|알림] 세그먼트(SegmentedTabs = role=tab)
     await expect(page.getByText('A 전용 알림'), '늦게 온 A 의 알림이 B 의 목록에 실렸다').toHaveCount(0);
     await expect(page.getByText('새 알림이 없습니다')).toBeVisible();
+  });
+});
+
+// ── R3-01(2026-10-04) — 형제 경로의 늦은 응답 ─────────────────────────────────────────
+// 원문: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\audit3-regress-connect-1004.md#R3-01
+// 위 '알림' 테스트는 **부팅 첫 조회**(정본 이펙트)만 붙잡는다. 같은 setter 를 쓰는 형제 경로
+// (online 복귀 · 창 복귀 · focus 재조회 · 출석 직후 재조회)는 가드가 없어서 그 테스트가 통과해도 샜다.
+// 각 경로를 **테스트 하나씩** 둔다 — 한 테스트에 묶으면 첫 실패에서 멈춰 나머지 경로의 FAIL 을 증명하지 못한다.
+//
+// 공통 순서: A 로 부팅(첫 조회는 바로 응답) → 붙잡기 켬 → 경로 발사 → A 의 재조회가 **실제로 붙잡힌 것을 확인** →
+//   로그아웃·B 로그인(B 는 빈 응답) → A 응답 해제 → B 화면에 A 의 것이 없어야 한다.
+//   '붙잡힌 것 확인'이 없으면 경로가 요청을 안 내도(이름 변경·조건 변경) 통과하는 거짓 통과가 된다.
+test.describe('R3-01 계정 전환 — 형제 경로의 늦은 응답', () => {
+  /** A 의 두 번째 이후 요청을 붙잡는 route. held 는 붙잡힌 요청이 처음 도착하면 풀린다. */
+  async function holdLaterA(page: Page, url: RegExp, bodyA: unknown) {
+    const st = { on: false };
+    const g = gate();
+    let markHeld!: () => void;
+    const held = new Promise<void>((r) => { markHeld = r; });
+    await page.route(url, async (r) => {
+      if (r.request().method() !== 'GET' && r.request().method() !== 'POST') return r.fallback();
+      if (!fromA(r)) return r.fulfill(json([]));
+      if (!st.on) return r.fulfill(json([]));
+      markHeld();
+      await g.wait();
+      return r.fulfill(json(bodyA));
+    });
+    return { arm: () => { st.on = true; }, held, release: g.release };
+  }
+  const notifA = [{
+    id: 'n-r301', user_id: A.user.id, type: 'system', title: 'A 전용 알림 R3', message: 'A 의 활동',
+    read: false, link: null, created_at: new Date().toISOString(),
+  }];
+  /** 알림 패널의 [알림] 탭을 연다 — 단언은 테스트 본문에 둔다(playwright/expect-expect). */
+  async function openNotifList(page: Page) {
+    await page.locator('button[aria-label^="알림"]').click();
+    const panel = page.getByRole('dialog', { name: '알림' });
+    await panel.waitFor({ state: 'visible' });
+    await panel.getByRole('tab', { name: '알림', exact: true }).click();
+  }
+
+  test('🔴 알림 · online 복귀 재조회', async ({ page }) => {
+    test.setTimeout(90_000);
+    const h = await holdLaterA(page, /\/rest\/v1\/notifications\?/, notifA);
+    await bootAsA(page);
+    h.arm();
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await h.held;
+    await switchToB(page);
+    h.release();
+    await page.waitForTimeout(1_000);
+    await openNotifList(page);
+    await expect(page.getByText('A 전용 알림 R3'), '늦게 온 A 의 알림이 B 의 목록에 실렸다').toHaveCount(0);
+    await expect(page.getByText('새 알림이 없습니다')).toBeVisible();
+  });
+
+  test('🔴 알림 · 창 복귀(visibilitychange) 재조회', async ({ page }) => {
+    test.setTimeout(90_000);
+    const h = await holdLaterA(page, /\/rest\/v1\/notifications\?/, notifA);
+    await bootAsA(page);
+    h.arm();
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await h.held;
+    await switchToB(page);
+    h.release();
+    await page.waitForTimeout(1_000);
+    await openNotifList(page);
+    await expect(page.getByText('A 전용 알림 R3'), '늦게 온 A 의 알림이 B 의 목록에 실렸다').toHaveCount(0);
+    await expect(page.getByText('새 알림이 없습니다')).toBeVisible();
+  });
+
+  test('🔴 바인 요청 배너 · focus 재조회', async ({ page }) => {
+    test.setTimeout(90_000);
+    const h = await holdLaterA(page, /\/rest\/v1\/rpc\/get_my_buyin_requests_current/, [{
+      id: 'br-r301', venue_id: '22222222-2222-4222-8222-222222222222', status: 'pending',
+      requested_game_seq: 1, game_seq: null, resolve_note: null, venue_name: 'A바인매장R3', used_voucher: false,
+    }]);
+    await bootAsA(page, '/?tab=browse');
+    h.arm();
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await h.held;
+    await switchToB(page);
+    h.release();
+    await page.waitForTimeout(1_000);
+    await expect(page.getByText('A바인매장R3'), '늦게 온 A 의 바인 요청이 B 의 배너에 실렸다').toHaveCount(0);
+  });
+
+  test('🔴 이어서 하기(가 본 매장) · 출석 직후 재조회', async ({ page }) => {
+    test.setTimeout(90_000);
+    const h = await holdLaterA(page, /\/rest\/v1\/rpc\/my_visited_venues/, [{
+      venue_id: '44444444-4444-4444-8444-444444444444', venue_name: 'A단골매장R3', visits: 3,
+    }]);
+    await bootAsA(page, '/?tab=browse');
+    h.arm();
+    await page.evaluate(() => window.dispatchEvent(new Event('nuri:checkin-done')));
+    await h.held;
+    await switchToB(page);
+    h.release();
+    await page.waitForTimeout(1_000);
+    await expect(page.getByText('A단골매장R3'), "늦게 온 A 의 '가 본 매장'이 B 의 이어서 하기에 실렸다").toHaveCount(0);
   });
 });
 

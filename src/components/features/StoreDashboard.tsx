@@ -34,7 +34,7 @@ import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
 import { hoursValue, laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
-import { countVenueVouchersSent } from '../../api/vouchers';
+import { countVenueVouchersSent, subscribeVenueVouchers } from '../../api/vouchers';
 import RegularsModal from './RegularsModal';
 import CheckinModal from './CheckinModal';
 // 🔴 2026-09-29 M단계 — 대시보드 유틸 줄 '딜러 로테이션·급여' 에서만 여는 모달을 지연 청크로 뺐다. VenueManageTab 청크가
@@ -436,6 +436,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const ownsReq = useCallback((id: string) => ownIdsRef.current.r.has(id), []);
   useEffect(() => { if (active) return subscribeLedger(venueId, reload, { ownsRow }); }, [venueId, reload, active, ownsRow]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
+  // R3-02 — '매장이용권' 카드(7일·오늘 전송 수)는 reloadRange 안에서만 갱신됐다. 다른 접수대·기기의 발급·회수·삭제도 따라가게 구독한다.
+  //   (이 화면의 모달에서 보낸 것은 아래 onClose 의 reloadRange 가 즉시 메운다 — realtime 이 늦거나 끊겨도 닫는 순간 맞는다.)
+  useEffect(() => { if (active && caps.voucher) return subscribeVenueVouchers(venueId, reloadRange); }, [venueId, reloadRange, active, caps.voucher]);
   useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsReq }); }, [venueId, reload, active, ownsReq]);
   // 창 복귀·네트워크 복귀 때 다시 읽는다(realtime 은 끊긴 동안의 변경을 다시 보내 주지 않는다 — lib/realtimeResync).
   useResyncOnWake(reload, active);
@@ -910,11 +913,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       <Suspense fallback={null}>
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       </Suspense>
-      <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} canIssue={caps.issueVoucher} />
+      <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); void reloadRange(); }} venueId={venueId} prefillReceiver={voucherPrefill} canIssue={caps.issueVoucher} />
       {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher).
           🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고
              누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼. `caps.issueVoucher`(= 서버 can_manage_pos)로 바꾼다. */}
-      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} canIssue={caps.issueVoucher} />
+      <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); void reloadRange(); }}venueId={venueId} canIssue={caps.issueVoucher} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}
