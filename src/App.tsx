@@ -4307,7 +4307,7 @@ export default function App() {
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
                   className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-chip px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {hasActiveSearchFilter && (
@@ -4373,8 +4373,8 @@ export default function App() {
                 D1: 로딩 중에도 같은 줄을 invisible 로 세워 자리(38px)를 잡는다 — 도착 때 아래 목록이 +38px 밀리던 자리. */}
             {(!schedulesLoaded || visibleSchedules.length > 0) && (
               <p aria-hidden={!schedulesLoaded || undefined}
-                className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary text-grad-violet', schedulesLoaded ? '' : 'invisible'].join(' ')}>
-                대회 <span className="text-sm font-bold tabular-nums text-accent-300 text-grad-keep">{schedulesLoaded ? visibleSchedules.length : 0}</span>
+                className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary', schedulesLoaded ? '' : 'invisible'].join(' ')}>
+                대회 <span className="text-sm font-bold tabular-nums text-accent-300">{schedulesLoaded ? visibleSchedules.length : 0}</span>
               </p>
             )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}

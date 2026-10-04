@@ -46,13 +46,14 @@ describe('UI-01 · 공지 본문 구조화', () => {
 });
 
 describe('UI-03 · 아우라 구분선', () => {
-  it('🔴 .divider-aura 유틸 — 1px · 양끝 투명 · 다크 accent-200 / 라이트 accent-300', () => {
+  // 2026-10-04 오너 결정 'E+황동' — accent 그라데이션 구분선을 평평한 1px 경계선(border-default)으로 바꿨다(종전: 양끝 투명 · 가운데 accent).
+  it('🔴 .divider-aura 유틸 — 1px · 평평한 경계선 색(그라데이션·accent 없음)', () => {
     const i = CSS.indexOf('.divider-aura {');
     expect(i, '.divider-aura 가 index.css 에 없다').toBeGreaterThan(-1);
-    const block = CSS.slice(i, i + 900);
+    const block = CSS.slice(i, CSS.indexOf('}', i) + 1);
     expect(block).toMatch(/height:\s*1px/);
-    expect(block).toMatch(/linear-gradient\(\s*90deg,\s*transparent[^)]*rgb\(var\(--accent-200\) \/ 0\.(2[5-9]|3[0-5])\)[^)]*transparent/);
-    expect(block).toMatch(/html\.light \.divider-aura[\s\S]*?rgb\(var\(--accent-300\) \/ 0\.(1[8-9]|2[0-8])\)/);
+    expect(block).toMatch(/background-color:\s*rgb\(var\(--border-default\)\)/);
+    expect(block, '구분선에 그라데이션이 되돌아왔다').not.toMatch(/gradient|accent/);
     // 움직이는 네온·큰 그림자 없음
     expect(block).not.toMatch(/animation|box-shadow:\s*0 0 (1[0-9]|[2-9][0-9])px/);
   });

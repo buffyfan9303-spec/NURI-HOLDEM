@@ -229,27 +229,28 @@ test('⑤ 비활성 버튼이 활성 버튼과 구별된다', async ({ page, con
   expect(r.iOff.cursor).toBe('not-allowed');
 });
 
-test('⑥ 라이트 지면에 옅은 보라를 반복하지 않는다', async ({ page, context }) => {
+// 2026-10-04 오너 결정 'E+황동' — 블룸(보라·남보라·자홍 빛번짐)을 **양 테마 모두** 걷었다.
+//   종전 ⑥ 은 '라이트 블룸 알파 ≤ .06 · 다크는 > .1 유지' 였다. 이제 뜻은 '지면 어디에도 빛번짐 그라데이션이 없다' 이다.
+test('⑥ 지면에 빛번짐(radial 블룸)이 없다 — 다크·라이트 둘 다', async ({ page, context }) => {
   await offline(context);
   await page.setViewportSize({ width: 390, height: 844 });
   await boot(page, 'light');
-  const a = await page.evaluate(() => {
-    const cs = getComputedStyle(document.documentElement);
-    return { a1: parseFloat(cs.getPropertyValue('--aura-a1')), a2: parseFloat(cs.getPropertyValue('--aura-a2')),
-             a3: parseFloat(cs.getPropertyValue('--aura-a3')) };
+  const probe = () => page.evaluate(() => {
+    const bg = document.querySelector<HTMLElement>('.aura-bg');
+    return {
+      auraBg: bg ? getComputedStyle(bg).backgroundImage : 'missing',
+      bodyBefore: getComputedStyle(document.body, '::before').backgroundImage,
+      a2: getComputedStyle(document.documentElement).getPropertyValue('--aura-a2').trim(),
+    };
   });
-  console.log('LIGHT-BLOOM ' + JSON.stringify(a));
-  // --aura-a2 는 .aura-bg 의 전면 블룸이자 **모든 sticky 서브탭 바**가 미리 섞는 보라의 계수다.
-  // 여기가 높으면 '모든 박스가 옅은 보라' 라는 인상이 지면과 바 양쪽에서 동시에 만들어진다.
-  expect(a.a2, '라이트 블룸 알파가 되돌아갔다 — 지면과 모든 서브탭 바가 다시 보라로 물든다').toBeLessThanOrEqual(0.06);
-  expect(a.a1).toBeLessThanOrEqual(0.06);
-  expect(a.a3).toBeLessThanOrEqual(0.05);
-
-  // 다크는 반대다 — 어두운 지면에서 블룸은 얼룩이 아니라 깊이라 내리지 않았다.
-  await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
-  const dark = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--aura-a2')));
-  console.log('DARK-BLOOM a2=' + dark);
-  expect(dark, '다크 블룸까지 같이 내려갔다 — 다크는 대상이 아니다').toBeGreaterThan(0.1);
+  for (const theme of ['light', 'dark'] as const) {
+    if (theme === 'dark') await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
+    const p = await probe();
+    console.log(`BLOOM ${theme} ` + JSON.stringify(p));
+    expect(p.auraBg, `${theme}: .aura-bg 가 다시 블룸을 칠한다`).not.toMatch(/radial-gradient/);
+    expect(p.bodyBefore, `${theme}: body::before 에 상단 글로우가 되돌아왔다`).not.toMatch(/radial-gradient/);
+    expect(p.a2, `${theme}: 블룸 알파 토큰이 되살아났다`).toBe('');
+  }
 });
 
 // ⑦ 일정 목록 카드의 실제 높이와 --card-h-list 가 맞는가.

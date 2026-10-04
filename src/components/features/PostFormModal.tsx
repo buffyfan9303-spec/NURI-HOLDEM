@@ -360,7 +360,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                   className={[
                     'min-h-[44px] shrink-0 inline-flex items-center px-3 rounded-badge text-2xs font-bold leading-none transition-colors focus:outline-hidden',
                     category === o.id
-                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow'
+                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
                       : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                   ].join(' ')}
                 >

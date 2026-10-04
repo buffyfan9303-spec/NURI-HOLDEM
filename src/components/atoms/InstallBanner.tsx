@@ -96,7 +96,6 @@ export default function InstallBanner({ hidden: covered = false }: { hidden?: bo
           ⚠ 위치 계산(bottom calc)은 그대로다 — InstallBanner.position.test.ts 가 잠그고 있다. */}
       <div data-aura data-aura-level="micro" data-aura-variant="violet"
         className="relative flex items-center gap-3 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3.5 py-2 shadow-dialog backdrop-blur-sm">
-        <span aria-hidden className="quick-blob quick-blob-violet" />
         {/* 앱 아이콘 타일 — 휴대폰 홈화면의 아이콘처럼 **둔덕한 사각 테두리**를 두른다(2026-09-18 오너).
             '이걸 홈에 놓는다' 를 그림으로 말해 주는 장치라 테두리가 있어야 아이콘으로 읽힌다. */}
         <span aria-hidden className="relative z-10 grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[12px] border border-border-strong bg-surface-high shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">

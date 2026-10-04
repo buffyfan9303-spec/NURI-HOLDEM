@@ -1247,7 +1247,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             // 밝은 은색 배지 위 숫자는 어두운 글자여야 읽힌다. 1등(보라)·3등(동)은 흰 글자로 4.5 이상이라 유지.
             const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-slate-900' : 'bg-amber-700 text-white';
             return (
-              <div key={e.nickname} className={['flex-1 max-w-38 rounded-aura border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
+              <div key={e.nickname} className={['flex-1 max-w-38 rounded-aura border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2' : ''].join(' ')}>
                 {big && <Icon name="crown" size={16} className="mx-auto mb-1 text-gold-300" />}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-200' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>

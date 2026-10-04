@@ -712,7 +712,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         'flex flex-col overflow-hidden rounded-aura border transition-transform duration-(--dur-panel) ease-out active:duration-(--dur-fast)',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
-          ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
+          ? 'border-accent-400 bg-surface-low'
           // card-elev: 단색 채움 위 수직 광원+헤어라인(DatawizzAI 문법). 프리미엄(TOP)은 자체 글로우
           // 섀도가 있어 제외 — card-elev 의 box-shadow 가 캐스케이드로 글로우를 덮어쓴다.
           // v2 아우라 카드(2026-09-02): 반투명 면 + 6% 헤어라인 + 상단 하이라이트 (index.css .card-aura)

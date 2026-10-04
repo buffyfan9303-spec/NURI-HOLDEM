@@ -211,7 +211,7 @@ function DragOverlayCard({ item }: { item: Schedule }) {
   return (
     <div className={[
       'flex items-center gap-3 px-3 py-3',
-      'bg-surface-float border border-accent-400 rounded-card shadow-[0_0_12px_rgb(var(--accent-300)/0.22)]',
+      'bg-surface-float border border-accent-400 rounded-card',
       'rotate-1 scale-[1.02] cursor-grabbing',
     ].join(' ')}>
       <span className="w-6" />

@@ -550,7 +550,7 @@ export default function HomeTab({
                 className="-mx-1 inline-flex h-[44px] items-center gap-1 rounded-[8px] px-1 text-left transition-colors hover:text-accent-200">
                 {/* 글로우 **박스**(stat-pill)는 없고 글씨만 네온(오너 H2). 앞 문구는 굵게(font-extrabold), 'GTO N개' 만 네온+한 단계 크게.
                     ⚠ '프로처럼 치는 <span…>무료 GTO {GTO_TOOL_COUNT}개' 는 한 줄로 붙여 둔다 — homeLiveFreshness 계약이 그 모양을 본다. */}
-                <span className="font-extrabold">프로처럼 치는</span> <span className="text-[20px] font-extrabold tabular-nums text-accent-200 md:text-[24px] lg:text-[22px] [text-shadow:0_0_4px_rgb(var(--accent-300)/0.3)] dark:[text-shadow:0_0_6px_rgb(var(--accent-300)/0.6)]">무료 GTO {GTO_TOOL_COUNT}개</span>
+                <span className="font-extrabold">프로처럼 치는</span> <span className="text-[20px] font-extrabold tabular-nums text-accent-200 md:text-[24px] lg:text-[22px]">무료 GTO {GTO_TOOL_COUNT}개</span>
                 <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
               </button>
             </p>
@@ -620,8 +620,7 @@ export default function HomeTab({
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
               className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
-              {/* 배경 — 시안의 우상단 블러 원 + 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. */}
-              <span aria-hidden className="quick-blob quick-blob-violet" />
+              {/* 배경 — 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. (우상단 블러 원은 2026-10-04 'E+황동'으로 삭제) */}
               <span aria-hidden className="quick-art quick-art-checkin" />
               {/* 🔴 2026-09-24 HOME-LAYOUT-STRETCH — 제목·배지와 아래 '매장 QR 스캔 ›' 을 **양끝 정렬에서 앞 정렬**로.
                   PC 에서 카드가 571px 인데 글자는 62~132px 라 글자와 꺾쇠 사이가 ~480px 비었다(실측). 꺾쇠는 글자 바로 뒤에 붙는다. */}
@@ -653,7 +652,6 @@ export default function HomeTab({
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
               className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-gold-300/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
-              <span aria-hidden className="quick-blob quick-blob-gold" />
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">

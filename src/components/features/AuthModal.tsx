@@ -281,7 +281,6 @@ function AuraSpade({ size }: { size: number }) {
         width={Math.round(size * 0.46)} height={Math.round(size * 0.46)}
         style={{
           width: Math.round(size * 0.46), height: Math.round(size * 0.46),
-          filter: `drop-shadow(0 0 ${Math.round(size * 0.1)}px rgb(232 201 124 / 0.45))`,
         }}
         draggable={false}
       />

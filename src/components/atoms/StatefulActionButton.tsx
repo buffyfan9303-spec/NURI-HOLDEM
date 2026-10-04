@@ -79,9 +79,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
   };
 
   const bg = phase === 'success' ? BG.success : phase === 'loading' ? BG.loading : disabled ? BG.disabled : BG.idle;
-  // idle = 그라데이션 CTA(.btn-primary·.pill-active 와 동일한 var(--grad-cta)) — 단색 accent 위에 얹는다.
-  // background-image 는 애니 불가라 즉시 교체되고, 밑의 background-color 전환이 페이즈 색을 잇는다.
-  const bgImage = phase === 'idle' && !disabled ? 'var(--grad-cta)' : 'none';
+  // idle = 단색 accent(.btn-primary 와 같은 면). 2026-10-04 오너 결정 'E+황동' — 그라데이션 CTA 를 걷었다.
 
   return (
     <button
@@ -89,7 +87,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       type="button"
       onClick={run}
       disabled={disabled || phase !== 'idle'}
-      style={{ borderRadius: 999, backgroundColor: bg, backgroundImage: bgImage, transition: 'background-color var(--dur-base) var(--ease), transform var(--dur-fast) var(--ease)' }}
+      style={{ borderRadius: 999, backgroundColor: bg, transition: 'background-color var(--dur-base) var(--ease), transform var(--dur-fast) var(--ease)' }}
       key={shakeKey > 0 ? `shake-${shakeKey}` : undefined}
       className={[
         shakeKey > 0 ? 'anim-shake' : '',

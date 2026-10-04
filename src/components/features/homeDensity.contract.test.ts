@@ -251,13 +251,14 @@ describe('배너 가로폭', () => {
 });
 
 describe('첫 줄 = GTO 진입(오너 H2 · 2026-09-29 항상)', () => {
-  it('줄 전체가 onTools 버튼 · 44px 고정 · 글로우 박스 없이 글씨만 네온', () => {
+  // 2026-10-04 오너 결정 'E+황동' — '글씨만 네온'(2026-09-29)도 후광이라 걷었다. 강조는 색 하나(text-accent-200)뿐이다.
+  it('줄 전체가 onTools 버튼 · 44px 고정 · 글로우 박스도 글자 후광도 없다', () => {
     expect(HOME).toMatch(/data-testid="home-today-line" className="flex h-\[44px\] items-center/);
     const btn = HOME.slice(HOME.indexOf('data-testid="home-gto-entry"') - 80, HOME.indexOf('data-testid="home-gto-entry"') + 900);
     expect(btn).toMatch(/onClick=\{onTools\}/);
     expect(btn).toMatch(/h-\[44px\]/);
     expect(btn).not.toMatch(/className="[^"]*stat-pill/);   // 주석의 기록 말고 **걸린 클래스**만 본다
-    expect(btn).toMatch(/dark:\[text-shadow:/);
+    expect(btn, '글자 후광(text-shadow)이 되돌아왔다').not.toMatch(/text-shadow:/);
     expect(btn).toMatch(/프로처럼 치는/);   // 2026-09-29 후킹 문구
     expect(btn).toMatch(/무료 GTO \{GTO_TOOL_COUNT\}개/);
   });
