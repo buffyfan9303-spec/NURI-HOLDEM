@@ -1118,15 +1118,16 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       <div className="min-w-0 flex-1">
         {/* 🔴 2026-09-22 오너 — 제목을 `참가 신청` 한 마디로 줄였다(종전: '지금 매장에서 참가 신청 · 오늘 · 현장').
             정보는 안 잃는다: 이 박스는 `isEventToday` 일 때만 렌더되므로 '오늘'은 원래 중복이고,
-            '지금 매장에서'·'현장'은 바로 아래 설명줄("매장에 도착한 뒤 눌러주세요 … 오늘 장부 명단")이 그대로 말한다.
+            '지금 매장에서'·'현장'은 바로 아래 설명줄("매장 도착 후 눌러주세요")이 그대로 말한다.
+            (2026-10-04 오너 — 손님 화면에 '장부'·'운영자 승인'을 드러내지 않는다. 승인 대기는 전송 토스트가 알린다.)
             ⚠ 위 '참가 예약'(사전 예약) 과 헷갈리지 않게 하는 것은 이제 **색·아이콘·설명줄**이 맡는다 —
               여기 수식어를 다시 붙이지 마라(오너가 길다고 지적한 자리다). */}
         <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="hand" size={15} className="shrink-0" />참가 신청</p>
-        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">매장에 도착한 뒤 눌러주세요. 운영자가 승인하면 <b className="text-ink-secondary">오늘 장부 명단</b>에 바로 등록됩니다.</p>
+        <p className="mt-0.5 whitespace-nowrap text-2xs leading-relaxed text-ink-muted">매장 도착 후 눌러주세요</p>
         {/* 오발신이 곧 운영자 장부 오염 + 업주 푸시 알림이라, 스치는 탭으로는 나가지 않게 꾹 누르기
             (예약 취소와 동일 패턴 — 확인 팝업보다 빠르면서 오작동엔 더 안전) */}
         <HoldToConfirmButton onConfirm={send} disabled={sending} holdingLabel="계속 누르세요…"
-          className="btn-primary mt-1.5 min-h-[44px] px-3 py-1.5 text-xs disabled:opacity-50">
+          className="btn-primary mt-1.5 min-h-[44px] w-full whitespace-nowrap px-3 py-1.5 text-xs disabled:opacity-50">
           {sending ? '전송 중…' : <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={13} className="shrink-0" />꾹 눌러 참가 신청</span>}
         </HoldToConfirmButton>
       </div>
