@@ -91,7 +91,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
-import { notePaneLeaving, handOffPane, LEAVE_FADE_MS, LEAVE_EASE } from './lib/tabCover';
+import { notePaneLeaving, handOffPane, warmHiddenPane, LEAVE_FADE_MS, LEAVE_EASE } from './lib/tabCover';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -1295,6 +1295,13 @@ export default function App() {
     //     '사용자가 확 긁었다' 로 읽지 않게 하는 기존 표식이고(2026-09-05), `notifyScrollNow` 는
     //     **예약된 옛 rAF 를 취소하고** 지금 Y 를 구독자 전원에게 즉시 준다.
     //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
+    // 6차 PANE-HANDOFF — 떠나는 판을 떠나기 직전 자리에 세우고(새 판 **위**, opacity .999), 새 판 첫 프레임 다음에 떠나는 판만 걷는다.
+    //   새 판(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록·R3 계약 그대로.
+    // 🔴 M3-02(2026-10-04) — **아래 scrollTo 보다 먼저** 세운다. scrollTo 가 이 커밋의 스타일·레이아웃을 동기로 강제하는데,
+    //   그때 떠나는 판은 React 가 방금 준 display:none 이라 레이아웃 트리가 통째로 버려졌다가, 뒤이어 data-pane-leaving(display:block)
+    //   으로 다시 지어졌다(CPU4 트레이스: 떠나는 판 610요소 스타일 재계산 + 629객체 재배치가 같은 클릭 작업에 한 벌 더).
+    //   먼저 세우면 떠나는 판은 display:none 을 한 번도 거치지 않고 제자리 fixed 로만 바뀐다. 읽는 값은 이벤트 때 잰 자리뿐이라 순서는 무관하다.
+    handOffPane(activeTab);
     // CONNECTIVITY-ALL 2 — 트레일 back 으로 돌아온 탭만 떠날 때 위치로(그 외는 맨 위). 이 layout effect 안이라
     //   첫 페인트 전에 정해진다.
     const back = backScrollRef.current;
@@ -1317,9 +1324,7 @@ export default function App() {
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     //   (뒤로가기 복원(toY>0)만 예외로 한 번 읽는다 — 판이 짧아졌으면 브라우저가 깎은 실제 값을 헤더에 줘야 한다.)
     notifyScrollNow(toY > 0 ? window.scrollY : 0);
-    // 6차 PANE-HANDOFF — 떠나는 판을 떠나기 직전 자리에 세우고(새 판 **위**, opacity .999), 새 판 첫 프레임 다음에 떠나는 판만 걷는다.
-    //   새 판(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록·R3 계약 그대로.
-    handOffPane(activeTab);
+    // (handOffPane 은 이 effect 맨 앞으로 옮겼다 — 위 M3-02 주석.)
     // (BOTTOM-TAB-SMOOTH 덮개 호출이 있던 자리 — 5차 PILL-FLASH(2026-09-26)에 덮개를 없애고 2026-09-26 호출·요소·`?fx=` 스위치를 걷었다.
     //   본문(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록 참고.)
     // 🔴 2026-09-22 — **여기 있던 본문 진입 모션(N1/M1 · `startTabEnter`)을 없앴다.**
@@ -1977,9 +1982,33 @@ export default function App() {
           ...(canStore ? [] : (['calendar'] as TabId[])),
           ...(isAdmin ? (['admin'] as TabId[]) : [])];
         const sent = new Set<TabId>();
+        // 🔴 M3-02(2026-10-04) — 프리마운트가 끝나면 숨은 하단 탭 판을 idle 마다 하나씩 **한 번** 화면 밖에서 배치한다(tabCover warmHiddenPane).
+        //   첫 진입의 긴 프레임은 판 배치가 아니라 **처음 쓰는 글꼴 조합의 인스턴스 생성**이었다 — 트레이스(CPU4, GTO→캘린더 첫 진입):
+        //   Layout 514ms 중 FontDataManager::onMakeFromStreamArgs 314ms(×11) · 같은 판 재방문 Layout 15ms. 숨긴 판은 display:none 이라
+        //   아무도 배치하지 않으니 그 비용이 탭을 누른 프레임에 몰렸다. 글꼴 캐시는 문서 전역이라 여기서 한 번 치르면 클릭 프레임에서 빠진다.
+        //   한 idle 에 판 하나(배치 한 번이 곧 한 작업이다). 보이는 판은 빼고, 아직 마운트 전인 판은 다음 idle 에 다시 본다
+        //   (프리마운트가 startTransition 이라 마지막 판이 idle 보다 늦게 커밋된다). 판이 끝내 없는 계정(업주는 캘린더 칸이 없다)을 위해 횟수 상한.
+        //   **두 바퀴**다: 첫 바퀴의 배치가 그 판이 쓰는 글꼴 서브셋 파일을 처음 요청하고(그때는 대체 글꼴로 배치된다), 파일이 도착한 뒤
+        //   (document.fonts.ready) 둘째 바퀴가 실제 글꼴 인스턴스를 만든다. 한 바퀴만 돌면 부팅 0.7초에 데워 정작 Pretendard 는 비어 있었다(하네스 실측).
+        const WARM_TABS: TabId[] = ['home', 'live', 'community', 'tools', 'calendar'];
+        let warmLeft = WARM_TABS;
+        let warmTries = 0;
+        let warmLap = 1;
+        const warmNext = () => {
+          for (const t of warmLeft) {
+            const r = warmHiddenPane(t);
+            if (r === 'later') continue;
+            warmLeft = warmLeft.filter((x) => x !== t);
+            if (r === 'done') break;
+          }
+          if (warmLeft.length && ++warmTries <= 40) { idle(warmNext); return; }
+          if (warmLap++ > 1) return;
+          warmLeft = WARM_TABS; warmTries = 0;
+          void (document.fonts?.ready ?? Promise.resolve()).then(() => idle(warmNext));
+        };
         const mountNext = () => {
           const t = seq.find((x) => !seenTabs.has(x) && !sent.has(x));
-          if (!t) return;
+          if (!t) { idle(warmNext); return; }
           sent.add(t);
           // transition 안에서만 상태로 올린다 — suspend 돼도 폴백 커밋 없음(가변 Set 을 여기서 건드리지 않는다)
           startTransition(() => setPremounted((prev) => (prev.has(t) ? prev : new Set(prev).add(t))));

@@ -410,11 +410,18 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
         y: Math.round(window.scrollY),
         h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
         shrunk: document.documentElement.dataset.headerShrunk ?? null,
-        now: getComputedStyle(document.documentElement).getPropertyValue('--header-now').trim(),
+        // M3-02(2026-10-04) — 축소값은 :root 가 아니라 소비처 표식(data-header-now)에만 걸린다(src/index.css).
+        //   그 표식을 단 탐침 요소로 재야 '서브바가 보는 값' 이다. :root 를 재면 늘 3.5rem 이라 아래 대조가 무의미해진다.
+        now: (() => {
+          let p = document.querySelector<HTMLElement>('[data-h1-probe]');
+          if (!p) { p = document.createElement('div'); p.setAttribute('data-header-now', ''); p.setAttribute('data-h1-probe', ''); p.hidden = true; document.body.appendChild(p); }
+          return getComputedStyle(p).getPropertyValue('--header-now').trim();
+        })(),
       }));
       // 전제 — 실제 결함 경로를 탔는지 못박는다. 안 접혔으면 이 검사는 아무것도 재지 않는다.
       expect(before.y, '헤더가 접힐 만큼 안 내려갔다 — 이 검사가 결함 경로를 못 탔다').toBeGreaterThan(56);
       expect(before.shrunk, '스크롤했는데 헤더가 축소 상태가 아니다 — 전제가 안 섰다').toBe('1');
+      expect(before.now, '헤더가 접혔는데 소비처(data-header-now)가 축소값을 못 받았다').toBe('2.75rem');
 
       // 🔴 클릭 **전에** 기록기를 설치한다.
       const frames = await page.evaluate(async (tab) => {
@@ -427,7 +434,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
             y: Math.round(window.scrollY),
             h: el ? +el.getBoundingClientRect().height.toFixed(2) : -1,
             shrunk: document.documentElement.dataset.headerShrunk ?? null,
-            now: getComputedStyle(document.documentElement).getPropertyValue('--header-now').trim(),
+            now: getComputedStyle(document.querySelector('[data-h1-probe]') as HTMLElement).getPropertyValue('--header-now').trim(),
           });
         };
         const tick = () => { snap(); if (++n < 14) requestAnimationFrame(tick); };

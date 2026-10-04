@@ -375,6 +375,8 @@ export default function NotificationPanel({
         ref={panelRef}
         role="dialog"
         aria-label="알림"
+        // 아래 top·max-h 가 var(--header-now) 를 쓴다 — 헤더 축소값은 이 표식이 있는 요소만 받는다(src/index.css M3-02).
+        data-header-now=""
         // 글을 쓰던 칸에서 Esc 는 칸만 벗어난다(창을 닫으면 쓰던 쪽지·검색어가 같이 사라진다 — B2 후속 · 독립 검토 ① 관찰).
         //   preventDefault 를 보면 전역 backstack 의 Esc 가 이 겹을 닫지 않는다(backstack.ts handleEscape). 한 번 더 누르면 닫힌다.
         onKeyDown={(e) => {

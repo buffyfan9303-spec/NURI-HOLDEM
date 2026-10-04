@@ -2474,8 +2474,12 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
  *   '일관성' 을 이유로 나중에 바꾸지 마라. 저기서는 고정 토큰이 맞다. */
 :root { --header-now: 3.5rem; } /* = spacing.header-h */
 @media (max-width: 767px) {
-  :root[data-header-shrunk='1'] { --header-now: 2.75rem; } /* h-11 = 46.75px */
+  :root[data-header-shrunk='1'] :is([data-community-secbar], [data-header-now]) { --header-now: 2.75rem; } /* h-11 = 46.75px */
 }
+/* 🔴 M3-02(2026-10-04) — 축소값은 **쓰는 요소에만** 건다. :root 의 상속 변수를 바꾸면 문서 전체(1,300여 요소)가
+ * 스타일을 다시 계산했다 — 스크롤된 탭에서 다른 탭을 누른 프레임마다 헤더가 펼쳐지며 CPU4 64ms(트레이스 data-header-shrunk → 전체 recalc).
+ * 표식(data-header-shrunk)은 그대로 :root 에 두고, 값은 소비처(커뮤니티 섹션 바 · data-header-now)만 받는다.
+ * ⚠ 새로 `var(--header-now)` 를 쓰는 요소는 data-header-now 를 붙여야 헤더와 같이 줄어든다(headerNowConsumers.contract.test.ts 가 센다). */
 
 /* 🔴 2026-09-19: 84 → **95**. 84 는 이 파일 자신이 적어 둔 실측(제목 1줄 94.2px)보다도 10px 작았다.
    게이트(`e2e/theme-tokens-v7.spec.ts` ⑦)가 잡았고, 잡힌 방식이 이 값의 함정을 그대로 보여준다:
