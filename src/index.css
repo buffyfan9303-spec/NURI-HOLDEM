@@ -106,8 +106,9 @@
   --breakpoint-2xl: 1536px;
 
   /* ── 글꼴 ── 'Pretendard FB Win/Android' = 폰트 도착 전 크기 맞춘 폴백(public/fonts/pretendard/…css 끝). body 스택과 같은 순서.
+     NuriMarks·NuriEmojiFB·NuriSym* 가 FB **앞**인 이유는 아래 @font-face 'NuriEmojiFB' 주석(M3-04). 세 스택 순서 계약: src/fontFallbackOrder.contract.test.ts
      display 는 2026-08-29 Noto Sans KR 제거 뒤 Pretendard 로 통합(FCP 388→148ms). 키는 호출부 font-display 7곳 때문에 남긴다. */
-  --font-sans: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif;
+  --font-sans: 'Pretendard Variable', 'Pretendard', 'NuriMarks', 'NuriEmojiFB', 'NuriSymSegoe', 'NuriSymMalgun', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif;
   --font-display: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
@@ -332,6 +333,57 @@
                  U+1F98B, U+1FA99;
 }
 
+/* ── 이모지·기호의 대체 글꼴 지름길 (2026-10-04, M3-04 · audit3-motion-1004.md) ───────────────────
+   문제: Pretendard 에 없는 글자(공지 제목의 🎉 같은 이모지, ♠♣♦ · − · ▾ 같은 기호)를 처음 그릴 때 Chrome 은 스택을 걸으며
+     **지나는 family 의 local() face 를 전부 실체화**한다 — 그 face 의 unicode-range 에 글자가 없어도 그렇다(실측: 🎉 한 글자에
+     'Pretendard FB Android' 의 두 face 가 모두 NotoSansKR-VF 인스턴스를 만든다). Windows 에서 그 local('Noto Sans KR') 가
+     설치된 10MB 가변 글꼴에 맞아 게시판 첫 진입 강제 레이아웃 271ms 중 214ms 가 글꼴 생성이었다(CPU4, FontDataManager::
+     onMakeFromStreamArgs 8회). 프로파일에선 SlidingPill 측정이 1위로 잡히지만 그건 첫 레이아웃을 먼저 읽었을 뿐이다.
+   해법: 지금도 결국 그 글자를 그리는 **같은 시스템 글꼴**을 local() 로, 그 글자 범위에만 걸어 FB 보다 **앞에** 둔다.
+     걷기가 여기서 끝나 FB face 를 깨우지 않는다. 그리는 글꼴이 같아 모양은 그대로다(전/후 확대 캡처 픽셀 차이 0).
+     효과(CPU4 새 브라우저 5회 중앙값): 커뮤니티 게시판 첫 진입 383→183ms(CPU6 633→317).
+     local() 이 안 맞는 기기(이름이 다른 OS)에서는 이 face 가 없는 것과 같다 — 예전 경로 그대로.
+   ⚠ 같은 family·같은 굵기에 face 를 여러 개 두지 않는다 — 지나는 순간 전부 실체화된다. 그래서 기호는 글꼴마다 family 를 따로 둔다
+     (굵기가 다른 face 는 따로 고른다 — 맑은 고딕 보통/굵게).
+   ⚠ 범위에 '기본 글자 모양(text presentation)' 기호를 넣지 않는다 — ❤·☀·⚠·♠ 를 이모지 글꼴로 보내면 색 그림으로 바뀐다.
+     이모지 face 범위 = 보조 평면 그림문자(U+1F000-1FAFF) + BMP 의 Emoji_Presentation=Yes 글자 + ZWJ·키캡·VS16. */
+@font-face {
+  font-family: 'NuriEmojiFB';
+  font-display: swap; /* local 이라 차단 구간이 없다 — NuriMarks·FB 와 같은 값 */
+  src: local('Segoe UI Emoji'), local('SegoeUIEmoji'), local('Apple Color Emoji'), local('AppleColorEmoji'), local('Noto Color Emoji'), local('NotoColorEmoji');
+  unicode-range: U+1F000-1FAFF, U+231A-231B, U+23E9-23EC, U+23F0, U+23F3, U+25FD-25FE, U+2614-2615, U+2648-2653, U+267F,
+                 U+2693, U+26A1, U+26AA-26AB, U+26BD-26BE, U+26C4-26C5, U+26CE, U+26D4, U+26EA, U+26F2-26F3, U+26F5, U+26FA,
+                 U+26FD, U+2705, U+270A-270B, U+2728, U+274C, U+274E, U+2753-2755, U+2757, U+2795-2797, U+27B0, U+27BF,
+                 U+2B1B-2B1C, U+2B50, U+2B55, U+200D, U+20E3, U+FE0F;
+}
+/* 기호 — 앱 문자열에 실제로 쓰는 것만, Windows 가 지금 고르는 글꼴 그대로(390 글자표 실측:
+   ♦ ✓ ✕ ✗ ✎ ⛶=Segoe UI Symbol(♦ 는 족보·아웃츠·리플레이어 화면 실측), ♠♣♤♧ ⅔ ⓘ=맑은 고딕 보통·굵게). Windows 전용 이름이라 다른 OS 에서는 없는 것과 같다.
+   전/후 확대 캡처(390·1440, 28px 400/700) 픽셀 차이 0 인 것만 넣었다 — ⤡ ⤢ 는 지금 다른 글꼴로 그려져 뺐다.
+   효과(CPU4 새 브라우저 5회 중앙값): GTO '홀덤 족보' 첫 열기 283→167ms · '핸드 리플레이어' 550→183ms.
+   ⚠ − ▾ ↺(지금 Cambria Math)는 넣지 않았다 — local('Cambria Math') face 를 두면 레인지 차트 첫 열기에서 Noto VF·맑은 고딕 인스턴스가
+     하나씩 **더** 생겨 317→417ms 로 나빠졌다(트레이스 3회 모두 재현, 원인 미규명 — cambria.ttc 묶음 글꼴의 face 선택으로 추정).
+   ⚠ 글자를 늘릴 때는 그 글자를 지금 그리는 글꼴을 먼저 재고(CDP CSS.getPlatformFontsForNode) 첫 열기 트레이스로 전/후를 확인하라. */
+@font-face {
+  font-family: 'NuriSymSegoe';
+  font-display: swap;
+  src: local('Segoe UI Symbol'), local('SegoeUISymbol');
+  unicode-range: U+2666, U+26F6, U+270E, U+2713, U+2715, U+2717;
+}
+@font-face {
+  font-family: 'NuriSymMalgun';
+  font-display: swap;
+  font-weight: 100 500;
+  src: local('Malgun Gothic'), local('MalgunGothic');
+  unicode-range: U+2154, U+24D8, U+2660, U+2663-2664, U+2667;
+}
+@font-face {
+  font-family: 'NuriSymMalgun';
+  font-display: swap;
+  font-weight: 600 900; /* 굵은 글자는 지금처럼 진짜 굵은 꼴(malgunbd) — 한 꼴에 합성 굵기를 걸면 모양이 달라진다 */
+  src: local('Malgun Gothic Bold'), local('MalgunGothicBold');
+  unicode-range: U+2154, U+24D8, U+2660, U+2663-2664, U+2667;
+}
+
 /* ══ v3 preflight (tailwindcss@3.4.19 src/css/preflight.css, MIT) — theme() 만 v3 빌드가 풀던 값으로 박았다 ══
    v4 preflight 로 바꾸면 버튼 cursor(pointer→default)·placeholder 색·input 배경(투명)·border 기본색이 달라진다. */
 /*
@@ -369,7 +421,7 @@ html,
   -webkit-text-size-adjust: 100%; /* 2 */
   -moz-tab-size: 4; /* 3 */
   tab-size: 4; /* 3 */
-  font-family: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif; /* 4 */
+  font-family: 'Pretendard Variable', 'Pretendard', 'NuriMarks', 'NuriEmojiFB', 'NuriSymSegoe', 'NuriSymMalgun', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif; /* 4 */
   font-feature-settings: normal; /* 5 */
   font-variation-settings: normal; /* 6 */
   -webkit-tap-highlight-color: transparent; /* 7 */
@@ -1323,7 +1375,7 @@ video {
        (2026-08-17 끊김 계측의 페인트 1순위). 고정 ::before 는 합성만 하므로 비용 0. */
     /* 'Pretendard FB Win/Android' = 크기 맞춘 폴백(맑은 고딕·Noto CJK) — woff2 도착 전 첫 페인트와 swap 뒤 글자 크기를 맞춰 리플로우를 줄인다
        (정의: public/fonts/pretendard/pretendardvariable-dynamic-subset.css 끝 · tailwind fontFamily.sans 와 같은 순서). Apple 폴백은 미측정이라 넣지 않았다. */
-    font-family: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', 'NuriMarks', system-ui, sans-serif;
+    font-family: 'Pretendard Variable', 'Pretendard', 'NuriMarks', 'NuriEmojiFB', 'NuriSymSegoe', 'NuriSymMalgun', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
     /* 한글 줄바꿈: 어절(단어) 단위로 끊어 "글자 하나만 다음 줄로 내려가는" 어색함 방지.
