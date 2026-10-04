@@ -1,0 +1,214 @@
+{
+ "nash:order": {
+  "n": 1,
+  "s": "5d52aaee0c0fa188047fc0e3a90aa4c0677f451a1f1cb2492c89dd088b8aaa6e"
+ },
+ "nash:shove:no": {
+  "n": 192,
+  "s": "425e2787a31ce17004b667519d8c98c0d125f5951d6a7cd8c10c1fe34eab4ce5"
+ },
+ "nash:shove:ante": {
+  "n": 192,
+  "s": "bb6d9302a2ee8bd2b5b3fd3d7d6ddd46ed462248b9d08055c337891a0810673a"
+ },
+ "nash:callBB:no": {
+  "n": 192,
+  "s": "07ff1f782c8ea7b3ea35fb98cfeff9d5bbc705ba59bad0ae1ab1bc4dac13473d"
+ },
+ "nash:callBB:ante": {
+  "n": 192,
+  "s": "ba8110e03e2240c305a25eacdcd8cbd622aee3fa0c72834972ceab2f8f26b11f"
+ },
+ "nash:callSB:no": {
+  "n": 192,
+  "s": "aab21c81e57c66e95912500283336bdbb943e7b5ca3a19b4560c0dc197b63495"
+ },
+ "nash:callSB:ante": {
+  "n": 192,
+  "s": "fb584114014d2e56d64e6575d2c37152fc367be21c7bb661974748250f57363e"
+ },
+ "ranges:meta": {
+  "n": 1,
+  "s": "244806d4b43a3d808695927a6b0f48abe8d5c1888f1f1d4555d982eed5de5389"
+ },
+ "ranges:rfi6": {
+  "n": 10,
+  "s": "247c7e874f74b54981931b6182590f96e4f9b9eec590aa707a7e3e55a41967d2"
+ },
+ "ranges:rfi9": {
+  "n": 16,
+  "s": "57646858786ebb2351edd0066dbfc60561ea4954f3d50225aa2410ba3541b604"
+ },
+ "ranges:defend": {
+  "n": 42,
+  "s": "56321db5d65faeaf488b5c6d5e79bf9f9a6cd35123a142366d1c9c019e64d286"
+ },
+ "ranges:threebet": {
+  "n": 46,
+  "s": "faf3bcc3954e44507508f432bf4a13421af88c0207624e219ba1462bd9185c54"
+ },
+ "ranges:vs3bet": {
+  "n": 36,
+  "s": "d52aafc29b150952ce71eb91a14526f9a79dfc5e9e6cf6521afdabda446e5411"
+ },
+ "quiz:push-stacks": {
+  "n": 1,
+  "s": "b6d0285476ba3cc6d47fbcec1b21b5017d6b8cb8fc7c70831c2fb8a58d41e3e8"
+ },
+ "quiz:rfi": {
+  "n": 10647,
+  "s": "78c4dab69798155c7c4f6f24b3c32ab2bac612ef5272bd66e6bdcea229a60a6e"
+ },
+ "quiz:threebet": {
+  "n": 10647,
+  "s": "d42d2f949d24867eccf46bf6d340aaae8546b705efb2947c42a3595957cc30fa"
+ },
+ "quiz:defend": {
+  "n": 10647,
+  "s": "414277f621fda67265e870cb88813aeea1e5495000f89e0e9d0c43bb1e82148d"
+ },
+ "quiz:vs3bet": {
+  "n": 10647,
+  "s": "d3e50770734ef4304a921e90c82e4cff6a8ebdbf269b98b146351e124f801681"
+ },
+ "quiz:push": {
+  "n": 14196,
+  "s": "bb64c6eea0b619ea456d3c6bd47c6d509f233249d7a5b209e8272b5462dd765d"
+ },
+ "quiz:call": {
+  "n": 32448,
+  "s": "a3d7b3c04c334defe5a99d0c7044ea20671d023ebdcb3ce878a5e24c2c26af6c"
+ },
+ "spot:2:open": {
+  "n": 2028,
+  "s": "da71f42f7b1f6315c8156f5e43da79d91bf6920a25fdbebad244ab9b07b30708"
+ },
+ "spot:2:vsOpen": {
+  "n": 2028,
+  "s": "1535e060823690c21cecfd04b37a97ffa605f1a93887511b982175ea331cefda"
+ },
+ "spot:2:vsOpenFold": {
+  "n": 2028,
+  "s": "5ece5d81c13f8a7dece5cfab78341782dd9e16f3052c77cd09c638ae58bba213"
+ },
+ "spot:2:vs3bet": {
+  "n": 2028,
+  "s": "c3e4c1705a643c4abd7297763c04d88d9347b25363980b411c129eeffac084f8"
+ },
+ "spot:2:vs3betFold": {
+  "n": 2028,
+  "s": "79fd8c6b5f52aedff6cde9f8894fc45590218c125b505bb91ec9a36db1e59628"
+ },
+ "spot:2:vsShove": {
+  "n": 8112,
+  "s": "0f4b438ab0c2a4d9c5f80b2118410341bd76f05a5499e7b93ea94cb151659861"
+ },
+ "spot:2:shove": {
+  "n": 8112,
+  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
+ },
+ "spot:2:shove2stk": {
+  "n": 8112,
+  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
+ },
+ "spot:6:open": {
+  "n": 30420,
+  "s": "edabb13696c02c2877fbf7465532c6cfb4daecb8f46ec81dcd28fd320d5016a2"
+ },
+ "spot:6:vsOpen": {
+  "n": 30420,
+  "s": "fbce2bad9096dba6cc522d414a0e753eb836460448e8e46ff1d82a1d131c9f1d"
+ },
+ "spot:6:vsOpenFold": {
+  "n": 30420,
+  "s": "222eba6a5c46998ad3b1f895b6cc66ffbd66fb097ac5a509036ace55b44080ef"
+ },
+ "spot:6:vs3bet": {
+  "n": 30420,
+  "s": "4a9d591eb889ae82269b4ffdf91a58f3b53550896bcfb67ccae4a854ccaa2b48"
+ },
+ "spot:6:vs3betFold": {
+  "n": 30420,
+  "s": "1bd95120cb4e21a87631cf48ef5868a5724cc9ca61daa7dca7f5c7715a3a6395"
+ },
+ "spot:6:vsShove": {
+  "n": 121680,
+  "s": "97232a5ace575d761d2f64cf1045e49dbb89010ff1be7f76b0ea1b5630de4fe4"
+ },
+ "spot:6:shove": {
+  "n": 121680,
+  "s": "f35596b14444eb2ecee1c4290e6a243179f2b475253fbed0e329af340dcdd1e8"
+ },
+ "spot:6:shove2stk": {
+  "n": 121680,
+  "s": "4546320072f5a828d9cfcd6359e5199cb5852650740cb138e03036d3f53602e4"
+ },
+ "spot:9:open": {
+  "n": 73008,
+  "s": "0e42d505a5b11b830fe8f31f3ec469cafc6413f6d1927dcfce678427a11f9298"
+ },
+ "spot:9:vsOpen": {
+  "n": 73008,
+  "s": "3d08f3f80f1104c8c63ba86b201b03756e822ded66625ff12eca6a1abf52b81f"
+ },
+ "spot:9:vsOpenFold": {
+  "n": 73008,
+  "s": "4b0d6149d326b98f173e31b52fd3f723f1b03f26004d070bc3d23258f2155f8d"
+ },
+ "spot:9:vs3bet": {
+  "n": 73008,
+  "s": "3a311b773884186777b1d01b6f8aa59663618a26d92eb32848ef755ebc9e391c"
+ },
+ "spot:9:vs3betFold": {
+  "n": 73008,
+  "s": "960aeeb9c27d04c4bf63fef010a1e0cc5c205b0937ed76aa63f20fee2ae9e002"
+ },
+ "spot:9:vsShove": {
+  "n": 292032,
+  "s": "0fc4de6124b8fbfbea2075044fad3b228900efaacc1145afaf8a23228e6d3ac5"
+ },
+ "spot:9:shove": {
+  "n": 292032,
+  "s": "28276294cbb8303f5b048b7d177f6e98150a86793b63edd9fe0094cc8c53b505"
+ },
+ "spot:9:shove2stk": {
+  "n": 292032,
+  "s": "bf16559fc070d3e1d544e5b2a9fb4ec1fc2d348a0c5da6e94612059ad03dd00a"
+ },
+ "spot:10:open": {
+  "n": 91260,
+  "s": "bf983673e9ee9bf8c54c345c346d13435e92ed2780db359c5e4b4999c3831402"
+ },
+ "spot:10:vsOpen": {
+  "n": 91260,
+  "s": "a896740ac62471b0444ad553746822bc3a254aac834082f96e97187f2bd8e6fa"
+ },
+ "spot:10:vsOpenFold": {
+  "n": 91260,
+  "s": "48fc287dd32e9909eb72250afbb2fc28849fa62353102dfa3b689d1feaf0e5d9"
+ },
+ "spot:10:vs3bet": {
+  "n": 91260,
+  "s": "1bd2c67d4d6111a5971cf6758c6e6c6434c2f53f87c4b3214387b589abf1404e"
+ },
+ "spot:10:vs3betFold": {
+  "n": 91260,
+  "s": "cb5bd98f591656c6b364a02a726caf0f3fae2a8f05642a1518f9aed0b4673c92"
+ },
+ "spot:10:vsShove": {
+  "n": 365040,
+  "s": "d70924a96e846e3830cfed73912248bcfa96a63a43f0ee3cc9b93d4b5c997f0d"
+ },
+ "spot:10:shove": {
+  "n": 365040,
+  "s": "ca9a62ca9cd170dfd19d8e1cd62d8ea4e2506833c6d219fd53797c97069adfb6"
+ },
+ "spot:10:shove2stk": {
+  "n": 365040,
+  "s": "567243e5678892fea5ca0a6ac324c0dd15cee8be4d959afc317fbe781482caea"
+ },
+ "spot:kinds": {
+  "n": 1,
+  "s": "a3800ee212b25d46e029172e1641618eb0f2256d9ddb40b1f2ce6dd6836af649"
+ }
+}

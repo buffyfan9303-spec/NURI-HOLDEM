@@ -17,18 +17,15 @@ import { type WeightedCombo, type EquityKind } from './equityEngine';
 import { equityAsync, equityVsRangeAsync } from './equityClient';
 import { buildFreq, type FreqMap } from '../../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
-import { SUITS, type ActionFrequency, type Card, type Rank, type Suit } from './gto.types';
+import { SUITS, cardId, type CardId, type ActionFrequency, type Card, type Rank, type Suit } from './gto.types';
 import type { GtoResult, Equity } from './gto.deep.types';
 
 export type CardTarget = 'hero' | 'villain' | 'board';
-export type CardId = string; // 예: 'As'
+// cardId·CardId 는 gto.types 로 옮겼다(가벼운 소비처가 이 파일의 레인지 표를 끌고 오지 않게). 옛 import 경로는 그대로 산다.
+export { cardId, type CardId };
 
 /** 빌런 입력 모드 — 특정 핸드 2장 or 프리셋 레인지 */
 export type VillainMode = 'hand' | 'range';
-
-export function cardId(c: Card): CardId {
-  return `${c.rank}${c.suit}`;
-}
 
 const SLOT_LIMIT: Record<CardTarget, number> = { hero: 2, villain: 2, board: 5 };
 const TARGET_ORDER: CardTarget[] = ['hero', 'villain', 'board'];

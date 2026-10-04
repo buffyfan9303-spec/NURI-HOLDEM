@@ -1,6 +1,6 @@
 // src/components/features/gto/CardGridPicker.tsx
-import { RANKS, SUITS, type Card, type Suit } from './gto.types';
-import { cardId, type CardId } from './useDeepGto';
+// cardId 는 gto.types 에서 — useDeepGto 를 물면 HandCards(커뮤니티 피드)까지 레인지 표·에퀴티 엔진이 딸려 온다.
+import { RANKS, SUITS, cardId, type Card, type CardId, type Suit } from './gto.types';
 
 /** 4색 덱: 스페이드=흰, 하트=빨강, 다이아=파랑, 클럽=초록 */
 // eslint-disable-next-line react-refresh/only-export-components -- 카드 색/라벨 상수를 GTO 화면들과 공유(기존 구조 유지)

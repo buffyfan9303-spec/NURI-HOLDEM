@@ -3,7 +3,7 @@
 //
 // 왜 useDeepGto 를 안 쓰나: 저쪽은 GTO 시나리오·빌런 레인지·전략표까지 물고 있어
 // '카드만 받으면 되는' 화면(아웃츠 계산기·핸드 리플레이어)엔 과하다. 카드 id 포맷은
-// useDeepGto.cardId 를 그대로 재사용해 CardGridPicker 의 usedIds 계약을 공유한다(새 포맷 0).
+// cardId(gto.types — useDeepGto 가 재export 하는 같은 함수)를 그대로 재사용해 CardGridPicker 의 usedIds 계약을 공유한다(새 포맷 0).
 //
 // 슬롯 규칙: 빈칸은 항상 뒤에 몰린다(중간 구멍 금지). 보드는 순서가 곧 스트리트라
 // 가운데 카드를 빼면 뒤가 앞으로 당겨져야 한다 — 구멍이 남으면 '턴이 비었는데 리버가 있는'
@@ -12,8 +12,7 @@
 // 2026-09-19: 빌런 B~E(`extra`, 0~4명 × 2칸). NURI SPOT 만 쓴다 — 아웃츠·리플레이는 init 에 extra 가
 // 없어 [] 이고 화면에도 아무것도 안 그려진다(기존 두 도구 동작 불변).
 import { useCallback, useMemo, useState } from 'react';
-import { RANKS, SUITS, type Card, type Rank, type Suit } from './gto.types';
-import { cardId, type CardId } from './useDeepGto';
+import { RANKS, SUITS, cardId, type Card, type CardId, type Rank, type Suit } from './gto.types';
 
 /** 'v1'~'v4' = 빌런 B~E 의 슬롯. */
 export type HandTarget = 'hero' | 'villain' | 'board' | 'v1' | 'v2' | 'v3' | 'v4';

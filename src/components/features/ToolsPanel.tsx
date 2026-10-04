@@ -1,5 +1,5 @@
 import { CHIP_HIT } from './gto/chip';
-import { useEffect, useLayoutEffect, useRef, useState, Suspense, type ReactNode } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useRef, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -15,19 +15,13 @@ import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
 import StructureSim from './tools/StructureSim';
-import RangeGuide from './tools/RangeGuide';
-import PreflopTrainer from './tools/PreflopTrainer';
 import OutsCalc from './tools/OutsCalc';
-import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc, MzoneCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
-import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
-import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import HandRankPanel from './tools/HandRankPanel';
-import DailyDrill from './tools/DailyDrill';
-import WrongNote, { type PushJump, type RangeJump } from './tools/WrongNote';
+import type { PushJump, RangeJump } from './tools/WrongNote';
 
 // GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { clearSnap, readSnap } from '../../lib/snapshot';
@@ -43,6 +37,22 @@ const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 const NuriSpotPanel = lazyWithReload(() => import('./gto/NuriSpotPanel'));
 // 스타팅 핸드 순위(2026-09-23) — 169칸 격자 + 표. 첫 화면 예산 여유가 2% 뿐이라 열 때 받는다.
 const StartingHandRankPanel = lazyWithReload(() => import('./tools/StartingHandRankPanel'));
+// 데이터가 무거운 GTO 전용 도구(2026-10-04 오너 "기능·성능은 그대로, 불러오는 용량만") — Nash 표(nash.data 100KB)·
+//   드릴 문제 은행(preflopQuiz·postflop.data 42KB)·레인지 표(ranges.data)를 이 패널 청크에서 뺀다.
+//   이 패널은 App 유휴 예열(모든 유저)과 캘린더·내 매장(정적 import)이 함께 받는 청크라, 여기 묶여 있으면
+//   GTO 를 안 쓰는 사람까지 이 표들을 받았다. 계산 코드는 그대로다 — 받는 시점만 바뀐다(gtoDataInvariance.test 가 값을 잠근다).
+//   ⚠ 매장·캘린더로 옮긴 도구(STORE/CAL 세트)는 정적으로 둔다 — 그 화면엔 아래 미리 받기 관찰자가 없다.
+//   한 묶음(tools/gtoHeavyTools — 한 청크)으로 받는다. 이유는 그 파일 머리 주석.
+const heavy = () => import('./tools/gtoHeavyTools');
+const RangeGuide = lazyWithReload(() => heavy().then((m) => ({ default: m.RangeGuide })));
+const PushFoldChart = lazyWithReload(() => heavy().then((m) => ({ default: m.PushFoldChart })));
+const PreflopTrainer = lazyWithReload(() => heavy().then((m) => ({ default: m.PreflopTrainer })));
+const PostflopTrainer = lazyWithReload(() => heavy().then((m) => ({ default: m.PostflopTrainer })));
+const DailyDrill = lazyWithReload(() => heavy().then((m) => ({ default: m.DailyDrill })));
+const WrongNote = lazyWithReload(() => heavy().then((m) => ({ default: m.WrongNote })));
+const MdfCalc = lazyWithReload(() => heavy().then((m) => ({ default: m.MdfCalc })));
+const AggroChart = lazyWithReload(() => heavy().then((m) => ({ default: m.AggroChart })));
+const RangeMatrix = lazyWithReload(() => heavy().then((m) => ({ default: m.RangeMatrix })));
 /**
  * 열 때 받는 도구들의 '미리 받기'(GTO-TOOL-OPEN-JANK 2026-09-24).
  * 첫 열기마다 '불러오는 중…'(148px)이 ~300ms 붙잡혔다가 본문으로 튀었다 — React 가 새 Suspense 경계의
@@ -50,13 +60,41 @@ const StartingHandRankPanel = lazyWithReload(() => import('./tools/StartingHandR
  * 동기로 그려 폴백 자체가 없다. **청크 분리는 그대로**다 — 첫 화면 번들 증가 0, 받는 시점만 앞당긴다.
  * 언제: GTO 판이 실제로 보일 때 유휴 시간(아래 ToolsPanel 이펙트) + 카드를 누르는 순간(pointerdown).
  */
+const LAZY_TOOL: Partial<Record<ToolKey, () => Promise<void>>> = {
+  gto: GtoDeepPanel.preload,
+  replay: HandReviewTool.preload,
+  spot: NuriSpotPanel.preload,
+  startrank: StartingHandRankPanel.preload,
+  range: RangeGuide.preload,
+  pushfold: PushFoldChart.preload,
+  trainer: PreflopTrainer.preload,
+  postflop: PostflopTrainer.preload,
+  drill: DailyDrill.preload,
+  wrongnote: WrongNote.preload,
+  mdf: MdfCalc.preload,
+  aggro: AggroChart.preload,
+  rvr: RangeMatrix.preload,
+};
 const PRELOAD: Partial<Record<ToolKey, () => void>> = {
-  gto: () => { void GtoDeepPanel.preload(); },
-  replay: () => { void HandReviewTool.preload(); },
-  spot: () => { void NuriSpotPanel.preload(); },
-  startrank: () => { void StartingHandRankPanel.preload(); },
+  ...Object.fromEntries(Object.entries(LAZY_TOOL).map(([k, f]) => [k, () => { void f(); }])),
   tda: () => { loadTdaRules().catch(() => { /* 열 때 도구가 다시 받는다 */ }); },
 };
+/** 지연 도구는 **모듈이 도착한 뒤** 연다. 도착 전에 열면 Modal 안에 새로 생긴 Suspense 경계가 폴백('불러오는 중…')을
+ *  최소 ~300ms 붙잡는다(lazyWithReload 머리 주석 — startTransition 으로도 새 경계의 폴백은 못 막는다).
+ *  보통은 위 유휴 미리 받기로 이미 와 있어 다음 마이크로태스크에 열린다. 느린 망에서 무반응이 길어지지 않게
+ *  OPEN_WAIT_MS 뒤에는 그냥 연다 — 그때는 폴백이 '불러오는 중' 을 정직하게 보여 준다(실패도 lazy 경로가 복구한다).
+ *  왜 1초인가: 일찍 끊으면 폴백이 최소 300ms 붙잡혀 오히려 늦게 그린다(도착 t ≤ 대기+300ms 면 기다리는 쪽이 항상 빠르다).
+ *  실측(2026-10-04 로컬 프리뷰, 판 보이자마자 누름): 청크 도착 15~280ms · 병렬 e2e 부하에서는 400ms 를 넘겨 폴백 13프레임. */
+const OPEN_WAIT_MS = 1000;
+function whenToolReady(k: ToolKey, run: () => void): void {
+  // k 는 URL 해시에서 올 수 있다 — 자기 키만 본다('constructor' 같은 원형 키로 엉뚱한 함수를 부르지 않게, CodeQL js/unvalidated-dynamic-method-call).
+  const pre = Object.hasOwn(LAZY_TOOL, k) ? LAZY_TOOL[k] : undefined;
+  if (!pre) { run(); return; }
+  let done = false;
+  const go = () => { if (done) return; done = true; run(); };
+  void pre().then(go);
+  window.setTimeout(go, OPEN_WAIT_MS);
+}
 
 /**
  * NURI SPOT 진입 초기값 — 직전 스팟이 있으면 그것, 없으면 **기존 두 도구의 스냅샷에서 카드를 물려받는다**.
@@ -303,11 +341,26 @@ export const renderCalendarTool = (k: CalendarToolKey): ReactNode => renderTool(
  *  레인은 접이식 금지 — 비접이 소제목 + 상단 필터 칩 행(전체/학습/분석/계산기/매장운영). */
 export default function ToolsPanel() {
   const toast = useToast();
-  const [active, setActive] = useState<ToolKey | null>(() => {
-    // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문) — 하위호환 계약, 변경 금지
+  // 딥링크(#tool=key — 공유·재방문, 하위호환 계약)는 마운트 이펙트가 setActive 로 연다. 판이 숨어 있으면 보일 때 연다.
+  const deepLink = useRef<ToolKey | null>(null);
+  const [active, setActiveNow] = useState<ToolKey | null>(() => {
     const m = window.location.hash.match(/^#tool=([a-z]+)/);
-    return m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
+    deepLink.current = m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
+    return null;
   });
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** 이 판이 지금 화면에 나와 있나 — 탭 keep-alive 는 display:none 으로 숨기므로 getClientRects 가 빈다. */
+  const shown = () => (rootRef.current?.getClientRects().length ?? 0) > 0;
+  // 여는 경로(카드·딥링크·해시·도구 간 링크·로그인 대기)는 전부 여기를 지난다. 마지막 요청만 산다 —
+  //   A 를 받는 동안 B 를 누르거나 닫으면 늦게 도착한 A 가 판을 덮지 않는다.
+  // 🔴 열 때 판이 숨어 있으면 열지 않는다(critical-reviewer PR #156): 청크를 기다리는 사이 하단 탭을 옮기면
+  //   숨은 판에 모달이 열려 다른 탭의 스크롤이 잠기고 URL 에 #tool= 이 남았다. Modal 은 포털이 아니라 판 안에 있다.
+  const openSeq = useRef(0);
+  const setActive = (k: ToolKey | null) => {
+    const seq = ++openSeq.current;
+    if (!k) { setActiveNow(null); return; }
+    whenToolReady(k, () => { if (openSeq.current === seq && shown()) startTransition(() => setActiveNow(k)); });
+  };
   // GTO 도구는 로그인 회원 전용(오너 지시 2026-08-27) — 카탈로그는 보이되 실행에 게이트
   //
   // ⚠ 2026-08-30: 예전엔 `if (!user) promptLogin()` 이었는데, 그게 **user 의 세 상태를 둘로 뭉갰다.**
@@ -362,17 +415,29 @@ export default function ToolsPanel() {
   const activeRef = useRef<ToolKey | null>(active);
   activeRef.current = active;
   useLayoutEffect(() => { stripToolHash(); }, []); // 딥링크 진입 항목 정규화(1회)
+  // 딥링크 진입 — 판이 보이면 바로, 숨어 있으면 **판이 보일 때** 연다(아래 관찰자). 루트 `/#tool=` 는 홈에 머문 채
+  //   이 판이 숨은 채 마운트되고 해시도 숨은 판에 도착한다 — 종전엔 숨은 판에 모달을 열어 홈 스크롤이 잠겼다(사전 결함 A15).
+  useEffect(() => {
+    const k = deepLink.current;
+    if (!k || !shown()) return;
+    deepLink.current = null;
+    setActive(k);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회(딥링크 진입). setActive 는 ref 만 읽는다
+  }, []);
   // 무거운 도구 미리 받기 — ⚠ **마운트가 아니라 '보일 때'** 다. 이 패널은 App 의 유휴 예열로 GTO 탭을 열기 전에
   //   display:none 인 채 마운트될 수 있다. 그때 받으면 GTO 를 안 쓰는 사람까지 수백 KB 를 받는다.
   //   IntersectionObserver 는 display:none 조상 아래에서 교차하지 않으므로 '실제로 화면에 나왔다' 의 신호가 된다.
-  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    let idleId = 0; let timerId = 0;
+    let idleId = 0; let timerId = 0; let preloaded = false;
+    // 계속 관찰한다 — 판이 다시 보일 때마다 숨은 동안 도착한 딥링크를 연다. 미리 받기는 처음 한 번만.
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      io.disconnect();
+      const k = deepLink.current;
+      if (k) { deepLink.current = null; setActive(k); }
+      if (preloaded) return;
+      preloaded = true;
       const run = () => { for (const f of Object.values(PRELOAD)) f?.(); };
       if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(run, { timeout: 3000 });
       else timerId = window.setTimeout(run, 1200);
@@ -462,6 +527,8 @@ export default function ToolsPanel() {
       // 위 ① 과 같은 이유 — 해시를 갖고 도착한 이 항목에서 해시를 걷어내고,
       // 도구가 열린 뒤 그 도구의 항목에 다시 얹는다(닫을 때 되살아나지 않게).
       stripToolHash();
+      // 숨은 판에 도착한 해시(루트 `/#tool=` 부팅)는 판이 보일 때 연다 — 위 관찰자가 꺼낸다.
+      if (!shown()) { deepLink.current = m[1] as ToolKey; return; }
       setActive(m[1] as ToolKey);
     };
     window.addEventListener('hashchange', onHash);
