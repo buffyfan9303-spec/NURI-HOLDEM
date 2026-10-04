@@ -3,7 +3,7 @@
 // 무엇을 지키나(동작): 그런 글자를 처음 그릴 때 Chrome 은 font-family 스택을 걸으며 지나는 local() face 를 **범위와 상관없이** 실체화한다.
 //   Windows 에서 'Pretendard FB Android' 의 local('Noto Sans KR') 가 설치된 NotoSansKR-VF.ttf(10MB 가변 글꼴)에 맞아, 글자 하나마다
 //   그 글꼴을 2번씩 새로 만들었다(CPU1 20~30ms · CPU4 게시판 첫 진입 214ms — audit3-motion-1004.md#M3-04). 그 글꼴은 이 글자들을 그리지 않는다.
-//   src/index.css 의 'NuriEmojiFB'·'NuriSymFB' 가 FB 앞에서 받아 걷기를 끝낸다(스택 순서 계약: src/fontFallbackOrder.contract.test.ts).
+//   src/index.css 의 'NuriEmojiFB'·'NuriSymSegoe·NuriSymMalgun' 가 FB 앞에서 받아 걷기를 끝낸다(스택 순서 계약: src/fontFallbackOrder.contract.test.ts).
 // 재는 법: ① 별도 컨텍스트(새 렌더러)에서 'Pretendard FB Android' 만으로 한글을 그려 그 글꼴의 스트림 크기를 알아낸다.
 //   ② 새 페이지에서 앱 스택으로 글자를 하나씩 그리며 트레이스 FontDataManager::onMakeFromStreamArgs 를 모아, ①의 크기가 나오면 실패.
 // 판정 불가: ①에서 글꼴이 안 만들어지면(Noto Sans KR 이 없는 기기 · 리눅스 러너는 그 글꼴이 실제로 그릴 수도 있어 제외) skip.
@@ -51,5 +51,5 @@ test('🔴 이모지·카드 무늬·기호를 처음 그려도 크기 맞춤 �
     const hit = sizes.filter((s) => fbSizes.has(s));
     if (hit.length) bad.push(`${name}: FB Android 글꼴(${[...fbSizes].join(',')}B)을 ${hit.length}번 만들었다 — 전체 생성 ${sizes.join(',')}`);
   }
-  expect(bad, "그리지 않는 크기 맞춤 폴백 글꼴을 깨웠다 — src/index.css 스택에서 NuriEmojiFB·NuriSymFB 가 'Pretendard FB Win' 앞에 있는지, 범위에 그 글자가 있는지 확인").toEqual([]);
+  expect(bad, "그리지 않는 크기 맞춤 폴백 글꼴을 깨웠다 — src/index.css 스택에서 NuriEmojiFB·NuriSymSegoe·NuriSymMalgun 가 'Pretendard FB Win' 앞에 있는지, 범위에 그 글자가 있는지 확인").toEqual([]);
 });

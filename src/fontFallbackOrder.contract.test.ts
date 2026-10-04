@@ -2,10 +2,10 @@
 //
 // 무엇을 보증하나(동작): Chrome 은 Pretendard 에 없는 글자를 그릴 때 스택을 걸으며 지나는 local() face 를 범위와 상관없이 실체화한다.
 //   FB Android 의 local('Noto Sans KR') 가 Windows 의 10MB 가변 글꼴에 맞아 게시판 첫 진입이 400ms 멈췄다(audit3-motion-1004.md#M3-04).
-//   그래서 앱이 그리는 이모지·기호는 **FB 보다 앞의** 전용 face(NuriMarks·NuriEmojiFB·NuriSymFB)가 범위로 받아야 한다.
+//   그래서 앱이 그리는 이모지·기호는 **FB 보다 앞의** 전용 face(NuriMarks·NuriEmojiFB·NuriSymSegoe·NuriSymMalgun)가 범위로 받아야 한다.
 //   런타임 확인은 e2e/font-fallback-shortcut.spec.ts(트레이스로 FB Android 글꼴 생성 0회).
 // 그리고 이모지 face 가 '글자 모양(text presentation)' 기호를 가로채면 ❤·☀·⚠·♠ 가 색 그림으로 바뀐다 — 그 경계도 잠근다.
-// 음성 대조: 수정 전 index.css(스택에 NuriEmojiFB·NuriSymFB 없음)에서 첫 테스트가 FAIL — 2026-10-04 확인.
+// 음성 대조: 수정 전 index.css(스택에 NuriEmojiFB·NuriSymSegoe·NuriSymMalgun 없음)에서 첫 테스트가 FAIL — 2026-10-04 확인.
 // 실행: npx vitest run src/fontFallbackOrder.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -48,7 +48,7 @@ describe('글꼴 스택 — 이모지·기호는 크기 맞춤 폴백 앞에서 
         if (at < 0 || at > fb) bad.push(`${ch} U+${cp.toString(16).toUpperCase()} → ${at < 0 ? '받는 face 없음' : stack[at] + '(FB 뒤)'}`);
       }
     }
-    expect(bad, '이 글자는 FB 를 지나며 local 폴백 글꼴을 깨운다(Windows 10MB Noto VF) — NuriEmojiFB/NuriSymFB 범위·스택 순서 확인').toEqual([]);
+    expect(bad, '이 글자는 FB 를 지나며 local 폴백 글꼴을 깨운다(Windows 10MB Noto VF) — NuriEmojiFB·NuriSymSegoe·NuriSymMalgun 범위·스택 순서 확인').toEqual([]);
   });
 
   it('이모지 face 는 글자 모양 기호를 가로채지 않는다(색 그림으로 바뀌지 않게)', () => {
