@@ -24,6 +24,18 @@ describe('한글 받침', () => {
     expect(withJosa('카드', '으로')).toBe('카드로');
   });
 
+  // F4-07(2026-10-04) — 이용권 전송 미리보기 '…매장이용권로 보입니다' 를 이 함수로 고치며 ㄹ 받침 규칙을 넣었다.
+  // 음성 대조: josa.ts 의 `if (kind === '으로' && final && endsWithRieul(word)) return '로';` 줄을 지우면 이 묶음이 빨개진다.
+  it('🔴 으로 — ㄹ 받침 뒤는 로(길로·서울로·1로·7로·8로·L로), 그 밖의 받침은 으로', () => {
+    expect(withJosa('매장이용권', '으로')).toBe('매장이용권으로');
+    expect(withJosa('길', '으로')).toBe('길로');
+    expect(withJosa('서울', '으로')).toBe('서울로');
+    expect(['1', '7', '8', 'L'].map((w) => josa(w, '으로'))).toEqual(['로', '로', '로', '로']);
+    expect(['0', '3', '6', 'M', 'N'].map((w) => josa(w, '으로'))).toEqual(['으로', '으로', '으로', '으로', '으로']);
+    expect(withJosa('직원', '은')).toBe('직원은'); // 다른 조사는 ㄹ 규칙과 무관
+    expect(withJosa('서울', '을')).toBe('서울을');
+  });
+
   it('종성 주기 경계 — 가(받침 없음)와 각(받침 있음)', () => {
     expect(josa('가', '을')).toBe('를');
     expect(josa('각', '을')).toBe('을');

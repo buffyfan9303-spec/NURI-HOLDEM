@@ -20,6 +20,7 @@ import { useBusinessDate } from '../../lib/businessDate';
 import { kstToday } from '../../lib/kst';
 import { useVenueScope } from '../../lib/useVenueScope';
 import { msgOf } from '../../lib/dbError';
+import { josa } from '../../lib/josa'; // F4-07 — '3.0로' → '3.0으로'(숫자는 읽는 소리로)
 
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
@@ -702,7 +703,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       {/* 인사이트 */}
       <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
         {multi
-          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다.</>
+          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}{josa(best.avgEntry.toFixed(1), '으로')} 가장 활발합니다.</>
           : <>아직 한 요일({DOW[best.w]})만 집계됐습니다.</>}
       </p>
     </div>

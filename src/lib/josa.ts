@@ -46,6 +46,14 @@ function hasFinalConsonant(word: string): boolean | null {
   return null;
 }
 
+/** 마지막 소리의 받침이 ㄹ 인가(종성 인덱스 8 · 숫자 1·7·8 · 영문 L). hasFinalConsonant 가 참일 때만 묻는다. */
+function endsWithRieul(word: string): boolean {
+  const last = word.trimEnd().at(-1)!;
+  const code = last.codePointAt(0)!;
+  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 === 8;
+  return '178'.includes(last) || last.toUpperCase() === 'L';
+}
+
 /**
  * 낱말에 맞는 조사를 고른다.
  *
@@ -56,6 +64,8 @@ function hasFinalConsonant(word: string): boolean | null {
 export function josa(word: string, kind: JosaKind): string {
   const final = hasFinalConsonant(word);
   if (final === null) return '';
+  // '으로' 는 받침 ㄹ 뒤에서도 '로' 다(길로·서울로·1(일)로·7(칠)로·8(팔)로·L(엘)로). 2026-10-04 F4-07 에서 처음 화면에 쓰며 확인.
+  if (kind === '으로' && final && endsWithRieul(word)) return '로';
   const [withFinal, withoutFinal] = PAIRS[kind];
   return final ? withFinal : withoutFinal;
 }

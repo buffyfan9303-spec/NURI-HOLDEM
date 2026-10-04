@@ -5,7 +5,7 @@
 //  · 거짓 '미입력' → 버튼이 남을 뿐 데이터는 안전하다.
 // 그래서 애매하면 '완료'로 찍지 않는다. 아래 경계를 그 원칙대로 못 박는다.
 import { describe, it, expect } from 'vitest';
-import { hasRankingForGame, rankingEventOf, rankingEventCandidates, normalizeEventName, gameSeqOfEvent } from './rankingGame';
+import { hasRankingForGame, rankingEventOf, rankingEventCandidates, normalizeEventName, gameSeqOfEvent, finishRowsFromSaved } from './rankingGame';
 import { gameKey, ledgerGameLabel } from './ledgerLink';
 
 const MAIN = { gameSeq: 1, title: '수요일 딥스택' };
@@ -198,5 +198,32 @@ describe('gameSeqOfEvent — 장부 보기 패널이 순위와 같은 게임을 
   });
   it('그날 게임 목록에 없는 이름은 메인으로 안전하게 되돌린다(추정으로 엉뚱한 게임을 짚지 않는다)', () => {
     expect(gameSeqOfEvent('없는 게임', games)).toBe(1);
+  });
+});
+
+// F4-06(2026-10-04 dummy-1004 실연) — 순위 저장 → 클락 '토너 종료' 창이 빈 칸을 다시 받아 같은 대회를 또 적게 했다.
+// 음성 대조: finishRowsFromSaved 가 늘 null 을 돌려주게 하면(이전 상태 = 빈 칸) 첫 두 묶음이 빨개진다.
+describe('F4-06 · 토너 종료 창은 이 게임에 저장된 순위를 채운다', () => {
+  const saved = [
+    { position: 1, nickname: '손님4', realName: '김철수', eventName: '' },
+    { position: 2, nickname: '손님2', realName: '', eventName: '' },
+    { position: 3, nickname: '손님3', realName: '이영희', eventName: '' },
+    { position: 1, nickname: '사이드우승', realName: '', eventName: '나이트 사이드' },
+  ];
+  it('메인 저장분 → 장부 표기 줄(실명(닉네임)) · 줄 수는 입상 자릿수 이상', () => {
+    const rows = finishRowsFromSaved(MAIN, saved, 5);
+    expect(rows?.map((r) => r.name)).toEqual(['김철수(손님4)', '손님2', '이영희(손님3)', '', '']);
+    // 다시 저장하면 같은 {닉네임, 실명} 으로 돌아간다(왕복)
+    expect(finishEntriesFromRows(rows ?? [])).toEqual([
+      { nickname: '손님4', realName: '김철수' }, { nickname: '손님2', realName: '' }, { nickname: '손님3', realName: '이영희' },
+    ]);
+  });
+  it('사이드는 자기 이름의 행만 · 빠진 등수는 빈 줄로 자리를 지킨다', () => {
+    expect(finishRowsFromSaved(SIDE, saved, 3)?.map((r) => r.name)).toEqual(['사이드우승', '', '']);
+    expect(finishRowsFromSaved(MAIN, [{ position: 3, nickname: 'x', realName: '', eventName: '' }], 1)?.map((r) => r.name)).toEqual(['', '', 'x']);
+  });
+  it('저장분이 없으면 null(빈 칸 그대로)', () => {
+    expect(finishRowsFromSaved(MAIN, [], 3)).toBeNull();
+    expect(finishRowsFromSaved(SIDE, saved.slice(0, 3), 3)).toBeNull();
   });
 });

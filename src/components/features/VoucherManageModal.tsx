@@ -22,6 +22,7 @@ import { buildQrForVenue } from './venueQrPrint'; // FINAL-QR#PRINT-A-B — `awa
 import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로컬이 아니라 KST — 서버 판정과 같은 기준
 import { msgOf } from '../../lib/dbError';
 import { manageFeedRows } from '../../lib/voucherFeed';
+import { josa } from '../../lib/josa'; // F4-07 — 제목이 '매장이용권' 이면 '…이용권으로', 받침 없으면 '…로'
 
 /** 발급 근거 픽 — 오너 지시(2026-09-19): '첫 방문 환영'·'방문 감사' 픽을 빼고 '이용권 지급'을 맨 앞에 둔다.
  *  2026-09-19 2차(마이그레이션 20260919a, 오너 결정 "내역도 '이용권 지급'으로 보이게 해라") — 처음엔
@@ -592,7 +593,7 @@ ${cards}
               {venueName && (
                 <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs leading-relaxed text-ink-muted">
                   <Icon name="eye" size={12} className="mt-0.5 shrink-0 text-accent-300" />
-                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b>로 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
+                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b>{josa(stripVenuePrefix(title, venueName), '으로')} 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
                 </p>
               )}
               {/* 유효기간 — 만료 이용권은 사용 RPC 가 서버에서 거부하고 손님 지갑에서도 자동 제외된다(2026-08-17).

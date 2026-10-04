@@ -95,6 +95,26 @@ export function finishEntriesFromRows(rows: { name: string }[]): { nickname: str
 }
 
 /**
+ * F4-06(2026-10-04) — 이 게임에 **이미 저장된 순위** → 클락 '토너 종료' 창의 입력칸. 저장분이 없으면 null(빈 칸 그대로).
+ * 예전엔 순위를 저장한 뒤 토너를 끝내도 빈 칸을 다시 받아 '순위 저장 후 종료' 를 누르면 같은 대회를 다시 적게 했다.
+ *  · 대상 이름은 저장과 같은 규칙(rankingSaveTarget) — 저장하면 교체될 바로 그 행들을 채운다.
+ *  · 줄 이름은 장부 표기 `실명(닉네임)`(실명 없으면 닉네임) — finishEntriesFromRows 가 같은 {닉네임, 실명}으로 되돌린다.
+ *  · 등수는 줄 번호라 position 자리에 넣는다(빠진 등수는 빈 줄). 줄 수 = max(minRows, 마지막 등수).
+ */
+export function finishRowsFromSaved(
+  game: RankingGame,
+  saved: { position: number; nickname: string; realName: string; eventName?: string | null }[],
+  minRows: number,
+): { name: string }[] | null {
+  const { eventName } = rankingSaveTarget(game, saved.map((e) => e.eventName));
+  const mine = saved.filter((e) => normalizeEventName(e.eventName) === eventName && e.position > 0);
+  if (mine.length === 0) return null;
+  const rows = Array.from({ length: Math.max(minRows, ...mine.map((e) => e.position)) }, () => ({ name: '' }));
+  for (const e of mine) rows[e.position - 1] = { name: e.realName.trim() ? `${e.realName.trim()}(${e.nickname})` : e.nickname };
+  return rows;
+}
+
+/**
  * 클락 END 저장의 **대회 이름과 교체 경고 수치**.
  *
  * 서버 save_venue_rankings 는 (날짜, event_name) **한 이름만** 지우고 넣는다. 그런데 메인 게임은 ''(기본 칩)와

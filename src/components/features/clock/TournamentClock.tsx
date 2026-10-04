@@ -35,7 +35,7 @@ import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 const prizePlaces = (prizes: readonly ClockPrizeRow[]) => prizes.reduce((n, p) => n + Math.max(1, p.count ?? 1), 0);
 import PresetPicker from '../PresetPicker';
 import { saveVenueRankings, getVenueRankings } from '../../../api/rankings';
-import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGame';
+import { rankingSaveTarget, finishEntriesFromRows, finishRowsFromSaved } from '../../../lib/rankingGame';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
@@ -713,7 +713,23 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 토너 종료 → 입상 순위 초안(장부 연동 시): 입상 자릿수만큼 빈 행(이름만) + 장부 참가자 자동완성 → saveVenueRankings.
   // 상금은 넣지 않는다(2026-09-05 법적위험완화 v3) — 클락 프라이즈 표(cfg.prizes)는 클락 표시용일 뿐 순위로 흐르지 않는다.
   const [finishRows, setFinishRows] = useState<{ name: string }[] | null>(null);
-  const seedFinishRows = (places: number) => Array.from({ length: places > 0 ? places : 3 }, () => ({ name: '' }));
+  // F4-06(2026-10-04) — 빈 칸으로 먼저 열고, 이 게임에 이미 저장한 순위가 있으면 채운다(저장 이름 규칙은 rankingSaveTarget 한 벌).
+  //   예전엔 순위 저장 → 토너 종료가 빈 칸을 다시 받아 같은 대회를 또 적게 했다.
+  //   채우기는 **아직 그 빈 칸 그대로일 때만** — 사람이 먼저 고쳤거나, 창을 닫았거나, 다른 게임으로 다시 열었으면 늦은 응답을 버린다.
+  //   기준 상태는 stateRef(최신) — 자동 전진(advance) 콜백 안에서도 불리므로 렌더 클로저를 쓰지 않는다. 조회 실패는 빈 칸 그대로.
+  const openFinishRows = useCallback(() => {
+    const s = stateRef.current;
+    const places = prizePlaces(s.config.prizes);
+    const blank = Array.from({ length: places > 0 ? places : 3 }, () => ({ name: '' }));
+    setFinishRows(blank);
+    if (!s.sessionDate) return;
+    void Promise.all([getLedgerSession(s.venueId, s.sessionDate, s.gameSeq), getVenueRankings(s.venueId, s.sessionDate)])
+      .then(([session, saved]) => {
+        const rows = finishRowsFromSaved({ gameSeq: s.gameSeq, title: session.title }, saved.entries, blank.length);
+        if (rows) setFinishRows((cur) => (cur === blank ? rows : cur));
+      })
+      .catch(() => {});
+  }, []);
   const [finishBusy, setFinishBusy] = useState(false);
   // END(조기 종료) 경로 — 실전 토너는 대부분 헤즈업 딜/우승 확정으로 블라인드가 남은 채 끝난다.
   // 예전엔 이 경로가 순위 입력을 통째로 건너뛰어 매장 순위·시즌·전적 데이터가 비었다.
@@ -721,7 +737,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const handleEnd = () => {
     if (canManage && state.sessionDate && !finishRows) {
       setEndAfterFinish(true);
-      setFinishRows(seedFinishRows(prizePlaces(cfg.prizes)));
+      openFinishRows();
       return; // 모달에서 '순위 저장 후 종료' 또는 '입력 없이 종료'를 고른다
     }
     onEnd();
@@ -808,7 +824,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     if (cu.finished) {
       playChime('finish');
       if (canManage && state.sessionDate) {
-        setFinishRows(seedFinishRows(prizePlaces(cfg.prizes)));
+        openFinishRows();
       }
       return;
     }
@@ -818,7 +834,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     if (cu.advanced > 1) {
       toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg.levels, s.currentIndex)} → L${levelNumberAt(cfg.levels, cu.toIndex)}`, 'info', { durationMs: 5000 });
     }
-  }, [onChange, onReload, playChime, canManage, cfg, toast, state.sessionDate]);
+  }, [onChange, onReload, playChime, canManage, cfg, toast, state.sessionDate, openFinishRows]);
 
   // 워치독 — active(섹션 노출)와 무관하게 running 인 동안 계속 돈다.
   // 비용: 경계를 안 지났으면 setState 를 하지 않으므로 재렌더가 0 이다(1초에 Date.now 비교 1회).
