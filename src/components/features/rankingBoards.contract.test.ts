@@ -98,7 +98,11 @@ describe('UI-08-4 · 실패 ≠ 없음 — LoadErrorCard 패턴을 보드 전부
     }
     expect(TLC).toMatch(/boardErr\.badges != null \? <LoadErrorCard error=\{boardErr\.badges\} what="업적"/);
     expect(TLC).toMatch(/\{boardErr\.verifs != null && \(\s*<LoadErrorCard error=\{boardErr\.verifs\} what="신청 이력"/);
-    expect(TLC).toMatch(/\{shopErr != null && \(\s*<LoadErrorCard error=\{shopErr\} what="상점 정보"/);
+    // 상점은 M3-09(늦은 오류 카드가 아래를 밀던 CLS)로 '내 활동점수' 줄 자리 안에 같은 높이로 말한다 — 실패 표시·권한 구분·사유·재시도는 그대로다.
+    expect(TLC).toMatch(/\{shopErr != null && \(\s*<div role="alert"/);
+    expect(TLC).toContain("isDenied(shopErr) ? '상점 정보 열람 권한이 없습니다' : '상점 정보를 불러오지 못했습니다'");
+    expect(TLC).toMatch(/msgOf\(shopErr, ''\)/);
+    expect(TLC).toMatch(/onClick=\{\(\) => \{ clearErr\('skus', 'owned', 'cosmetics', 'season', 'balance', 'equip'\); setEquippedMark\(undefined\); \}\}/);
     // 신청 이력 실패 카드는 '중복 제출' 을 막는 힌트를 단다(실패를 없음으로 보고 다시 제출하는 것이 실제 피해).
     expect(TL).toMatch(/hint="접수한 신청이 있어도 지금은 보이지 않을 수 있습니다/);
   });

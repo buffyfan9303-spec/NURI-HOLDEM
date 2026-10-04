@@ -312,6 +312,13 @@ export default function NotificationPanel({
   //   예전엔 escape 등록이 없어 키보드로는 벨을 다시 눌러야만 닫혔다(review-motion-revisit-1002 '남은 것' 3).
   useBackClose(open, handleClose, { escape: true });
 
+  // 쪽지 대화·새 쪽지(하위 화면) → 목록. 머리줄 [뒤로] 버튼과 같은 함수다.
+  //   M4-03(audit4-motion-1004): 하위 화면이 뒤로가기 스택에 겹으로 없어서 대화에서 뒤로가기·Esc 한 번에 패널 전체가 닫혔다.
+  //   패널 겹 위에 한 겹 더 올려 '대화 → 목록 → 패널 닫힘' 한 단계씩이 된다(글 상세 위 글쓰기와 같은 방식).
+  //   [뒤로] 버튼·차단·패널 닫기로 목록이 되면 조건이 꺼져 이 겹의 칸도 정리된다(죽은 칸 없음 — backstack.ts).
+  const backToList = useCallback(() => { setMsgView('list'); setActiveOther(null); reloadThreads(); }, [reloadThreads]);
+  useBackClose(open && mode === 'messages' && msgView !== 'list', backToList, { escape: true });
+
   // 카드 머리줄(쪽지/알림 탭 줄)·패널 아래 어두운 막을 끌거나 휠을 굴리면 **뒤 화면**이 굴러갔다 — 둘 다 스크롤 상자가 아니라
   //   입력이 문서 스크롤로 넘어간다(실측 390: 머리줄 끌기 172px · 스크림 휠 +384px, B2 2026-10-02). 목록·대화는 자기 상자가
   //   overscroll-contain 으로 막는다. 끌기는 CSS(touch-none — 합성 스레드에서 끊겨 목록 스크롤에 지연이 없다), 휠은 CSS 로 못 막아
@@ -411,7 +418,7 @@ export default function NotificationPanel({
             <div className="flex min-w-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => { setMsgView('list'); setActiveOther(null); reloadThreads(); }}
+                onClick={backToList}
                 aria-label="뒤로"
                 className="hit relative -ml-1 flex h-7 w-7 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors"
               >
