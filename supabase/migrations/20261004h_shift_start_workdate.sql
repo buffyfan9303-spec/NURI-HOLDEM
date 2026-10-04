@@ -1,5 +1,5 @@
 -- 20261004h — 근무 시작 시각을 근무 날짜(work_date)로 읽는다: 손으로 넣은 출근도 24시간 상한이 실제 경과 시간을 본다
--- ⏳ 미적용(작성 2026-10-04 store-team) — 리드 적용 대기. 적용은 LF 본문 그대로(아래 ⓪ 가드가 새 본문 md5 를 알아본다).
+-- ✅ 적용 완료 2026-10-04 23:5x KST (리드, LF 원문 · critical PASS · 운영 리허설 112줄 REHEARSAL_OK) — md5: set_my_shift_time 969cebbb… · punch_my_shift e4447d1d… · _remind_open_shifts 33269754… · _shift_start_at(date,text,timestamptz) f3f1ed3d… · 옛 2인자 함수 삭제 확인
 --
 -- 요구 키: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\audit5-regress-connect-1004.md#R5-01
 --   오너 10-04: "근무 1회는 24시간을 넘지 못함"(20261004c) — 20261004f 가 규칙을 한 함수(_shift_span_check)로 모았다.
