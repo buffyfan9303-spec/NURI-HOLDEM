@@ -2153,7 +2153,7 @@ export function MyStaffCard({ venueId, preview = false }: {
       <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-2">
         <p className="text-sm font-bold text-ink-primary">내 스케줄·출퇴근</p>
         <p className="t-desc break-keep text-ink-muted">
-          왼쪽 메뉴의 <span className="font-semibold text-ink-primary">출근 관리</span>에서 본인 일정을 보고 출퇴근을 기록할 수 있어요.
+          <span className="max-lg:hidden">왼쪽</span><span className="lg:hidden">전체</span> 메뉴의 <span className="font-semibold text-ink-primary">출근 관리</span>에서 본인 일정을 보고 출퇴근을 기록할 수 있어요.
         </p>
       </div>
 
