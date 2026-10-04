@@ -29,14 +29,18 @@ export const MOCK_VENUE_NAME = '테스트 홀덤펍';
 export const MOCK_DAY = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
 
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+/** 세션 수명. ⚠ 1시간이면 안 된다 — 스펙이 page.clock 으로 시각을 'MOCK_DAY 01:30 KST' 같은 **앞쪽**에 고정할 때,
+ *  실제 KST 가 00:00~00:30 이면 고정 시각이 만료(실제 now+1h)보다 뒤라 supabase-js 가 세션을 버리고 로그아웃으로 부팅한다
+ *  ('내 매장' 버튼이 없다 — CI run 37211324435, 매일 KST 00:00~00:30 에만 빨개진다). 고정 시각은 최대 +1.5h 앞서므로 하루로 넉넉히. */
+const SESSION_TTL_S = 86_400;
 const JWT = [
   b64({ alg: 'HS256', typ: 'JWT' }),
-  b64({ sub: MOCK_UID, aud: 'authenticated', role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }),
+  b64({ sub: MOCK_UID, aud: 'authenticated', role: 'authenticated', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_S }),
   'e2e',
 ].join('.');
 export const FAKE_SESSION = {
   access_token: JWT, refresh_token: 'e2e-fake', token_type: 'bearer',
-  expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+  expires_in: SESSION_TTL_S, expires_at: Math.floor(Date.now() / 1000) + SESSION_TTL_S,
   user: {
     id: MOCK_UID, aud: 'authenticated', role: 'authenticated', email: 'owner@example.com',
     app_metadata: {}, user_metadata: { name: '업주' }, created_at: new Date().toISOString(),

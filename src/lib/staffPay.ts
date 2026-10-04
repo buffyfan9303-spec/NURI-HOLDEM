@@ -22,6 +22,8 @@
 //                 계획 종료가 없거나 주가 안 끝났으면 **확인 필요**로 세고 지급·미지급을 정하지 않는다.
 // 가산·주휴는 시급제(WageShift)에만 계산한다 — 일급·주급·월급의 통상시급 환산은 하지 않는다.
 
+import { PUNCH_YESTERDAY_UNTIL_MIN } from './staffPunch';
+
 export type PayType = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
 export interface PayShift {
@@ -168,21 +170,23 @@ export function shiftSpanError(startMs: number, endMs: number): ShiftSpanError |
 }
 /** KST 벽시계 HH:mm. */
 export const kstHm = (ms: number) => new Date(ms + 9 * H).toISOString().slice(11, 16);
-/** 근무 시작 시각 — 서버 _shift_start_at 과 같다: 서버 출근 표지(checkInAtMs)가 있으면 그것,
- *  없으면 **지금 이전 24시간 안에서 가장 가까운 그 HH:mm**(00:00~01:59 '어제 근무' 를 하루 앞당기지 않는다). */
-export function shiftStartMs(checkIn: string, checkInAtMs: number | null | undefined, nowMs: number): number {
+/** 근무 시작 시각 — 서버 _shift_start_at(20261004h)과 같다: 서버 출근 표지(checkInAtMs)가 있으면 그것,
+ *  없으면 **근무 날짜 + 출근 HH:mm**(KST). 00:00~01:59 출근은 다음 날 — 출근 버튼의 '어제 근무' 창과 같은 경계.
+ *  그 값이 지금보다 늦으면(날짜를 잘못 고른 행) 24시간 앞 — 시작은 미래일 수 없다.
+ *  (예전 '지금 이전 24시간 안의 가장 가까운 HH:mm' 은 손으로 넣은 출근의 25시간 근무를 1시간으로 읽었다 — R5-01.) */
+export function shiftStartMs(workDate: string, checkIn: string, checkInAtMs: number | null | undefined, nowMs: number): number {
   if (checkInAtMs != null) return checkInAtMs;
   const [h, m] = checkIn.split(':').map(Number);
-  const x = ((nowMs + 9 * H) % DAY) - (h * 60 + m) * MIN;
-  return nowMs - (x >= 0 ? x : x + DAY);
+  const t = kstAt(h * 60 + m < PUNCH_YESTERDAY_UNTIL_MIN ? addDays(workDate, 1) : workDate, checkIn);
+  return t > nowMs ? t - DAY : t;
 }
 /** 직원 '내 출근 관리' 쓰기(set_my_shift_time, 20261004f)의 판정 — 서버와 같은 식.
  *  '지금' 은 순서 규칙이 먼저다: 출근 없이 지금 퇴근 → SHIFT_NO_IN · 퇴근이 있는 행에 지금 출근 → SHIFT_OUT_BEFORE_IN.
  *  value: 'now'(지금 출근·지금 퇴근 — 서버 시각) · 'HH:mm'(직접 입력) · null(비우기).
- *  시작 = 쓰기 뒤 출근(손으로 바꾼 출근은 서버 표지가 비워진다 · 'now' 출근은 지금이 표지).
+ *  시작 = 쓰기 뒤 출근(손으로 바꾼 출근은 서버 표지가 비워진다 · 'now' 출근은 지금이 표지) — 근무 날짜(row.date) 기준.
  *  끝 = '지금 퇴근' 이면 지금, 아니면 시작 + (퇴근 − 출근 을 24시간 안으로 접은 값 · 같은 분이면 0). */
 export function selfShiftWriteError(
-  row: { checkIn?: string | null; checkOut?: string | null; checkInAt?: number | null },
+  row: { date: string; checkIn?: string | null; checkOut?: string | null; checkInAt?: number | null },
   field: 'checkIn' | 'checkOut', value: string | null, nowMs: number,
 ): SelfShiftWriteError | null {
   const isNow = value === 'now';
@@ -193,7 +197,7 @@ export function selfShiftWriteError(
   const outHm = field === 'checkOut' ? v : row.checkOut ?? null;
   if (!inHm || !outHm) return null;
   const inAt = field !== 'checkIn' ? row.checkInAt ?? null : isNow ? nowMs : v === row.checkIn ? row.checkInAt ?? null : null;
-  const start = shiftStartMs(inHm, inAt, nowMs);
+  const start = shiftStartMs(row.date, inHm, inAt, nowMs);
   if (field === 'checkOut' && isNow) return shiftSpanError(start, nowMs);
   const gap = (kstAt('2000-01-01', outHm) - kstAt('2000-01-01', inHm) + DAY) % DAY;
   return shiftSpanError(start, start + gap);
