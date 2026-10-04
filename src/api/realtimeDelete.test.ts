@@ -20,7 +20,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 const { subscribeClock } = await import('./clock');
-const { subscribeBuyinRequests } = await import('./ledger');
+const { subscribeBuyinRequests, subscribeMyBuyinRequests } = await import('./ledger');
 
 const fire = (c: (typeof channels)[number], table: string, payload: unknown) =>
   c.handlers.filter((h) => h.filter.table === table && h.filter.event === 'DELETE' && !h.filter.filter).forEach((h) => h.cb(payload));
@@ -53,6 +53,16 @@ describe('실시간 DELETE·재연결', () => {
     fire(c, 'ledger_buyin_requests', { old: { id: 'zz' } });
     expect(on).toHaveBeenCalledTimes(0);
     fire(c, 'ledger_buyin_requests', { old: { id: 'r1' } });
+    expect(on).toHaveBeenCalledTimes(1);
+  });
+
+  it('손님 본인 바인 요청 구독(홈 배너)도 소켓 재연결(두 번째 SUBSCRIBED) 때 한 번 다시 읽는다 — R4-03', () => {
+    const on = vi.fn();
+    subscribeMyBuyinRequests('u1', on);
+    const c = channels[channels.length - 1];
+    c.status?.('SUBSCRIBED');
+    expect(on).toHaveBeenCalledTimes(0);
+    c.status?.('CLOSED'); c.status?.('SUBSCRIBED');
     expect(on).toHaveBeenCalledTimes(1);
   });
 });

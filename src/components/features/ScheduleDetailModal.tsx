@@ -1103,7 +1103,11 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
     if (sending) return;
     setSending(true);
     requestBuyin(venueId, null, undefined, eventDate)
-      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'))
+      .then((name) => {
+        toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success');
+        // 홈 '참가 요청 대기' 배너(myBuyinReqs)는 App 이 들고 있다 — QR·홈 시트 경로처럼 보낸 직후 다시 읽게 알린다(R4-03).
+        window.dispatchEvent(new Event('nuri:buyin-request-sent'));
+      })
       .catch((e) => toast.show(msgOf(e, '요청 전송 실패'), 'error'))
       .finally(() => setSending(false));
   };

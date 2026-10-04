@@ -1859,7 +1859,7 @@ export function subscribeMyBuyinRequests(userId: string, cb: () => void): () => 
   if (IS_MOCK) return () => {};
   const ch = supabase.channel(`my_buyin_req:${userId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_buyin_requests', filter: `user_id=eq.${userId}` }, () => cb())
-    .subscribe();
+    .subscribe(resubscribeStatus(cb));   // R4-03 — 소켓 재연결(SUBSCRIBED 재진입) 때 놓친 승인·거절을 한 번 다시 읽는다(형제 subscribeBuyinRequests 와 같다)
   return () => { supabase.removeChannel(ch); };
 }
 
