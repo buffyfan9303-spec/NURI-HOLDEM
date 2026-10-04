@@ -167,17 +167,34 @@ test.describe('AI 아쉬운 포인트', () => {
     await expect(page.locator('[data-share-preview]')).not.toContainText('드라이 보드');
   });
 
-  test('🔴 GTO 탭 NURI SPOT 카드가 AI 코칭(하루 3회 · 회당 30P)을 알린다 — 카드는 여전히 첫 화면을 다 먹지 않는다', async ({ page }) => {
+  test('🔴 GTO 탭 NURI SPOT 카드가 AI 코칭(첫 3회 무료 · 이후 30P · 하루 3회)을 알린다 — 카드는 여전히 첫 화면을 다 먹지 않는다', async ({ page }) => {
     await stubLogin(page, { activity_points: 48 });
     await stabilizeBackstack(page);
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
     const hero = page.getByTestId('spot-hero');
-    await expect(hero.getByTestId('spot-hero-ai')).toHaveText('AI 코칭 하루 3회 · 회당 30P');
+    await expect(hero.getByTestId('spot-hero-ai')).toHaveText('AI 코칭 첫 3회 무료 · 이후 회당 30P · 하루 3회');
     const box = await hero.boundingBox();
     expect(box!.height, `대표 카드가 ${box!.height}px`).toBeLessThan(200);
     const over = await hero.getByTestId('spot-hero-ai').evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(over, '안내 줄이 넘친다').toBeLessThanOrEqual(0);
+  });
+
+  test('🔴 무료 회차가 남으면 포인트가 0 이어도 열리고 "무료 n/3 남음" · 시트는 무료로 받기 · 성공하면 무료가 하나 준다', async ({ page }) => {
+    const dlg = await openSpot(page, { enabled: true, price: 30, used_today: 0, limit: 3, available: 0, free_limit: 3, free_left: 2 });
+    await fillComplete(dlg);
+    await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('무료 2/3 남음 · 오늘 0/3');
+    const open = dlg.getByTestId('spot-ai-open');
+    await expect(open).toHaveText('AI 아쉬운 포인트 보기 (무료 2/3 남음)');
+    await expect(open).toBeEnabled();
+    await expect(dlg.getByTestId('spot-ai-poor'), '무료가 남았는데 포인트 부족을 말한다').toHaveCount(0);
+    await open.click();
+    const sheet = page.locator('[data-spot-ai-confirm]');
+    await expect(sheet).toContainText('포인트가 들지 않습니다');
+    await expect(sheet).not.toContainText('차감됩니다');
+    await sheet.getByTestId('spot-ai-confirm').click();
+    await expect(dlg.getByTestId('spot-ai-result')).toContainText('드라이 보드');
+    await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('무료 1/3 남음 · 오늘 1/3');
   });
 
   test('🔴 포인트가 모자라면 버튼 아래에 이유(보유·필요)와 모으는 길을 말한다', async ({ page }) => {

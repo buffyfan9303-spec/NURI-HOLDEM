@@ -5,7 +5,7 @@
 // 과금(30P)·하루 3회·실패 환불은 DB(20260923c)가 강제한다. 여기 값은 화면 안내용일 뿐이다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { toJSON, type SpotReview } from '../lib/spot';
-import { SPOT_AI_DAILY_LIMIT } from '../lib/spotAiLimits';
+import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT } from '../lib/spotAiLimits';
 
 /**
  * AI 코칭을 받을 만큼 채워졌는가 — 내 카드 2장 + 내 선택 + 액션 1개 이상.
@@ -25,6 +25,9 @@ export interface SpotAiStatus {
   usedToday: number;
   limit: number;
   available: number;
+  /** 평생 무료 횟수와 남은 무료(20261004g). 옛 서버(필드 없음)면 freeLeft 0 — 예전처럼 30P 로 안내한다. */
+  freeLimit: number;
+  freeLeft: number;
 }
 
 /** spot_ai_status() — 꺼져 있거나 읽지 못하면 null(버튼을 숨긴다). */
@@ -40,6 +43,8 @@ export async function getSpotAiStatus(): Promise<SpotAiStatus | null> {
     usedToday: Number(d.used_today ?? 0),
     limit: Number(d.limit ?? SPOT_AI_DAILY_LIMIT),
     available: Number(d.available ?? 0),
+    freeLimit: Number(d.free_limit ?? SPOT_AI_FREE_COUNT),
+    freeLeft: Math.max(0, Number(d.free_left ?? 0)),
   };
 }
 

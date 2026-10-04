@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spotToText, checkOutput, cleanNote, buildPrompt, SYSTEM_PROMPT, allowedNumbers, strayNumber, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
 import { spotCompleteness, spotAiPoorText, spotAiMessage } from './spotReview';
-import { SPOT_AI_DAILY_LIMIT, SPOT_AI_PRICE } from '../lib/spotAiLimits';
+import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT, SPOT_AI_PRICE } from '../lib/spotAiLimits';
 import { emptySpot, toJSON, type SpotReview } from '../lib/spot';
 
 const ROOT = join(__dirname, '..', '..');
@@ -124,7 +124,7 @@ describe('배선 계약', () => {
   it('🔴 이미 받은 코칭은 시트(차감 안내)를 열지 않고 "다시 보기 (무료)" — 서버도 같은 스냅샷은 무료(캐시)', () => {
     expect(REPORT).toContain('const prior = shown !== null;');
     expect(REPORT).toMatch(/if \(prior\) \{[^}]*scrollIntoView[^}]*\}\);? return; \}\s*if \(ensureLogin\(user\)\) setAsking\(true\);/);
-    expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : 'AI 아쉬운 포인트 보기'");
+    expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'");
     // 이전 판에 '내 스팟' 에서 연 스팟이 "30P 차감" 으로 보였다 — 저장된 같은 스팟의 끝난 코칭을 미리 읽는다.
     expect(REPORT).toMatch(/listSpotAiReviews\(\[id\]\)/);
     // 서버 근거: 캐시 조회가 한도·포인트 검사보다 앞이다.
@@ -160,7 +160,31 @@ describe('배선 계약', () => {
     expect(spotAiMessage('DAILY_LIMIT')).toContain(`${SPOT_AI_DAILY_LIMIT}회`);
     // GTO 탭 NURI SPOT 카드 안내(오너 2026-10-04: 입구 안내 한 줄)
     const TOOLS = strip(read('src/components/features/ToolsPanel.tsx'));
-    expect(TOOLS).toMatch(/data-testid="spot-hero-ai">AI 코칭 하루 \{SPOT_AI_DAILY_LIMIT\}회 · 회당 \{SPOT_AI_PRICE\}P</);
+    expect(TOOLS).toMatch(/data-testid="spot-hero-ai">AI 코칭 첫 \{SPOT_AI_FREE_COUNT\}회 무료 · 이후 회당 \{SPOT_AI_PRICE\}P · 하루 \{SPOT_AI_DAILY_LIMIT\}회</);
+  });
+
+  // 2026-10-04 오너: 계정마다 평생 첫 3회 무료 · 이후 회당 30P · 하루 3회(무료 회차도 센다) — 20261004g
+  it('🔴 첫 3회 무료 — DB(begin·status)와 화면이 같은 숫자 · 무료가 남으면 포인트를 보지 않는다', () => {
+    expect(SPOT_AI_FREE_COUNT).toBe(3);
+    const MIG = read('supabase/migrations/20261004g_spot_ai_first3_free.sql');
+    expect(MIG.match(new RegExp(`c_free_limit constant int := ${SPOT_AI_FREE_COUNT};`, 'g')), 'begin·status 두 곳').toHaveLength(2);
+    // 순서: 캐시 → 하루 한도 → 무료 → 포인트(무료 회차도 하루 한도에 센다 · 캐시는 무료를 안 쓴다)
+    const begin = MIG.slice(MIG.indexOf('create or replace function public._spot_ai_begin'), MIG.indexOf('create or replace function public.spot_ai_status'));
+    const at = (t: string) => { const i = begin.indexOf(t); expect(i, `${t} 없음`).toBeGreaterThan(0); return i; };
+    const order = [at("spot_hash = v_hash and status in ('pending','done')"), at("'code','DAILY_LIMIT'"), at('if v_free_used < c_free_limit then'), at("'code','INSUFFICIENT'")];
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // 진행 중(pending)도 무료에 센다 — 동시 요청에서 4번째 무료가 생기지 않는 근거(프로필 행 잠금 뒤에 센다)
+    expect(begin).toContain("where user_id = p_user and free and status in ('pending','done')");
+    expect(begin.indexOf('for update')).toBeLessThan(begin.indexOf('v_free_used <'));
+    // 무료 회차는 원장 없이 free 표시 — cost>0·price>0 제약을 건드리지 않는다
+    expect(MIG).toContain('values (p_user, p_spot, v_hash, null, true)');
+    expect(MIG).toMatch(/check \(\(free and purchase_id is null\) or \(not free and purchase_id is not null\)\)/);
+    expect(MIG, '제약을 풀면 상점·환불 견적이 0원 구매를 만난다').not.toMatch(/drop constraint (if exists )?(point_purchases_cost_check|shop_skus_price_check)/);
+    // 화면: 무료면 포인트 부족·30P 안내 대신 '무료 n/3 남음'
+    expect(REPORT).toContain('const free = status.freeLeft > 0;');
+    expect(REPORT).toContain('const poor = !free && left < 0;');
+    expect(REPORT).toMatch(/free \? '무료로 코칭 받기' : `\$\{status\.price\}P로 코칭 받기`/);
+    expect(read('src/api/spotReview.ts')).toContain('freeLeft: Math.max(0, Number(d.free_left ?? 0))');
   });
 
   it('🔴 저장·공유 버튼은 여전히 blocked 만 본다 — AI 판정으로 기능을 줄이지 않았다', () => {

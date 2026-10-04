@@ -306,7 +306,8 @@ function ShareConfirmSheet({
 }
 
 /**
- * AI 아쉬운 포인트(2026-09-23 오너 결정) — 저장된 스팟에 30P 로 정성 코칭을 받는다.
+ * AI 아쉬운 포인트(2026-09-23 오너 결정) — 저장된 스팟에 정성 코칭을 받는다.
+ *  · 2026-10-04 오너: 계정마다 평생 첫 3회 무료(spot_ai_status.free_left), 그 뒤 회당 30P · 하루 3회(무료도 센다).
  *
  *  · 켜짐·가격·오늘 사용·잔여는 서버(spot_ai_status)가 말한다. 꺼져 있으면 **버튼 자체가 없다**.
  *  · spotCompleteness(내 카드 2장·액션 1개·내 선택)는 **이 버튼만** 막는다 — 저장·공유는 그대로다.
@@ -356,7 +357,11 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const complete = spotCompleteness(spot);
   const left = status.available - status.price;
   const outOfDay = status.usedToday >= status.limit;
-  const poor = left < 0;
+  /** 평생 첫 무료 회차가 남았다(오너 2026-10-04) — 포인트를 보지 않는다. 서버 _spot_ai_begin 도 같은 순서(한도 → 무료 → 포인트). */
+  const free = status.freeLeft > 0;
+  const freeTag = `무료 ${status.freeLeft}/${status.freeLimit} 남음`;
+  /** 포인트 부족 안내는 무료를 다 쓴 뒤에만. */
+  const poor = !free && left < 0;
   const shown = result?.key === key ? result.body : null;
   /** 이 스팟은 이미 코칭을 받았다 — 다시 보기는 무료라 포인트·한도로 막지 않는다(서버와 같은 규칙). */
   const prior = shown !== null;
@@ -376,7 +381,9 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       const r = await requestSpotAi(id);
       setResult({ key, body: r.body });
       setAsking(false);
-      if (!r.cached) setStatus((s) => (s ? { ...s, usedToday: s.usedToday + 1, available: s.available - s.price } : s));
+      if (!r.cached) setStatus((s) => (s ? (free
+        ? { ...s, usedToday: s.usedToday + 1, freeLeft: Math.max(0, s.freeLeft - 1) }
+        : { ...s, usedToday: s.usedToday + 1, available: s.available - s.price }) : s));
     } catch (e) {
       toast.show(msgOf(e, spotAiMessage('UNKNOWN')), 'error');
       setAsking(false);
@@ -388,7 +395,9 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   return (
     <div className="mt-2.5 space-y-1.5 border-t border-border-subtle pt-2.5" data-testid="spot-ai">
       <p className="text-2xs tabular-nums text-ink-muted" data-testid="spot-ai-meta">
-        {status.price}P · 오늘 {status.usedToday}/{status.limit} · 사용 가능 {poor ? `${status.available}P (부족)` : `${status.available}P→${left}P`}
+        {free
+          ? `${freeTag} · 오늘 ${status.usedToday}/${status.limit}`
+          : `${status.price}P · 오늘 ${status.usedToday}/${status.limit} · 사용 가능 ${poor ? `${status.available}P (부족)` : `${status.available}P→${left}P`}`}
       </p>
       <button type="button" disabled={disabled}
         onClick={() => {
@@ -398,7 +407,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         }}
         data-testid="spot-ai-open"
         className="btn-ghost flex min-h-[44px] w-full items-center justify-center gap-1.5 whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : 'AI 아쉬운 포인트 보기'}
+        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'}
       </button>
       {!prior && poor && (
         <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-poor">{spotAiPoorText(status.available, status.price)}</p>
@@ -421,9 +430,11 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         <div className="space-y-3 p-4" data-spot-ai-confirm>
           <ul className="space-y-1.5">
             {[
-              `활동 포인트 ${status.price}P가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료입니다.`,
+              free
+                ? `첫 ${status.freeLimit}회는 무료 — 이번 요청은 포인트가 들지 않습니다(${freeTag}). 무료를 다 쓰면 회당 ${status.price}P입니다. 같은 스팟을 다시 보면 무료입니다.`
+                : `활동 포인트 ${status.price}P가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료입니다.`,
               `오늘 ${status.usedToday}/${status.limit}회 사용 — 하루 최대 ${status.limit}회입니다.`,
-              'AI 가 답을 주지 못하면 포인트를 돌려드립니다.',
+              free ? 'AI 가 답을 주지 못하면 무료 횟수를 돌려드립니다.' : 'AI 가 답을 주지 못하면 포인트를 돌려드립니다.',
               savedId ? '저장된 이 스팟으로 요청합니다.' : "아직 저장하지 않은 스팟이라 '내 스팟'에 먼저 저장한 뒤 요청합니다.",
               '보내는 내용: 스팟(자리·스택·카드·액션·내 선택)과 메모(앞 300자). 닉네임·이름 같은 계정 정보는 보내지 않습니다.',
               '외부 AI(Google Gemini)가 만든 참고용 정성 코칭이며, 결과는 나만 볼 수 있습니다.',
@@ -444,7 +455,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
               className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">취소</button>
             <button type="button" onClick={run} disabled={busy} data-testid="spot-ai-confirm"
               className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-              {busy ? '코칭 받는 중…' : `${status.price}P로 코칭 받기`}
+              {busy ? '코칭 받는 중…' : free ? '무료로 코칭 받기' : `${status.price}P로 코칭 받기`}
             </button>
           </div>
         </div>
