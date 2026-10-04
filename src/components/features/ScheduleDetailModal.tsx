@@ -1123,11 +1123,11 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
             ⚠ 위 '참가 예약'(사전 예약) 과 헷갈리지 않게 하는 것은 이제 **색·아이콘·설명줄**이 맡는다 —
               여기 수식어를 다시 붙이지 마라(오너가 길다고 지적한 자리다). */}
         <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="hand" size={15} className="shrink-0" />참가 신청</p>
-        <p className="mt-0.5 whitespace-nowrap text-2xs leading-relaxed text-ink-muted">매장 도착 후 눌러주세요</p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">매장 도착 후 눌러주세요</p>
         {/* 오발신이 곧 운영자 장부 오염 + 업주 푸시 알림이라, 스치는 탭으로는 나가지 않게 꾹 누르기
             (예약 취소와 동일 패턴 — 확인 팝업보다 빠르면서 오작동엔 더 안전) */}
         <HoldToConfirmButton onConfirm={send} disabled={sending} holdingLabel="계속 누르세요…"
-          className="btn-primary mt-1.5 min-h-[44px] w-full whitespace-nowrap px-3 py-1.5 text-xs disabled:opacity-50">
+          className="btn-primary mt-1.5 min-h-[44px] w-full px-3 py-1.5 text-xs disabled:opacity-50">
           {sending ? '전송 중…' : <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={13} className="shrink-0" />꾹 눌러 참가 신청</span>}
         </HoldToConfirmButton>
       </div>
