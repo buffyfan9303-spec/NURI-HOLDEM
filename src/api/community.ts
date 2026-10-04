@@ -1745,7 +1745,7 @@ export async function adminGrantPoints(userId: string, delta: number, reason: st
 // ── 소유물형·상위 티어 상품 (2026-08-30 · 20260830n) ──────────────────────────
 //
 // 앞 단계(20260830m)가 가격 사다리의 아랫칸(응원 30 · 끌올 100)을 만들었고, 이 묶음은 그 위다:
-//   길게 외치기 120 · 예약 외치기 200 · 시즌 뱃지 300 · 프레임 400 · 즉시 변경권 250 · 닉네임 색 600.
+//   길게 외치기 120 · 예약 외치기 200 · 시즌 뱃지 300 · 프레임 400 · 닉네임 색 600.
 // 기준은 같다 — **하루 최대 획득 50점**.
 //
 // ⚠ 여기 있는 것은 전부 **표현·소유·편의**뿐이다. 확률형(뽑기)·포인트 베팅·유저 간 포인트 선물·
@@ -1877,17 +1877,4 @@ export async function buySeasonBadge(venueId: string): Promise<{
     seasonId: String(r.season_id), seasonName: r.season_name ?? '시즌',
     venueName: r.venue_name ?? '(매장)', available: Number(r.available) || 0,
   };
-}
-
-/**
- * 닉네임 즉시 변경권(250점) — 파는 것은 기능이 아니라 **기다림 면제**다.
- * 닉네임 변경 자체는 계속 무료이고, 30일 쿨다운이 걸려 있지 않으면 서버가
- * '이 권한은 필요하지 않습니다'로 거절한다(아무것도 주지 않고 점수만 받는 일이 없게).
- * @returns 구매 후 사용 가능 점수(서버 계산값)
- */
-export async function buyNicknameReset(): Promise<number> {
-  const { data, error } = await supabase.rpc('buy_nickname_reset');
-  if (error) throw new Error(error.message);
-  const r = Array.isArray(data) ? data[0] : data;
-  return Number(r?.available) || 0;
 }
