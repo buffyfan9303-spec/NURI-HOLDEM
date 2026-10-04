@@ -271,6 +271,44 @@ test.describe('AI 아쉬운 포인트', () => {
     expect(calls, '다시 보기가 서버(spot-review)를 불렀다').toBe(0);
   });
 
+  // M5-01(audit5-motion-1004): 받은 코칭이 있는 스팟인데 입구 버튼이 먼저 '무료 n/3 남음' 으로 그려졌다가 ~0.6초 뒤 '다시 보기' 로 바뀌었다.
+  //   그 사이에 누르면 '무료로 코칭 받기' 시트(잘못된 시트)가 열렸다. → 조회가 끝나기 전엔 확정 문구를 그리지 않고 누름도 막는다.
+  test('🔴 받은 코칭이 있는 스팟 — 조회가 끝나기 전 첫 프레임에 확정 문구가 없고, 일찍 눌러도 시트가 안 열리며, 버튼 자리가 안 움직인다', async ({ page }) => {
+    const dlg = await openSpot(page, { ...ON, free_limit: 3, free_left: 2 }, undefined, { prior: true });
+    const slow = (re: RegExp, ms: number, body: string) => page.route(re, async (r) => {
+      await new Promise((res) => setTimeout(res, ms));
+      await r.fulfill({ status: 200, contentType: 'application/json', body });
+    });
+    await slow(/\/rest\/v1\/rpc\/spot_ai_status/, 300, JSON.stringify({ ...ON, free_limit: 3, free_left: 2 }));
+    await slow(/\/rest\/v1\/spot_reviews/, 300, JSON.stringify([{ id: SPOT_ID }]));
+    await slow(/\/rest\/v1\/spot_ai_reviews/, 600, JSON.stringify([{ spot_review_id: SPOT_ID, body: AI_BODY, created_at: '2026-10-04T01:00:00Z' }]));
+    // 버튼이 처음 그려진 프레임부터 문구·자리·시트를 프레임마다 기록한다.
+    await page.evaluate(() => {
+      const log: { t: string; top: number; sheet: boolean }[] = [];
+      (window as unknown as { __ai: typeof log }).__ai = log;
+      const tick = () => {
+        const b = document.querySelector('[data-testid="spot-ai-open"]') as HTMLElement | null;
+        if (b) log.push({ t: (b.textContent || '').trim(), top: Math.round(b.getBoundingClientRect().top + window.scrollY), sheet: !!document.querySelector('[data-spot-ai-confirm]') });
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await fillComplete(dlg);
+    const open = dlg.getByTestId('spot-ai-open');
+    await expect(open).toBeVisible();
+    await open.evaluate((el) => (el as HTMLButtonElement).click());   // 조회 전 누름 — DOM click 은 disabled 를 존중한다
+    await expect(dlg.getByTestId('spot-ai-result')).toBeVisible();
+    await expect(open).toHaveText('AI 코칭 다시 보기 (무료)');
+    await page.waitForTimeout(400);
+    const log = await page.evaluate(() => (window as unknown as { __ai: { t: string; top: number; sheet: boolean }[] }).__ai);
+    const texts = [...new Set(log.map((f) => f.t))];
+    console.log('[M5-01] texts', JSON.stringify(texts), 'tops', JSON.stringify([...new Set(log.map((f) => f.top))]));
+    expect(texts.filter((t) => /무료 \d+\/\d+ 남음|^AI 아쉬운 포인트 보기/.test(t)), '받은 스팟인데 처음 받는 스팟 문구가 그려졌다').toEqual([]);
+    expect(log.some((f) => f.sheet), '조회 전 누름이 시트를 열었다').toBe(false);
+    expect(new Set(log.map((f) => f.top)).size, '버튼 자리가 움직였다').toBe(1);
+    await expect(page.locator('[data-spot-ai-confirm]')).toHaveCount(0);
+  });
+
   for (const [code, status, text] of [
     ['DAILY_LIMIT', 409, '3회를 모두 사용했습니다'],
     ['AI_FAILED', 502, '포인트를 돌려 드렸습니다'],

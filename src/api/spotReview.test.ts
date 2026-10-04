@@ -117,14 +117,14 @@ describe('배선 계약', () => {
   it('🔴 AI 버튼의 disabled 가 spotCompleteness 를 본다 — 미완성 스팟에서 열리지 않는다', () => {
     expect(REPORT).toContain('const complete = spotCompleteness(spot);');
     // 2026-10-04 D: 이미 코칭받은 스팟(prior)은 무료 다시 보기라 busy 만 본다 — 새 요청은 여전히 완성도·한도·포인트를 본다.
-    expect(REPORT).toMatch(/const disabled = prior \? busy : \(!complete\.ok \|\| blocked \|\| outOfDay \|\| poor \|\| busy\)/);
+    expect(REPORT).toMatch(/const disabled = prior \? busy : \(!complete\.ok \|\| blocked \|\| outOfDay \|\| poor \|\| busy \|\| checking\)/);
     expect(REPORT).toMatch(/<button type="button" disabled=\{disabled\}[\s\S]{0,500}?data-testid="spot-ai-open"/);
   });
 
   it('🔴 이미 받은 코칭은 시트(차감 안내)를 열지 않고 "다시 보기 (무료)" — 서버도 같은 스냅샷은 무료(캐시)', () => {
     expect(REPORT).toContain('const prior = shown !== null;');
     expect(REPORT).toMatch(/if \(prior\) \{[^}]*scrollIntoView[^}]*\}\);? return; \}\s*void openSheet\(\);/);
-    expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'");
+    expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : checking ? 'AI 코칭 기록 확인 중…' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'");
     // 이전 판에 '내 스팟' 에서 연 스팟이 "30P 차감" 으로 보였다 — 저장된 같은 스팟의 끝난 코칭을 미리 읽는다.
     expect(REPORT).toMatch(/listSpotAiReviews\(\[id\]\)/);
     // 서버 근거: 캐시 조회가 한도·포인트 검사보다 앞이다.
