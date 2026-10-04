@@ -1,6 +1,6 @@
 -- 20261004f — 근무 1회 길이 규칙(60초 하한 · 24시간 상한)을 한 함수로 모아 출근 버튼·출근 관리 두 RPC 가 같이 쓴다 ·
 --             18시간 퇴근 알림 수신자를 '본인 근무 행' 판정과 같은 이름 매칭으로 해석한다
--- ⏳ 미적용 — 작성·로컬(PGlite) 검증만. 적용은 리드가 critical 반증 뒤(운영 리허설: shift-guard-1004/README.txt).
+-- ✅ 적용 완료 2026-10-04 (리드, MCP Management API · critical 재반증 PASS · 운영 리허설 82줄 REHEARSAL_OK) — 실측 md5: set_my_shift_time e90d49b2… · punch_my_shift 6e45d060… · _remind_open_shifts e0aa4366… · _shift_span_check 43a61a06… · _shift_row_owner 40b5188f… · ACL 내부 함수 postgres/service_role 만 · advisors ERROR 0
 --
 -- 요구 키: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\audit4-regress-connect-1004.md#R4-01 · #R4-02
 --   오너 10-04: "퇴근 시간 제한 대신 24시간을 초과하지 못하며 18시간이 넘어도 퇴근 체크가 안 되어 있으면 알림".
