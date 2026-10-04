@@ -385,6 +385,32 @@ export function handOffPane(to: string): void {
   }, () => document.querySelector(`.tab-pane[data-tab="${to}"]`), l.first);
 }
 
+/**
+ * M3-02(2026-10-04) — 숨은 keep-alive 판(display:none)을 **한 번** 화면 밖에서 배치했다가 즉시 되돌린다(App 프리마운트 idle 이 부른다).
+ * 왜: 첫 진입의 긴 프레임은 판 배치가 아니라 그 판이 처음 쓰는 글꼴 조합(서브셋 × 굵기 × 크기)의 인스턴스 생성이었다
+ *   (CPU4 트레이스 GTO→캘린더: 클릭 처리 안 Layout 514ms 중 FontDataManager::onMakeFromStreamArgs 314ms · 재방문 Layout 15ms).
+ *   글꼴 캐시는 문서 전역이라 여기서 치르면 탭을 누른 프레임에서 빠진다(같은 폭 → 같은 줄바꿈·컨테이너 쿼리 → 같은 크기 조합).
+ * 같은 동기 작업 안에서 켰다 끄므로 페인트·ResizeObserver·IntersectionObserver·rAF 는 아무것도 못 본다(렌더 단계 전에 원복).
+ *   React 가 쥔 inline style(display:none)은 cssText 를 통째로 되돌려 바이트까지 그대로다.
+ * 반환: 'done' = 배치했다 · 'skip' = 필요 없다(보이는 중 — 이미 배치돼 있다) ·
+ *   'later' = 지금은 못 한다(판이 아직 마운트 전 · 떠나는 중 · 판 교체 중(html[data-tab-swap] — 하위 탭 MutationObserver 가 style 변화를 본다) · 숨은 문서).
+ *   ⚠ 'later' 를 버리면 안 된다 — 프리마운트는 startTransition 이라 마지막 판(캘린더)이 idle 보다 늦게 커밋돼 영영 안 데워졌다(하네스 실측).
+ */
+export function warmHiddenPane(tab: string): 'done' | 'skip' | 'later' {
+  if (typeof document === 'undefined') return 'skip';
+  if (document.hidden || document.documentElement.hasAttribute('data-tab-swap')) return 'later';
+  const el = document.querySelector<HTMLElement>(`.tab-pane[data-tab="${tab}"]`);
+  if (!el || el.hasAttribute('data-pane-leaving')) return 'later';
+  if (el.style.display !== 'none') return 'skip';
+  const ref = [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((p) => p.style.display !== 'none' && !p.hasAttribute('data-pane-leaving'));
+  const w = ref?.offsetWidth || el.parentElement?.clientWidth || window.innerWidth;
+  const prev = el.style.cssText;
+  el.style.cssText = `${prev};display:block;position:fixed;top:0;left:0;width:${w}px;visibility:hidden;pointer-events:none;z-index:-1`;
+  void el.offsetHeight;
+  el.style.cssText = prev;
+  return 'done';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 7차 SUB-HANDOFF(오너 2026-09-26: "메인 카테고리 이동 때의 부드러운 모션을 카테고리 메뉴(하위 탭)에서 이동할 때도 동일한 모션으로") —
 //   하위 탭(goSubTab 한 입구)도 메인 탭과 **같은 장치·같은 수치**다: ① 스왑 프레임 정적화(html[data-tab-swap]) ② 떠나는 판만
