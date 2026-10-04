@@ -264,6 +264,9 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
                 // 남기는 것은 순수 재조회 하나(HomeTab.tsx:330 getEventBoard, 변이 RPC 0회).
                 // onDone 은 `r.ok > 0`(최소 1장 성공)일 때만 불린다 — 전량 실패는 여기 오지 않는다.
                 window.dispatchEvent(new Event('nuri:event-board-refresh'));
+                // R5-03(2026-10-04) — 사용 요청은 장부에 '대기 바인 요청'을 만든다. 홈 배너(myBuyinReqs)도 다시 읽게 한다
+                // (VoucherWallet 의 같은 자리와 짝 — App.tsx 가 받아 getMyBuyinRequestsToday 재조회).
+                window.dispatchEvent(new Event('nuri:buyin-request-sent'));
               }}
             />
           )}
