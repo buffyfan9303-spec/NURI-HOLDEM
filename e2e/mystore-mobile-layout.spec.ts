@@ -167,7 +167,9 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
   test('1440 — PC 는 종전 그대로(바 50.25 · Level 따로 · 미리보기 반응형 · 발급 제목 옆 라벨 없음·범위 안내 박스)', async ({ page }) => {
     test.setTimeout(120_000);
     await open(page, 1440, 900);
-    expect(await page.locator(RAIL).evaluate((r) => r.getBoundingClientRect().height)).toBeCloseTo(50.25, 1);
+    // PC 바 = 칸 h-[44px] + 레일 p-0.5(0.125rem)×2 + 테두리 1px×2. 2026-10-05 루트 17→16px 로 p-0.5 만 2.125 → 2px(50.25 → 50) —
+    //   칸 높이(44px)·테두리는 px 라 그대로다(실측 main 50.25 / root16 50). 같은 식으로 잰다(바가 모바일 처방으로 바뀌면 여전히 빨갛다).
+    expect(await page.locator(RAIL).evaluate((r) => r.getBoundingClientRect().height)).toBeCloseTo(44 + 2 * 0.125 * 16 + 2, 1);
     await pick(page, '클락');
     await expect(page.getByTestId('clk-main-action')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(1000);

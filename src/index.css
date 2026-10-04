@@ -1733,8 +1733,10 @@ video {
   .tap-y-44 { position: relative; }
   /* 2026-10-04 루트 17→16px: h-8(34→32px)에 테두리 1px 가 있으면 padding 상자가 30px 라 ±6px 로는 42px 였다
      (inset % 의 기준은 padding 상자다 — 외치기·장부 칩 실측 44 → 42). 모자란 만큼만 더 내밀되 최대 8px 로 묶는다:
-     padding 상자 32px 이상은 종전과 똑같이 ±6px, 30px 은 ±7px(=44), 그보다 작은 것도 ±8px 까지만(이웃 침범 상한 +2px). */
-  .tap-y-44::before { content: ''; position: absolute; inset: clamp(-8px, calc((100% - 44px) / 2), -6px) 0; }
+     padding 상자 32px 이상은 종전과 똑같이 ±6px, 30px 은 ±7px(=44), 그보다 작은 것도 ±8px 까지만(이웃 침범 상한 +2px).
+     2026-10-05: 목표를 44 → 46 으로. 딱 44 는 소수 좌표에서 정수 탐침(e2e gto-tab-verify)이 43 으로 읽었다(gto/chip.ts 와 같은 함정).
+     padding 34 이상 ±6(종전 그대로) · 32(h-8 테두리 없음) ±7 = 46(17px 때 34±6=46 과 같은 실효) · 30 이하 ±8. */
+  .tap-y-44::before { content: ''; position: absolute; inset: clamp(-8px, calc((100% - 46px) / 2), -6px) 0; }
   /* HIT-1(2026-09-22) — **위로만** 넓히는 히트 확장. 아래는 0 이다.
      왜 tap-y-44 를 쓰면 안 되나: 그건 위아래 6px 양방향이라, 바로 아래에 세로 간격 0 으로 붙어 있는
      일정 카드 제목을 덮는다. 그러면 매장명 링크가 카드 탭을 가로채고(목적지가 매장 페이지 ≠ 일정 상세),

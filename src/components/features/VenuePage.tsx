@@ -313,7 +313,7 @@ export default function VenuePage({
           </span>
         )}
         {/* Phase 10: 팔로우·공유를 헤더로 — 히어로는 '지금 필요한 행동' 4개만 남긴다 */}
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <FollowButton following={follow.following} count={follow.count} busy={follow.busy} onToggle={follow.toggle} compact />
           {/* 공유 글리프는 손으로 그린 인라인 SVG(stroke 1.9)였다 — 옆 아이콘(stroke 2)과 굵기가
               갈려 '아이콘이 섞여 보이는' 원인이었다. 레지스트리 share 로 통일(ICON-2). */}

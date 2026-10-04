@@ -1302,11 +1302,11 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
               </>
             )}
             <button type="button" onClick={toggleMute} aria-label={volume > 0 ? '음소거' : '음소거 해제'}
-              className="grid h-[4.2cqmin] min-h-[36px] w-[4.2cqmin] min-w-[36px] shrink-0 place-items-center rounded-[1cqmin] bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] shrink-0 place-items-center rounded-[1cqmin] bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white">
               <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
             </button>
             <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
-              className="min-h-[36px] shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[max(11px,1.7cqmin)] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              className="inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center rounded-[1cqmin] bg-white/10 px-[1.6cqmin] text-[max(11px,1.7cqmin)] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
               ⤡ 해제
             </button>
           </div>
