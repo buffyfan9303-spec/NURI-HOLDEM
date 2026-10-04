@@ -1,14 +1,16 @@
 -- 20261004c — 근무 1회 24시간 상한 · 18시간 미퇴근 본인 알림 · 서버 출근 시각 저장 · 직원용 급여 설정 읽기
 -- ⏳ 미적용 — store-team 작성·라이브 롤백 리허설(2026-10-04). 적용은 리드만 한다.
---   보고서: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\shift-cap-1004\REPORT.md
+--   리허설 폴더: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\shift-cap-1004\ (run2.txt) · 반증: review-shift-cap-1004.md
 --
 -- 요구 원문: 리드 기억 project_autonomous_run_1004.md '오너 답(10-04)' ① + '근무 마이그레이션 묶음' ①~④,
 --            review-r3-03-1004.md §3(01:59 귀속은 서버 출근 시각 저장 뒤) · §4(직원 설정 읽기 RPC).
 --   오너 10-04: "근무 1회는 24시간을 넘지 못함" + "18시간이 지나도 퇴근이 없으면 본인에게 '퇴근 체크' 알림".
 --
 -- 라이브 정의가 정본이다 — punch_my_shift 는 2026-10-04 pg_get_functiondef 로 뜬 본문(prosrc md5 354189f7f22e1863e828bfa0d50f1ec5,
---   20260930b 판)에서 **두 군데만** 바꿨다: ① 출근 UPDATE 가 check_in_at 도 쓴다 ② 퇴근 직전 24시간 상한 검사.
+--   20260930b 판)에서 **세 군데만** 바꿨다: ① 출근 UPDATE 가 check_in_at 을 쓰고 checkout_reminded_at 을 비운다(F4)
+--   ② 퇴근 직전 24시간 상한 검사 ③ 퇴근 직전 60초 미만 거부(F6 — 같은 분 출퇴근은 HH:MM 이 같아 급여가 24시간으로 계산된다).
 --   반환 형식·인자·나머지 분기는 한 글자도 바꾸지 않았다(CREATE OR REPLACE → ACL 보존, 아래에 REVOKE/GRANT 도 다시 적는다).
+--   critical 반증(review-shift-cap-1004.md) F1·F4·F5·F6 반영판. F3 은 후속(아래 punch 본문 주석).
 --
 -- 24시간 상한은 '거부' 안이다(퇴근을 출근+24h 로 잘라 기록하는 안은 쓰지 않는다):
 --   잘라 기록하면 HH:MM 이 출근과 같아져 급여 계산(staffPay.shiftFromHm: 퇴근<=출근 → +1일)이 **24시간을 지급**한다 —
@@ -18,7 +20,7 @@
 -- check_in_at 은 **서버만 쓴다**: 클라이언트(anon·authenticated 직접 쓰기)는 이 칸을 못 바꾸고, 출근 글자(check_in)가
 --   바뀌면 저절로 비워진다(손으로 고친 시각에는 서버 증명이 없다). 따라서 check_in_at 이 있으면 항상
 --   to_char(check_in_at KST,'HH24:MI') = check_in 이다. 01:59 '어제 근무' 의 실제 날짜는 (check_in_at KST)::date 로 읽는다.
---   기존 행(2026-10-04 실측 0행)과 손입력 행은 check_in_at 이 null 이고, 그때는 work_date + check_in(급여 계산과 같은 해석)을 쓴다.
+--   기존 행(2026-10-04 실측 0행)과 손입력 행은 check_in_at 이 null 이다 — 그때의 해석은 아래 _shift_start_at 주석(F1).
 
 -- ── ③ 서버 출근 시각 · 알림 표지 칸 ─────────────────────────────────────────
 alter table public.staff_schedule add column if not exists check_in_at timestamptz;
@@ -59,8 +61,15 @@ create or replace trigger trg_guard_staff_shift_stamps
   before insert or update on public.staff_schedule
   for each row execute function public._guard_staff_shift_stamps();
 
--- 근무 시작 시각 한 벌 — 24시간 상한과 18시간 알림이 같은 기준을 쓴다.
-create or replace function public._shift_start_at(p_work_date date, p_check_in text, p_check_in_at timestamptz)
+-- 근무 시작 시각 한 벌 — 24시간 상한·60초 하한·18시간 알림이 같은 기준을 쓴다.
+--   서버 표지(check_in_at)가 있으면 그것이 실제 출근 시각이다.
+--   없으면(손으로 넣거나 고친 행) **지금 이전 24시간 안에서 가장 가까운 그 HH:MM** 을 시작으로 본다(F1, 리드 결정 안 A).
+--     work_date + check_in 으로 읽으면 00:00~01:59 에 출근한 '어제 근무' 행이 하루 앞당겨져, 정상 야간 근무의
+--     퇴근이 거부되고 18시간 알림이 잘못 나갔다(critical R1e·R1f·R2b 실측). 급여 계산(staffPay.shiftFromHm)도 날짜가 아니라
+--     퇴근을 출근 뒤 24시간 안으로 접어 근무 길이를 세므로, 근무 길이 기준으로는 이 해석과 같다.
+--   ponytail: 대가 — 표지 없는 행은 경과가 늘 24시간 미만으로 계산되므로 **24시간 상한이 사실상 걸리지 않는다.**
+--     그 행은 사람이 직접 넣은 시각이라 업주 책임으로 둔다. 상한을 걸어야 하면 손입력에도 날짜가 있는 시각(timestamptz)을 받게 바꿔야 한다.
+create or replace function public._shift_start_at(p_check_in text, p_check_in_at timestamptz)
 returns timestamptz
 language sql
 stable
@@ -68,13 +77,15 @@ set search_path = public, pg_temp
 as $fn$
   select coalesce(
     p_check_in_at,
-    case when p_check_in ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-         then (p_work_date + p_check_in::time) at time zone 'Asia/Seoul' end
+    case when p_check_in ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then
+      now() - (select case when x >= interval '0' then x else x + interval '24 hours' end
+                 from (select (now() at time zone 'Asia/Seoul')::time - p_check_in::time as x) t)
+    end
   );
 $fn$;
-revoke all on function public._shift_start_at(date, text, timestamptz) from public, anon, authenticated;
+revoke all on function public._shift_start_at(text, timestamptz) from public, anon, authenticated;
 
--- ── ① punch_my_shift — 라이브 본문 + (출근 check_in_at) + (퇴근 24시간 상한) ──────────
+-- ── ① punch_my_shift — 라이브 본문 + (출근 표지) + (퇴근 24시간 상한 · 60초 하한) ──────────
 create or replace function public.punch_my_shift(p_venue_id uuid, p_kind text)
  returns table(work_date date, check_in text, check_out text, applied boolean)
  language plpgsql
@@ -101,6 +112,8 @@ begin
          and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
        order by s.id limit 1;
       if v_id is null then
+        -- 후속(F3, 이번 범위 밖): 이 '어제 열린 행' 이 24시간 상한에 막힌 행이어도 00:00~01:59 동안 오늘 출근을 막는다
+        --   (클라이언트 punchView 도 같은 규칙). 창이 좁아 그대로 두고, 고칠 때는 punchView 와 함께 바꾼다.
         select s.id into v_id from public.staff_schedule s
          where s.venue_id = p_venue_id and s.work_date = v_today - 1
            and s.check_in is not null and s.check_out is null
@@ -123,7 +136,7 @@ begin
     end if;
     return query
       with u as (
-        update public.staff_schedule s set check_in = v_hm, check_in_at = v_now
+        update public.staff_schedule s set check_in = v_hm, check_in_at = v_now, checkout_reminded_at = null
          where s.id = v_id and s.check_in is null
         returning s.work_date, s.check_in, s.check_out
       ) select u.work_date, u.check_in, u.check_out, true from u;
@@ -138,13 +151,18 @@ begin
      and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
    order by s.work_date desc, s.id limit 1;
   if v_id is not null then
-    -- 20261004c: 근무 1회는 24시간을 넘지 못한다(오너 10-04). 넘으면 기록하지 않고 사유를 돌려준다.
-    select public._shift_start_at(s.work_date, s.check_in, s.check_in_at) into v_start
+    -- 20261004c: 근무 1회는 24시간을 넘지 못한다(오너 10-04). 넘으면 버튼으로는 기록하지 않고 사유를 돌려준다.
+    --   손입력(set_my_shift_time · 업주 근무표)은 HH:MM 두 개라 구조상 24시간을 넘는 기록을 만들 수 없어 규칙을 따로 두지 않는다(F5).
+    select public._shift_start_at(s.check_in, s.check_in_at) into v_start
       from public.staff_schedule s where s.id = v_id;
     if v_start is not null and v_now - v_start > interval '24 hours' then
-      raise exception '근무 1회는 24시간을 넘을 수 없습니다 — % 출근 뒤 24시간이 지나 퇴근을 기록하지 않았습니다. 업주에게 실제 퇴근 시각 수정을 요청해 주세요',
+      raise exception '근무 1회는 24시간을 넘을 수 없습니다 — % 출근 뒤 24시간이 지나 퇴근 버튼으로는 기록하지 않습니다. 출근 관리(시각 고치기)에서 실제 퇴근 시각을 직접 넣거나 업주에게 수정을 요청해 주세요',
         to_char(v_start at time zone 'Asia/Seoul', 'MM-DD HH24:MI')
         using hint = 'SHIFT_OVER_24H';
+    end if;
+    -- F6: 출근 뒤 60초 안의 퇴근은 거부한다 — 같은 분이면 퇴근 HH:MM 이 출근과 같아져 staffPay 가 24시간으로 계산한다.
+    if v_start is not null and v_now - v_start < interval '60 seconds' then
+      raise exception '방금 출근했습니다 — 1분 뒤 다시 눌러 주세요' using hint = 'SHIFT_TOO_SHORT';
     end if;
     return query
       with u as (
@@ -188,8 +206,8 @@ begin
        and s.checkout_reminded_at is null
        and s.user_id is not null
        and s.work_date >= (now() at time zone 'Asia/Seoul')::date - 2
-       and public._shift_start_at(s.work_date, s.check_in, s.check_in_at) <= now() - interval '18 hours'
-    returning s.user_id, s.venue_id, public._shift_start_at(s.work_date, s.check_in, s.check_in_at) as started
+       and public._shift_start_at(s.check_in, s.check_in_at) <= now() - interval '18 hours'
+    returning s.user_id, s.venue_id, public._shift_start_at(s.check_in, s.check_in_at) as started
   )
   insert into public.notifications(user_id, type, title, message, avatar_text, avatar_color, link)
   select d.user_id, 'reminder', '퇴근 체크',
@@ -248,7 +266,7 @@ begin
       ('public.punch_my_shift(uuid,text)', true, true, false),
       ('public.my_venue_pay_rules(uuid)', true, true, false),
       ('public._remind_open_shifts()', true, false, false),
-      ('public._shift_start_at(date,text,timestamptz)', false, false, false),
+      ('public._shift_start_at(text,timestamptz)', false, false, false),
       ('public._guard_staff_shift_stamps()', false, false, false)
     ) as t(sig, definer, auth_ok, anon_ok)
   loop
@@ -266,6 +284,8 @@ begin
     end if;
   end loop;
   if position('check_in_at = v_now' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0
+     or position('checkout_reminded_at = null' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0
+     or position('SHIFT_TOO_SHORT' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0
      or position('SHIFT_OVER_24H' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0 then
     bad := bad || ' punch_body';
   end if;
