@@ -105,11 +105,19 @@
  },
  "spot:2:shove": {
   "n": 8112,
-  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
+  "s": "92e9f0364dbe591ce232d149f825f2b4f2e9081345f5cf4f2652f317522bce2c"
  },
  "spot:2:shove2stk": {
   "n": 8112,
-  "s": "e2f939286b2ea6f88244921acd0e0cac5f0fe3cba64a06754c7582e7c3f00ed6"
+  "s": "36d5e0a0e9f27e8f7e41d0d0f11bb58e9272a4a7451a1b96b34f79b975a383ac"
+ },
+ "spot:2:pfFold": {
+  "n": 8112,
+  "s": "6de780c0911f8c97267265fe7463b0a256c0127a8942dceaa260a657261edf53"
+ },
+ "spot:2:minraise": {
+  "n": 8112,
+  "s": "c4e37fe6e049b00918ee4aa8a463a2d7e9b6cc3fda01f63675c39248fa97e14c"
  },
  "spot:6:open": {
   "n": 30420,
@@ -137,11 +145,19 @@
  },
  "spot:6:shove": {
   "n": 121680,
-  "s": "f35596b14444eb2ecee1c4290e6a243179f2b475253fbed0e329af340dcdd1e8"
+  "s": "2ef03e52666d548b39b092ac583e07ed45f386260a624a633b8749208f358acf"
  },
  "spot:6:shove2stk": {
   "n": 121680,
-  "s": "4546320072f5a828d9cfcd6359e5199cb5852650740cb138e03036d3f53602e4"
+  "s": "a59c0268518423ff5b08c62809c7fbc7fbbfcc608f5b0e755cea31218339329a"
+ },
+ "spot:6:pfFold": {
+  "n": 121680,
+  "s": "053072cefc21c8c1537bc7946823c72736c7389ba90f6d4b0970214e0084ec36"
+ },
+ "spot:6:minraise": {
+  "n": 121680,
+  "s": "ea3e770445c2cc6cdec73d39a7be1299918144afc7bf82361dcfb7f78b6604db"
  },
  "spot:9:open": {
   "n": 73008,
@@ -169,11 +185,19 @@
  },
  "spot:9:shove": {
   "n": 292032,
-  "s": "28276294cbb8303f5b048b7d177f6e98150a86793b63edd9fe0094cc8c53b505"
+  "s": "c336753a4d641ef37c02ab4e2f1798e16476a51dacf54c0f1a9d22d6ace6e90b"
  },
  "spot:9:shove2stk": {
   "n": 292032,
-  "s": "bf16559fc070d3e1d544e5b2a9fb4ec1fc2d348a0c5da6e94612059ad03dd00a"
+  "s": "d20fc93b3952c69cfd6b983678c1aa7d2650b99acad495f43a63420ee5518a84"
+ },
+ "spot:9:pfFold": {
+  "n": 292032,
+  "s": "200689b9ae0ed39543a085104149c963b1abe0a05cf4d529bc6f3094bf566070"
+ },
+ "spot:9:minraise": {
+  "n": 292032,
+  "s": "00e82bf1689415b94b72a15ad602beb1cadabde925581506486b5caf54d43d44"
  },
  "spot:10:open": {
   "n": 91260,
@@ -201,14 +225,22 @@
  },
  "spot:10:shove": {
   "n": 365040,
-  "s": "ca9a62ca9cd170dfd19d8e1cd62d8ea4e2506833c6d219fd53797c97069adfb6"
+  "s": "284eed481214c59c27334e5e9e43d79ea8e7e8a592d7291d33ad924c8bc228c2"
  },
  "spot:10:shove2stk": {
   "n": 365040,
-  "s": "567243e5678892fea5ca0a6ac324c0dd15cee8be4d959afc317fbe781482caea"
+  "s": "ee0d240371c46d71a122ed21cb6e064f712a11baa6077fe03d45765f5d417016"
+ },
+ "spot:10:pfFold": {
+  "n": 365040,
+  "s": "6913b4c9d4482a795afb6ec510c45ddc731b10671ddde57bf18d8415ad04210c"
+ },
+ "spot:10:minraise": {
+  "n": 365040,
+  "s": "573ccd3c97d5a430aa3cfb2c9dc838c15912caacd353053c5b75b59e8c533887"
  },
  "spot:kinds": {
   "n": 1,
-  "s": "a3800ee212b25d46e029172e1641618eb0f2256d9ddb40b1f2ce6dd6836af649"
+  "s": "de96b3b6e9ac2235023b5b67faf5607a8df071c8d49737c8b19a8949a005683c"
  }
 }

@@ -657,7 +657,9 @@ describe('앤티는 BB 한 명이 내는 총액이다', () => {
   });
 
   it('BB앤티 1BB 는 Nash 앤티 표에 정확히 걸린다', () => {
-    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 1 })));
+    // 2026-10-04 단계 A(리드 승인): 입력 20BB → 6BB. 푸시·폴드 정확 판정은 S ≤ 10BB 뿐이다(CO 뒤 3명 앤티 6~10BB 는 격리라 S 5BB).
+    //   20BB 는 '참고'가 되는 것을 아래 '단계 A' 의 새 테스트가 단언한다.
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 6, anteBb: 1 })));
     expect(c.kind).toBe('chart_nash');
     expect(c.sourceLabel).toMatch(/BB앤티/);
   });
@@ -1124,5 +1126,71 @@ describe('BB앤티 Nash — 두 스택이 있으면 누가 짧은지로 S 를 �
 
   it('앤티 없으면 두 스택의 min 그대로', () => {
     expect(chart(evaluateSpot(two(12, 30, { anteBb: 0 }))).sourceLabel).toMatch(/· 12BB ·/);
+  });
+});
+
+// ── 단계 A (오너 2026-10-04 "미니멈레이즈는 빼" · 푸시/폴드 정확 판정은 10BB 이하) ──────────────
+// 설계서 gto-minraise-design-1004.md §8-1·§8-3. 푸시·폴드 표는 **올인/폴드 두 갈래만** 푸는 게임의 답이다.
+//  · 2bb 같은 작은 레이즈·림프는 표가 말하지 않는다 → 참고(normalized_reference)·판정 안 함·heroFreq null
+//  · 10BB(표의 S — 앤티 낸 뒤)보다 깊으면 실제로는 작은 레이즈가 주력이라 표를 정확 판정에 쓰지 않는다 → 참고
+// 이전(origin/main 55d9dd8a)에는 아래 줄이 전부 chart_nash 였다 — 2bb 레이즈를 셔브 빈도로 채점해 '개선 필요'가 나갔다.
+describe('단계 A — 푸시·폴드 표는 폴드·올인에만, 10BB 이하에서만 정확 판정', () => {
+  const pf = (heroPos: SpotReview['heroPos'], hand: [string, string], eff: number, over: Partial<SpotReview> = {}) => base({
+    tableSize: 9, heroPos, villainPos: 'BB', anteBb: 1, effectiveBb: eff, hero: hand, ...over,
+  });
+  const minraise = { heroAction: 'raise' as const, heroActionSizeBb: 2 };
+  const A8s: [string, string] = ['Ac', '8c'];
+
+  it.each([
+    ['UTG A8s', 'UTG', A8s],
+    ['UTG K9s', 'UTG', ['Kd', '9d']],
+    ['UTG 66', 'UTG', ['6s', '6h']],
+    ['UTG AKo', 'UTG', ['As', 'Kh']],
+    ['BTN K4s', 'BTN', ['Kh', '4h']],
+  ] as [string, SpotReview['heroPos'], [string, string]][])('%s 20BB 2bb 레이즈 — 셔브 표로 채점하지 않는다(참고)', (_n, pos, hand) => {
+    const c = chart(evaluateSpot(pf(pos, hand, 20, minraise)));
+    expect(c.kind).toBe('normalized_reference');
+    expect(c.verdict).toBe('reference');
+    expect(c.heroFreq, '2bb 레이즈 빈도를 셔브 칸에서 읽으면 안 된다').toBeNull();
+    expect(c.differences.join(' ')).toMatch(/올인·폴드 두 갈래/);
+  });
+
+  it('UTG A8s 12BB 2bb 레이즈 — 이전 mixed(셔브 25%)였다. 참고 · heroFreq null', () => {
+    const c = chart(evaluateSpot(pf('UTG', A8s, 12, minraise)));
+    expect(c.kind).toBe('normalized_reference');
+    expect(c.verdict).toBe('reference');
+    expect(c.heroFreq).toBeNull();
+  });
+
+  it('10BB 이하라도 2bb 레이즈·림프는 표가 말하지 않는다(SB 9BB 표)', () => {
+    const raise = chart(evaluateSpot(pf('SB', A8s, 10, { heroAction: 'raise', heroActionSizeBb: 1.5 })));
+    expect([raise.kind, raise.verdict, raise.heroFreq]).toEqual(['normalized_reference', 'reference', null]);
+    const limp = chart(evaluateSpot(pf('SB', A8s, 10, { heroAction: 'call', heroActionSizeBb: 0.5 })));
+    expect([limp.kind, limp.verdict, limp.heroFreq], '림프를 콜 0% 로 읽어 개선 필요를 내면 안 된다').toEqual(['normalized_reference', 'reference', null]);
+  });
+
+  it('20BB 폴드·올인 — 표는 참조하되 10BB 보다 깊어 참고(좋은 선택/개선 필요를 단정하지 않는다)', () => {
+    const fold = chart(evaluateSpot(pf('UTG', A8s, 20, { heroAction: 'fold' })));
+    expect([fold.kind, fold.verdict]).toEqual(['normalized_reference', 'reference']);
+    expect(fold.differences.join(' ')).toMatch(/10BB 보다 깊/);
+    const shove = chart(evaluateSpot(pf('UTG', ['As', 'Kh'], 20, { heroAction: 'raise', heroActionSizeBb: 20 })));
+    expect([shove.kind, shove.verdict]).toEqual(['normalized_reference', 'reference']);
+    expect(shove.heroFreq, '올인은 셔브 칸 빈도를 그대로 보여 준다').toBeGreaterThan(0.5);
+  });
+
+  it('BB앤티 1BB 20BB 는 여전히 앤티 표를 참조한다(:658 의 20BB 경우) — 등급만 참고', () => {
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 1 })));
+    expect(c.kind).toBe('normalized_reference');
+    expect(c.sourceLabel).toMatch(/BB앤티/);
+  });
+
+  it('양성 대조 — 10BB 이하 폴드·올인은 그대로 정확 판정(chart_nash)', () => {
+    const shove = chart(evaluateSpot(pf('UTG', ['As', 'Kh'], 5, { heroAction: 'raise', heroActionSizeBb: 5 })));
+    expect([shove.kind, shove.verdict]).toEqual(['chart_nash', 'good']);
+    const fold = chart(evaluateSpot(pf('UTG', ['7c', '2d'], 5, { heroAction: 'fold' })));
+    expect([fold.kind, fold.verdict]).toEqual(['chart_nash', 'good']);
+    // SB 는 이미 0.5 를 냈다 — 올인 증분은 스택 − 0.5
+    const sb = chart(evaluateSpot(pf('SB', ['As', 'Kh'], 10, { heroAction: 'raise', heroActionSizeBb: 9.5 })));
+    expect([sb.kind, sb.verdict]).toEqual(['chart_nash', 'good']);
   });
 });

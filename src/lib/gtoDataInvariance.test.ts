@@ -20,8 +20,8 @@ import {
 import { RANGE_SCENARIOS, RANGE_GROUPS, ACTION_COLORS } from './ranges.data';
 import { buildFreq, gridName } from './ranges';
 import { makeQuiz, MODES, KEY_PREFIX, PUSH_POS, PUSH_STACKS_AVAILABLE, type Mode } from './preflopQuiz';
-import { evaluateSpot, amountToCall } from './spotEvaluate';
-import { emptySpot, positionsFor, type SpotReview, type SpotAction } from './spot';
+import { evaluateSpot, amountToCall, heroActionClass } from './spotEvaluate';
+import { emptySpot, positionsFor, committedBb, type SpotReview, type SpotAction } from './spot';
 
 const GOLDEN = new URL('./gtoDataInvariance.golden.json', import.meta.url);
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -35,6 +35,8 @@ const cardsOf = (h: string): string[] => {
 
 let SPOT_KINDS: [string, number][] = [];
 let SPOT_LINE_KINDS: Record<string, Record<string, number>> = {};
+let SB_SHOVE_KINDS: Record<string, number> = {};
+let STAGE_A = { smallRaiseJudged: -1, deepExact: -1 };
 function sections(): Record<string, { n: number; s: string }> {
   const out: Record<string, string[]> = {};
   const add = (sec: string, line: string) => (out[sec] ??= []).push(line);
@@ -83,6 +85,9 @@ function sections(): Record<string, { n: number; s: string }> {
   // ④ SPOT 판정 — 등급·판정·빈도·수치(문장은 빼고 구조만: 문구 수정이 지문을 흔들지 않게)
   const kinds: Record<string, number> = {};
   const lineKinds: Record<string, Record<string, number>> = {};
+  const sbShove: Record<string, number> = {};
+  let smallRaiseJudged = 0;
+  let deepExact = 0;
   const raise = (actor: 'hero' | 'villain', sizeBb: number): SpotAction => ({ street: 'preflop', actor, type: 'raise', sizeBb });
   for (const tableSize of [2, 6, 9, 10]) {
     const seats = positionsFor(tableSize);
@@ -101,8 +106,12 @@ function sections(): Record<string, { n: number; s: string }> {
         ]],
         [[20, 15, 13, 10, 9.8, 9.5, 5, 2], [0, 0.5, 1], [
           ['vsShove', (eff) => [raise('villain', eff)], () => ({ heroAction: 'call' })],
-          ['shove', () => [], (eff) => ({ heroAction: 'raise', heroActionSizeBb: eff })],
-          ['shove2stk', () => [], (eff) => ({ heroAction: 'raise', heroActionSizeBb: eff, heroStackBb: eff, villainStackBb: eff * 2 })],
+          // 셔브·미니레이즈 크기는 아래 루프에서 '이미 낸 돈'(SB 0.5 · BB 1+앤티)을 빼서 채운다 — 증분이다.
+          //   예전에는 셔브 증분 = 스택이라 SB 줄이 전부 '스택 초과' 입력 오류였고 SB(뒤 1명) 표를 한 번도 안 지났다(critical PR #156).
+          ['shove', () => [], () => ({ heroAction: 'raise' })],
+          ['shove2stk', () => [], (eff) => ({ heroAction: 'raise', heroStackBb: eff, villainStackBb: eff * 2 })],
+          ['pfFold', () => [], () => ({ heroAction: 'fold' })],
+          ['minraise', () => [], () => ({ heroAction: 'raise' })],
         ]],
       ];
       for (const [stacks, antes, lines] of groups) for (const eff of stacks) for (const anteBb of antes) {
@@ -114,9 +123,15 @@ function sections(): Record<string, { n: number; s: string }> {
           for (const h of HANDS) {
             const s: SpotReview = { ...emptySpot(), tableSize, heroPos, villainPos, effectiveBb: eff, anteBb, actions, hero: cardsOf(h), ...over };
             if (s.heroAction === 'call') s.heroActionSizeBb = amountToCall(s);
+            if (name.startsWith('shove')) s.heroActionSizeBb = eff - committedBb(s, heroPos);
+            if (name === 'minraise') s.heroActionSizeBb = Math.max(0, 2 - committedBb(s, heroPos));
             const e = evaluateSpot(s);
             kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
             lk[e.kind] = (lk[e.kind] ?? 0) + 1;
+            if (name.startsWith('shove') && heroPos === 'SB') sbShove[e.kind] = (sbShove[e.kind] ?? 0) + 1;
+            // 단계 A 불변식 — 작은 레이즈는 판정하지 않고, 12BB 이상(S ≥ 11)은 푸시·폴드 표로 정확 판정하지 않는다
+            if (heroActionClass(s) === 'raise' && eff <= 20 && ['good', 'mixed', 'improve'].includes(e.verdict)) smallRaiseJudged++;
+            if (eff >= 12 && eff <= 20 && e.kind === 'chart_nash') deepExact++;
             const c = e as Partial<{ mix: unknown; absent: unknown; heroFreq: unknown; differences: unknown[]; drill: unknown }>;
             add(sec, `${heroPos}|${villainPos}|${eff}|${anteBb}|${h}|${e.kind}|${e.verdict}|${JSON.stringify([c.mix, c.absent, c.heroFreq, c.differences?.length, c.drill, e.math, e.issues.length])}`);
           }
@@ -125,6 +140,8 @@ function sections(): Record<string, { n: number; s: string }> {
     }
   }
   SPOT_LINE_KINDS = lineKinds;
+  SB_SHOVE_KINDS = sbShove;
+  STAGE_A = { smallRaiseJudged, deepExact };
   SPOT_KINDS = Object.entries(kinds).sort();
   add('spot:kinds', JSON.stringify(SPOT_KINDS));
 
@@ -149,12 +166,22 @@ describe('GTO 데이터 불변 — 분할 전 지문과 전수 비교', () => {
     const k = Object.fromEntries(SPOT_KINDS) as Record<string, number>;
     const msg = JSON.stringify(k);
     // 2026-10-04 실측(콜 크기 반영 뒤): chart_nash 444,132 · normalized_reference 767,598 · math_only 1,521,338 · unsupported 611,104
+    // 2026-10-04 단계 A 뒤(셔브 증분 = 스택 − 낸 돈 · 폴드/미니레이즈 줄 추가 · 10BB 상한): chart_nash 439,062 · normalized_reference 1,996,566 · math_only 2,244,320 · unsupported 237,952
+    //   지문을 다시 뽑은 이유와 바뀐 구역 표는 보고서 spot-stage-a-1004.md — 10BB 이하 폴드·올인 줄은 옛 엔진과 한 줄도 다르지 않다.
     expect(k.chart_nash ?? 0, msg).toBeGreaterThan(200_000);
     expect(k.normalized_reference ?? 0, msg).toBeGreaterThan(300_000);
     expect(k.math_only ?? 0, msg).toBeGreaterThan(500_000);
   });
 
-  it.each(['open', 'vsOpen', 'vsOpenFold', 'vs3bet', 'vs3betFold', 'shove', 'shove2stk'])(
+  it('SPOT SB 첫 진입 셔브 — SB(뒤 1명) 표를 실제로 지난다(셔브 증분 = 스택 − 0.5)', () => {
+    expect(SB_SHOVE_KINDS.chart_nash ?? 0, JSON.stringify(SB_SHOVE_KINDS)).toBeGreaterThan(0);
+  });
+
+  it('단계 A — 작은 레이즈는 푸시·폴드 표로 판정하지 않고, 12BB 이상은 정확 판정(chart_nash)이 없다', () => {
+    expect(STAGE_A).toEqual({ smallRaiseJudged: 0, deepExact: 0 });
+  });
+
+  it.each(['open', 'vsOpen', 'vsOpenFold', 'vs3bet', 'vs3betFold', 'shove', 'shove2stk', 'pfFold', 'minraise'])(
     'SPOT 줄 %s — 입력 오류로 전부 막히지 않고 차트·Nash 판정이 실제로 나온다', (name) => {
       const lk = SPOT_LINE_KINDS[name] ?? {};
       expect((lk.chart_nash ?? 0) + (lk.normalized_reference ?? 0), `${name}: ${JSON.stringify(lk)}`).toBeGreaterThan(0);
