@@ -1,5 +1,5 @@
 -- 20261004e — 장부 결제 변경: '같은 결제 수단 안에서만' 비밀번호 없이 + 모든 결제 변경 감사 기록(오너 2026-10-04 F4-02)
--- ⏳ 미적용 초안 v3(store-team 2026-10-04, 브랜치 NURI/ledger-ticket-check-1004). 적용 판단은 리드 — critical-reviewer 재반증 뒤.
+-- ✅ 적용 완료 2026-10-04 (리드, Management API · critical v3 재반증 PASS · 운영 리허설 REHEARSAL_OK) — 실측 md5: guard ff9fb941… · audit 591390f9… · 금액규칙 06a44e6b… · 애드온 RPC edf8e89e… · advisors ERROR 0
 -- 요구 원천: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\dummy-1004\RUN-REPORT.md#F4-02 · 오너 답 2026-10-04(리드 전달):
 --   v1 "완납에서 미수로 바꾸는 것은 비밀번호 없이 가능하게."
 --   v2(critical 반증 뒤 오너 결정) "같은 결제 수단으로만 자유" — 현금 미수 → 현금 완납 · 티켓 미수(가불) → 티켓 완납 · 완납 → 같은 수단 미수는
