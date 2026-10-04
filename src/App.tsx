@@ -14,7 +14,7 @@ import { isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { flushSignupLocationConsent } from './lib/locationConsent';
-import { checkinFailureAction, checkinGeoRetryCopy } from './lib/checkinGeoRetry';
+import { checkinFailureAction, checkinGeoRetryCopy, CHECKIN_RETRY_EVENT } from './lib/checkinGeoRetry';
 import type { CheckinRetryCode } from './lib/checkinGeoRetry';
 import Modal from './components/atoms/Modal';
 import type { MyBuyinRequest } from './api/ledger';
@@ -1588,6 +1588,16 @@ export default function App() {
         else toast.show(act.message, 'error');
       });
   }, [toast, refreshProfile]);
+  // critical L3(20261004d) — 매장 페이지 출석 버튼·이용권 시트 카메라 경로도 같은 재시도 시트(대체 경로 안내)를 연다.
+  //   그 화면들은 checkIn 실패를 requestCheckinRetrySheet 로 넘긴다(lib/checkinGeoRetry). 계정은 받는 시점 계정으로 묶는다.
+  useEffect(() => {
+    const onRetry = (ev: Event) => {
+      const d = (ev as CustomEvent<{ venueId?: string; code?: CheckinRetryCode }>).detail;
+      if (d?.venueId && d.code) setGeoRetry({ venueId: d.venueId, code: d.code, uid: uidRef.current, open: true });
+    };
+    window.addEventListener(CHECKIN_RETRY_EVENT, onRetry);
+    return () => window.removeEventListener(CHECKIN_RETRY_EVENT, onRetry);
+  }, []);
 
   /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
    *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */

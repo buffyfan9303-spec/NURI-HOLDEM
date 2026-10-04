@@ -10,7 +10,7 @@ vi.mock('../api/settings', () => ({ getAppSetting: async () => null }));
 
 import { CheckinGeoError, CheckinGeoRequiredError, CHECKIN_GEO_MESSAGE, type CheckinGeoErrorCode } from './checkinGeo';
 import { CHECKIN_ALT_PATH } from './locationTerms';
-import { checkinFailureAction, checkinGeoRetryCopy, isKakaoInApp } from './checkinGeoRetry';
+import { checkinFailureAction, checkinGeoRetryCopy, isKakaoInApp, requestCheckinRetrySheet, CHECKIN_RETRY_EVENT } from './checkinGeoRetry';
 
 const CODES: CheckinGeoErrorCode[] = ['denied', 'unavailable', 'timeout', 'unsupported'];
 const CHROME = 'Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 Chrome/128 Mobile Safari/537.36';
@@ -27,6 +27,17 @@ describe('① 분기 — 위치 실패는 시트, 나머지는 토스트', () =>
     expect(checkinFailureAction(new CheckinGeoRequiredError('consent', 'x'))).toEqual({ kind: 'sheet', code: 'consent' });
     expect(checkinFailureAction(new CheckinGeoRequiredError('position', 'x'))).toEqual({ kind: 'sheet', code: 'unavailable' });
   });
+  it('critical L3 — requestCheckinRetrySheet: 시트 대상이면 App 이벤트를 쏘고 true, 아니면 false(호출부 토스트)', () => {
+    const w = new EventTarget();
+    vi.stubGlobal('window', w);
+    const got: unknown[] = [];
+    w.addEventListener(CHECKIN_RETRY_EVENT, (ev) => got.push((ev as CustomEvent).detail));
+    expect(requestCheckinRetrySheet('v-1', new CheckinGeoRequiredError('consent', 'x'))).toBe(true);
+    expect(requestCheckinRetrySheet('v-2', new CheckinGeoError('denied'))).toBe(true);
+    expect(requestCheckinRetrySheet('v-3', new Error('매장 근처에서만 출석할 수 있어요'))).toBe(false);
+    expect(got).toEqual([{ venueId: 'v-1', code: 'consent' }, { venueId: 'v-2', code: 'denied' }]);
+    vi.unstubAllGlobals();
+  });
   it('Error 가 아닌 값 → 기본 문구 토스트', () => {
     expect(checkinFailureAction('x')).toEqual({ kind: 'toast', message: '출석 실패' });
     expect(checkinFailureAction(undefined)).toEqual({ kind: 'toast', message: '출석 실패' });
@@ -41,13 +52,13 @@ describe('② 시트 문구', () => {
     expect(checkinGeoRetryCopy('denied', CHROME).hint).toMatch(/권한 → 위치/);
     expect(checkinGeoRetryCopy('timeout', CHROME).hint).toBeNull();
   });
-  it('모든 사유에 대체 경로(직원 요청·참가 신청)를 붙인다 — 이 시트는 위치 확인 출석 매장에서만 뜬다(오너 결정 (다)-(a))', () => {
+  it('모든 사유에 대체 경로(직원에게 출석 처리 요청)를 붙인다 — 이 시트는 위치 확인 출석 매장에서만 뜬다(오너 결정 (다)-(a) · critical L1)', () => {
     for (const c of [...CODES, 'consent' as const]) {
       const copy = checkinGeoRetryCopy(c, CHROME);
-      expect(copy.alt).toBe(`QR 출석이 어려우면 ${CHECKIN_ALT_PATH}`);
-      expect(copy.alt).toMatch(/매장 직원에게 참가를 요청/);
+      expect(copy.alt).toBe(`동의하기 어렵거나 위치를 켤 수 없으면 ${CHECKIN_ALT_PATH}`);
+      expect(copy.alt).toMatch(/매장 직원에게 출석 처리를 요청할 수 있습니다$/);
     }
-    expect(checkinGeoRetryCopy('consent', CHROME)).toMatchObject({ reason: expect.stringMatching(/위치정보 이용에 동의해야 QR 출석/), action: '동의하고 출석' });
+    expect(checkinGeoRetryCopy('consent', CHROME)).toMatchObject({ reason: expect.stringMatching(/위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다/), action: '동의하고 출석' });
     expect(checkinGeoRetryCopy('denied', CHROME).action).toBe('위치 확인 후 출석');
   });
   it('카카오 인앱 → 코드와 무관하게 외부 브라우저 안내', () => {

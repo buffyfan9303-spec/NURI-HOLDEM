@@ -31,7 +31,9 @@ function naverReady(): Promise<boolean> {
   });
 }
 
-export default function CheckinLocationSection({ venueId }: { venueId: string }) {
+/** canToggleGeo — 「위치 확인 출석」 스위치를 쓸 수 있는가(대표 업주·관리자 — 서버 set_venue_checkin_geo_required 와 같은 선, 20261004d F1).
+ *  공동 운영자·모름(false)이면 상태와 안내만 보인다(fail-closed). 좌표 등록은 공동 운영자도 된다(set_venue_coords = can_manage_venue). */
+export default function CheckinLocationSection({ venueId, canToggleGeo = false }: { venueId: string; canToggleGeo?: boolean }) {
   const venueRef = useRef(venueId);
   venueRef.current = venueId;
   const [spot, setSpot] = useState<Spot | null>(null);
@@ -109,7 +111,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
   /** 「위치 확인 출석」 켜기/끄기 — 서버 저장 → 재조회 값으로만 상태·성공을 말한다. */
   const toggleGeo = async () => {
     const id = venueId;
-    if (busy || spot == null) return;
+    if (busy || spot == null || !canToggleGeo) return;
     const next = !spot.geoRequired;
     setBusy('geo'); setMsg(null);
     try {
@@ -166,7 +168,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
           </div>
           <button type="button" role="switch" aria-checked={geoReq} aria-labelledby="checkin-geo-required-label"
             data-testid="checkin-geo-required-switch" onClick={toggleGeo}
-            disabled={!!busy || spot == null || (!has && !geoReq)}
+            disabled={!canToggleGeo || !!busy || spot == null || (!has && !geoReq)}
             className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center disabled:opacity-50">
             <span className={['relative h-6 w-11 rounded-full transition-colors', geoReq ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
               <span className={['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', geoReq ? 'translate-x-[1.15rem]' : 'translate-x-0'].join(' ')} />
@@ -175,10 +177,11 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
         </div>
         <p className="text-2xs leading-relaxed text-ink-muted">
           켜면 손님이 이 매장 QR로 출석할 때 위치정보 이용 동의를 받고 현재 위치를 한 번 확인합니다(좌표는 저장하지 않습니다).
-          {' '}<b className="text-ink-secondary">{LOCATION_TERMS_EFFECTIVE_KO}부터</b>는 동의하지 않거나 위치를 확인할 수 없는 손님의 <b className="text-ink-secondary">QR 출석이 되지 않습니다</b>{isGeoRequiredNow() ? '' : '(그 전에는 출석은 되고 위치만 확인합니다)'}.
-          {' '}그런 손님은 직원이 장부에 직접 등록하거나 손님의 「참가 신청」을 승인해 주세요.
+          {' '}<b className="text-ink-secondary">{LOCATION_TERMS_EFFECTIVE_KO}부터</b>는 동의하지 않거나 위치를 확인할 수 없는 손님은 <b className="text-ink-secondary">스스로 출석할 수 없습니다</b>(QR 스캔·매장 페이지 출석 버튼·앱 카메라){isGeoRequiredNow() ? '' : '(그 전에는 출석은 되고 위치만 확인합니다)'}.
+          {' '}그런 손님은 대시보드 「출석·QR 명단」에서 <b className="text-ink-secondary">직접 출석 처리</b>해 주세요(출석과 같은 활동 점수·연속 출석·방문 기록이 쌓입니다).
         </p>
-        {!has && spot != null && <p className="text-2xs text-ink-muted">출석 위치를 먼저 등록해야 켤 수 있습니다.</p>}
+        {!canToggleGeo && <p data-testid="checkin-geo-required-owner-only" className="text-2xs text-ink-muted">위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다.</p>}
+        {canToggleGeo && !has && spot != null && <p className="text-2xs text-ink-muted">출석 위치를 먼저 등록해야 켤 수 있습니다.</p>}
       </div>
       {msg && (
         <p role="status" className={`text-2xs font-semibold ${msg.tone === 'ok' ? 'text-emerald-400' : 'text-danger-light'}`}>{msg.text}</p>

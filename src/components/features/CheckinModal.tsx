@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
-import { listVenueCheckins, subscribeCheckins, checkinUrl, getVenueCheckinGeoRequired, type Checkin } from '../../api/checkins';
+import { listVenueCheckins, subscribeCheckins, checkinUrl, getVenueCheckinGeoRequired, staffCheckIn, type Checkin } from '../../api/checkins';
 import { LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow } from '../../lib/locationTerms';
 import { getVenueVisitorStats } from '../../api/crm';
-import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
+import { issueVoucher, VOUCHER_REASONS, searchVoucherRecipients, voucherRecipientLabel, type VoucherRecipient } from '../../api/vouchers';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useCheckinGeoEnabled } from '../../lib/checkinGeo';
 import { msgOf } from '../../lib/dbError';
@@ -37,7 +37,8 @@ export function canSendVoucher(c: Pick<Checkin, 'venueId' | 'userId'>, venueId: 
   return c.venueId === venueId && canIssue && !!c.userId && Number.isInteger(count) && count > 0;
 }
 
-export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
+/** canStaffCheckin — 손님을 지정해 출석 처리할 수 있는가(서버 staff_check_in·search_voucher_recipients 와 같은 can_manage_pos 선, 20261004d L1). */
+export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false, canStaffCheckin = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean; canStaffCheckin?: boolean }) {
   const toast = useToast();
   // CHECKIN-GEO — 위치 안내는 운영 스위치 + 이 매장의 「위치 확인 출석」이 둘 다 켜졌을 때만(20261004d — 매장이 안 켰으면 위치를 안 본다).
   const geoOn = useCheckinGeoEnabled();
@@ -146,6 +147,38 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     }
   };
 
+  // ── 20261004d L1 — 손님 출석 처리(직원). 위치 확인을 못 하는/안 하는 손님도 출석과 같은 혜택을 받는 대체 경로다. ──
+  const [scQ, setScQ] = useState('');
+  const [scHits, setScHits] = useState<VoucherRecipient[] | null>(null);
+  const [scBusy, setScBusy] = useState(false);
+  useEffect(() => { setScQ(''); setScHits(null); setScBusy(false); }, [open, venueId]);
+  const scSearch = async () => {
+    const q = scQ.trim();
+    if (q.length < 2 || scBusy) return;
+    const gen = mountGenRef.current;
+    setScBusy(true);
+    try {
+      const hits = await searchVoucherRecipients(venueId, q);
+      if (!isStaleResponse(gen, mountGenRef.current)) setScHits(hits);
+    } catch (e) {
+      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(msgOf(e, '손님을 찾지 못했습니다'), 'error');
+    } finally { if (!isStaleResponse(gen, mountGenRef.current)) setScBusy(false); }
+  };
+  const scCheckin = async (r: VoucherRecipient) => {
+    if (scBusy || !canStaffCheckin) return;
+    const gen = mountGenRef.current;
+    setScBusy(true);
+    try {
+      const res = await staffCheckIn(venueId, r.userId);
+      if (isStaleResponse(gen, mountGenRef.current)) return; // 다른 매장 화면이 됐다 — 반영하지 않는다
+      toast.show(`${r.nickname || '회원'}님 출석 처리 완료${res.points > 0 ? ` · +${res.points}점` : ''}`, 'success');
+      setScQ(''); setScHits(null);
+      reload(); // 오늘 방문 명단은 서버 재조회로(실시간 구독도 따라온다)
+    } catch (e) {
+      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(msgOf(e, '출석 처리하지 못했습니다'), 'error');
+    } finally { if (!isStaleResponse(gen, mountGenRef.current)) setScBusy(false); }
+  };
+
   const copy = async () => { try { await navigator.clipboard.writeText(checkinUrl(venueId)); toast.show('출석 링크를 복사했습니다', 'success'); } catch { /* noop */ } };
   const fmt = (iso: string) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const openPicker = (id: string) => { setSendTo((v) => (v === id ? null : id)); setConfirm(null); setCustomCount(''); };
@@ -163,9 +196,30 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
             : qrFailed
               ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR을 만들지 못했습니다</div>
               : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoHint && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인 출석 매장 · {isGeoRequiredNow() ? '동의하고 매장 안에 있는 손님만 QR로 출석됩니다' : `${LOCATION_TERMS_EFFECTIVE_KO}부터 동의하고 매장 안에 있는 손님만 QR로 출석됩니다`}</b><br />그 밖의 손님은 장부에 직접 등록하거나 참가 신청을 승인해 주세요</>}</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoHint && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인 출석 매장 · {isGeoRequiredNow() ? '동의하고 매장 안에 있는 손님만 QR로 출석됩니다' : `${LOCATION_TERMS_EFFECTIVE_KO}부터 동의하고 매장 안에 있는 손님만 QR로 출석됩니다`}</b><br />그 밖의 손님은 {canStaffCheckin ? '아래 「손님 출석 처리」로 출석시켜 주세요' : '대표 업주·공동 운영자에게 출석 처리를 요청해 주세요'}</>}</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
+        {canStaffCheckin && (
+          <div data-testid="staff-checkin" className="space-y-2 rounded-aura border card-aura p-3">
+            <p className="text-sm font-bold text-ink-primary">손님 출석 처리</p>
+            <p className="text-2xs text-ink-muted">QR로 출석하기 어려운 손님(위치정보 미동의·위치 확인 불가 등)을 닉네임으로 찾아 직접 출석 처리합니다. 출석과 같은 활동 점수·연속 출석·방문 기록이 쌓이고, 같은 손님은 4시간에 한 번만 됩니다.</p>
+            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void scSearch(); }}>
+              <input value={scQ} onChange={(e) => setScQ(e.target.value)} placeholder="닉네임(2자 이상)" aria-label="출석 처리할 손님 닉네임"
+                data-testid="staff-checkin-q" className="input min-h-[44px] min-w-0 flex-1 text-sm" />
+              <button type="submit" data-testid="staff-checkin-search" disabled={scBusy || scQ.trim().length < 2}
+                className="btn-ghost min-h-[44px] shrink-0 border border-border-default px-3 text-sm disabled:opacity-50">찾기</button>
+            </form>
+            {scHits && (scHits.length === 0
+              ? <p className="text-2xs text-ink-muted">찾는 손님이 없습니다.</p>
+              : <ul className="space-y-1">{scHits.map((r) => (
+                <li key={r.userId} className="flex items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-1">
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{voucherRecipientLabel(r, scQ)}</span>
+                  <button type="button" data-testid="staff-checkin-do" disabled={scBusy} onClick={() => void scCheckin(r)}
+                    className="min-h-[44px] shrink-0 rounded-input border border-accent-400/40 px-3 text-2xs font-bold text-accent-200 hover:bg-accent-500/10 disabled:opacity-50">출석 처리</button>
+                </li>
+              ))}</ul>)}
+          </div>
+        )}
         <div>
           <p className="mb-1 text-2xs font-bold text-ink-secondary">오늘 방문 {listErr ? '—' : `${list.length}명`}</p>
           {listErr ? (

@@ -13,7 +13,9 @@ import path from 'node:path';
 import {
   LOCATION_TERMS_VERSION, LOCATION_TERMS_NOTICE, LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_EFFECTIVE_KO,
   LOCATION_TERMS_PREV_ARCHIVE_URL, GEO_REQUIRED_FROM_MS, isGeoRequiredNow, LOCATION_OFFICER, CHECKIN_ALT_PATH,
+  CHECKIN_SCOPE, CONSENT_NATURE, BUSINESS_PHONE, PRIVACY_PRE_LOCATION_ARCHIVE_URL,
 } from './locationTerms';
+import { BIZ_REQUIRED } from '../components/features/BusinessFooter';
 import { GEO_REQUIRED_CODES } from './checkinGeo';
 
 const ROOT = path.join(__dirname, '../..');
@@ -48,7 +50,8 @@ describe('locationTerms — 서버·클라 단일 사실', () => {
     const codes = [...fnBody('check_in').matchAll(/'code', '([a-z_]+)'/g)].map((x) => x[1]).sort();
     expect(codes).toEqual(Object.keys(GEO_REQUIRED_CODES).sort());
     // 서버 문구에도 대체 경로가 들어 있다 — 옛 번들·다른 출석 경로(이용권 시트·매장 페이지)는 이 문구를 토스트로 보여 준다
-    expect(fnBody('check_in').match(/매장 직원에게 참가를 요청/g)).toHaveLength(2);
+    expect(fnBody('check_in').match(/매장 직원에게 출석 처리를 요청할 수 있습니다/g)).toHaveLength(2);
+    expect(fnBody('check_in')).not.toMatch(/참가를 요청/);
   });
 });
 
@@ -60,23 +63,28 @@ describe('개인정보처리방침 — 위치정보법 제21조의2 · 시행령
     for (const k of ['처리 목적:', '처리 항목:', '보유기간:', '이용·제공사실 확인자료:', '제16조제2항', '6개월', '파기 절차 및 방법:', '제3자 제공:', '즉시 알립니다', '8세 이하', '권리 행사:', '위치정보관리책임자:']) {
       expect(block, k).toContain(k);
     }
-    expect(block).toMatch(/\$\{LOCATION_OFFICER\.name\} · 연락처 \$\{LOCATION_OFFICER\.contact\}/);
-    expect(block).toMatch(/\$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 동의하지 않으면 그 매장의 QR 출석이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}/);
+    expect(block).toMatch(/\$\{LOCATION_OFFICER\.name\} · 연락처 \$\{LOCATION_OFFICER\.contact\} · 전화 \$\{LOCATION_OFFICER\.phone\}/);
+    expect(block).toMatch(/\$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}\(직원이 처리한 출석도 같은/);
+    expect(block).toMatch(/보완 전\(\$\{LOCATION_TERMS_NOTICE\} 이전\) 처리방침 원문: https:\/\/nuriholdem\.com\$\{PRIVACY_PRE_LOCATION_ARCHIVE_URL\}/);
   });
   it('⑥ "현재 사용하지 않습니다" 옛 문구가 두 처리방침 어디에도 없다', () => {
     const modal = read('src/components/features/LegalDocsModal.tsx');
     expect(pp).not.toMatch(/출석 위치 확인 — 현재 사용하지 않습니다/);
     expect(modal).not.toMatch(/출석 위치 확인\(현재 미사용\)/);
     const p7 = modal.slice(modal.indexOf('7-1. 개인위치정보의 처리'), modal.indexOf('8. 안전성 확보 조치'));
-    for (const k of ['처리 목적:', '처리 항목:', '보유기간:', '이용·제공사실 확인자료:', '파기 절차 및 방법:', '제3자 제공:', '8세 이하', '위치정보관리책임자: ${BIZ.locationOfficer} / 연락처 ${BIZ.locationOfficerContact}']) {
+    for (const k of ['처리 목적:', '처리 항목:', '보유기간:', '이용·제공사실 확인자료:', '파기 절차 및 방법:', '제3자 제공:', '8세 이하', '위치정보관리책임자: ${BIZ.locationOfficer} / 연락처 ${BIZ.locationOfficerContact} · 전화 ${BIZ.locationOfficerPhone}', '${CONSENT_NATURE}', '${CHECKIN_SCOPE}이 처리되지 않으며, ${CHECKIN_ALT_PATH}']) {
       expect(p7, k).toContain(k);
     }
   });
-  it('⑦ 위치정보 동의는 "기능 이용 시 필요한 항목" — 그 매장 QR 출석만 안 되고 다른 이용 제한 없음(개인정보 보호법 제22조⑤ 취지)', () => {
-    expect(pp).toMatch(/기능 이용 시 필요한 항목\(위치\):[^`]*그 매장의 QR 출석만 되지 않을 뿐[^`]*그 밖의 서비스 이용에는 제한이 없습니다/);
+  it('⑦ 위치정보 동의는 "기능 이용 시 필요한 항목" — 그 매장 직접 출석만 안 되고 같은 혜택의 직원 처리·다른 이용 제한 없음(개인정보 보호법 제22조⑤ 취지)', () => {
+    expect(pp).toMatch(/기능 이용 시 필요한 항목\(위치 — \$\{CONSENT_NATURE\}\):[^`]*\$\{CHECKIN_SCOPE\}만 직접 할 수 없을 뿐, \$\{CHECKIN_ALT_PATH\}\(같은 혜택\)[^`]*그 밖의 서비스 이용에는 제한이 없습니다/);
   });
   it('⑧ 책임자 = 신고서 담당자(김윤혜 대표) · 회사 공식 메일', () => {
-    expect(LOCATION_OFFICER).toEqual({ name: '김윤혜(대표)', contact: 'ace@nuriholdem.com' });
+    expect(LOCATION_OFFICER).toEqual({ name: '김윤혜(대표)', contact: 'ace@nuriholdem.com', phone: BUSINESS_PHONE });
+    // L6 — 전화는 하단 푸터(BusinessFooter)와 같은 값을 읽는다(두 벌 금지) · 하단 창 약관의 사업자 전화(BIZ.phone)와도 같다
+    expect(BUSINESS_PHONE).toBe(BIZ_REQUIRED.find(([k]) => k === '전화번호')?.[1]);
+    expect(BUSINESS_PHONE).toMatch(/^0\d{1,2}-\d{3,4}-\d{4}$/);
+    expect(read('src/components/features/LegalDocsModal.tsx')).toContain(`phone: '${BUSINESS_PHONE}',`);
   });
 });
 
@@ -102,10 +110,72 @@ describe('제2판 원문 보존본(public/legal/archive)', () => {
 describe('화면 문구 — 동의 시트·재시도 시트가 같은 사실을 말한다', () => {
   it('⑪ 동의 시트: 시행일·QR 출석 불가·대체 경로·선택 동의 · required 모드 문구', () => {
     const s = read('src/components/features/LocationConsentSheet.tsx');
-    expect(s).toMatch(/동의는 선택입니다\. 다만 \$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 위치 확인 출석 매장에서는 동의하지 않으면 QR 출석이 되지 않으며, \$\{CHECKIN_ALT_PATH\}/);
+    expect(s).toMatch(/동의하지 않아도 다른 이용에는 제한이 없습니다\. 다만 \$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 위치 확인 출석 매장에서는 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 되지 않으며, \$\{CHECKIN_ALT_PATH\}/);
+    expect(s).toMatch(/data-testid="location-consent-nature"[^>]*>\{CONSENT_NATURE\}/);
     expect(s).toMatch(/\{required \? '동의하지 않음' : '동의하지 않고 출석'\}/);
     expect(s).not.toMatch(/동의하지 않아도 출석할 수 있습니다/);
-    expect(CHECKIN_ALT_PATH).toMatch(/매장 직원에게 참가를 요청/);
-    expect(CHECKIN_ALT_PATH).toMatch(/참가 신청/);
+    // L1·L2·L3 표현 고정
+    expect(CHECKIN_ALT_PATH).toBe('매장 직원에게 출석 처리를 요청할 수 있습니다');
+    expect(CONSENT_NATURE).toBe('선택 동의 — 위치 확인 출석 매장의 출석에만 필요');
+    expect(CHECKIN_SCOPE).toBe('그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)');
+  });
+});
+
+// critical 반증 반영(2026-10-04 F1·F2·L1·L3·L5·L6) — 서버 판정과 화면 배선이 같은 선인지.
+// 음성 대조: StoreDashboard 의 `canStaffCheckin={caps.manage}` 를 빼면 ⑬이, VenuePage 의 requestCheckinRetrySheet 를 토스트로 되돌리면 ⑭가,
+//   VenueManageTab 의 `primaryOwner === true` 를 `!== false` 로 넓히면 ⑮가, LegalDocsModal 의 배너 조건을 지우면 ⑯이 빨개진다.
+describe('critical 반증 반영 — 권한·대체 경로·배너·보존본', () => {
+  it('⑫ 서버: 매장 스위치는 대표·관리자만 · 좌표 CHECK · 직원 출석 처리는 can_manage_pos + 4시간 + 감사', () => {
+    expect(fnBody('set_venue_checkin_geo_required')).toContain('public._venue_owner_ok(p_venue_id)) is distinct from true');
+    expect(fnBody('set_venue_checkin_geo_required')).not.toMatch(/can_manage_(venue|pos)\(/);
+    expect(sql).toContain('check (not checkin_geo_required or (lat is not null and lng is not null))');
+    expect(fnBody('check_in')).toContain('and v_vlat is not null and v_vlng is not null');
+    const st = fnBody('staff_check_in');
+    expect(st).toContain('coalesce(public.can_manage_pos(p_venue_id), false)');
+    expect(st).toContain("interval '4 hours'");
+    expect(st).toContain("public._audit('staff_check_in'");
+    expect(st).toContain('public._apply_checkin(p_venue_id, p_user_id)');
+    expect(st).toContain('p_user_id = auth.uid()');
+    expect(sql).toMatch(/revoke all on function public\.staff_check_in\(uuid, uuid\) from public, anon;\ngrant execute on function public\.staff_check_in\(uuid, uuid\) to authenticated, service_role;/);
+  });
+  it('⑬ 화면: 손님 출석 처리 — 검색(같은 권한) 뒤 staffCheckIn · 운영 권한(caps.manage)일 때만 그린다 · 늦은 응답 가드', () => {
+    const m = read('src/components/features/CheckinModal.tsx');
+    expect(read('src/components/features/StoreDashboard.tsx')).toContain('canStaffCheckin={caps.manage}');
+    expect(m).toMatch(/\{canStaffCheckin && \(\s*<div data-testid="staff-checkin"/);
+    const fn = m.slice(m.indexOf('const scCheckin'), m.indexOf('const copy = async'));
+    expect(fn).toMatch(/await staffCheckIn\(venueId, r\.userId\);\s*if \(isStaleResponse\(gen, mountGenRef\.current\)\) return;/);
+    expect(fn).toContain('reload();');
+    expect(read('src/api/checkins.ts')).toMatch(/supabase\.rpc\('staff_check_in', \{ p_venue_id: venueId, p_user_id: userId \}\)/);
+  });
+  it('⑭ 대체 경로 안내: 매장 페이지 출석 버튼·이용권 시트 카메라도 App 의 재시도 시트로(토스트만 X)', () => {
+    expect(read('src/components/features/VenuePage.tsx')).toMatch(/if \(!requestCheckinRetrySheet\(venue!\.id, e\)\) toast\.show/);
+    expect(read('src/components/features/MyVoucherSheet.tsx')).toMatch(/if \(checkinFailureAction\(e\)\.kind === 'sheet'\) \{ onClose\(\); requestCheckinRetrySheet\(venueId, e\); \}/);
+    expect(read('src/App.tsx')).toMatch(/window\.addEventListener\(CHECKIN_RETRY_EVENT, onRetry\)/);
+  });
+  it('⑮ 매장 스위치 화면 게이트 = 대표(확인된 is_primary)·관리자 — 모르면 끔', () => {
+    expect(read('src/components/features/VenueManageTab.tsx')).toContain('canToggleCheckinGeo={isAdmin || (isOwner && primaryOwner === true)}');
+    expect(read('src/components/features/VenueCustomizePanel.tsx')).toContain('<CheckinLocationSection venueId={venueId} canToggleGeo={canToggleCheckinGeo} />');
+    expect(read('src/components/features/CheckinLocationSection.tsx')).toContain('canToggleGeo = false');
+  });
+  it('⑯ L5 — 제3판 시행 전에는 위치약관 맨 위에 "현재 적용: 제2판" 배너', () => {
+    const m = read('src/components/features/LegalDocsModal.tsx');
+    expect(m).toMatch(/const body = tab === 'location' && !isGeoRequiredNow\(\) \? `\$\{LOCATION_PENDING_BANNER\}/);
+    expect(m).toContain('[현재 적용: 제2판 — 원문 https://nuriholdem.com${LOCATION_TERMS_PREV_ARCHIVE_URL}]');
+    expect(m).toContain('{body}</p>');
+  });
+  it('⑰ L5 — 보완 전 처리방침 원문 보존본 두 벌(가입 화면 판·하단 창 판) · noindex · sitemap 밖', () => {
+    const dir = path.join(ROOT, 'public' + PRIVACY_PRE_LOCATION_ARCHIVE_URL.replace('/privacy.html', ''));
+    const pp0 = readFileSync(path.join(dir, 'privacy.html'), 'utf8');
+    const fp0 = readFileSync(path.join(dir, 'footer-privacy.html'), 'utf8');
+    expect(pp0).toContain('출석 위치 확인 — 현재 사용하지 않습니다'); // 보완 전 원문 그대로
+    expect(fp0).toContain('출석 위치 확인(현재 미사용)');
+    for (const h of [pp0, fp0]) {
+      expect(h).toContain('noindex');
+      expect(h).toContain('2026년 10월 5일 보완(위치정보 항목 추가) 전까지 게시된');
+      expect(h).toContain('525-20-02937');
+      expect(h).toContain('1336');
+      expect(h).not.toContain('${');
+    }
+    expect(read('public/sitemap.xml')).not.toContain('2026-09-29');
   });
 });

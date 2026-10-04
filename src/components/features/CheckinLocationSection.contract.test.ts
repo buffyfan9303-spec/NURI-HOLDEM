@@ -11,7 +11,7 @@ const panel = readFileSync(fileURLToPath(new URL('./VenueCustomizePanel.tsx', im
 
 describe('CheckinLocationSection', () => {
   it('매장 설정 › 매장 페이지에 실제로 렌더된다', () => {
-    expect(panel).toMatch(/<CheckinLocationSection venueId=\{venueId\} \/>/);
+    expect(panel).toMatch(/<CheckinLocationSection venueId=\{venueId\} canToggleGeo=\{canToggleCheckinGeo\} \/>/);
   });
   it('무가드 .then(set…) 배선이 없다', () => {
     expect(body).not.toMatch(/\.then\(set[A-Z]/);
@@ -41,7 +41,7 @@ describe('CheckinLocationSection', () => {
     expect(modal).toMatch(/const geoHint = geoOn && venueGeo\?\.venueId === venueId && venueGeo\.on;/);
     expect(modal).toMatch(/\{geoHint && <><br \/><b data-testid="checkin-geo-hint"/);
     expect(modal).not.toMatch(/\{geoOn && <>/);
-    expect(modal).toMatch(/그 밖의 손님은 장부에 직접 등록하거나 참가 신청을 승인해 주세요/);
+    expect(modal).toMatch(/그 밖의 손님은 \{canStaffCheckin \? '아래 「손님 출석 처리」로 출석시켜 주세요' : '대표 업주·공동 운영자에게 출석 처리를 요청해 주세요'\}/);
   });
 });
 
@@ -63,14 +63,16 @@ describe('CheckinLocationSection — 위치 확인 출석 스위치', () => {
     expect(iOk).toBeGreaterThan(iGuard);
     expect(fn).toMatch(/if \(s\.geoRequired !== next\)/);
   });
-  it('switch 역할·이름·44px · 좌표가 없으면(켜져 있지 않은 한) 켤 수 없다', () => {
+  it('switch 역할·이름·44px · 대표·관리자만(F1) · 좌표가 없으면(켜져 있지 않은 한) 켤 수 없다', () => {
     expect(body).toMatch(/role="switch" aria-checked=\{geoReq\} aria-labelledby="checkin-geo-required-label"/);
-    expect(body).toMatch(/disabled=\{!!busy \|\| spot == null \|\| \(!has && !geoReq\)\}/);
+    expect(body).toMatch(/disabled=\{!canToggleGeo \|\| !!busy \|\| spot == null \|\| \(!has && !geoReq\)\}/);
+    expect(body).toMatch(/if \(busy \|\| spot == null \|\| !canToggleGeo\) return;/);
+    expect(body).toMatch(/\{!canToggleGeo && <p data-testid="checkin-geo-required-owner-only"[^>]*>위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다/);
     expect(body).toMatch(/min-h-\[44px\] min-w-\[44px\]/);
   });
-  it('업주에게 시행일·거부 효과·대체 처리(장부 직접 등록·참가 신청 승인)를 알린다', () => {
+  it('업주에게 시행일·거부 효과(그 매장의 모든 손님 출석 경로)·대체 처리(직접 출석 처리)를 알린다', () => {
     expect(body).toMatch(/\{LOCATION_TERMS_EFFECTIVE_KO\}부터/);
-    expect(body).toMatch(/QR 출석이 되지 않습니다/);
-    expect(body).toMatch(/장부에 직접 등록하거나 손님의 「참가 신청」을 승인해 주세요/);
+    expect(body).toMatch(/스스로 출석할 수 없습니다<\/b>\(QR 스캔·매장 페이지 출석 버튼·앱 카메라\)/);
+    expect(body).toMatch(/대시보드 「출석·QR 명단」에서 <b className="text-ink-secondary">직접 출석 처리<\/b>해 주세요/);
   });
 });

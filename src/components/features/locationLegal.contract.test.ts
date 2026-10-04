@@ -23,7 +23,7 @@ describe('위치기반서비스 이용약관(LOCATION 절)', () => {
   it('제19조① 3호 — 실제 쓰는 위치 기능 두 가지(가까운 순 · 출석 위치 확인)', () => {
     expect(loc).toMatch(/가까운 순 정렬/);
     expect(loc).toMatch(/단말 안에서만/);
-    expect(loc).toMatch(/출석 위치 확인\(선택\)/);
+    expect(loc).toMatch(/출석 위치 확인\(\$\{CONSENT_NATURE\}\)/);
     expect(loc).toMatch(/반경 300미터/);
   });
   it('제19조① 4호 — 확인자료 보유근거·보유기간', () => {
@@ -58,10 +58,10 @@ describe('위치기반서비스 이용약관 제3판 — 동의 거부 효과·�
     expect(loc).toMatch(/매장이 이 기능을 켜지 않았으면 위치를 받지 않습니다/);
   });
   it('제3조제5항 — 시행일부터 켠 매장에서 동의·위치가 없으면 QR 출석 불가 + 대체 경로 + 다른 이용 제한 없음', () => {
-    expect(loc).toMatch(/5\. 위치 확인 출석을 켠 매장에서는 \$\{LOCATION_TERMS_EFFECTIVE\}부터[^\n]*QR 출석이 처리되지 않습니다\. 이 경우에도 \$\{CHECKIN_ALT_PATH\}\. 동의하지 않았다는 이유로 그 밖의 서비스 이용을 제한하지 않습니다\./);
+    expect(loc).toMatch(/5\. 위치 확인 출석을 켠 매장에서는 \$\{LOCATION_TERMS_EFFECTIVE\}부터[^\n]*\$\{CHECKIN_SCOPE\}이 처리되지 않습니다\. 이 경우에도 \$\{CHECKIN_ALT_PATH\}\. 직원이 처리한 출석은 이용자가 직접 한 출석과 같은 혜택\(활동 점수·연속 출석·방문 기록·이벤트 참여\)을 받습니다\. 동의하지 않았다는 이유로 그 밖의 서비스 이용을 제한하지 않습니다\./);
   });
   it('제7조제1항 — 선택·분리 동의 유지, 거부 효과는 켠 매장의 QR 출석뿐', () => {
-    expect(loc).toMatch(/1\. 출석 위치 확인에 대한 동의는 선택이며, 다른 동의와 따로 받습니다\. 동의하지 않아도 서비스 이용에 제한이 없습니다\. 다만 위치 확인 출석을 켠 매장에서는/);
+    expect(loc).toMatch(/1\. 출석 위치 확인에 대한 동의는 \$\{CONSENT_NATURE\}이며, 다른 동의와 따로 받습니다\. 동의하지 않아도 서비스 이용에 제한이 없습니다\. 다만 위치 확인 출석을 켠 매장에서는 \$\{LOCATION_TERMS_EFFECTIVE\}부터 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}\(제3조제5항\)\./);
   });
   it('옛 문구("동의하지 않아도 출석을 포함한 서비스 이용에 제한이 없습니다") 없음 — 제3판과 모순', () => {
     expect(loc).not.toMatch(/출석을 포함한 서비스 이용에 제한이 없습니다/);
@@ -78,7 +78,8 @@ describe('위치기반서비스 이용약관 제3판 — 동의 거부 효과·�
     expect(loc).toMatch(/제2판 원문: https:\/\/nuriholdem\.com\$\{LOCATION_TERMS_PREV_ARCHIVE_URL\}/);
   });
   it('제9조 위치정보관리책임자·연락처 = lib/locationTerms LOCATION_OFFICER(처리방침과 같은 값)', () => {
-    expect(loc).toMatch(/- 연락처: \$\{BIZ\.locationOfficerContact\}/);
+    expect(loc).toMatch(/- 연락처: \$\{BIZ\.locationOfficerContact\} · 전화 \$\{BIZ\.locationOfficerPhone\}/);
+    expect(src).toMatch(/locationOfficerPhone: LOCATION_OFFICER\.phone,/);
     expect(src).toMatch(/locationOfficer: LOCATION_OFFICER\.name,/);
     expect(src).toMatch(/locationOfficerContact: LOCATION_OFFICER\.contact,/);
     expect(src).not.toMatch(/지정 예정/);

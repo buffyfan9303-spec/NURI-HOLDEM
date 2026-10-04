@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { getMyLocationConsent, getMyLocationUseLog, type LocationConsentState, type LocationUseRow } from '../../api/locationPrivacy';
 import { saveLocationConsent, isConsentCurrent, consentSummary, LOCATION_CONSENT_EVENT, LOCATION_TERMS_VERSION } from '../../lib/locationConsent';
-import { CHECKIN_ALT_PATH, LOCATION_TERMS_EFFECTIVE_KO } from '../../lib/locationTerms';
+import { CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, LOCATION_TERMS_EFFECTIVE_KO } from '../../lib/locationTerms';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { takeWarm } from '../../lib/warmFetch';
@@ -58,7 +58,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
   const granted = s ? isConsentCurrent(s) : false;
   return (
     <div data-testid="location-privacy-card">
-      <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의(선택)</p>
+      <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의 <span className="text-2xs font-normal text-ink-muted">({CONSENT_NATURE})</span></p>
       <p className="mb-2 text-2xs leading-relaxed text-ink-muted">위치 확인 출석을 켠 매장에서 출석할 때 매장 안인지 위치로 확인하는 데만 씁니다. 좌표는 저장하지 않습니다.</p>
       {s === null && err == null ? (
         <p aria-busy="true" className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -80,7 +80,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
               <button type="button" onClick={() => onOpenLegal('location')} className="btn-ghost btn-sm min-h-[44px]">약관 보기</button>
             )}
           </div>
-          {granted && <p className="text-2xs text-ink-muted">{`철회하면 위치 이용 내역이 바로 삭제됩니다. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE_KO}부터 동의 없이 QR 출석이 되지 않으며, ${CHECKIN_ALT_PATH}. 그 밖의 이용에는 제한이 없습니다.`}</p>}
+          {granted && <p className="text-2xs text-ink-muted">{`철회하면 위치 이용 내역이 바로 삭제됩니다. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE_KO}부터 동의 없이 ${CHECKIN_SCOPE}이 되지 않으며, ${CHECKIN_ALT_PATH}. 그 밖의 이용에는 제한이 없습니다.`}</p>}
           {msg && <p role="status" data-testid="location-consent-msg" className="text-2xs text-ink-secondary">{msg}</p>}
         </div>
       )}

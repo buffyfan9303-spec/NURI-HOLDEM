@@ -13,7 +13,7 @@ import Icon from '../atoms/Icon';
 import LegalDocsModal from './LegalDocsModal';
 import { BIZ_REQUIRED } from './BusinessFooter';
 import { otherGateOpen } from '../../lib/locationConsent';
-import { CHECKIN_ALT_PATH, LOCATION_TERMS_EFFECTIVE_KO, LOCATION_TERMS_VERSION } from '../../lib/locationTerms';
+import { CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, LOCATION_TERMS_EFFECTIVE_KO, LOCATION_TERMS_VERSION } from '../../lib/locationTerms';
 
 // 위치기반서비스 이용약관 제3판(제3조·제5조·제7조)과 같은 사실만 짧게. 판이 바뀌면 이 목록도 같은 커밋에서 맞춘다.
 const POINTS: string[] = [
@@ -21,7 +21,7 @@ const POINTS: string[] = [
   '매장 등록 위치에서 반경 안(300m, 오차 최대 200m 보정)인지만 판정합니다',
   '좌표는 저장하지 않고 판정 직후 파기합니다. 매장을 포함해 누구에게도 제공하지 않습니다',
   '이용 사실(일시·방법·취득 경로)만 기록해 6개월 보관 후 파기합니다',
-  `동의는 선택입니다. 다만 ${LOCATION_TERMS_EFFECTIVE_KO}부터 위치 확인 출석 매장에서는 동의하지 않으면 QR 출석이 되지 않으며, ${CHECKIN_ALT_PATH}`,
+  `동의하지 않아도 다른 이용에는 제한이 없습니다. 다만 ${LOCATION_TERMS_EFFECTIVE_KO}부터 위치 확인 출석 매장에서는 동의하지 않으면 ${CHECKIN_SCOPE}이 되지 않으며, ${CHECKIN_ALT_PATH}`,
   '내 정보 › 보안에서 언제든 철회하고 이용 내역을 볼 수 있습니다',
 ];
 
@@ -46,11 +46,14 @@ export default function LocationConsentSheetView({ onChoose, required = false }:
         <div data-testid="location-consent-sheet" className="space-y-4 px-4 pb-5 pt-1">
           <div className="flex items-center gap-3 pt-1">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300/12 text-accent-300"><Icon name="map-pin" size={22} /></div>
-            <p className="text-sm font-bold text-ink-primary">매장 안에 있는지 위치로 확인해 출석을 처리하시겠습니까?</p>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-ink-primary">매장 안에 있는지 위치로 확인해 출석을 처리하시겠습니까?</p>
+              <p data-testid="location-consent-nature" className="mt-0.5 text-2xs text-ink-muted">{CONSENT_NATURE}</p>
+            </div>
           </div>
           {required && (
             <p data-testid="location-consent-required" className="rounded-input border border-accent-300/30 bg-accent-300/8 px-3 py-2 text-xs leading-relaxed text-ink-primary">
-              이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 QR 출석이 되지 않습니다. {CHECKIN_ALT_PATH}.
+              이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 {CHECKIN_SCOPE.replace('그 매장', '이 매장')}이 되지 않습니다. {CHECKIN_ALT_PATH}.
             </p>
           )}
           <ul className="space-y-1.5">

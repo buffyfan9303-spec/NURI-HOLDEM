@@ -63,7 +63,7 @@ test('🔴 G1 — 동의했는데 위치 권한 차단 → 재시도 시트 없�
 test('🔴 G3 — 시행일 뒤 켠 매장: 위치 권한 차단 + 서버 geo_position_required → 재시도 시트(사유·대체 경로) → 허용 후 재시도로 출석', async ({ page }) => {
   test.setTimeout(60_000);
   const calls = await setup(page,
-    { status: 200, body: { code: 'geo_position_required', error: '위치 확인 출석 매장이라 현재 위치를 확인해야 QR 출석이 됩니다. 위치를 켤 수 없으면 매장 직원에게 참가를 요청하거나 오늘 대회의 참가 신청을 이용해 주세요' } },
+    { status: 200, body: { code: 'geo_position_required', error: '위치 확인 출석 매장이라 현재 위치를 확인해야 이 매장에서 출석할 수 있습니다. 위치를 켤 수 없으면 매장 직원에게 출석 처리를 요청할 수 있습니다' } },
     { status: 200, body: { name: '검증 홀덤', points: 3, streak: 1 } });
   await page.addInitScript(() => {
     const w = window as unknown as { __geoDeny: boolean };
@@ -83,7 +83,7 @@ test('🔴 G3 — 시행일 뒤 켠 매장: 위치 권한 차단 + 서버 geo_po
   const sheet = page.getByTestId('checkin-geo-retry');
   await expect(sheet, '서버가 위치 없이 거부했는데 재시도 시트가 안 떴다').toBeVisible({ timeout: 10_000 });
   await expect(sheet).toContainText('위치 권한을 허용해야 출석할 수 있습니다');
-  await expect(page.getByTestId('checkin-geo-retry-alt')).toContainText('매장 직원에게 참가를 요청');
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toContainText('매장 직원에게 출석 처리를 요청할 수 있습니다');
   await expect(page.getByTestId('checkin-geo-retry-btn')).toHaveText('위치 확인 후 출석');
   await expect(page.getByText('출석 완료!', { exact: false }), '거부됐는데 출석 완료 토스트').toHaveCount(0);
   await page.evaluate(() => { (window as unknown as { __geoDeny: boolean }).__geoDeny = false; });

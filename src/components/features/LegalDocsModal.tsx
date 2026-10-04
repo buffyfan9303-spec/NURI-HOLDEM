@@ -25,7 +25,8 @@ import UnderlineTabs from '../atoms/UnderlineTabs';
 import { goSubTab } from '../../lib/subTabTransition';
 import {
   LOCATION_TERMS_VERSION, LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_NOTICE, LOCATION_TERMS_PREV_EFFECTIVE,
-  LOCATION_TERMS_PREV_ARCHIVE_URL, LOCATION_OFFICER, CHECKIN_ALT_PATH,
+  LOCATION_TERMS_PREV_ARCHIVE_URL, LOCATION_OFFICER, CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, PRIVACY_PRE_LOCATION_ARCHIVE_URL,
+  LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow,
 } from '../../lib/locationTerms';
 
 export type LegalDoc = 'terms' | 'privacy' | 'location' | 'refund';
@@ -44,6 +45,7 @@ const BIZ = {
   /** 위치정보관리책임자(위치정보법 시행령 제20조제1항제1호) — 값은 lib/locationTerms.ts LOCATION_OFFICER 한 곳(처리방침과 같은 값). */
   locationOfficer: LOCATION_OFFICER.name,
   locationOfficerContact: LOCATION_OFFICER.contact,
+  locationOfficerPhone: LOCATION_OFFICER.phone,
   /** 이번 개정 대상 문서(이용약관·개인정보처리방침)의 시행일. */
   effective: LEGAL_EFFECTIVE_ISO,
   /** 이번 개정에서 내용이 바뀌지 않은 문서(환불)의 시행일. 위치기반은 lib/locationTerms.ts 의 판·시행일로 따로 간다. */
@@ -181,16 +183,17 @@ const PRIVACY = `${BIZ.service}(이하 "회사")는 「개인정보 보호법」
 - 회원 탈퇴 시 파기 대상은 탈퇴 처리와 함께 즉시 자동 파기하고, 기간을 정해 보관하는 정보(본인인증 변환값·백업 사본·앱 오류 기록)는 기간이 지나면 자동 작업으로 파기합니다.
 
 7-1. 개인위치정보의 처리(「위치정보의 보호 및 이용 등에 관한 법률」 제21조의2)
-- 처리 목적: 매장이 '위치 확인 출석'을 켠 경우, 이용자가 별도로 동의하면 그 매장 QR 출석 때 현재 위치가 매장 반경 300미터(측위 오차 최대 200미터 보정) 안인지 판정합니다. 가까운 순 정렬의 위치는 단말 안에서만 쓰고 회사 서버로 보내지 않습니다.
+- 처리 목적: 매장이 '위치 확인 출석'을 켠 경우, 이용자가 별도로 동의하면 그 매장에서 출석할 때 현재 위치가 매장 반경 300미터(측위 오차 최대 200미터 보정) 안인지 판정합니다. 가까운 순 정렬의 위치는 단말 안에서만 쓰고 회사 서버로 보내지 않습니다.
 - 처리 항목: 단말의 위도·경도·측위 오차(출석 때 1회)
 - 보유기간: 좌표는 저장하지 않으며 판정이 끝나는 즉시 파기합니다.
 - 이용·제공사실 확인자료: 보유근거 같은 법 제16조제2항·「위치정보의 관리적·기술적 보호조치 기준」 제6조 / 항목 이용·제공 일시·방법, 취득 경로, 제공받는 자(좌표·매장 제외) / 보유기간 6개월(동의 철회·회원 탈퇴 시 지체 없이 파기)
 - 파기 절차 및 방법: 좌표는 판정에만 쓰고 데이터베이스에 기록하지 않습니다. 확인자료는 6개월이 지난 기록을 매일 자동 작업으로 복구할 수 없게 삭제하고, 동의 철회·탈퇴 때는 그 즉시 삭제합니다.
 - 제3자 제공: 개인위치정보를 제3자에게 제공하지 않습니다(매장에도 좌표·거리를 제공하지 않고 출석 여부만 표시). 앞으로 제공하게 되면 별도 동의를 받고 제공할 때마다 제공받는 자·일시·목적을 즉시 통보합니다(같은 법 제19조제2항·제3항).
 - 8세 이하 아동 등의 보호의무자 권리: 만 19세 미만은 이용할 수 없어 8세 이하 아동 등의 개인위치정보를 처리하지 않습니다.
-- 동의를 거부할 권리와 효과: 동의는 선택입니다. 다만 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 동의하지 않으면 그 매장의 QR 출석이 처리되지 않으며, ${CHECKIN_ALT_PATH}. 그 밖의 이용에는 제한이 없습니다.
+- 동의를 거부할 권리와 효과: ${CONSENT_NATURE}. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 동의하지 않으면 ${CHECKIN_SCOPE}이 처리되지 않으며, ${CHECKIN_ALT_PATH}(직원이 처리한 출석도 같은 활동 점수·연속 출석·방문 기록이 쌓입니다). 그 밖의 이용에는 제한이 없습니다.
 - 권리 행사: 내 정보 › 보안 › 위치정보 이용 동의에서 동의·철회(일시 중지)와 이용 내역 열람을 바로 할 수 있고, 이메일로도 요청할 수 있습니다.
-- 위치정보관리책임자: ${BIZ.locationOfficer} / 연락처 ${BIZ.locationOfficerContact}
+- 위치정보관리책임자: ${BIZ.locationOfficer} / 연락처 ${BIZ.locationOfficerContact} · 전화 ${BIZ.locationOfficerPhone}
+- 보완 전(${LOCATION_TERMS_NOTICE} 이전) 처리방침 원문: https://nuriholdem.com${PRIVACY_PRE_LOCATION_ARCHIVE_URL}
 
 8. 안전성 확보 조치
 - 비밀번호 암호화, 접근권한 관리, 접근통제(RLS) 등 기술적·관리적 보호조치를 시행합니다.
@@ -214,9 +217,9 @@ const LOCATION = `제1조(목적)
 제3조(서비스 내용)
 1. 장소 정보: 매장(홀덤펍)·대회 일정의 등록 위치(지역·주소)와 길찾기 연결을 제공합니다. 이 위치는 매장 운영자가 등록한 사업장 위치이며 이용자의 개인위치정보가 아닙니다.
 2. 가까운 순 정렬: 이용자가 목록에서 '가까운 순'을 고르면 단말의 위치 권한으로 현재 위치를 받아 이용자의 단말 안에서만 매장까지의 거리를 계산해 정렬합니다. 이 위치는 회사 서버로 전송되지 않으며 별도로 저장되지 않습니다.
-3. 출석 위치 확인(선택): 매장이 '위치 확인 출석'을 켠 경우에 한하여, 이용자가 별도로 동의하면 그 매장의 QR로 출석할 때 한 번 단말의 현재 위치(위도·경도·측위 오차)를 회사 서버로 전송하여 해당 매장의 등록 위치에서 반경 300미터(측위 오차는 최대 200미터까지 보정) 안에 있는지만 판정하고, 그 결과를 출석 처리에만 사용합니다. 측위 오차가 1킬로미터를 넘으면 판정하지 않습니다. 매장이 이 기능을 켜지 않았으면 위치를 받지 않습니다. 회사는 이 기능을 처음 시작할 때 서비스 내 공지로 알립니다.
+3. 출석 위치 확인(${CONSENT_NATURE}): 매장이 '위치 확인 출석'을 켠 경우에 한하여, 이용자가 별도로 동의하면 그 매장에서 출석할 때(QR 스캔·매장 페이지 출석 버튼·앱 카메라) 한 번 단말의 현재 위치(위도·경도·측위 오차)를 회사 서버로 전송하여 해당 매장의 등록 위치에서 반경 300미터(측위 오차는 최대 200미터까지 보정) 안에 있는지만 판정하고, 그 결과를 출석 처리에만 사용합니다. 측위 오차가 1킬로미터를 넘으면 판정하지 않습니다. 매장이 이 기능을 켜지 않았으면 위치를 받지 않습니다. 회사는 이 기능을 처음 시작할 때 서비스 내 공지로 알립니다.
 4. 회사는 이용자의 실시간 개인위치정보를 상시 수집·보관하지 않습니다. 위치를 추적하거나 이동 경로를 수집하지 않으며, 위치정보를 광고에 이용하지 않습니다.
-5. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 이용자가 제3항의 동의를 하지 않거나 단말에서 현재 위치를 확인할 수 없으면 그 매장의 QR 출석이 처리되지 않습니다. 이 경우에도 ${CHECKIN_ALT_PATH}. 동의하지 않았다는 이유로 그 밖의 서비스 이용을 제한하지 않습니다.
+5. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 이용자가 제3항의 동의를 하지 않거나 단말에서 현재 위치를 확인할 수 없으면 ${CHECKIN_SCOPE}이 처리되지 않습니다. 이 경우에도 ${CHECKIN_ALT_PATH}. 직원이 처리한 출석은 이용자가 직접 한 출석과 같은 혜택(활동 점수·연속 출석·방문 기록·이벤트 참여)을 받습니다. 동의하지 않았다는 이유로 그 밖의 서비스 이용을 제한하지 않습니다.
 
 제4조(개인위치정보의 보유목적 및 보유기간)
 1. 보유목적: 제3조제3항의 출석 반경 판정.
@@ -232,7 +235,7 @@ const LOCATION = `제1조(목적)
 2. 앞으로 제공이 필요해지면 제공받는 자와 제공목적을 미리 알리고 별도의 동의를 받으며, 제공할 때마다 제공받는 자·제공일시·제공목적을 이용자에게 즉시 통보합니다(같은 법 제19조제2항·제3항).
 
 제7조(동의와 이용자의 권리 및 행사방법)
-1. 출석 위치 확인에 대한 동의는 선택이며, 다른 동의와 따로 받습니다. 동의하지 않아도 서비스 이용에 제한이 없습니다. 다만 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 동의하지 않으면 그 매장의 QR 출석이 처리되지 않으며, 매장 직원에게 참가를 요청할 수 있습니다(제3조제5항).
+1. 출석 위치 확인에 대한 동의는 ${CONSENT_NATURE}이며, 다른 동의와 따로 받습니다. 동의하지 않아도 서비스 이용에 제한이 없습니다. 다만 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE}부터 동의하지 않으면 ${CHECKIN_SCOPE}이 처리되지 않으며, ${CHECKIN_ALT_PATH}(제3조제5항).
 2. 이용자는 언제든지 동의의 전부 또는 일부를 철회하거나 개인위치정보의 수집·이용의 일시적인 중지를 요구할 수 있습니다(같은 법 제24조제1항·제2항).
 3. 이용자는 본인의 위치정보 이용·제공사실 확인자료의 열람 또는 고지를 요구할 수 있고, 오류가 있으면 정정을 요구할 수 있습니다. 회사는 정당한 사유 없이 거절하지 않습니다(같은 법 제24조제3항).
 4. 행사방법: 서비스의 '내 정보 › 보안 › 위치정보 이용 동의'에서 동의·철회와 이용 내역 확인을 바로 할 수 있으며, 이메일(${BIZ.email})로도 요청할 수 있습니다. 이메일 요청은 지체 없이 처리합니다.
@@ -244,7 +247,7 @@ const LOCATION = `제1조(목적)
 제9조(위치정보관리책임자)
 회사는 위치정보를 보호하고 관련 불만을 처리하기 위하여 아래와 같이 위치정보관리책임자를 지정합니다.
 - 위치정보관리책임자: ${BIZ.locationOfficer}
-- 연락처: ${BIZ.locationOfficerContact}
+- 연락처: ${BIZ.locationOfficerContact} · 전화 ${BIZ.locationOfficerPhone}
 
 제10조(손해배상)
 이용자는 회사가 「위치정보의 보호 및 이용 등에 관한 법률」 제15조부터 제26조까지의 규정을 위반하여 손해를 입은 경우 손해배상을 청구할 수 있으며, 회사는 고의 또는 과실이 없음을 입증하지 못하면 책임을 면하지 못합니다(같은 법 제27조). 매장이 등록한 위치 정보의 오류, 천재지변 등 회사의 고의·과실이 없는 사유로 인한 손해는 그러하지 아니합니다.
@@ -260,10 +263,14 @@ const LOCATION = `제1조(목적)
    - 2026-09-30: 제9조의 위치정보관리책임자를 지정했습니다(김윤혜, 대표). 이용자에게 불리한 내용이 없어 지정한 날부터 바로 적용했습니다.
 3. 제${LOCATION_TERMS_VERSION}판은 ${LOCATION_TERMS_NOTICE}에 공지하여 ${LOCATION_TERMS_EFFECTIVE}부터 시행합니다.
 4. 제${LOCATION_TERMS_VERSION}판 개정 이유: 매장 출석 QR은 주소만 알면 매장 밖에서도 열 수 있어, 매장이 원하면 실제로 매장 안에 있는 이용자만 QR로 출석하도록 하기 위함입니다(같은 법 제12조제1항에 따른 변경 이유 공개).
-5. 제${LOCATION_TERMS_VERSION}판 개정 내용: 제3조제3항의 출석 위치 확인을 매장이 '위치 확인 출석'을 켠 경우로 한정하고, 제3조제5항을 신설하여 그 매장에서 동의하지 않거나 위치를 확인할 수 없으면 QR 출석이 처리되지 않는다는 점과 직원 요청·참가 신청이라는 대체 경로를 적었습니다. 제5조제2항의 기록 항목을 같은 법 제2조제5호의 용어(이용·제공 일시·방법, 취득 경로, 제공받는 자)로 바로잡고, 제7조제1항에 동의하지 않을 때의 효과를 적었으며, 제9조에 위치정보관리책임자의 연락처를 따로 적었습니다.
+5. 제${LOCATION_TERMS_VERSION}판 개정 내용: 제3조제3항의 출석 위치 확인을 매장이 '위치 확인 출석'을 켠 경우로 한정하고, 제3조제5항을 신설하여 그 매장에서 동의하지 않거나 위치를 확인할 수 없으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 처리되지 않는다는 점과, 매장 직원이 같은 혜택으로 출석을 처리하는 대체 경로를 적었습니다. 제5조제2항의 기록 항목을 같은 법 제2조제5호의 용어(이용·제공 일시·방법, 취득 경로, 제공받는 자)로 바로잡고, 제7조제1항에 동의하지 않을 때의 효과를 적었으며, 제9조에 위치정보관리책임자의 연락처(전자우편·사업자 대표 전화)를 따로 적었습니다.
 6. 제${LOCATION_TERMS_VERSION}판에는 동의하지 않는 이용자에게 불리할 수 있는 내용이 있어 이용약관 제16조제2항에 따라 시행일 30일 전에 공지합니다. 이미 제2판에 동의한 이용자에게는 위치 확인 출석 매장에서 다음 출석 때 제${LOCATION_TERMS_VERSION}판 동의를 다시 여쭙니다. 출석 위치 확인은 이 약관을 알린 뒤 이용자의 별도 동의를 받아서만 이용합니다.
 
 시행일: ${LOCATION_TERMS_EFFECTIVE}`;
+
+/** 제3판 시행 전 배너(L5) — 현재 적용되는 판은 제2판이다. */
+const LOCATION_PENDING_BANNER = `[현재 적용: 제2판 — 원문 https://nuriholdem.com${LOCATION_TERMS_PREV_ARCHIVE_URL}]
+아래는 ${LOCATION_TERMS_NOTICE}에 공지한 제${LOCATION_TERMS_VERSION}판이며 ${LOCATION_TERMS_EFFECTIVE_KO}부터 시행할 예정입니다.`;
 
 const REFUND = `${BIZ.service}(이하 "회사")의 유료 서비스 결제 취소 및 환불에 관한 기준은 다음과 같습니다. 본 정책은 「전자상거래 등에서의 소비자보호에 관한 법률」을 따릅니다.
 
@@ -306,6 +313,8 @@ export default function LegalDocsModal({
 }: { open: boolean; onClose: () => void; initial?: LegalDoc }) {
   const [tab, setTab] = useState<LegalDoc>(initial);
   const doc = DOCS[tab];
+  // critical L5 — 제3판 시행일 전에는 맨 위에 "현재 적용: 제2판" 을 먼저 말한다(시행 전 판을 현재 판처럼 보이게 하지 않는다).
+  const body = tab === 'location' && !isGeoRequiredNow() ? `${LOCATION_PENDING_BANNER}\n\n${doc.body}` : doc.body;
   /** 문서 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. DOCS 나열 그대로. */
   const order = Object.keys(DOCS) as LegalDoc[];
   return (
@@ -316,7 +325,7 @@ export default function LegalDocsModal({
           value={tab} onChange={(v) => goSubTab('legal-tab', order, tab, v, () => setTab(v))} size="sm" />
       </div>
       <div data-legal-panel="" className="max-h-[65vh] overflow-y-auto p-4">
-        <p className="whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{doc.body}</p>
+        <p className="whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{body}</p>
       </div>
     </Modal>
   );

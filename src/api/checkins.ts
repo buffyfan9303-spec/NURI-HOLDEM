@@ -102,6 +102,15 @@ export async function setVenueCheckinGeoRequired(venueId: string, on: boolean): 
   return data === true;
 }
 
+/** 매장 직원(대표·승인 공동 운영자·관리자 = can_manage_pos)이 손님을 지정해 출석 처리(staff_check_in, 20261004d critical L1).
+ *  손님 QR 출석과 같은 혜택(_apply_checkin)·같은 4시간 중복 가드. 위치를 쓰지 않는다. 오류는 원본 그대로 던진다(msgOf 분류용). */
+export async function staffCheckIn(venueId: string, userId: string): Promise<CheckInResult> {
+  if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
+  const { data, error } = await supabase.rpc('staff_check_in', { p_venue_id: venueId, p_user_id: userId });
+  if (error) throw error;
+  return normalizeCheckInResult(data);
+}
+
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('checkins').select('*')

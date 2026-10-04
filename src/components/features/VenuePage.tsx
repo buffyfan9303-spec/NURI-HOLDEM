@@ -56,6 +56,7 @@ import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
 import SlidingPill from '../atoms/SlidingPill';
 import { msgOf } from '../../lib/dbError';
+import { requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -261,7 +262,10 @@ export default function VenuePage({
       // 홈 '이어서 하기'·'가 본 매장' 은 App 의 visitedVenues 가 만든다 — 여기서 재조회한 목록은 이 페이지 몫이고,
       // App 은 이 신호를 듣고 자기 것을 다시 읽는다(연결 감사 E · 첫 방문 매장에서 체크인해도 홈이 옛 값이던 것).
       window.dispatchEvent(new Event('nuri:checkin-done'));
-    } catch (e) { toast.show(msgOf(e, '출석 실패'), 'error'); }
+    } catch (e) {
+      // critical L3(20261004d) — 위치 확인 출석 매장의 거부·위치 실패는 토스트가 아니라 App 의 재시도 시트(대체 경로 안내)로.
+      if (!requestCheckinRetrySheet(venue!.id, e)) toast.show(msgOf(e, '출석 실패'), 'error');
+    }
     finally { setCheckinBusy(false); }
   };
   const shareVenue = async () => {

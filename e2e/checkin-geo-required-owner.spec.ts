@@ -13,12 +13,14 @@ const json = (b: unknown) => ({ status: 200, contentType: 'application/json', bo
 const single = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
 const SHOT = process.env.LOC_SHOT_DIR;
 
-async function boot(page: Page, st: { lat: number | null; lng: number | null; on: boolean }) {
+async function boot(page: Page, st: { lat: number | null; lng: number | null; on: boolean }, { primary = true } = {}) {
   const rpc: Record<string, unknown>[] = [];
   let reads = 0;
   await bootOwner(page, {
     appSettings: { checkin_geo_enabled: 'on' },
     extra: async (p) => {
+      // 대표 여부(list_venue_owners 의 내 줄 is_primary) — false 면 공동 운영자처럼 스위치가 잠긴다(F1)
+      if (!primary) await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([{ user_id: '00000000-0000-4000-8000-0000000000ee', nickname: '업주', name: '업주', is_primary: false, status: 'approved' }])));
       // getVenueCheckinSpot — venues.select('lat, lng, address, checkin_geo_required')
       await p.route(/\/rest\/v1\/venues\?.*checkin_geo_required/, (r) => {
         if (r.request().method() !== 'GET') return r.fallback();
@@ -63,8 +65,9 @@ test('🔴 O1 업주 1440 — 좌표가 있으면 켜고 끈다(RPC 저장 → �
   await expect(sw).toBeEnabled();
   await expect(page.getByTestId('checkin-geo-required-state')).toHaveText('꺼짐 — 손님에게 위치를 묻지 않습니다');
   await expect(sec).toContainText('2026년 11월 5일부터');
-  await expect(sec).toContainText('QR 출석이 되지 않습니다');
-  await expect(sec).toContainText('장부에 직접 등록하거나 손님의 「참가 신청」을 승인해 주세요');
+  await expect(sec).toContainText('스스로 출석할 수 없습니다(QR 스캔·매장 페이지 출석 버튼·앱 카메라)');
+  await expect(sec).toContainText('대시보드 「출석·QR 명단」에서 직접 출석 처리해 주세요');
+  await expect(page.getByTestId('checkin-geo-required-owner-only'), '대표인데 대표 전용 안내가 떴다').toHaveCount(0);
   const box = await sw.boundingBox();
   expect(box!.height, '스위치 누름 높이 < 44px').toBeGreaterThanOrEqual(44);
 
@@ -89,4 +92,55 @@ test('🔴 O2 업주 1440 — 출석 위치(좌표)가 없으면 켤 수 없다'
   await expect(sw).toBeDisabled();
   await expect(sec).toContainText('출석 위치를 먼저 등록해야 켤 수 있습니다');
   expect(rpc).toEqual([]);
+});
+
+test('🔴 O3 대표가 아닌 운영자(공동 운영자) — 스위치가 잠기고 "대표 업주만" 안내(F1, 서버도 거부)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { rpc } = await boot(page, { lat: 37.5, lng: 127.0, on: false }, { primary: false });
+  const sw = page.getByTestId('checkin-geo-required-switch');
+  await expect(sw).toBeDisabled();
+  await expect(page.getByTestId('checkin-geo-required-owner-only')).toHaveText('위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다.');
+  await sw.click({ force: true }).catch(() => {});
+  expect(rpc, '잠긴 스위치가 RPC 를 불렀다').toEqual([]);
+});
+
+test('🔴 O4 업주 1440 — 「출석·QR 명단」에서 손님을 닉네임으로 찾아 출석 처리(staff_check_in) · 명단 재조회', async ({ page }) => {
+  test.setTimeout(120_000);
+  const calls: { search: unknown[]; staff: unknown[]; listReads: number } = { search: [], staff: [], listReads: 0 };
+  let checkedIn = false;
+  await bootOwner(page, {
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/rpc\/search_voucher_recipients/, (r) => {
+        calls.search.push(r.request().postDataJSON());
+        return r.fulfill(json([{ user_id: 'aaaaaaaa-0000-4000-8000-000000000001', nickname: '위치거부손님', real_name: null, verified: false, matched: 'nickname', phone_masked: null }]));
+      });
+      await p.route(/\/rest\/v1\/rpc\/staff_check_in/, (r) => {
+        calls.staff.push(r.request().postDataJSON());
+        checkedIn = true;
+        return r.fulfill(json({ points: 3, streak: 1, name: '테스트 홀덤펍' }));
+      });
+      await p.route(/\/rest\/v1\/checkins\?/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        calls.listReads++;
+        return r.fulfill(json(checkedIn ? [{ id: 'c1', venue_id: MOCK_VENUE, user_id: 'aaaaaaaa-0000-4000-8000-000000000001', display_name: '위치거부손님', created_at: new Date().toISOString() }] : []));
+      });
+    },
+  });
+  await openMyStore(page);
+  await expect(page.locator('[data-mystore-rail]').first(), '내 매장을 못 열었다').toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '출석·QR 명단' }).click();
+  const box = page.getByTestId('staff-checkin');
+  await expect(box, '손님 출석 처리 칸이 없다').toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('staff-checkin-q').fill('위치거부');
+  await page.getByTestId('staff-checkin-search').click();
+  await expect(box).toContainText('위치거부손님');
+  expect(calls.search).toEqual([{ p_venue_id: MOCK_VENUE, p_q: '위치거부' }]);
+  if (SHOT) await page.screenshot({ path: `${SHOT}/owner-staff-checkin.png` });
+  const reads0 = calls.listReads;
+  await page.getByTestId('staff-checkin-do').click();
+  await expect.poll(() => calls.staff.length).toBe(1);
+  expect(calls.staff[0]).toEqual({ p_venue_id: MOCK_VENUE, p_user_id: 'aaaaaaaa-0000-4000-8000-000000000001' });
+  await expect(page.getByText('위치거부손님님 출석 처리 완료 · +3점')).toBeVisible();
+  await expect.poll(() => calls.listReads, { message: '출석 처리 뒤 오늘 명단을 다시 읽지 않았다' }).toBeGreaterThan(reads0);
+  await expect(page.getByText('오늘 방문 1명')).toBeVisible();
 });

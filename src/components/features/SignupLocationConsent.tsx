@@ -8,7 +8,7 @@
 // 문구는 기존 화면과 같은 사실만 말한다 — 가까운 순은 라이브 탭 안내(live-distance-local-note), 출석 위치 확인은 출석 시트(LocationConsentSheet)와 같다.
 import { lazy, Suspense, useState } from 'react';
 import Icon from '../atoms/Icon';
-import { LOCATION_TERMS_EFFECTIVE_KO } from '../../lib/locationTerms';
+import { CHECKIN_ALT_PATH, CONSENT_NATURE, LOCATION_TERMS_EFFECTIVE_KO } from '../../lib/locationTerms';
 
 const LegalDocsModal = lazy(() => import('./LegalDocsModal'));
 
@@ -22,7 +22,7 @@ export default function SignupLocationConsent({ checked, onChange }: { checked: 
       <ul className="space-y-1 text-2xs leading-relaxed text-ink-muted">
         <li>· 가까운 순: 위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않습니다</li>
         <li>· 출석 위치 확인: 위치 확인 출석을 켠 매장에서 출석할 때 한 번 매장 반경 안인지만 판정하고, 좌표는 저장하지 않습니다</li>
-        <li>· 동의하지 않아도 가입·이용할 수 있습니다. 다만 {LOCATION_TERMS_EFFECTIVE_KO}부터 위치 확인 출석 매장의 QR 출석은 동의가 필요합니다(매장 직원에게 참가 요청은 그대로 됩니다). 내 정보 › 보안에서 언제든 바꿀 수 있습니다</li>
+        <li>· {CONSENT_NATURE}. 동의하지 않아도 가입·이용할 수 있고, {LOCATION_TERMS_EFFECTIVE_KO}부터 위치 확인 출석 매장에서는 {CHECKIN_ALT_PATH}. 내 정보 › 보안에서 언제든 바꿀 수 있습니다</li>
       </ul>
       <div className="flex items-start justify-between gap-2">
         {/* py-3 -my-3: 누름 높이만 46px 로 넓히고 레이아웃은 그대로(2026-09-29 D4 — 가입 동의 행과 같은 44px). 위는 설명 글, 아래는 상자 여백이라 겹칠 조작이 없다. */}
