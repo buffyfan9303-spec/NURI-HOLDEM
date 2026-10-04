@@ -23,7 +23,8 @@ describe('내 매장 전체 디버깅 2026-09-26', () => {
 
   it('#6 출근 관리의 지금 출근·지금 퇴근·월 이동은 44px', () => {
     const s = read('StaffPayroll.tsx');
-    for (const k of ["'checkIn', nowHm())} className=\"min-h-[44px]", "'checkOut', nowHm())} className=\"min-h-[44px]"]) expect(s).toContain(k);
+    // R4-01: '지금' 은 서버 시각('now')으로 보낸다 — 44px 계약은 그대로
+    for (const k of ["'checkIn', 'now')} className=\"min-h-[44px]", "'checkOut', 'now')} className=\"min-h-[44px]"]) expect(s).toContain(k);
     expect(s.match(/shiftMonth\(m, [-]?1\)\)\} className="h-\[44px\] w-\[44px\]/g)?.length).toBe(2);
   });
 

@@ -156,6 +156,44 @@ export function shiftHoursNote(m: { raw: number; stay: number; brk: number; net:
   return `급여 기준 ${hoursText(m.net)} (${parts.join(' · ')})`;
 }
 
+// ── 근무 1회 길이 규칙(오너 10-04) — 서버 _shift_span_check(20261004f)와 같은 선 ────────────────────
+//   출근~퇴근이 60초 미만이면 거절한다: 같은 분이면 HH:MM 이 같아 shiftFromHm 이 '퇴근 ≤ 출근 → +1일' 로 24시간을 센다(R4-01).
+//   24시간을 넘으면 거절한다(정확히 24시간은 허용). 서버가 최종 판정이고 화면은 같은 조건에서 버튼을 미리 막는다.
+export type ShiftSpanError = 'SHIFT_TOO_SHORT' | 'SHIFT_OVER_24H';
+export function shiftSpanError(startMs: number, endMs: number): ShiftSpanError | null {
+  const d = endMs - startMs;
+  return d > DAY ? 'SHIFT_OVER_24H' : d < MIN ? 'SHIFT_TOO_SHORT' : null;
+}
+/** KST 벽시계 HH:mm. */
+export const kstHm = (ms: number) => new Date(ms + 9 * H).toISOString().slice(11, 16);
+/** 근무 시작 시각 — 서버 _shift_start_at 과 같다: 서버 출근 표지(checkInAtMs)가 있으면 그것,
+ *  없으면 **지금 이전 24시간 안에서 가장 가까운 그 HH:mm**(00:00~01:59 '어제 근무' 를 하루 앞당기지 않는다). */
+export function shiftStartMs(checkIn: string, checkInAtMs: number | null | undefined, nowMs: number): number {
+  if (checkInAtMs != null) return checkInAtMs;
+  const [h, m] = checkIn.split(':').map(Number);
+  const x = ((nowMs + 9 * H) % DAY) - (h * 60 + m) * MIN;
+  return nowMs - (x >= 0 ? x : x + DAY);
+}
+/** 직원 '내 출근 관리' 쓰기(set_my_shift_time, 20261004f)의 판정 — 서버와 같은 식.
+ *  value: 'now'(지금 출근·지금 퇴근 — 서버 시각) · 'HH:mm'(직접 입력) · null(비우기).
+ *  시작 = 쓰기 뒤 출근(손으로 바꾼 출근은 서버 표지가 비워진다 · 'now' 출근은 지금이 표지).
+ *  끝 = '지금 퇴근' 이면 지금, 아니면 시작 + (퇴근 − 출근 을 24시간 안으로 접은 값 · 같은 분이면 0). */
+export function selfShiftWriteError(
+  row: { checkIn?: string | null; checkOut?: string | null; checkInAt?: number | null },
+  field: 'checkIn' | 'checkOut', value: string | null, nowMs: number,
+): ShiftSpanError | null {
+  const isNow = value === 'now';
+  const v = isNow ? kstHm(nowMs) : value;
+  const inHm = field === 'checkIn' ? v : row.checkIn ?? null;
+  const outHm = field === 'checkOut' ? v : row.checkOut ?? null;
+  if (!inHm || !outHm) return null;
+  const inAt = field !== 'checkIn' ? row.checkInAt ?? null : isNow ? nowMs : v === row.checkIn ? row.checkInAt ?? null : null;
+  const start = shiftStartMs(inHm, inAt, nowMs);
+  if (field === 'checkOut' && isNow) return shiftSpanError(start, nowMs);
+  const gap = (kstAt('2000-01-01', outHm) - kstAt('2000-01-01', inHm) + DAY) % DAY;
+  return shiftSpanError(start, start + gap);
+}
+
 export function plannedMinutes(s: PayShift): number | null {
   if (s.startAt == null || s.endAt == null) return null;
   return Math.floor((s.endAt - s.startAt) / MIN);

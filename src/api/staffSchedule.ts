@@ -18,6 +18,8 @@ export interface StaffShift {
   startHm?: string | null;   // 계획 출근(HH:mm)
   checkIn?: string | null;   // 실제 출근(HH:mm)
   checkOut?: string | null;  // 실제 퇴근(HH:mm)
+  /** 서버가 기록한 실제 출근 시각(epoch ms, 20261004c check_in_at) — 출근 버튼·'지금 출근' 만 남긴다. 손으로 고친 출근이면 null. */
+  checkInAt?: number | null;
   confirmed?: boolean;
 }
 
@@ -25,13 +27,14 @@ export interface StaffShift {
 export async function getStaffSchedule(venueId: string, from: string, to: string): Promise<StaffShift[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('staff_schedule')
-    .select('work_date, staff_name, start_hm, check_in, check_out, confirmed')
+    .select('work_date, staff_name, start_hm, check_in, check_out, check_in_at, confirmed')
     .eq('venue_id', venueId).gte('work_date', from).lte('work_date', to);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     date: r.work_date, name: r.staff_name,
-    startHm: r.start_hm ?? null, checkIn: r.check_in ?? null, checkOut: r.check_out ?? null, confirmed: !!r.confirmed,
+    startHm: r.start_hm ?? null, checkIn: r.check_in ?? null, checkOut: r.check_out ?? null,
+    checkInAt: r.check_in_at ? Date.parse(r.check_in_at) : null, confirmed: !!r.confirmed,
   }));
 }
 
@@ -134,6 +137,10 @@ export async function getMyStaffWage(venueId: string): Promise<MyWage | null> {
  *   PATCH 는 0행을 고치고도 200 을 돌려줘 조용히 실패했다(2026-08-28 실측).
  *   UPDATE 정책을 통째로 넓히면 직원이 confirmed·start_hm 까지 바꿀 수 있어,
  *   읽기는 정책(staff_sched_self_select)으로 열고 쓰기는 이 RPC 두 칼럼으로 좁힌다.
+ *
+ * val = 'now' 는 '지금 출근·지금 퇴근' — 서버가 **자기 시각**으로 적는다(20261004f). 기기 시계·시간대와 무관하고,
+ *   서버가 그 퇴근이 출근 뒤 24시간을 넘는지 알 수 있다(HH:MM 으로 보내면 25시간이 1시간으로 접혀 기록됐다 — R4-01).
+ *   같은 분 출퇴근(60초 미만)·24시간 초과는 서버가 거절하고 사유 문장을 돌려준다(punch_my_shift 와 같은 규칙).
  */
 export async function setMyShiftTime(venueId: string, date: string, field: 'checkIn' | 'checkOut', val: string | null): Promise<void> {
   if (IS_MOCK) return;
