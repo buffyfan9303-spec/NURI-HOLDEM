@@ -6,7 +6,7 @@
 //   (clock/gameSwitchContract.test.ts · remoteContract.test.ts 와 같은 결).
 // 실행: npx vitest run src/components/features/gto/nuriSpotWiring.contract.test.ts
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = readFileSync(join(__dirname, 'NuriSpotPanel.tsx'), 'utf-8');
@@ -110,16 +110,35 @@ describe('빌런 B~E 배선', () => {
   });
 });
 
-describe("🔴 '수학 참고' 배지는 화면에 나가지 않는다 (오너 2026-10-04)", () => {
+describe("🔴 신뢰도 배지(솔버·차트/Nash·유사 스팟·범위 밖·수학 참고)는 화면에 나가지 않는다 (오너 2026-10-04)", () => {
   // 판정(coverage_kind='math_only')은 그대로 돌고, 사용자에게 보이는 말만 없앴다.
-  it('라벨이 빈 coverage 는 내 스팟 행에 배지를 그리지 않는다', () => {
+  it('내 스팟 행은 coverage 라벨을 읽지 않는다(배지 자체가 없다)', () => {
     const list = readFileSync(join(__dirname, 'MySpotList.tsx'), 'utf-8');
-    expect(list, '라벨이 비어도 빈 배지 칸을 그린다').toMatch(/COVERAGE_LABEL\[r\.coverageKind\] && <span/);
+    expect(list, '내 스팟 행이 coverage 라벨을 다시 읽는다').not.toMatch(/COVERAGE_LABEL|VERDICT_LABEL|coverageKind/);
   });
   it("math_only 라벨은 빈 문자열이고 spotEvaluate 에 '수학 참고' 화면 문구가 없다", () => {
     const ev = readFileSync(join(__dirname, '../../../lib/spotEvaluate.ts'), 'utf-8')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     expect(ev, "COVERAGE_LABEL 에 '수학 참고' 문구가 되살아났다").not.toContain('수학 참고');
     expect(ev).toMatch(/math_only: '',/);
+  });
+});
+
+describe("🔴 신뢰도 배지 문구는 어느 화면 파일에도 없다 (오너 2026-10-04)", () => {
+  // 판정·저장값(coverage_kind)은 그대로 돈다 — 화면(.tsx)이 라벨 표를 읽거나 배지 문구를 직접 쓰지 않는지만 본다.
+  const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(join(d, e.name)) : /\.tsx$/.test(e.name) ? [join(d, e.name)] : []);
+  const strip = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const files = walk(join(__dirname, '../..')).map((p) => ({ p, t: strip(readFileSync(p, 'utf-8')) }));
+  it('src/components 의 .tsx 가 0 개가 아니다(수집 거짓 통과 방지)', () => {
+    expect(files.length).toBeGreaterThan(50);
+  });
+  it('COVERAGE_LABEL · VERDICT_LABEL 을 화면 파일이 읽지 않는다', () => {
+    const hit = files.filter(({ t }) => /\b(COVERAGE_LABEL|VERDICT_LABEL)\b/.test(t)).map(({ p }) => p);
+    expect(hit, '배지 라벨 표를 다시 읽는 화면 파일').toEqual([]);
+  });
+  it('배지 문구 다섯 개를 화면 파일이 직접 쓰지 않는다', () => {
+    const hit = files.filter(({ t }) => /솔버 기준|차트\/Nash 기준|유사 스팟 참고|정확한 분석 범위 밖|수학 참고/.test(t)).map(({ p }) => p);
+    expect(hit, '배지 문구가 화면에 되살아났다').toEqual([]);
   });
 });

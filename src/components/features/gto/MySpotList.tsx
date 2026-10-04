@@ -11,7 +11,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../../lib/spot';
 import { kstToday } from '../../../lib/kst';
 import { clampSpotDate } from '../../../lib/spotDate';
-import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, updateSpotPlayedOn, type SavedSpot } from '../../../api/spots';
 import { listSpotAiReviews } from '../../../api/spotReview';
 import SpotDetails from './SpotDetails';
@@ -112,7 +111,6 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold text-ink-primary">{spotSummary(r.spot)}</p>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
-                {COVERAGE_LABEL[r.coverageKind] && <span className="rounded-badge bg-surface-high px-1.5 py-px font-semibold">{COVERAGE_LABEL[r.coverageKind]}</span>}
                 {r.spot.heroAction && <span>내 선택 {actionLabel(r.spot.heroAction)}</span>}
                 {r.spot.board.length > 0 && <span>{streetLabel(r.spot.street)} {r.spot.board.length}장</span>}
                 {ai.has(r.id) && <span className="inline-flex items-center gap-0.5 text-accent-200"><Icon name="sparkles" size={10} aria-hidden />AI 코칭</span>}
