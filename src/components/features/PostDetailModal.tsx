@@ -371,13 +371,16 @@ export default function PostDetailModal({
   // 낙관 갱신 직후 리얼타임 에코 가드 — castPollVote 서버 응답이 최종이므로,
   // 마지막 vote 후 800ms 안에 도착한 구독 콜백은 무시한다(§7-6).
   const lastVoteAtRef = useRef(0);
+  // ⚠ 닫힐 때(open=false)는 첨부를 비우지 않는다 — 닫히는 동안 Modal 은 200ms 남아 있는데, 맨 앞에서 setAttachment(null) 을 하면
+  //   그 사이 투표 칸이 먼저 없어지고 아래가 위로 튄다(2026-10-04 감사 M3-01, 입력 없는 CLS 0.034).
+  //   글이 바뀐 직후의 옛 글 첨부는 shownAttachment 의 attachmentFor 가드가 가린다(새 글 응답 전엔 pollEmbed 로 자리만 잡는다).
+  //   그래서 비우는 곳은 '이 글의 조회가 실패했을 때' 하나뿐이다(안 비우면 attachmentFor 가 맞아 옛 글 첨부가 이 글에 칠해진다).
   useEffect(() => {
-    setAttachment(null);
     if (!open || !post) return;
     let active = true;
     fetchAttachment(post.id)
       .then((a) => { if (active) { setAttachment(a); setAttachmentFor(post.id); } })
-      .catch(() => { if (active) setAttachmentFor(post.id); });
+      .catch(() => { if (active) { setAttachment(null); setAttachmentFor(post.id); } });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
