@@ -1486,7 +1486,7 @@ function VenuesSection({
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-(--dur-fast) cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
-                    ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] hover:border-accent-400'
+                    ? 'bg-surface-low border-accent-400/50 hover:border-accent-400'
                     : 'card-aura',
                 ].join(' ')}
               >

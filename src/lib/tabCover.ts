@@ -464,6 +464,11 @@ function stripIdentity(root: HTMLElement): void {
   for (const x of [root, ...root.querySelectorAll('*')]) {
     for (const a of [...x.attributes]) {
       const n = a.name;
+      // 🔴 aria-hidden 은 **절대 떼지 않는다**(2026-10-05). 하위 판 복제본은 이 함수보다 먼저 aria-hidden 을 붙이는데(snapSubPanel),
+      //   예전엔 'CSS 가 선택자로 읽는 속성'(keep)에 aria-hidden 이 우연히 들어 있어서만 살아남았다 — 그 선택자(하단 탭바 :not([aria-hidden]))가
+      //   E+황동 재디자인에서 사라지자 복제본이 접근성 트리에 드러나 같은 그룹·버튼이 두 개로 잡혔다(e2e mystore-mobile-tabjump · spot-tab-keepalive).
+      //   복제본 안의 장식 aria-hidden 도 원본과 같이 숨어 있어야 한다.
+      if (n === 'aria-hidden') continue;
       if (n === 'id' || n === 'for' || n === 'name' || ((n.startsWith('data-') || n.startsWith('aria-') || n === 'role') && !keep.has(n))) x.removeAttribute(n);
     }
   }
@@ -632,8 +637,8 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   const nudge = (d: number) => { shift += d; clipBelow(lastRb); };
   clipBelow(rb);
   if (base === null) {
-    const ground = window.matchMedia('(prefers-reduced-transparency: reduce)').matches
-      ? ['var(--grad-surface)', 'var(--glow-layer)'] : ['var(--aura-layers)', 'var(--grad-surface)', 'var(--glow-layer)'];
+    // 지면 그림 = body::before 와 같은 한 장(2026-10-04 'E+황동' — 블룸 --aura-layers·--glow-layer 삭제. 없는 var() 를 남기면 선언 전체가 무효가 된다)
+    const ground = ['var(--grad-surface)'];
     el.style.backgroundColor = 'rgb(var(--surface-base))';
     el.style.backgroundImage = [...layers, ...ground].join(', ');
   } else {

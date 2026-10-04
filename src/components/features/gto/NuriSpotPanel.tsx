@@ -292,7 +292,7 @@ function SpadeMark() {
       <span data-aura data-aura-level="hero" data-aura-variant="violet" className="pointer-events-none absolute inset-0 rounded-full" />
       <span
         className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
-        style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }}
+        style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2A2D31 0%, #18191C 58%, #0E0F11 100%)' /* 2026-10-04 네이비 → 무채색 */ }}
       >
         <img src="/brand/nuri-holdem-symbol.svg" alt="" width={22} height={22} draggable={false} />
       </span>

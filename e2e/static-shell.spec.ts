@@ -78,10 +78,12 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     // MO-7A: 셸 스켈레톤이 ListCard 골격 복제로 바뀌며 대표 클래스도 그 컨테이너로 교체.
     // 2026-09-05: 홈 목록 컨테이너는 아우라 v6 카드(rounded-aura border card-aura)다 — 예전 값(rounded-card …)은
     //   주간 머니인 킹 스트립이 우연히 만족시키고 있었고, 그 스트립이 제거되자(법적위험완화 v3) 셸과 앱의 불일치가 드러났다.
-    for (const cls of ['h-header-h', 'bg-surface-mid shadow-dialog', 'rounded-aura border card-aura']) {
+    // 2026-10-05 E+황동: 하단 탭바가 떠 있는 판(bg-surface-mid shadow-dialog)에서 바닥에 붙은 평평한 바로 바뀌었다 — 셸·App 둘 다
+    //   안쪽 바가 'flex pb-[3px]' 다. React 쪽 검사도 첫 단어만이 아니라 **모든 클래스를 가진 요소**로 좁혔다(동일성 검증 강화).
+    for (const cls of ['h-header-h', 'flex pb-[3px]', 'rounded-aura border card-aura']) {
       expect(html, `셸에서 '${cls}' 가 사라졌다`).toContain(cls);
       const inApp = await page.evaluate(
-        (c) => document.querySelector(`[class*="${c.split(' ')[0]}"]`) != null, cls,
+        (c) => document.querySelector(c.split(' ').map((k) => '.' + CSS.escape(k)).join('')) != null, cls,
       );
       expect(inApp, `React 렌더에 '${cls}' 가 더는 없다 — App.tsx 가 바뀌었으니 index.html 셸도 갱신할 것`).toBe(true);
     }

@@ -5,15 +5,14 @@
 //   바꾸지 않는 것: 높이·로고·로그인 버튼·알림 위치·축소 임계값(56/40)·탭바 sticky offset. backdrop-filter 를 헤더 호스트에 붙이지 않는다
 //   (필터가 걸린 요소는 fixed 자손의 컨테이닝 블록이 되어 알림 스크림이 헤더 안에 갇혔다 — CLAUDE.md 참고 메모).
 // 이 파일이 보는 것
-//   ① 헤더 ::before 가 불투명이고(alpha 1) 순수 surface-base 가 아니며, 서브바와 같은 색 계열(보라 기운 — b > r ≥ g)이다.
-//      헤더↔서브바 색 거리가 옛 검은 띠(surface-base)↔서브바 거리보다 작다. 라이트도 불투명 + 옅은 인디고 기운.
+//   ① 헤더 ::before 가 불투명이고(alpha 1) 지면(surface-base)·서브바와 **같은 면**이다(2026-10-04 'E+황동' — 블룸을 걷어
+//      검은 띠의 원인 자체가 사라졌다. 종전 '보라 기운' 단언을 대체). 라이트는 불투명한 밝은 면.
 //   ② 헤더 호스트에 filter/backdrop-filter/transform/will-change 가 없다(컨테이닝 블록 금지). ::before 에도 backdrop-filter 없음.
 //   ③ 알림 패널을 열면 스크림(fixed inset-0)이 **뷰포트 전체**를 덮는다 — 헤더 높이에 갇히지 않는다.
 //   ④ 높이(60.5)·로고·알림 버튼 위치·스크롤 축소 뒤 표면색이 그대로다(축소 임계값 계약은 headerShrink 단위 테스트).
-//   ⑤ N01: `.card-aura` + `[data-aura]` 를 함께 가진 호스트의 box-shadow 가 **접촉 그림자 + LED 둘 다**를 갖는다(교체가 아니라 합성).
-//      forced-colors 에서는 LED 만 빠지고 접촉 그림자는 남는다.
+//   ⑤ N01(2026-10-04 개정): `[data-aura]` 는 상태 표식일 뿐 후광을 칠하지 않는다 — card-aura 호스트도 속성 유무와 같은 그림자.
 // 못 보는 것: 프로필 이미지 있음/없음(실계정 필요) — 비로그인 + 가짜 세션(로그인 UI)만 본다.
-// 음성 대조: index.css 의 `.glass-chrome::before` color-mix 줄을 지우면 ① 이, `.card-aura[data-aura]` 합성 규칙을 지우면 ⑤ 가 실패한다.
+// 음성 대조: `.glass-chrome::before` 에 색 섞기를 되살리면 ① 이, `[data-aura]` 에 box-shadow 를 되살리면 ⑤ 가 실패한다.
 // 실행: E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/header-surface.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
@@ -68,7 +67,7 @@ const surfaces = (page: Page) => page.evaluate(() => {
 });
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`🔴 ${theme}: 헤더 표면이 불투명 보라 기운 + 서브바와 같은 계열 · 필터 없음 · 높이/로고/알림 불변`, async ({ page }) => {
+  test(`🔴 ${theme}: 헤더 표면이 불투명 · 지면·서브바와 같은 면 · 필터 없음 · 높이/로고/알림 불변`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, theme);
     const s = await surfaces(page);
@@ -79,15 +78,12 @@ for (const theme of ['dark', 'light'] as const) {
     for (const k of ['filter', 'backdrop'] as const) expect(s.host[k], `헤더 호스트 ${k}`).toBe('none');
     expect(s.host.transform).toBe('none'); expect(s.host.willChange).toBe('auto');
     expect(s.host.bg).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);   // 배경은 ::before 레이어에만(구조 유지)
+    // 2026-10-04 오너 결정 'E+황동': 지면 블룸이 없어져 헤더·서브바·지면이 **한 색**이다(검은 띠 문제의 원인이던 블룸 자체가 없다).
+    //   종전 단언(보라 기운 b > r · 서브바보다 어둡다)은 블룸을 미리 섞던 시절의 계약이라 '같은 면' 단언으로 바꿨다.
     if (theme === 'dark') {
-      expect(dist(before, base), `헤더가 여전히 순수 surface-base(${s.before}) — 검은 띠`).toBeGreaterThan(6);
-      expect(before[2], '보라 기운(b > r)').toBeGreaterThan(before[0]);
-      expect(before[0], '보라 기운(r ≥ g)').toBeGreaterThanOrEqual(before[1]);
-      expect(dist(before, sub), `헤더↔서브바 거리 ${dist(before, sub).toFixed(1)} ≥ 옛 검은 띠↔서브바 ${dist(base, sub).toFixed(1)}`).toBeLessThan(dist(base, sub));
-      // 여전히 서브바보다 어둡다(같은 계열이지 같은 색은 아니다 — 경계는 얇은 선이 담당)
-      expect(before[0] + before[1] + before[2]).toBeLessThan(sub[0] + sub[1] + sub[2]);
+      expect(dist(before, base), `헤더(${s.before})가 지면(surface-base ${s.surfaceBase})과 다르다 — 띠가 생긴다`).toBeLessThanOrEqual(2);
+      expect(dist(before, sub), `헤더↔서브바 거리 ${dist(before, sub).toFixed(1)} — 한 면이어야 한다`).toBeLessThanOrEqual(2);
     } else {
-      expect(before[2], '라이트: 옅은 인디고 기운(b ≥ r)').toBeGreaterThanOrEqual(before[0]);
       expect(before[0] + before[1] + before[2], '라이트: 밝은 면').toBeGreaterThan(720);
     }
     // 3.5rem + 테두리 1px — 루트 16px 에서 57(17px 시절 60.5)
@@ -117,8 +113,9 @@ for (const theme of ['dark', 'light'] as const) {
       const s = await surfaces(page);
       const before = rgb(s.before)!;
       expect(before[3], `${theme} ${w}px: 반투명 ${s.before}`).toBe(1);
-      if (theme === 'dark') { expect(before[2]).toBeGreaterThan(before[0]); expect(before[0]).toBeGreaterThanOrEqual(before[1]); }
-      else expect(before[2]).toBeGreaterThanOrEqual(before[0]);
+      // 폭과 무관하게 같은 면(2026-10-04 — 종전 '보라 기운' 단언 대체)
+      if (theme === 'dark') { const base = s.surfaceBase.split(/\s+/).map(Number); expect(dist(before, base), `${w}px 헤더≠지면 ${s.before}`).toBeLessThanOrEqual(2); }
+      else expect(before[0] + before[1] + before[2], `${w}px 라이트 밝은 면`).toBeGreaterThan(720);
       const ox = await page.evaluate(() => { const h = document.querySelector<HTMLElement>('header[data-stack-header]')!; return h.scrollWidth - h.clientWidth; });
       expect(ox, `${theme} ${w}px: 헤더 가로 넘침`).toBeLessThanOrEqual(1);
     }
@@ -146,18 +143,18 @@ test('🔴 로그인 UI(가짜 세션)에서도 같은 표면이고, 알림 스�
   await page.waitForTimeout(300);
 });
 
-test('🔴 N01: .card-aura + [data-aura] 는 접촉 그림자와 LED 를 합성한다(교체 아님) · forced-colors 는 LED 만 뺀다', async ({ page }) => {
+// 2026-10-04 오너 결정 'E+황동' — LED 백라이트를 껐다. 이 테스트의 뜻을 '합성 유지'에서 **'어떤 호스트에도 색 후광이 없다'** 로 바꿨다.
+//   data-aura 속성은 상태 표식으로 남지만 칠하지 않는다 → 순수 [data-aura] 는 그림자 none, card-aura 호스트는 속성 유무와 무관하게 같은 그림자.
+test('🔴 N01: [data-aura] 는 더 이상 색 후광을 칠하지 않는다(card-aura 호스트도 속성 유무와 같은 그림자)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page, 'dark');
   const g = await page.evaluate(() => {
     const mk = (attrs: Record<string, string>) => { const d = document.createElement('div'); d.className = 'card-aura rounded-aura border'; for (const [k, v] of Object.entries(attrs)) d.setAttribute(k, v); document.body.appendChild(d); const s = getComputedStyle(d).boxShadow; d.remove(); return s; };
     return { plain: mk({}), led: mk({ 'data-aura': '', 'data-aura-level': 'hero', 'data-aura-variant': 'violet' }), ledOnly: (() => { const d = document.createElement('div'); d.setAttribute('data-aura', ''); d.setAttribute('data-aura-level', 'hero'); document.body.appendChild(d); const s = getComputedStyle(d).boxShadow; d.remove(); return s; })() };
   });
-  // 순수 [data-aura] 의 LED 색(violet 139 92 246 / .19)이 card-aura 호스트의 그림자 목록에도 있고, card-aura 의 접촉 그림자(inset 하이라이트)도 남아 있다
-  expect(g.ledOnly).toMatch(/rgba\(139, 92, 246, 0\.19\)/);
-  expect(g.led, `card-aura + data-aura 가 LED 를 잃었다: ${g.led}`).toMatch(/rgba\(139, 92, 246, 0\.19\)/);
-  expect(g.led, `card-aura + data-aura 가 접촉 그림자를 잃었다: ${g.led}`).toMatch(/inset/);
-  expect(g.led).not.toBe(g.plain);
+  expect(g.ledOnly, `[data-aura] 가 여전히 후광을 칠한다: ${g.ledOnly}`).toBe('none');
+  expect(g.led, `card-aura + data-aura 가 속성 없는 card-aura(${g.plain})와 다르다 — LED 가 남았다: ${g.led}`).toBe(g.plain);
+  expect(g.led, '보라 LED 색이 남았다').not.toMatch(/139, 92, 246/);
   await page.emulateMedia({ forcedColors: 'active' });
   const f = await page.evaluate(() => { const d = document.createElement('div'); d.className = 'card-aura'; d.setAttribute('data-aura', ''); d.setAttribute('data-aura-level', 'hero'); document.body.appendChild(d); const s = getComputedStyle(d).boxShadow; d.remove(); return s; });
   expect(f, 'forced-colors 에서 LED 가 남았다').not.toMatch(/139, 92, 246/);

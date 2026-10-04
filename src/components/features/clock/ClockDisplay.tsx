@@ -163,7 +163,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         <div className="flex shrink-0 items-center gap-1">
           {games.map((c) => (
             <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
-              style={c.gameSeq === g?.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)' } : undefined}
+              style={c.gameSeq === g?.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #D9B25A) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #D9B25A) 55%, transparent)' } : undefined}
               className={['rounded-[1cqmin] border px-[1.4cqmin] py-[0.5cqmin] text-[1.7cqmin] font-bold transition-colors',
                 c.gameSeq === g?.gameSeq ? 'text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'].join(' ')}>
               {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6cqmin] inline-block h-[1.6cqmin] w-[1.6cqmin] align-[-0.15em]" />}

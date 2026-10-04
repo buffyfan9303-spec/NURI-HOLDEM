@@ -19,7 +19,7 @@ const VENUE_ROW = {
   approved: true, status: 'active', verification_status: 'verified', is_paid_ad: false, display_order: 1,
   follower_count: 12, rating: null,
 };
-const ACCENT = 'rgb(99, 68, 206)'; // --accent-300 (다크·라이트 동일)
+const ACCENT = 'rgb(140, 94, 20)'; // --accent-300 (다크·라이트 동일) — 2026-10-04 'E+황동' #8C5E14(종전 #6344CE)
 const SHOT_DIR = process.env.FOLLOW_SHOT_DIR;
 
 interface Writes { posts: unknown[]; deletes: string[] }

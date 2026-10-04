@@ -750,12 +750,10 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(m.입력높이).toBeGreaterThanOrEqual(44);
       expect(m.보내기[0]).toBeGreaterThanOrEqual(44); expect(m.보내기[1]).toBeGreaterThanOrEqual(44);
       expect(m.글자공간 - m.안내폭, `입력칸 안내 글자가 잘린다(여유 ${(m.글자공간 - m.안내폭).toFixed(2)}px)`).toBeGreaterThan(0);
-      // ⑤ 두 카드 뒤 LED — 기존 hero 유틸, 기본(34/.19)보다 한 단계 위, AURA-03 상한(48/.22) 안, outer 만.
+      // ⑤ 두 카드 뒤 LED — 2026-10-04 오너 결정 'E+황동'으로 LED 백라이트를 껐다(종전: 확산 34~48 · 알파 .19~.22 의 outer 후광).
+      //   이제 뜻은 '두 카드 뒤에 오프셋 0 색 후광이 없다'. (data-aura 속성·--aura-led-* 변수는 상태 표식으로 남아도 칠하지 않는다)
       for (const [k, l] of [['게시글', m.카드], ['댓글', m.댓글]] as const) {
-        expect(l.blur, `${k} 카드 LED 확산`).toBeGreaterThan(34); expect(l.blur).toBeLessThanOrEqual(48);
-        expect(l.a, `${k} 카드 LED 알파`).toBeGreaterThan(0.19); expect(l.a).toBeLessThanOrEqual(0.22);
-        expect(l.shadow, `${k} 카드에 LED 그림자가 없다`).toContain(`${l.blur}px`);
-        expect(l.shadow, `${k} 카드 LED 가 inset 이다(글자 위)`).not.toContain('inset');
+        expect(l.shadow, `${k} 카드 뒤에 후광(오프셋 0 · 확산 ≥ 16px)이 되돌아왔다: ${l.shadow}`).not.toMatch(/0px 0px (1[6-9]|[2-9]\d)px/);
       }
     });
   }

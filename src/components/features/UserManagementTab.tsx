@@ -325,7 +325,7 @@ function UserRow({ user, onUpdate, onReload }: {
               {statusStyle.label}
             </span>
             {user.shadowbanned && (
-              <span className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 순위에서 조용히 제외됨"><Icon name="eye-off" size={11} className="shrink-0" />섀도우밴</span>
+              <span className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-border-strong bg-surface-high text-ink-primary" title="활동 순위에서 조용히 제외됨"><Icon name="eye-off" size={11} className="shrink-0" />섀도우밴</span>
             )}
           </div>
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>
@@ -402,7 +402,7 @@ function UserRow({ user, onUpdate, onReload }: {
               <button type="button" onClick={toggleShadowban}
                 className={['text-2xs font-semibold px-2.5 py-1 rounded-badge border transition-colors',
                   user.shadowbanned
-                    ? 'border-violet-400/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25'
+                    ? 'border-accent-300 bg-accent-300/15 text-accent-200 hover:bg-accent-300/25'
                     : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {user.shadowbanned ? '섀도우밴 해제' : '섀도우밴'}
               </button>

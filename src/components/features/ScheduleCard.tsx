@@ -518,7 +518,7 @@ function ListCard({
         />
         {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
         {rating && rating.count > 0 && (
-          <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+          <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>
             ★{rating.avg.toFixed(1)}
           </span>
         )}
@@ -590,7 +590,7 @@ function ListCard({
             ⚠ 라벨·금액 둘 다 정본 하나(prizeParts)에서 온다. 'GTD'(보장)와 '예상 상금'(엔트리 비례)은
               뜻이 달라 같은 말로 적으면 보장되지 않은 금액을 보장처럼 말하게 된다.
             ⚠ 상금이 없으면 라벨 '상금' + 값 '—'(오너 지시). 0 이나 확정값처럼 적지 않는다. */}
-        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-gold-300' : 'text-ink-muted'} />
+        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-ink-primary' : 'text-ink-muted'} /* 2026-10-04 오너: 금액은 본문 색(금색은 순위·성취 전용) */ />
         {/* 참가비 — §28 상품 가격 정보라 표시를 유지한다. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로. */}
         <Metric label="참가비" value={buyInText(schedule.buyIn?.amount)}
           title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined} />
@@ -712,7 +712,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         'flex flex-col overflow-hidden rounded-aura border transition-transform duration-(--dur-panel) ease-out active:duration-(--dur-fast)',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
-          ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
+          ? 'border-accent-400 bg-surface-low'
           // card-elev: 단색 채움 위 수직 광원+헤어라인(DatawizzAI 문법). 프리미엄(TOP)은 자체 글로우
           // 섀도가 있어 제외 — card-elev 의 box-shadow 가 캐스케이드로 글로우를 덮어쓴다.
           // v2 아우라 카드(2026-09-02): 반투명 면 + 6% 헤어라인 + 상단 하이라이트 (index.css .card-aura)
@@ -790,7 +790,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
             <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-sky-300"><Icon name="map-pin" size={11} className="shrink-0" />{fmtKm(distanceKm)}</span>
           ) : rating && rating.count > 0 ? (
             <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-accent-200" title={`방문 후기 ${rating.count}건 평균`}>
-              <Icon name="star-fill" size={11} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+              <Icon name="star-fill" size={11} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
             </span>
           ) : null}
         </div>
@@ -806,7 +806,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
               {buyInText(schedule.buyIn?.amount)}
             </p>
           </div>
-          <p className={`shrink-0 text-right text-2xs font-bold tabular-nums leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+          <p className={`shrink-0 text-right text-2xs font-bold tabular-nums leading-none ${sub ? 'text-ink-primary' : 'text-ink-muted'}`}>
             {sub ?? '상금 정보 없음'}
           </p>
         </div>
@@ -928,7 +928,7 @@ function TimetableCard({
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           {rating && rating.count > 0 && (
-            <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
+            <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}
           {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
           {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
@@ -966,7 +966,7 @@ function TimetableCard({
         className="flex w-20.5 min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right active:text-right">
         {gtd ? (
           <span data-testid="schedule-prize" className={`break-keep ${gtd.includes('억') ? 'text-[0.75rem]' : 'text-[0.8125rem]'} font-extrabold
- leading-tight tracking-tight tabular-nums text-gold-300`}>{gtd}</span>
+ leading-tight tracking-tight tabular-nums text-ink-primary`}>{gtd}</span>
         ) : (
           <span data-testid="schedule-daily" data-kind={kind.text} className={`text-[0.8125rem] font-extrabold leading-tight ${kind.cls}`}>{kind.text}</span>
         )}

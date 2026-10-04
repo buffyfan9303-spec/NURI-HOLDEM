@@ -562,7 +562,7 @@ export default function PostDetailModal({
             {/* 고정·끌올 — 목록(CommunityTab PostRow)과 같은 배지. 목록에서 '왜 위에 있는지' 보고 들어온 사람이
                 상세에서 그 상태를 잃지 않게 한다(끌올은 작성자 전용 행에만 있어 남에게는 사라졌다). */}
             {post.pinnedAt && (
-              <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>
+              <span className="shrink-0 rounded-badge bg-surface-high px-1 text-2xs font-extrabold leading-none text-ink-primary">고정</span>
             )}
             {isBumped(post) && (
               <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>

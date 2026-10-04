@@ -93,8 +93,8 @@ test('🔴 커뮤니티 서브탭 — 히트 44px 는 지키고 시각 알약만
     expect(m.spanH[i], `모바일 시각 알약이 32px 를 넘는다(${m.spanH[i]})`).toBeLessThanOrEqual(33);
   }
   expect(m.barH, `바가 아직 두껍다(${m.barH}px)`).toBeLessThanOrEqual(58);
-  expect(m.pillBlur, 'LED 확산이 micro 범위(8~16px)를 벗어났다').toBeGreaterThanOrEqual(8);
-  expect(m.pillBlur!, 'LED 확산이 micro 범위(8~16px)를 벗어났다').toBeLessThanOrEqual(16);
+  // 2026-10-04 오너 결정 'E+황동' — 활성 알약의 micro LED 도 껐다(종전: 확산 8~16px). 이제 활성 알약에 후광이 없어야 한다.
+  expect(m.pillBlur, `활성 알약에 후광(확산 ${m.pillBlur}px)이 되돌아왔다`).toBeNull();
   expect(Math.round(Number(String(m.pillRadius).replace('px', ''))), '알약 곡률이 8~10px 범위 밖이다').toBeGreaterThanOrEqual(8);
   expect(Math.round(Number(String(m.pillRadius).replace('px', ''))), '알약 곡률이 8~10px 범위 밖이다').toBeLessThanOrEqual(10);
   expect(m.inactiveShadows, '비활성 탭에 글로우가 붙었다').toEqual([]);

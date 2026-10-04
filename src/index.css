@@ -44,10 +44,7 @@
   /* ── 앱 브랜드 토큰 (구 tailwind.config.js theme.extend.colors) ──
      index.css 의 CSS 변수("R G B")를 rgb() 로 받는다. 투명도 수식어(bg-surface-base/95)는 v4 가
      color-mix(in oklab, rgb(var(--x)) 95%, transparent) 로 만든다 — 같은 색·같은 알파다(v3 의 <alpha-value> 대체). */
-  /* 아우라 신호색(틸) — --aura-* 참조. 브랜드 주색은 accent(바이올렛) 그대로. */
-  --color-aura-200: rgb(var(--aura-200));
-  --color-aura-300: rgb(var(--aura-300));
-  --color-aura-400: rgb(var(--aura-400));
+  /* (아우라 신호색 틸 --color-aura-* — 2026-10-04 'E+황동'으로 삭제. 호출부 6곳은 accent·emerald 로 옮겼다) */
   /* 시안의 상태색 — 차트 블루·리커버리 오렌지(게이지/차트 세그먼트 전용) */
   --color-chart-blue: rgb(var(--chart-blue));
   --color-chart-orange: rgb(var(--chart-orange));
@@ -57,8 +54,7 @@
   --color-surface-mid: rgb(var(--surface-mid));     /* 모달, 사이드바 */
   --color-surface-high: rgb(var(--surface-high));   /* 호버 영역, 입력 필드 */
   --color-surface-float: rgb(var(--surface-float)); /* 드롭다운, 툴팁 */
-  /* Accent: 트와일라잇 플럼 정합 바이올렛-인디고(h≈248) — 주요 액션·활성·링크·포커스.
-     대비 실측(2026-08-27): 다크 300 vs #151221 = 4.01, 흰 텍스트 on 300 = 4.59 / 라이트 300 vs #FFF = 6.78. */
+  /* Accent: 진한 황동 한 가지(2026-10-04 오너 결정 'E+황동') — 주요 액션·활성·링크·포커스. 값·대비는 아래 :root/html.light 토큰 주석. */
   --color-accent-50: rgb(var(--accent-50));
   --color-accent-100: rgb(var(--accent-100));
   --color-accent-200: rgb(var(--accent-200)); /* 다크 배경 위 액센트 텍스트(PET --accent-ink 계승) */
@@ -149,9 +145,7 @@
 
   /* ── 그림자 ── 헤어라인 링/그림자를 CSS 변수로 → 라이트 모드에서 흰색 테두리 선이 보이던 버그 해결 */
   --shadow-card: 0 0 0 1px var(--card-ring);   /* 바이낸스식 플랫 — 헤어라인만 */
-  --shadow-gold: 0 0 10px rgba(252,213,53,0.30);
-  --shadow-aura: 0 0 0 1px rgb(var(--aura-300) / 0.5), 0 0 15px rgb(var(--aura-300) / 0.25); /* v3 네온 — 데이터 링 전용 */
-  --shadow-glow: 0 0 16px rgb(129 140 248 / 0.28); /* v6.5: 블룸 한 겹. 활성 칩은 ring-1 inset 이 테두리를 맡는다 */
+  /* (shadow-gold·shadow-aura·shadow-glow — 2026-10-04 오너 결정 'E+황동'으로 후광 그림자 삭제) */
   --shadow-dialog: 0 -4px 32px var(--card-shadow);
   --shadow-badge: 0 0 6px rgba(229,62,62,0.6);
   /* drop-shadow: v4 기본값이 v3 와 다르다 — v3 값을 v4 이름(xs=v3 sm, sm=v3 기본)에 둔다 */
@@ -865,36 +859,18 @@ video {
        '덜 칠해진 것'으로 보인다. 헤더는 상시 떠 있는 크롬이라 여기서만큼은 가독성이 이긴다.
        (필터를 걷어내 상시 backdrop-filter 한 겹도 사라진다 — §20.4 #5 측정 게이트에 유리) */
     background-color: rgb(var(--surface-base));
-    /* N09(2026-09-13, 오너 첨부 "로그인 헤더의 검은 띠"): 불투명은 그대로 두고 **.subbar-aura 와 같은 수법**으로 누리 보라를
-       미리 섞는다 — 실측 헤더 rgb(6,8,15) vs 바로 아래 서브바 ≈ rgb(27,21,52) 라 하드한 검은 가로 띠였다.
-       섞는 양은 서브바(--aura-a2 .16)보다 낮은 --chrome-mix(다크 .08 · §5.1 표 5~9%) — 같은 계열이되 서브바보다 어둡고,
-       경계는 아래 얇은 border 한 줄이 맡는다. 움직이는 body bloom 을 비추는 투명 배경·backdrop-filter 는 쓰지 않는다
-       (필터는 fixed 자손의 컨테이닝 블록 — 알림 스크림이 헤더에 갇혔던 사고). 높이·로고·알림·축소 임계값은 손대지 않는다. */
-    background-color: color-mix(in srgb,
-      rgb(var(--surface-base)) calc(100% - var(--chrome-mix, 0.08) * 100%),
-      rgb(var(--bloom-1)) calc(var(--chrome-mix, 0.08) * 100%));
+    /* 2026-10-04 'E+황동': 지면의 보라 블룸을 걷었으므로 헤더·서브바·지면이 같은 불투명 surface-base 한 색이다(경계는 아래 border 한 줄). */
   }
   @supports not (backdrop-filter: blur(1px)) {
     .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
   }
   @media (prefers-reduced-transparency: reduce) {
     .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
-    .aura-bg { display: none; }
   }
-  /* 지면 그림 한 벌 — .aura-bg 블룸 · body::before 결/글로우 · 떠나는 판(PANE-HANDOFF, 아래 .tab-pane[data-pane-leaving])이
-     **같은 값**을 쓴다. 떠나는 판이 새 판 위에 설 때 지면과 한 치도 다르면 페이드 동안 배경이 바뀌어 보인다(2026-09-26). */
-  :root {
-    --aura-layers:
-      radial-gradient(min(600px, 150vw) min(600px, 150vw) at 88% 10%, rgb(var(--bloom-1) / var(--aura-a2)) 0%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .55)) 30%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .2)) 60%, transparent 100%),
-      radial-gradient(min(420px, 110vw) min(420px, 110vw) at 50% 96%, rgb(var(--bloom-3) / var(--aura-a3)) 0%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .55)) 30%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .2)) 60%, transparent 100%);
-    --glow-layer: radial-gradient(min(560px, 140vw) min(560px, 140vw) at 10% 0%, rgb(var(--bloom-2) / var(--glow-a, 0.14)) 0%, rgb(var(--bloom-2) / calc(var(--glow-a, 0.14) * .55)) 30%, rgb(var(--bloom-2) / calc(var(--glow-a, 0.14) * .2)) 60%, transparent 100%);
-  }
+  /* .aura-bg — 2026-10-04 오너 결정 'E+황동'으로 보라·남보라·자홍 블룸(--aura-layers·--glow-layer)을 걷었다. 이제 아무것도 칠하지 않는다.
+     요소는 남긴다: PC 판 전환에서 view-transition-name(app-chrome-bg)의 닻이다(e2e/pc-chrome-no-blink). */
   .aura-bg {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    /* v3: 상단 시안 글로우는 body::before 가 이미 그린다 — 여기는 우측 퍼플 + 좌하단 시안 두 겹만(겹침 방지) */
-    /* v6.1: 레퍼런스 blur(64px) 원의 가우시안 감쇠를 4단 스톱(1 → .55 → .2 → 0)으로 근사 — 선형 감쇠는 원판 가장자리가 보였다.
-       위치는 뷰포트 안쪽(모바일 390px 에서도 보이게), 크기는 vw 로 묶는다. filter 없음(페인트 1회). */
-    background-image: var(--aura-layers);
   }
   /* 🔴 2026-09-22 현행 정리 — 아래 C1 서술은 **역사**다. 지금은 규칙 설명이 아니다.
      그 처방이 막던 원인(`src/lib/tabEnter.ts` 의 본문 transform)은 2026-09-22 에 **모듈째 삭제**됐다.
@@ -924,7 +900,7 @@ video {
   @media (max-width: 1023px) {
     .aura-bg { z-index: -1; }
   }
-  /* .subbar-aura — 페이지 위에 얹히는 **sticky 서브탭 바**의 바탕.
+  /* .subbar-aura — 페이지 위에 얹히는 **sticky 서브탭 바**의 바탕. (아래는 2026-09-07 역사 — 블룸은 2026-10-04 삭제)
      오너 리포트(2026-09-07): "커뮤니티 하위 메뉴 탭은 주변 테두리와 백그라운드가 검게 처리돼 있어
      다른 카테고리들과 괴리감이 든다."
      원인: 아우라 블룸 두 겹(.aura-bg 의 바이올렛 88% 10% · body::before 의 인디고 10% 0%)이 가장 진한 곳이
@@ -935,22 +911,19 @@ video {
      블룸이 그 자리에 칠할 색만큼 미리 섞는다. 섞는 양은 아우라 알파 토큰(--aura-a2, 다크 .16 · 라이트 .10)을
      그대로 써서 테마가 바뀌어도 따라온다. 위치에 의존하지 않으므로 어느 화면의 바에도 그대로 쓴다.
      ⚠ 유리(backdrop-filter)로 풀지 않는다 — 헤더에서 이미 "콘텐츠가 비친다"고 되돌린 길이다(.glass-chrome 주석). */
+  /* 2026-10-04 'E+황동': 지면 블룸이 없어졌으므로 미리 섞을 보라도 없다 — 지면과 같은 불투명 surface-base. */
   .subbar-aura {
-    background-color: rgb(var(--surface-base)); /* color-mix 미지원 폴백 = 종전 동작 */
-    background-color: color-mix(in srgb,
-      rgb(var(--surface-base)) calc(100% - var(--aura-a2) * 100%),
-      rgb(var(--bloom-1)) calc(var(--aura-a2) * 100%));
+    background-color: rgb(var(--surface-base));
   }
   /* sticky 로 올라올 때 위쪽 틈을 덮는 ::before 도 같은 색이어야 한다(호출측이 위치·크기만 준다). */
   .subbar-aura::before { background-color: inherit; }
 
+  /* 2026-10-04 오너 결정 'E+황동' — 카드는 **면의 밝기 단계**로만 나눈다(지면 surface-base < 카드 surface-low < 속 카드 surface-mid).
+     테두리·겹친 그림자·위 하이라이트 3종 세트를 걷었다('모든 카드에 테두리+둥근 모서리+그림자' — 진단 §2 #12).
+     테두리 **폭은 그대로**(호출부의 border 1px)이고 색만 투명이라 상자 크기·레이아웃은 한 치도 안 변한다(CLS 0). */
   .card-aura {
-    /* v4 'Vibrant Depth'(aura-ui.com): 불투명 카드 + **거의 안 보이는** 헤어라인(white 5%) + 겹친 부드러운 그림자(Aura UI shadow-lg)
-       + 상단 1px 하이라이트. v3 의 7% 테두리·반투명은 '선이 도드라지는' 조잡함의 원인이었다. */
     background-color: rgb(var(--surface-low));
-    /* v6 실측: aura-ui 카드는 slate-900 위 slate-600(#475569) 1px — '보이는' 테두리가 깊이의 절반이었다. white 5% 는 안 보였다. */
-    border-color: rgb(var(--border-strong) / 0.55);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 15px rgb(0 0 0 / 0.10), 0 4px 6px rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.02);
+    border-color: transparent;
   }
   /* 호버 가능한 카드(Aura UI 'Hoverable Cards Grid'): 포인터가 있는 기기에서만 테두리가 살짝 밝아지고 2px 떠오른다.
      transform/색만(헌법 화이트리스트) · --dur-fast · 터치 기기는 hover 가 없어 영향 0 */
@@ -968,8 +941,8 @@ video {
       transition-duration: var(--dur-fast);
       transition-timing-function: var(--ease);
     }
-    :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(var(--border-strong) / 0.85); transform: translateY(-2px);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 20px 25px rgb(0 0 0 / 0.10), 0 8px 10px rgb(0 0 0 / 0.04), 0 0 0 3px rgb(var(--accent-300) / 0.10); }
+    /* 2026-10-04 'E+황동': 2px 떠오름·accent 링을 걷고 테두리 밝기만 남긴다. */
+    :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(var(--border-strong) / 0.85); }
   }
   /* ⚠ 글로우 카드의 hover — 오너 리포트 2026-09-04 "마우스 올리면 뒤 그라데이션이 갑자기 확 없어진다".
      원인은 디자인이 아니라 **특이도 충돌**이었다: `.card-aura:hover`(0,2,0)가 `.ring-aura-glow`(0,1,0)의
@@ -979,37 +952,11 @@ video {
      (0,3,0)으로 되찾고, 리프트 그림자는 글로우 뒤에 **더한다**(교체가 아니라 누적).
      전환도 --dur-fast(.15s) → --dur-base(.22s): 퍼짐 56px 짜리 그림자는 150ms 에 바뀌면 '툭' 끊긴다.
      헌법 §2 상한(300ms) 안이고 애니메이트 대상은 여전히 색·그림자·transform 뿐이다. */
-  @media (hover: hover) and (pointer: fine) {
-    .card-aura.ring-aura-glow { transition: transform var(--dur-base) var(--ease-out-ui), border-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease); }
-    .card-aura.ring-aura-glow:hover {
-      box-shadow:
-        0 0 0 1px rgb(139 92 246 / 0.42), 0 0 26px rgb(139 92 246 / 0.36), 0 0 64px rgb(217 70 239 / 0.18),
-        0 18px 36px -14px rgb(0 0 0 / 0.55);
-    }
-    html.light .card-aura.ring-aura-glow:hover {
-      box-shadow:
-        0 0 0 1px rgb(109 40 217 / 0.30), 0 0 24px rgb(139 92 246 / 0.20), 0 0 56px rgb(217 70 239 / 0.10),
-        0 16px 32px -14px rgb(11 18 32 / 0.25);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) { :is(a, button, [role="button"]).card-aura:hover { transform: none; } }
   /* N01 §5.2-2·3(2026-09-13): box-shadow 는 선언이 합쳐지지 않는다 — `.card-aura`(components 레이어)가 `[data-aura]`(base 레이어)를
      통째로 덮어 **card-aura 호스트의 LED 가 아예 사라졌다**(실측: CommunityShoutBar 의 card-aura + data-aura → LED 0, 옛 주석은 "box-shadow 없는
      호스트에만 붙인다" 였는데 그 호스트가 card-aura 였다). 접촉 그림자 + LED 를 여기서 **합성**한다(교체·래퍼·가상요소 없음).
      hover 리프트(:is(a,button,[role=button]).card-aura:hover, 0,2,0)는 이 규칙(0,2,0)보다 뒤에 있어 데이터 호스트가 대화형이면 리프트가 이긴다 —
      현재 data-aura 호스트 중 card-aura 인 것은 비대화형 div 뿐이라 충돌 없음. 접근성 미디어에서는 LED 만 뺀다(접촉 그림자는 남긴다). */
-  .card-aura[data-aura] {
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 15px rgb(0 0 0 / 0.10), 0 4px 6px rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.02),
-      0 0 var(--aura-led-blur, 34px) rgb(var(--aura-led-rgb, 139 92 246) / var(--aura-led-a, 0.19));
-  }
-  html.light .card-aura[data-aura] {
-    box-shadow: inset 0 1px 0 rgb(255 255 255), 0 1px 2px rgb(11 18 32 / 0.04), 0 12px 32px -16px rgb(11 18 32 / 0.18),
-      0 0 var(--aura-led-blur, 22px) rgb(var(--aura-led-rgb, 139 92 246) / var(--aura-led-a, 0.09));
-  }
-  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-    .card-aura[data-aura] { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 15px rgb(0 0 0 / 0.10), 0 4px 6px rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.02); }
-    html.light .card-aura[data-aura] { box-shadow: inset 0 1px 0 rgb(255 255 255), 0 1px 2px rgb(11 18 32 / 0.04), 0 12px 32px -16px rgb(11 18 32 / 0.18); }
-  }
   /* 카드 속 카드(시안 Sub-Card #151C30) — 수면 분석 캡슐처럼 한 단계 밝은 면 + 4% 헤어라인 */
   .card-aura-sub {
     background-color: rgb(var(--surface-mid));
@@ -1033,132 +980,70 @@ video {
         붙일 때는 같은 방식으로 합성 규칙을 두어야 한다(e2e/header-surface.spec.ts ⑤ 가 합성을 잰다).
      ⚠ @layer base 에 둔다: Tailwind utilities(shadow-*)가 이겨야 하는 방향이 맞다.
      단계는 둘뿐이다(§7). hero = 카드 뒤 면광, micro = 활성 컨트롤. micro 는 hero 와 경쟁하지 않는다. */
-  [data-aura] {
-    /* 기본값 = violet. variant 가 덮는다. */
-    --aura-led-rgb: 139 92 246;
-    box-shadow: 0 0 var(--aura-led-blur) rgb(var(--aura-led-rgb) / var(--aura-led-a));
-  }
-  [data-aura-level='hero']  { --aura-led-blur: 34px; --aura-led-a: 0.19; }  /* §7 확산 24~48px · 다크 0.16~0.22 */
-  [data-aura-level='micro'] { --aura-led-blur: 12px; --aura-led-a: 0.16; }  /* §7 확산 8~16px */
-  [data-aura-variant='violet']  { --aura-led-rgb: 139  92 246; }
-  [data-aura-variant='cyan']    { --aura-led-rgb:  34 211 238; }
-  [data-aura-variant='emerald'] { --aura-led-rgb:  52 211 153; }
-  [data-aura-variant='amber']   { --aura-led-rgb: 251 191  36; }
-  [data-aura-variant='rose']    { --aura-led-rgb: 251 113 133; }
-  /* 라이트: 밝은 지면에서는 블룸이 '뿌연 얼룩'으로 읽힌다 — 확산을 줄이고 알파를 내려 가장자리 쪽에 남긴다(§7). */
-  html.light [data-aura-level='hero']  { --aura-led-blur: 22px; --aura-led-a: 0.09; }  /* §7 라이트 0.06~0.10 */
-  html.light [data-aura-level='micro'] { --aura-led-blur: 10px; --aura-led-a: 0.08; }
-  /* 접근성 — 이 저장소에 prefers-contrast·forced-colors 대응이 0건이었다. 장식광은 셋 다에서 끈다.
-     (prefers-reduced-motion 은 손댈 것이 없다: 이 레이어에 애니메이션이 처음부터 없다.) */
-  @media (prefers-reduced-transparency: reduce) { [data-aura] { box-shadow: none; } }
-  @media (prefers-contrast: more)               { [data-aura] { box-shadow: none; } }
-  @media (forced-colors: active)                { [data-aura] { box-shadow: none; } }
+  /* 🔴 2026-10-04 오너 결정 'E+황동' — LED 백라이트를 **끈다**(빛나는 후광은 AI 생성 화면의 대표 문법이었다).
+     호출부의 data-aura / data-aura-level / data-aura-variant 속성은 '이 칸이 지금 중요한 상태다'라는 **상태 표식**으로 남긴다
+     (e2e AURA-05~09 가 상태 조건을 이 속성으로 잰다). 칠하는 규칙만 없다. */
   /* 홈 첫 줄 글로우 .stat-glow · 알약 배지 .stat-pill (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
-  /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
-  .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
-  html.light .ring-glow { filter: none; }
   /* v5 라이트 '종이와 잉크'(2026-09-02): 카드는 불투명 순백 + 잉크 6% 헤어라인 + 2겹 그림자(접촉 1px · 확산 32px).
      반투명(0.85)+굵은 테두리는 지면과 섞여 '회색 상자'로 읽혔다 — 밝은 지면에서 깊이는 선이 아니라 그림자가 만든다
      (Atlassian elevation · Linear 라이트: tinted neutral 지면 + 흰 표면 + 옅은 layered shadow). */
+  /* 라이트 카드 — 흰 카드는 밝은 지면과 밝기 차가 작아(1.1) 면만으로는 경계가 사라진다 → 그림자 대신 **헤어라인 한 줄**(border-subtle). */
   html.light .card-aura {
-    background-color: rgb(255 255 255);
-    border-color: rgb(11 18 32 / 0.06);
-    box-shadow: inset 0 1px 0 rgb(255 255 255), 0 1px 2px rgb(11 18 32 / 0.04), 0 12px 32px -16px rgb(11 18 32 / 0.18);
+    border-color: rgb(var(--border-subtle));
   }
   @media (hover: hover) and (pointer: fine) {
-    html.light :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(11 18 32 / 0.12); box-shadow: inset 0 1px 0 rgb(255 255 255), 0 2px 4px rgb(11 18 32 / 0.05), 0 20px 40px -18px rgb(11 18 32 / 0.22); }
+    html.light :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(var(--border-default)); }
   }
   /* 라이트 크롬(탭바 .glass-strong)은 지면색(#F5F7FB) 반투명이 아니라 순백 78% — 스크롤 콘텐츠가 비치되 글자는 흰 종이 위에 남는다 */
   html.light .glass-strong { background-color: rgb(255 255 255 / 0.78); }
-  /* N09 라이트 헤더: 모바일도 **불투명**(예전 0.78 은 backdrop-filter 를 걷어낸 뒤라 22% 만큼 콘텐츠가 그대로 비쳤다) +
-     아주 옅은 인디고 기운(§5.1 표) — 순백에 bloom-2 를 --chrome-mix-light(.03) 만큼 섞는다. PC/모바일 한 규칙. */
+  /* N09 라이트 헤더: 모바일도 **불투명**(예전 0.78 은 backdrop-filter 를 걷어낸 뒤라 22% 만큼 콘텐츠가 그대로 비쳤다).
+     (인디고 기운 섞기는 2026-10-04 'E+황동'으로 삭제.) PC/모바일 한 규칙. */
   html.light .glass-chrome::before {
     background-color: rgb(255 255 255);
-    background-color: color-mix(in srgb, rgb(255 255 255) calc(100% - var(--chrome-mix-light, 0.03) * 100%), rgb(var(--bloom-2)) calc(var(--chrome-mix-light, 0.03) * 100%));
   }
   .t-micro {
     /* v3 스펙: text-xs font-semibold tracking-widest cyan — 영문 대문자 라벨(PLAYERS·BUY-IN·REG)에만. 한글엔 쓰지 않는다 */
     font-size: 0.6875rem; line-height: 1; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-    color: rgb(var(--aura-300));
+    color: rgb(var(--ink-secondary)); /* 2026-10-04: 틸 → 흐린 글자(라벨은 색으로 강조하지 않는다) */
   }
 
   :root,
   html.dark {
-    /* ── 아우라 v3(2026-09-02 오너 승인): 딥 플럼 → 시안 'Aura Health AI' 의 딥 네이비 블랙.
-       바탕 #06080F · 카드 #0E1322 · 서브카드 #151C30. 블루 언더톤이 전 지면에 깔린다. ── */
-    --surface-base:  6 8 15;     /* #06080F 딥 네이비 블랙 */
-    --surface-low:   14 19 34;   /* #0E1322 카드 */
-    --surface-mid:   21 28 48;   /* #151C30 서브카드/모달 */
-    --surface-high:  27 36 60;   /* #1B243C 인풋/호버 */
-    --surface-float: 34 45 74;   /* #222D4A 드롭다운/툴팁 */
+    /* ── 2026-10-04 오너 결정 'E+황동' — Resend 톤 흑백 바탕·면 + 강조색 하나(진한 황동, 로고 스페이드의 금색 계열).
+       종전 '아우라 v3'(딥 네이비 #06080F · 바이올렛 주색 · 틸 신호 · 보라/남보라/자홍 블룸)는 AI 생성 화면의 대표 문법이라 걷었다
+       (진단·시안: 문서 ai-tell-redesign-1004.md §2·§5-2). 대비는 아래 값마다 실제 지면 다섯 단 기준으로 쟀다(WCAG 2.x).
+       순흑 대신 #0A0A0A — OLED 스크롤 번짐(검은 화소 꺼짐→켜짐 지연)을 피한다. ── */
+    --surface-base:  10 10 10;   /* #0A0A0A 지면 */
+    --surface-low:   21 22 25;   /* #151619 카드(지면 대비 1.09 — 면 단계, Resend 실측) */
+    --surface-mid:   31 34 37;   /* #1F2225 속 카드/모달 */
+    --surface-high:  36 39 43;   /* #24272B 인풋/호버 */
+    --surface-float: 42 46 50;   /* #2A2E32 드롭다운/툴팁 */
 
-    /* v7(2026-09-12 §4 목표값): 순백 #FFFFFF → #F4F6FA. 다크 지면에서 순백은 헤일레이션(번짐)을 만들고
-       '순검정 위 흰 글자'의 반복이 §7 이 금지한 바로 그 인상이다. base 20.01 → 18.50 으로 여전히 압도적. */
-    --ink-primary:   244 246 250; /* #F4F6FA 헤드라인·주요 수치 */
-    /* ⚠ 보조/메타 텍스트는 앱에서 가장 많이 쓰이는데(1087곳) 대비가 부족했다.
-       현장 조명이 어둡고 화면을 비스듬히 보는 상황이 기본이라, '읽을 수 있음'의 하한을 올린다.
-       (#8A8F98 → #A0A6B0 / #6E747C → #868C96 — surface-base 대비 AA 확보) */
-    /* v7 §4 목표값 #9AAAC2 — 실측 base 7.10 → 8.48 · 카드(low) 6.56 → 7.84(문서가 적은 7.84 와 일치) */
-    --ink-secondary: 154 170 194; /* #9AAAC2 본문·부제목 — 쿨 그레이(눈부심 방지) */
-    /* 시안의 3차 #526079 는 base 3.6:1 로 AA 미달 — 메타 글자 1087곳이 이 토큰이라 #74849E 로 올린다(base 5.3 · 카드 4.9) */
-    /* v7 §4 목표값 #8293AD — 메타 글자가 드롭다운·툴팁(surface-float)에서 3.59 로 AA 미달이었다.
-       실측 base 5.28→6.41 · low 4.88→5.93 · float 3.59→4.36. 아우라 블룸 알파 상한(--aura-a2)의
-       근거였던 '블룸 피크 위 ink-muted AA' 도 이 상향으로 여유가 생긴다. */
-    --ink-muted:     130 147 173; /* #8293AD 메타/라벨 */
-    --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
-    /* 유저가 고른 '밝은' 배경(아바타 이니셜 등) 위 글자. 테마 무관 고정값 —
-       배경이 지면이 아니라 유저 데이터라 다크/라이트로 갈릴 이유가 없다.
-       #030405: 흰색의 AA 상한(L≤0.1833)과 이 색의 AA 하한(L≥0.1803)이 겹쳐
-       임계 하나(src/lib/color.ts)로 전 색역 4.5:1 이 보장된다. 더 밝히면 사각지대가 생긴다. */
+    --ink-primary:   240 240 240; /* #F0F0F0 — base 17.4 · float 11.3 (순백 헤일레이션 회피) */
+    --ink-secondary: 168 171 173; /* #A8ABAD — base 8.57 · low 7.83 · float 5.92 */
+    --ink-muted:     150 154 157; /* #969A9D — base 6.98 · low 6.38 · high 5.29 · float 4.82 (전 지면 AA) */
+    --ink-inverse:   24 26 32;    /* 밝은 면(골드 등) 위 검정 */
+    /* 유저가 고른 '밝은' 배경(아바타 이니셜 등) 위 글자. 테마 무관 고정값 — src/lib/color.ts 임계와 짝(#030405). */
     --ink-on-bright: 3 4 5;
 
-    --border-subtle:  24 28 43;   /* #181C2B — 시안 sub-border(white 4%) 를 카드 위에 합성한 값 */
-    /* 입력칸 경계가 1.28:1 이라 '칸이 어디까지인지'가 안 보였다. subtle < default < strong 위계는 유지한다. */
-    --border-default: 41 53 74;   /* #29354A — v7 §4 '장식 경계선' 목표값. base 1.46 → 1.62 (게이트 >1.35) */
-    --border-strong:  84 96 128;  /* #546080 — base 3.2 (UI 경계 ≥3) */
+    --border-subtle:  30 33 36;   /* #1E2124 장식 구획 — base 1.22 */
+    --border-default: 44 48 52;   /* #2C3034 입력칸·카드 경계 — base 1.49 · low 1.36 (Resend rgba(214,235,253,.19) 계열) */
+    --border-strong:  110 116 122; /* #6E747A UI 경계 — base 4.19 · low 3.83 · high 3.17 (≥3) */
 
-    /* 액센트 — 어워드 레퍼런스 정합 바이올렛(h256 · 2026-08-27, 구 h248 #7364DB 에서 이동).
-       레퍼런스(DatawizzAI·OUTFLAME·Alice K) 공통 hue ≈258(#8B5CF6 계열)로 동조하되 명도는 제약 유지 —
-       실측(WCAG): 300 vs base 4.00 · vs low 3.71 (UI ≥3 충족) / 흰 텍스트 on 300 = 4.60 (AA)
-       / 200 텍스트 vs base 8.83 (AA 본문). 50·100 은 사용처 감사 결과 텍스트 틴트 용도
-       (text-accent-100 1곳·50 은 0곳)라 페일 톤 유지 — 딥 틴트로 바꾸면 그 텍스트가 죽는다. */
-    /* v4(2026-09-02 오너 지시 'aura-ui.com 기준'): 주색 = Aura UI primary 인디고 계열. v3 딥 퍼플은 시안·골드와 겹쳐 조잡했다.
-       #6366F1 은 흰 글자 4.45 로 AA 에 아슬하게 미달 → 한 톤 깊은 #5850EC 를 primary 로(흰 글자 5.6 · base 3.6 · 카드 3.3).
-       200 텍스트 틴트 #A5B4FC vs base 9.9. hover/pressed 는 Aura UI 600/700 그대로. */
-    --accent-50:  224 231 255; /* #E0E7FF 텍스트 틴트 */
-    --accent-100: 199 210 254; /* #C7D2FE */
-    /* v7(2026-09-12 §4): '링크·선택 강조' 와 '주요 버튼 바탕' 을 **역할로 분리**했다.
-       한 색으로 둘 다 못 한다 — 채운 버튼은 흰 글자 4.5 를 넘기려 어두워야 하고,
-       글자로 쓰는 액센트는 어두운 지면에서 4.5 를 넘기려 밝아야 한다.
-         200 = 링크·선택 강조(글자) #B5A6FF — base 9.40
-         300 = 주요 버튼 바탕(면)   #6344CE — 흰 글자 5.56 → **6.46**, vs base 3.10 (비텍스트 UI ≥3)
-       ⚠ 그래서 다크에서 `text-accent-300` 은 아래(unlayered)에서 200 으로 승격한다.
-         승격 없이는 #6344CE on base = 3.10 으로 본문 AA 미달이다(기존 #5850EC 도 3.60 미달이었다 —
-         handoff 의 미해결 P1 '다크 대비 AA 미달 10건'이 바로 이 값이다).
-       400/500 은 새 300 의 hue 를 따라 같은 색의 곱셈 스케일(×0.88 / ×0.76)로 다시 떴다 —
-       예전 값(#4F46E5·#4338CA)은 인디고라 hover 때 보라→파랑 색상 점프가 보였다. */
-    --accent-200: 181 166 255; /* #B5A6FF 다크 위 액센트 텍스트(링크·선택 강조) */
-    --accent-300: 99 68 206;   /* #6344CE primary(주요 버튼 바탕) */
-    --accent-400: 87 60 181;   /* #573CB5 hover — 흰 글자 7.72 */
-    --accent-500: 75 52 157;   /* #4B349D pressed — 흰 글자 9.22 */
-    --accent-600: 55 48 163;   /* #3730A3 딥 보더/배경 (800) */
-
-    /* ── 아우라(Aura) 신호색 — 틸(청록). 오너 참조 시안 'Aura Health AI'(2026-09-02).
-       역할 분담: 바이올렛(accent)은 **브랜드 주색**(채운 버튼·활성 탭) 그대로, 틸은 **신호·데이터·후광** —
-       글로우 블룸 · 링/바 데이터 · 대문자 마이크로 라벨 · 활성 외곽선 칩 · 라이브 펄스.
-       시안에서 틸이 실제로 쓰이는 방식이 정확히 이것이고, 채운 버튼까지 틸로 바꾸면 흰 글자가 AA 를 못 넘긴다.
-       실측(WCAG): 300 #2DD4BF vs base 9.2 · vs low 8.5 (AA 본문) / 400 #14B8A6 vs base 6.9. */
-    /* v4: 네온(#00F2FE)은 인디고·골드와 겹치면 조잡 — Aura UI secondary(cyan-500 #06B6D4)로 절제. 텍스트 대비 base 8.2 */
-    --aura-200: 34 211 238;  /* #22D3EE 연한 틴트(비텍스트·글로우 하이라이트) */
-    --aura-300: 6 182 212;   /* #06B6D4 primary — 라벨·링·데이터 강조 */
-    --aura-400: 8 145 178;   /* #0891B2 딥 */
-    /* v6(2026-09-02 aura-ui.com 실측): 배경 블룸 = 500px 안팎의 blur-3xl 원 3개 — violet-500/20 · indigo-500/15 · fuchsia-500/10.
-       우리는 filter:blur 대신 radial-gradient 로 같은 모양을 그린다(페인트 비용). 색은 실측값 그대로. */
-    --bloom-1: 139 92 246;   /* violet-500  #8B5CF6 — 우상단 큰 블룸 */
-    --bloom-2: 99 102 241;   /* indigo-500  #6366F1 — 상단 글로우(body::before) */
-    --bloom-3: 217 70 239;   /* fuchsia-500 #D946EF — 하단 중앙 */
-    --aura-a1: 0.14; --aura-a2: 0.16; --aura-a3: 0.10; /* 실측 .15/.20/.10 이지만 ink-muted 가 블룸 피크 위에서 AA 를 지키는 상한이 .16(4.60) — 그 값으로 */
+    /* 강조 = 진한 황동 한 가지. 역할 분리는 종전 그대로:
+         200 = 강조 글자·링크·선택 표시(다크 지면에서 밝아야 읽힌다) #D9B25A — base 9.87 · float 6.82
+         300 = 채운 버튼·활성 면 #8C5E14 — 흰 글자 5.64 · 지면 대비 3.51(비텍스트 ≥3)
+       ⚠ 다크의 text-accent-300 은 아래(unlayered)에서 200 으로 승격된다(300 은 글자로 쓰면 지면 3.5 라 AA 미달).
+       400/500 은 hover/pressed — 흰 글자 6.90 / 8.49. */
+    --accent-50:  246 234 210; /* #F6EAD2 */
+    --accent-100: 235 211 166; /* #EBD3A6 */
+    --accent-200: 217 178 90;  /* #D9B25A */
+    --accent-300: 140 94 20;   /* #8C5E14 */
+    --accent-400: 122 82 18;   /* #7A5212 */
+    --accent-500: 104 70 16;   /* #684610 */
+    --accent-600: 80 54 12;    /* #50360C */
+    /* (틸 신호색 --aura-*·블룸 --bloom-* — 2026-10-04 삭제. 신호는 라이브=emerald · 위험=danger 만 남는다) */
     /* 시안의 상태색 — 차트 블루·리커버리 오렌지(순수 SVG 게이지/차트용) */
     --chart-blue: 59 130 246;   /* #3B82F6 */
     --chart-orange: 255 140 66; /* #FF8C42 */
@@ -1211,14 +1096,7 @@ video {
     --tier-admin:        255 114 140; /* #FF728C  SS 운영자 */
     --tier-admin-vivid:  255  77 109; /* #FF4D6D */
 
-    /* 브랜드 그라데이션(어워드 레퍼런스 2026-08-27) — 전부 정적 배경. 애니메이션 금지(모션 헌법 §20.4).
-       (aurora 워시 --grad-aurora 는 v6.2 에서 .hero-aurora 가 해제된 뒤 읽는 곳 0 — 2026-09-29 삭제. 되살릴 때는 git 이력에서)
-       cta: OUTFLAME 필 문법 — 사선(135deg) 딥→프라이머리. 흰 텍스트 실측 6.07(어두운끝)~4.60(밝은끝).
-       hover/active 는 한 단계 어두운 정적 스왑(그라데이션은 transition 불가 속성). */
-    /* v6 aura-ui.com 실측 .aura-btn-primary: linear-gradient(to right, violet-700 #6D28D9, indigo-800 #3730A3) · 흰 글자 6.4 / 8.6 */
-    --grad-cta:        linear-gradient(90deg, #6D28D9 0%, #3730A3 100%);
-    --grad-cta-hover:  linear-gradient(90deg, #7C3AED 0%, #4338CA 100%);
-    --grad-cta-active: linear-gradient(90deg, #5B21B6 0%, #312E81 100%);
+    /* (브랜드 그라데이션 --grad-cta*·크롬 결 --grad-bar — 2026-10-04 오너 결정 'E+황동'으로 삭제. 버튼·활성은 단색 면이다) */
 
     /* 지면(ground)의 결 — body::before 고정 레이어에 얹는 수직 광원(오너 지시 2026-08-28 '죄다 단색').
        ⚠ 위를 밝히지 않고 '아래를 가라앉히는' 방향인 이유(실측 근거, 뒤집지 말 것):
@@ -1229,18 +1107,12 @@ video {
        강도: 하단 최심점 ΔL* 2.12 / 100 (기준 ≤3) — 인접 단색과 붙여 봐도 띠가 보이지 않는 하한.
        색은 --card-shadow 와 같은 배경 hue 편향(순검정 금지 — 플럼이 회색으로 죽는다). */
     --grad-surface: linear-gradient(180deg,
-      rgb(8 6 16 / 0) 0%, rgb(8 6 16 / 0) 34%, rgb(8 6 16 / 0.42) 100%);
-    /* 상시 크롬(헤더·하단 탭바 알약)의 얕은 결 — 상시 노출이라 강도 최소.
-       62% 에서 알파 0 으로 끝나는 이유(실측 2026-08-28): ① 헤더(실측 61px)는 아래 23px 이
-       완전 평면이 되어 그 아래 GNB·본문과 이음매가 없다 ② 탭바 알약(실측 59.8px)의 라벨 밴드가
-       69.2~87.7% 라 그라데이션(~62%) 밖에 완전히 놓인다 → 11px 라벨이 밟는 배경 알파가 정확히 0,
-       활성 text-accent-300 대비 3.43:1 이 소수점까지 불변(이 값 자체는 기존 AA 미달 — 별건 리스크). */
-    --grad-bar: linear-gradient(180deg, rgb(var(--accent-300) / 0.05) 0%, rgb(var(--accent-300) / 0) 62%);
+      rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0) 34%, rgb(0 0 0 / 0.42) 100%); /* 2026-10-04: 플럼 편향 → 무채색 */
 
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
        그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */
     --card-ring:   rgba(255, 255, 255, 0.05);
-    --card-shadow: rgba(8, 10, 20, 0.6);
+    --card-shadow: rgba(0, 0, 0, 0.6);
 
     /* 다크 모드 네이티브 렌더(스크롤바·폼·포커스) 정합 → 클릭 시 플래시 방지 */
     color-scheme: dark;
@@ -1248,58 +1120,32 @@ video {
 
   /* 라이트 테마 — NURI PET 라이트(화이트 패널·옅은 회색 보더) */
   html.light {
-    /* v3 라이트 — 다크의 블루 언더톤을 그대로 물려받은 쿨 화이트(시안은 다크 전용이라 제가 유도) */
-    --surface-base:  245 247 251; /* #F5F7FB 쿨 화이트 */
+    /* 라이트 — 다크와 같은 원칙(무채색 지면·흰 카드 + 진한 황동 한 가지). 대비는 실제 지면(surface-base #F5F5F5) 기준. */
+    --surface-base:  245 245 245; /* #F5F5F5 지면 */
     --surface-low:   255 255 255;
     --surface-mid:   255 255 255;
-    --surface-high:  238 242 248; /* #EEF2F8 인풋/호버 */
-    --surface-float: 228 233 242; /* #E4E9F2 */
+    --surface-high:  237 237 237; /* #EDEDED 인풋/호버 */
+    --surface-float: 229 229 229; /* #E5E5E5 */
 
-    --ink-primary:   11 18 32;    /* #0B1220 네이비 블랙 글자 */
-    --ink-secondary: 74 88 120;   /* #4A5878 쿨 그레이 — base 6.7 */
-    --ink-muted:     92 107 138;  /* #5C6B8A — base 5.0 · 흰 카드 5.4 */
-    --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
-    --ink-on-bright: 3 4 5;       /* 다크와 동일 — 근거는 위 블록 주석 */
+    --ink-primary:   10 10 10;    /* #0A0A0A — base 18.2 */
+    --ink-secondary: 71 71 71;    /* #474747 — base 8.52 · float 7.38 */
+    --ink-muted:     94 94 94;    /* #5E5E5E — base 5.95 · high 5.54 · float 5.15 */
+    --ink-inverse:   24 26 32;
+    --ink-on-bright: 3 4 5;       /* 다크와 동일 */
 
-    /* v7 §4 '장식 경계선' 목표값 #D6DEEA — 구분선이 실제로 보이는 하한(지면 대비 1.11 → 1.26).
-       ⚠ 이 값은 **border-subtle(장식 구획)** 에만 넣는다. border-default(입력칸 경계)에 넣으면
-       1.65 → 1.26 으로 **후퇴**한다(실측) — 문서도 "입력창·포커스의 필수 경계 대비는 별도로 검사"라 적었다. */
-    --border-subtle:  214 222 234; /* #D6DEEA 헤어라인(쿨) — 깊이는 그림자가 맡는다 */
-    /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다.
-       시인성 재보정(2026-08-27, 명도만·hue 218 유지): default 1.55→1.79, strong 2.34→3.13(UI 경계 ≥3:1) */
-    --border-default: 185 195 214; /* #B9C3D6 — base 1.65 */
-    --border-strong:  127 140 166; /* #7F8CA6 — base 3.2 */
+    --border-subtle:  226 226 226; /* #E2E2E2 헤어라인 — 라이트 카드 경계(그림자 대신) */
+    --border-default: 196 196 196; /* #C4C4C4 입력칸 경계 — base 1.60 · 흰 카드 1.74 */
+    --border-strong:  133 133 133; /* #858585 UI 경계 — base 3.38 · 흰 카드 3.69 · high 3.15 */
 
-    /* 액센트(라이트) — h256 동조(다크와 동일 hue · 2026-08-27). 흰 배경 시인성 유지:
-       실측(WCAG): 300 vs #FFF 6.34 (≥5 목표 충족) / 400 7.61 / 500 9.10 / 600 11.35.
-       200 은 라이트에선 연한 보조(비텍스트) — 텍스트로 쓰인 곳은 아래 unlayered 오버라이드가 딥 톤 교정. */
-    /* v4 인디고(라이트) — Aura UI 600 을 primary 로(흰 글자 6.3 · 흰 지면 6.3) */
-    --accent-50:  238 242 255; /* #EEF2FF 옅은 틴트 배경 */
-    --accent-100: 224 231 255; /* #E0E7FF */
-    --accent-200: 129 140 248; /* #818CF8 연한 보조(비텍스트) */
-    /* v7 §4: 주요 버튼 바탕은 **양 테마 동일** #6344CE(문서 명시) — 흰 글자 6.29 → 6.46.
-       흰 지면 위 텍스트로 써도 6.46 이라 라이트는 승격이 필요 없다(다크와 다른 점). */
-    --accent-300: 99 68 206;   /* #6344CE primary */
-    --accent-400: 87 60 181;   /* #573CB5 hover — 흰 글자 7.72 */
-    --accent-500: 75 52 157;   /* #4B349D pressed — 흰 글자 9.22 */
-    --accent-600: 49 46 129;   /* #312E81 */
-
-    /* 아우라(라이트) — 흰 지면에선 틸을 어둡혀야 글자가 산다.
-       ⚠ 첫 값 #0D9488 은 순백 기준 4.55 였지만 실제 지면 surface-base #F5F6F8 위에선 **3.46** —
-       design-tokens.spec 아우라 게이트가 잡았다(2026-09-02). 한 단계 어둡힌 #0F766E: base 5.2 · low(#FFF) 5.6.
-       블룸은 라이트에서 훨씬 옅게 — 밝은 지면 위 채도 높은 후광은 '얼룩' 으로 읽힌다. */
-    /* v3 라이트 시안 — 흰 지면에선 어둡혀야 산다: 300 #0E7490 base 5.0 */
-    --aura-200: 6 182 212;   /* #06B6D4 비텍스트 틴트 */
-    --aura-300: 14 116 144;  /* #0E7490 primary(텍스트 AA) */
-    --aura-400: 21 94 117;   /* #155E75 딥 */
-    --bloom-1: 139 92 246; --bloom-2: 99 102 241; --bloom-3: 217 70 239; /* 라이트도 같은 세 색(aura-ui 라이트 실측: 흰 지면 위 파스텔 워시) */
-    /* v7(2026-09-12 §7·§4): 라이트에서 **옅은 보라를 화면 전체와 모든 박스에 반복하지 않는다.**
-       이 알파는 두 곳에 동시에 작용한다 — ① .aura-bg 의 화면 전면 블룸 ② .subbar-aura 가
-       **모든 sticky 서브탭 바**에 미리 섞는 보라(color-mix 계수가 --aura-a2 다).
-       ②가 '모든 박스가 옅은 보라' 라는 인상의 실제 발원지였다. 절반으로 내려
-       지면은 중립적 쿨 화이트로, 브랜드 보라는 핵심 동작(버튼·선택)에 남긴다.
-       다크 값(0.14/0.16/0.10)은 그대로 — 어두운 지면에서 블룸은 얼룩이 아니라 깊이다. */
-    --aura-a1: 0.05; --aura-a2: 0.05; --aura-a3: 0.035;
+    /* 강조(라이트) — 버튼 면과 글자 모두 #8C5E14(흰 지면 5.64 · base 5.17 · 흰 글자 5.64). 200 은 라이트에선 비텍스트 틴트,
+       글자로 쓰인 text-accent-200/100 은 아래 unlayered 오버라이드가 #7A5212(base 6.33)로 교정한다. */
+    --accent-50:  250 243 230; /* #FAF3E6 */
+    --accent-100: 243 230 204; /* #F3E6CC */
+    --accent-200: 201 150 58;  /* #C9963A 비텍스트 */
+    --accent-300: 140 94 20;   /* #8C5E14 */
+    --accent-400: 122 82 18;   /* #7A5212 */
+    --accent-500: 104 70 16;   /* #684610 */
+    --accent-600: 80 54 12;    /* #50360C */
     --chart-blue: 37 99 235;    /* #2563EB */
     --chart-orange: 234 88 12;  /* #EA580C */
 
@@ -1336,25 +1182,17 @@ video {
     --tier-admin:        146   0  26; /* #92001A */
     --tier-admin-vivid:  222  76 102; /* #DE4C66 */
 
-    /* 브랜드 그라데이션(라이트) — cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
-    --grad-cta:        linear-gradient(135deg, rgb(var(--accent-400)) 0%, rgb(var(--accent-300)) 100%);
-    --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-400)) 100%);
-    --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
-
     /* 지면의 결(라이트) — 다크와 같은 문법(하단 침강). 라이트는 방향이 반대로 위험하다:
        배경을 낮추면 '어두운 글자'의 대비가 **떨어진다** → 하단 알파를 다크(0.42)의 1/19 로 조인다.
        실측: 하단 최심점에서 ink-muted(#636C7B) vs 지면 4.902 → 4.689 (AA 4.5 유지) · ΔL* 1.75.
        ⚠ 라이트 지면(#F5F6F8)은 흰색까지 여유가 10/255 뿐이라 '위를 밝히는' 방향은
        완전 흰색을 써도 ΔL* 3.14 가 상한 — 물리적으로 결이 안 생긴다. 그래서 양 테마 모두 하단 침강. */
     --grad-surface: linear-gradient(180deg,
-      rgb(15 18 26 / 0) 0%, rgb(15 18 26 / 0) 34%, rgb(15 18 26 / 0.022) 100%);
-    /* 상시 크롬(라이트) — 흰쪽으로 올린다. 어두운 글자 대비는 올라가므로 안전(단조 증가).
-       탭바 알약은 surface-mid=#FFF 라 이 그라데이션이 무효 — 라이트 탭바는 보더·섀도가 이미 입체다. */
-    --grad-bar: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 62%);
+      rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0) 34%, rgb(0 0 0 / 0.022) 100%);
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
-    --card-ring:   rgba(15, 18, 26, 0.08);
-    --card-shadow: rgba(15, 18, 26, 0.12);
+    --card-ring:   rgba(0, 0, 0, 0.08);
+    --card-shadow: rgba(0, 0, 0, 0.12);
 
     color-scheme: light;
   }
@@ -1395,6 +1233,8 @@ video {
        긴 영문/URL/숫자는 칸을 넘칠 때만 강제로 끊어 레이아웃이 깨지지 않게 한다. */
     word-break: keep-all;
     overflow-wrap: break-word;
+    /* 2026-10-04 'E+황동' ② — 숫자 고정폭(시간·참가비·순위·칩 수가 갱신돼도 자리가 안 흔들린다. 카드룸·증권 앱 문법). */
+    font-variant-numeric: tabular-nums;
   }
 
   /* 상단 인디고 글로우 + 하단 침강(--grad-surface) — 둘 다 이 고정 레이어 하나에 얹는다.
@@ -1408,18 +1248,14 @@ video {
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image:
-      var(--grad-surface),
-      /* v3: 상단 중앙 글로우는 시안(시안의 히어로 뒤 후광). 퍼플·좌하단 시안은 .aura-bg 가 맡는다 — 세 겹이 겹치지 않게 역할 분담 */
-      var(--glow-layer);
+    /* 2026-10-04 'E+황동': 상단 인디고 블룸(--glow-layer)을 걷었다 — 하단 침강 결(--grad-surface) 한 장만. */
+    background-image: var(--grad-surface);
   }
   /* 라이트 지면은 흰색에 가까워 같은 알파가 텍스트 대비를 잡아먹는다 — 실측(2026-08-28):
      0.12 에서 상단 최악 합성 #E4E1F2 위 ink-muted 4.13:1(AA 미달), 0.05 에서 4.57:1 통과.
      (다크는 지면이 어두워 글로우가 대비를 오히려 올리므로 0.12 유지) */
   /* v7 §7: 라이트 상단 글로우도 같은 이유로 절반(0.09 → 0.05). 대비는 단조 증가라 안전하다
      (0.12 에서 ink-muted 4.13 미달 → 0.09 에서 4.57 → 0.05 는 더 높다). */
-  /* html 에 둔다 — --glow-layer 가 :root 에서 값을 푼다(body::before 에만 두면 떠나는 판 배경이 다크 알파로 남는다). */
-  html.light { --glow-a: 0.05; }
 
   /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
      제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
@@ -1481,12 +1317,10 @@ video {
      실체 1 CSS px, 양끝은 투명으로 약해지고 중앙에 은은한 accent. 정적(애니메이션·번짐·그림자 없음).
      다크 --accent-200 30% / 라이트 --accent-300 22% 에서 출발 — 배경 위 합성 결과로 조정한다(숫자만으로 대비 통과를 말하지 않는다).
      입력창 경계·표 구획선·focus ring 에는 쓰지 않는다. <hr> 기본 border 를 지운다. */
+  /* 2026-10-04 'E+황동': accent 그라데이션을 걷고 평평한 1px 경계선. */
   .divider-aura {
     display: block; height: 1px; border: 0; margin-inline: 0; padding: 0;
-    background: linear-gradient(90deg, transparent 0%, rgb(var(--accent-200) / 0.30) 50%, transparent 100%);
-  }
-  html.light .divider-aura {
-    background: linear-gradient(90deg, transparent 0%, rgb(var(--accent-300) / 0.22) 50%, transparent 100%);
+    background-color: rgb(var(--border-default));
   }
 
   /* ── 버튼 공통 — 바이낸스 밀도(높이 40px대, 패딩 압축. 터치 최소 40px 유지) ── */
@@ -1531,23 +1365,11 @@ video {
        복사**한다(합성이 아니다). 그래서 크기 변형이 `.btn-primary` **뒤**에 와야 이긴다(둘 다 (0,1,0)).
        위로 옮기면 `class="btn-primary btn-lg"` 가 조용히 무시된다. 실제로 그렇게 썼다가 잡았다. */
 
+  /* 1급 CTA — 2026-10-04 오너 결정 'E+황동': 그라데이션·광택·보라 그림자·hover 리프트를 걷은 **단색 면**.
+     hover/active 는 한 단계 진한 색 스왑(.btn 의 background-color 전환이 잇는다). */
   .btn-primary {
     @apply bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
-    /* 1급 CTA 필(OUTFLAME 문법, 2026-08-27) — 정적 그라데이션. bg-* 색은 폴백 겸 유지.
-       그라데이션은 transition 불가 속성 → hover/active 는 한 단계 어두운 정적 스왑(모션 헌법 준수:
-       새 이징·duration 없음, 애니메이트 없음). ⚠ 색 오버라이드 콜러(골드 등)는 !bg-none 으로
-       그라데이션을 함께 해제해야 한다(StoreDashboard 할 일 카드 참고). */
-    /* v6.1: 레퍼런스 .aura-btn 의 '유리 캡슐' = 상단 흰 12%→0 광택(:before) + hover 1px 리프트. pseudo 없이 배경 2겹으로. */
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12) 0%, rgb(255 255 255 / 0) 55%), var(--grad-cta);
-    box-shadow: 0 10px 15px -3px rgb(139 92 246 / 0.25), 0 4px 6px -4px rgb(139 92 246 / 0.25); /* 실측: 검정이 아니라 보라 틴트 그림자가 'Vibrant Depth' */
   }
-  @media (hover: hover) and (pointer: fine) {
-    /* 리프트 전환은 포인터 기기에서만(모바일 프레스는 :active 정적 스왑) · hover 광택 0.08 상한 — 0.14 는 hover 좌단 흰 글자 4.43 미달(critic 실측) */
-    .btn-primary { transition: transform var(--dur-fast) var(--ease-out-ui), background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease); }
-    .btn-primary:hover { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.08) 0%, rgb(255 255 255 / 0) 55%), var(--grad-cta-hover); transform: translateY(-1px); }
-  }
-  .btn-primary:active { background-image: var(--grad-cta-active); transform: translateY(0); }
-  @media (prefers-reduced-motion: reduce) { .btn-primary:hover { transform: none; } }
 
   .btn-ghost {
     @apply bg-transparent text-ink-secondary
@@ -1587,34 +1409,18 @@ video {
   .ring-aura { position: relative; }
   .ring-aura::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-    background: linear-gradient(120deg, rgb(139 92 246 / 0.55), rgb(99 102 241 / 0.25) 45%, rgb(217 70 239 / 0.5));
+    background: rgb(var(--border-strong) / 0.6); /* 2026-10-04 'E+황동': 보라→자홍 그라데이션 링을 평평한 1px 로 */
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
   }
-  html.light .ring-aura::before { background: linear-gradient(120deg, rgb(109 40 217 / 0.45), rgb(67 56 202 / 0.2) 45%, rgb(162 28 175 / 0.4)); }
-  /* 링 글로우(v6.5, 오너 "테두리에 아우라 글로우") — 그라데이션 링 바깥으로 보라→푸시아 후광 2겹 + 착지 그림자. 정적(애니 없음).
-     라이트는 후광 절반(흰 지면에선 얼룩이 빨리 온다). 강조판 .ring-aura-glow-vivid (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
-  .ring-aura-glow { box-shadow: 0 0 0 1px rgb(139 92 246 / 0.30), 0 0 22px rgb(139 92 246 / 0.28), 0 0 56px rgb(217 70 239 / 0.14), 0 14px 32px -14px rgb(0 0 0 / 0.55); }
-  .ring-aura-glow::before { background: linear-gradient(120deg, rgb(167 139 250 / 0.85), rgb(129 140 248 / 0.45) 45%, rgb(232 121 249 / 0.8)); }
-  html.light .ring-aura-glow { box-shadow: 0 0 0 1px rgb(109 40 217 / 0.22), 0 0 20px rgb(139 92 246 / 0.16), 0 0 48px rgb(217 70 239 / 0.08), 0 12px 28px -14px rgb(11 18 32 / 0.25); }
-  /* 안쪽 후광 — 링만으론 '선', 이게 있어야 '빛나는 카드'. 합성 #16172F 위 ink-muted 4.62(.08 은 4.52 · .10 은 4.43 미달) */
-  .ring-aura::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 28px rgb(139 92 246 / 0.06); }
-  html.light .ring-aura::after { box-shadow: inset 0 0 28px rgb(109 40 217 / 0.05); }
-  /* 아이콘 그라데이션 타일(레퍼런스 #features): 135deg 두 톤 + 같은 색 그림자, 흰 아이콘. 카드 안 유일한 채도 포인트 */
-  .tile-grad { color: #fff; background-image: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); box-shadow: 0 6px 12px -4px rgb(124 58 237 / 0.35); }
-  html.light .tile-grad { box-shadow: 0 6px 12px -4px rgb(124 58 237 / 0.28); }
-  /* 레인별 타일 색(v6.3, 워크플로 critic 배정): 차트/새 게임=violet · 계산기/장부=indigo · 트레이닝/순위=fuchsia · 분석/클락/장터=cyan
-     · emerald 는 앱의 '라이브/진행 중' 신호색이라 타일에 쓰지 않는다. 그림자 1겹(툴 그리드 ~20타일). 아이콘 전용(흰 글자 금지: cyan 3.7). */
-  .tile-grad-indigo  { background-image: linear-gradient(135deg, #6366F1 0%, #4338CA 100%); box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.35); }
-  .tile-grad-fuchsia { background-image: linear-gradient(135deg, #C026D3 0%, #A21CAF 100%); box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.35); }
-  .tile-grad-cyan    { background-image: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.35); }
-  /* 경고 톤 — '주의' 공지 전용. gold 팔레트(400→500)라 브랜드 안에 있고,
-     다른 타일과 달리 밝은 면이라 흰 글자가 2:1 밖에 안 나온다 → 잉크를 어둡게 뒤집는다(실측 12:1). */
-  .tile-grad-amber   { color: #241A00; background-image: linear-gradient(135deg, #F0B90B 0%, #C99400 100%); box-shadow: 0 6px 12px -4px rgb(240 185 11 / 0.35); }
-  html.light .tile-grad-indigo { box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.28); }
-  html.light .tile-grad-fuchsia { box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.28); }
-  html.light .tile-grad-cyan { box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.28); }
-  html.light .tile-grad-amber { box-shadow: 0 6px 12px -4px rgb(240 185 11 / 0.28); }
+  /* (.ring-aura-glow 후광·.ring-aura::after 안쪽 후광 — 2026-10-04 삭제. 클래스는 호출부에 남아 링만 그린다) */
+  /* 아이콘 타일 — 2026-10-04 'E+황동': 그라데이션 상자·색 그림자를 걷고 한 단계 밝은 면 + 강조색 아이콘.
+     레인별 변형(indigo·fuchsia·cyan)도 같은 면이다(색 표는 실제 분류와 안 맞는 죽은 표였다 — 진단 §2 #4). */
+  /* ② 구조(2026-10-04): 상자도 걷어 **맨 아이콘**만 남긴다(제목 앞 SectionTile·도구 타일·공지 목록 공통). 자리 크기는 호출부 h-/w- 그대로.
+     아이콘은 흐린 글자 색 — 강조색은 '누르는 것' 하나에만 쓴다. */
+  .tile-grad { color: rgb(var(--ink-secondary)); }
+  /* 경고 톤 — '주의' 공지 전용 신호색이라 평평한 황색 면을 유지한다(잉크는 어둡게 — 실측 12:1). */
+  .tile-grad-amber   { color: #241A00; background-color: #F0B90B; }
   /* 섹션 밴드(레퍼런스 bg-gray-50 교차 밴드) — PC 대시보드 KPI 밴드 1곳 한정. 모바일 피드에는 붙이지 않는다(3중 선). */
   .section-alt { background-color: rgb(var(--surface-low) / 0.5); border: 1px solid rgb(255 255 255 / 0.06); }
   html.light .section-alt { background-color: rgb(255 255 255 / 0.6); border-color: rgb(11 18 32 / 0.06); }
@@ -1637,13 +1443,13 @@ video {
   .stat-gold    { color: #E7C57C; }  html.light .stat-gold    { color: #805900; }
   /* 캘린더 월 그리드 마커 — 흰 카드 위에서 무너지던 기본 팔레트 400 톤 대신 테마별 값을 준다.
      점은 글자가 아니라 도형이라 3:1(비텍스트 대비) 기준을 쓴다. */
-  .dot-like     { background-color: #E879F9; }  html.light .dot-like     { background-color: #A21CAF; }
-  .dot-reserve  { background-color: #818CF8; }  html.light .dot-reserve  { background-color: #4338CA; }
+  /* 2026-10-04: 자홍·남보라 마커 → 장미·차트 블루(범례 글자와 함께 쓰는 분류색 — 비텍스트 3:1 은 rose-400 7.0 · blue 5.0 / 라이트 6.0 · 5.2) */
+  .dot-like     { background-color: #FB7185; }  html.light .dot-like     { background-color: #BE123C; }
+  .dot-reserve  { background-color: rgb(var(--chart-blue)); }
   .dot-cash     { background-color: #FCD535; }  html.light .dot-cash     { background-color: #8D6A00; }
   .dot-bankroll { background-color: #34D399; }  html.light .dot-bankroll { background-color: #047857; }
-  .stat-violet  { color: #A78BFA; }  html.light .stat-violet  { color: #6D28D9; }
-  .stat-indigo  { color: #818CF8; }  html.light .stat-indigo  { color: #4338CA; }
-  .stat-fuchsia { color: #E879F9; }  html.light .stat-fuchsia { color: #A21CAF; }
+  /* 2026-10-04 'E+황동': 장식 통계 숫자색(보라·남보라·자홍)은 숫자가 주인공인 본문 색으로. 의미 있는 색(emerald 진행·gold 상금·cyan 이벤트 3등)은 위에 그대로. */
+  .stat-violet, .stat-indigo, .stat-fuchsia { color: rgb(var(--ink-primary)); }
   /* 캘린더 날짜 셀 — 선택이 '툭' 바뀌지 않게(오너 지시 2026-09-04 "부드럽고 글로우도").
      선택된 날은 화면에 **정확히 하나**뿐이라 글로우를 줘도 '화면당 1곳' 규칙과 충돌하지 않는다
      (반복 카드에 글로우를 뿌리는 것과는 다르다). 글로우는 tailwind shadow-glow(16px 블룸) —
@@ -1670,25 +1476,11 @@ video {
                 border-color var(--dur-fast) var(--ease),
                 transform var(--dur-fast) var(--ease-out-ui);
   }
+  /* 2026-10-04 'E+황동': 후광·떠오름을 걷고 테두리 밝기만. */
   @media (hover: hover) {
-    .card-glow-hover:hover {
-      border-color: rgb(var(--border-strong) / 0.85);
-      transform: translateY(-1px);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04),
-                  0 10px 15px rgb(0 0 0 / 0.10),
-                  0 4px 6px rgb(0 0 0 / 0.06),
-                  0 0 0 1px rgb(0 0 0 / 0.02),
-                  0 0 18px rgb(129 140 248 / 0.28);
-    }
-    html.light .card-glow-hover:hover {
-      border-color: rgb(11 18 32 / 0.12);
-      box-shadow: inset 0 1px 0 rgb(255 255 255),
-                  0 2px 4px rgb(11 18 32 / 0.05),
-                  0 20px 40px -18px rgb(11 18 32 / 0.22),
-                  0 0 18px rgb(79 70 229 / 0.22);
-    }
+    .card-glow-hover:hover { border-color: rgb(var(--border-strong) / 0.85); }
+    html.light .card-glow-hover:hover { border-color: rgb(11 18 32 / 0.12); }
   }
-  @media (prefers-reduced-motion: reduce) { .card-glow-hover:hover { transform: none; } }
   /* 🔴 2026-09-18: 접근성 미디어 3종 세트를 맞춘다.
      같은 '카드 후광' 계열인 .card-aura[data-aura] 는 이미 셋을 전부 처리하는데
      .card-glow-hover 와 .chip-aura 만 빠져 있었다(전자는 reduced-motion 하나뿐, 후자는 없음).
@@ -1704,7 +1496,11 @@ video {
   @media (prefers-contrast: more) { .tier-chip { box-shadow: none; } }
   @media (forced-colors: active)  { .tier-chip { box-shadow: none; } }
 
-  .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
+  /* 2026-10-05 독립 검토 P2-2 · 오너 결정 '선택 = 밝은 테두리': .chip-aura 는 **비선택·바로가기·라벨 칩**(소비처 대부분)이라 중립이다
+     (한 단계 밝은 면 + 경계선 + 보조 글자). 선택된 칩만 아래 .chip-on 이 황동 틴트 + 밝은 황동 테두리로 강조한다
+     (다크 accent-200 테두리 vs 카드 9.02 · 라이트 accent-300 5.64 — 비텍스트 3:1). */
+  .chip-aura { background-color: rgb(var(--surface-high)); border: 1px solid rgb(var(--border-default)); color: rgb(var(--ink-secondary)); }
+  .chip-on { background-color: rgb(var(--accent-300) / 0.14); border: 1px solid rgb(var(--accent-200)); color: rgb(var(--accent-200)); }
   /* 🔴 홈 퀴액션 카드 배경 (2026-09-18 오너 지시: "출석체크, 제휴혜택 뒤에는 이미지 넣어줘")
      두 격이다 — 오너 레퍼런스(code.html 152행)의 **우상단 블러 원** + 직접 제작한 **SVG 모티프**.
      · 블러 원은 시안 그대로: `-right-6 -top-6 w-16 h-16 blur-xl`.
@@ -1718,11 +1514,7 @@ video {
      **scrollWidth 에는 그대로 잡힌다** — home-flow-fit 의 '잘림 0' 검사가 카드를
      171/196·171/197 로 잡아 29건이 빨개졌다(실측 2026-09-18, 두 번).
      그라디언트는 박스 안에서 끝나므로 넘침이 0 이고, blur 합성 레이어도 안 만든다(더 싸다). */
-  .quick-blob { position: absolute; inset: 0; pointer-events: none; }
-  .quick-blob-violet { background: radial-gradient(4.5rem 4.5rem at 100% 0%, rgb(var(--accent-300) / 0.34), transparent 72%); }
-  .quick-blob-gold   { background: radial-gradient(4.5rem 4.5rem at 100% 0%, rgb(245 158 11 / 0.26), transparent 72%); }
-  html.light .quick-blob-violet { background: radial-gradient(4.5rem 4.5rem at 100% 0%, rgb(var(--accent-300) / 0.16), transparent 72%); }
-  html.light .quick-blob-gold   { background: radial-gradient(4.5rem 4.5rem at 100% 0%, rgb(245 158 11 / 0.20), transparent 72%); }
+  /* (.quick-blob 얼룩 — 2026-10-04 'E+황동'으로 삭제, 호출부 span 도 걷었다. 마스크 모티프 .quick-art 는 오너 요청 자산이라 남긴다) */
   .quick-art { position: absolute; inset: 0; pointer-events: none;
     -webkit-mask: var(--quick-art-src) right -0.35rem center / auto 92% no-repeat;
             mask: var(--quick-art-src) right -0.35rem center / auto 92% no-repeat; }
@@ -1731,8 +1523,8 @@ video {
   html.light .quick-art-checkin { background-color: rgb(var(--accent-300) / 0.12); }
   html.light .quick-art-event   { background-color: rgb(245 158 11 / 0.14); }
   /* 접근성 미디어 — 장식은 제일 먼저 물러난다(글자 대비가 우선이다). */
-  @media (prefers-contrast: more) { .quick-blob, .quick-art { display: none; } }
-  @media (forced-colors: active)  { .quick-blob, .quick-art { display: none; } }
+  @media (prefers-contrast: more) { .quick-art { display: none; } }
+  @media (forced-colors: active)  { .quick-art { display: none; } }
   /* 탭 타깃 확장 — 보이는 높이는 그대로(32px 칩), 누르는 영역만 위아래 6px 씩 늘려 44px(WCAG 2.5.5 / Apple HIG).
      가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */
   .tap-y-44 { position: relative; }
@@ -1767,29 +1559,9 @@ video {
      h-7(28px) 로그인 버튼이 위쪽 14px 에 앉고, 위로만 16px 내밀면 화면 위 2px 밖으로 나가 실효 42px 였다(elementFromPoint 실측).
      헤더 안은 스크롤 넘침 게이트와 무관하고 56px 안에서 위아래 8px 씩 들어간다(아이콘 36px 은 4px 씩). */
   [data-stack-header] .tap-44::before { inset: min(0px, calc((100% - 44px) / 2)) 0; }
-  html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
-  @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }
-  .text-grad-violet {
-    /* v4: Aura UI 'Vibrant Depth' 헤드라인 — 흰색에서 시작해 인디고→바이올렛→푸시아로 흐르는 정적 그라데이션.
-       가장 어두운 끝(푸시아-400 #E879F9) vs base 8.1 · 인디고-300 #A5B4FC 9.9 — 어디서 잘려도 AA */
-    /* v6: aura-ui.com 실측 'Vibrant Depth' = violet→indigo→fuchsia (to right). 레퍼런스도 다크에선 400 계열로 올린다 —
-       500 계열(#8B5CF6/#6366F1)은 카드(surface-low) 위 4.37/4.14 로 AA 미달이었다(v6.0 오기 정정).
-       400 계열 실측: #A78BFA 7.1 · #818CF8 6.0 · #E879F9 7.3 (surface-low 위). 흰색 시작은 빛바랜 인상의 원인이었다. */
-    background-image: linear-gradient(90deg, #A78BFA 0%, #818CF8 50%, #E879F9 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  html.light .text-grad-violet {
-    /* 라이트: 잉크 → 인디고-600 → 푸시아-700(#A21CAF vs 흰 지면 5.9) */
-    background-image: linear-gradient(90deg, #6D28D9 0%, #4338CA 50%, #A21CAF 100%); /* 흰 지면 5.9 · 8.0 · 5.9 */
-  }
-  /* 미지원 브라우저 폴백: 그라데이션 해제 → 동반 텍스트 색 유틸(text-ink-primary 등)이 그대로 보인다 */
-  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
-    .text-grad-violet { background-image: none; -webkit-text-fill-color: currentColor; }
-  }
-  /* 그라데이션 헤드라인 안에서 제 색을 지켜야 하는 강조 스팬(예: 라이브 카운트 그린) */
-  .text-grad-keep { -webkit-text-fill-color: currentColor; background: none; }
+  html.light .chip-on { background-color: rgb(var(--accent-300) / 0.08); border-color: rgb(var(--accent-300)); color: #7A5212; }
+  @media (hover: hover) { .chip-aura:hover { border-color: rgb(var(--border-strong)); color: rgb(var(--ink-primary)); } .chip-on:hover { background-color: rgb(var(--accent-300) / 0.22); } }
+  /* (그라데이션 글자 — 2026-10-04 'E+황동'으로 삭제. 제목은 단색 text-ink-primary 다) */
 
   /* 홈·랜딩 히어로 오로라 워시(구 --grad-aurora — 2026-09-29 변수도 삭제). 전 레이어 투명 종단 + px 고정 크기라
      어떤 높이의 컨테이너에도 안전. 정적 1회 페인트(스크롤 리페인트 없음). */
@@ -1970,13 +1742,10 @@ video {
   .max-lg\:ring-aura { position: relative; }
   .max-lg\:ring-aura::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-    background: linear-gradient(120deg, rgb(139 92 246 / 0.55), rgb(99 102 241 / 0.25) 45%, rgb(217 70 239 / 0.5));
+    background: rgb(var(--border-strong) / 0.6);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
   }
-  html.light .max-lg\:ring-aura::before { background: linear-gradient(120deg, rgb(109 40 217 / 0.45), rgb(67 56 202 / 0.2) 45%, rgb(162 28 175 / 0.4)); }
-  .max-lg\:ring-aura::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 28px rgb(139 92 246 / 0.06); }
-  html.light .max-lg\:ring-aura::after { box-shadow: inset 0 0 28px rgb(109 40 217 / 0.05); }
 }
 
 
@@ -2041,7 +1810,7 @@ main { max-width: 48rem; margin-inline: auto; }
 /* ② 떠나는 판 — React 가 방금 준 display:none(inline)을 페이드 동안만 이기고, 떠나기 직전 화면 자리(--leave-*)에 fixed 로 선다.
    새 판(in-flow)은 그 **아래**에서 제 모습으로 래스터된다. opacity .999 = 가려진 새 판 타일도 '보이는 타일'로 래스터하게 하는 값
    (1 이면 가림 판정으로 새 판 래스터를 미룬다). will-change 는 퇴장 페이드가 시작될 때 층을 새로 만들지 않게 미리 세운다.
-   배경 = 지면 그림 한 벌(--aura-layers · --grad-surface · --glow-layer, fixed) — 투명이면 새 판 글자가 첫 프레임부터 비친다.
+   배경 = 지면 그림 한 벌(--grad-surface, fixed — body::before 와 같은 값) — 투명이면 새 판 글자가 첫 프레임부터 비친다.
    z-35: 헤더·하단바(z-50)·FAB(z-40) 아래, 본문 위 — 새 판의 sticky 바(커뮤니티 섹션 바 z-30)보다도 위여야 대기 동안 옛 본문 위에
    새 판 바가 겹치지 않는다(design-reviewer 실측 → 30 에서 35). 입력은 새 판이 받는다(pointer-events none).
    떠나기 직전 화면에 걸쳐 있던 사업자 푸터는 복제본이 같은 규칙으로 선다(판 밖 형제라 새 판을 따라 내려가기 때문).
@@ -2058,7 +1827,7 @@ main { max-width: 48rem; margin-inline: auto; }
   opacity: 0.999;
   will-change: opacity;
   background-color: rgb(var(--surface-base));
-  background-image: var(--aura-layers), var(--grad-surface), var(--glow-layer);
+  background-image: var(--grad-surface); /* body::before 와 같은 한 장(2026-10-04 블룸 삭제) */
   background-attachment: fixed;
 }
 /* 판이 화면 아래까지 안 닿으면(짧은 판 · 문서 끝) 판 끝~푸터 사이 틈으로 새 판이 먼저 비친다 — 떠나는 판을 화면 바닥까지 늘려
@@ -2067,9 +1836,6 @@ main { max-width: 48rem; margin-inline: auto; }
 /* 자손이 pointer-events:auto 를 스스로 켜면(캐러셀 버튼 등) 부모의 none 을 이긴다 — 떠나는 판의 버튼이 탭을 가로챘다
    (tab-handoff-gate ② 실측: BUTTON@home LEAVING). 퇴장 동안은 자손까지 전부 끈다. */
 [data-pane-leaving] * { pointer-events: none !important; }
-@media (prefers-reduced-transparency: reduce) {
-  [data-pane-leaving] { background-image: var(--grad-surface), var(--glow-layer); }
-}
 
 /* ── 모션 2단계 — 애플 웹의 '등장감'과 손맛 ─────────────────────────────────
    ① 스크롤 리빌(.reveal): 뷰포트에 들어오는 섹션이 살짝 떠오르며 나타난다.
@@ -2219,7 +1985,7 @@ html.light .hover\:text-danger:hover { color: #B82640; }
 /* 액센트 텍스트 — 라이트에선 100/200 변수가 연한 틴트(비텍스트)라 텍스트로 쓰인 곳만 딥 톤 교정.
    300/400 은 변수 자체가 딥(6.78/8.09:1)이라 오버라이드 불필요 — 목록에서 제거(2026-08-27). */
 /* v7 §4 '링크·선택 강조(라이트)' 목표값 #5C3BBF — 흰 카드 6.34 → 7.41 · 지면 6.91. */
-html.light .text-accent-200 { color: #5C3BBF; }
+html.light .text-accent-200 { color: #7A5212; } /* 2026-10-04 황동 — base 6.33 · 흰 카드 6.90 · float 5.48 */
 
 /* ── 하단 탭바 활성 라벨(TXT-NAV) ─────────────────────────────
    활성 라벨은 '지금 어느 탭인지'를 알려주는 유일한 텍스트 신호인데, 다크에서
@@ -2292,7 +2058,51 @@ html.light {
 }
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
   html.light .text-indigo-300 { color: #4338CA; }
-html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
+/* 🔴 2026-10-05 오너 결정 — 라이트 경고색 = 주황(#C2410C 색상). 글자는 같은 색상에서 명도만 낮춘 #AF3B0B — 라이트 모든 면에서 AA
+   (지면 5.58 · 흰 카드 6.08 · high 5.19 · float 4.83 · 지면 위 틴트 최대 15% 4.51). 틴트 배경·테두리·링은 #C2410C(비텍스트). 종전 #92600A 는
+   황동 #8C5E14 와 대비 1.05 로 같은 색이었다(재측정 r2 P2 — 1440 대시보드 일시정지 시간 vs 옆 황동 링크). 다크는 그대로(#FBBF24 계열).
+   글자뿐 아니라 틴트 배경·테두리·링·hover/focus/active 변형도 같은 색상으로 맞춘다 — 변형은 별개 클래스라 따로 적는다(2026-09-12 알파 변형 구멍).
+   목록은 src 의 실제 사용 토큰에서 뽑았다(진한 채움 bg ≥50% 는 위 글자 색과 짝이라 제외). 틴트 배경은 알파를 **절반**으로 —
+   글자(#AF3B0B)가 제 틴트 위에서도 AA 를 지키게(최대 15% 지면 위 4.51). 새 앰버 토큰을 쓰면 여기 한 줄을 더한다. */
+html.light .active\:bg-amber-400\/20:active { background-color: rgb(194 65 12 / 0.1); }
+html.light .bg-amber-400\/10 { background-color: rgb(194 65 12 / 0.05); }
+html.light .bg-amber-400\/15 { background-color: rgb(194 65 12 / 0.075); }
+html.light .bg-amber-400\/20 { background-color: rgb(194 65 12 / 0.1); }
+html.light .bg-amber-400\/6 { background-color: rgb(194 65 12 / 0.03); }
+html.light .bg-amber-400\/8 { background-color: rgb(194 65 12 / 0.04); }
+html.light .bg-amber-400\/\[0\.07\] { background-color: rgb(194 65 12 / 0.035); }
+html.light .bg-amber-500\/10 { background-color: rgb(194 65 12 / 0.05); }
+html.light .bg-amber-500\/15 { background-color: rgb(194 65 12 / 0.075); }
+html.light .bg-amber-500\/20 { background-color: rgb(194 65 12 / 0.1); }
+html.light .bg-amber-500\/30 { background-color: rgb(194 65 12 / 0.15); }
+html.light .bg-amber-500\/6 { background-color: rgb(194 65 12 / 0.03); }
+html.light .bg-amber-500\/8 { background-color: rgb(194 65 12 / 0.04); }
+html.light .bg-amber-500\/\[0\.07\] { background-color: rgb(194 65 12 / 0.035); }
+html.light .border-amber-400 { border-color: rgb(194 65 12); }
+html.light .border-amber-400\/30 { border-color: rgb(194 65 12 / 0.3); }
+html.light .border-amber-400\/40 { border-color: rgb(194 65 12 / 0.4); }
+html.light .border-amber-400\/50 { border-color: rgb(194 65 12 / 0.5); }
+html.light .border-amber-400\/60 { border-color: rgb(194 65 12 / 0.6); }
+html.light .border-amber-500\/30 { border-color: rgb(194 65 12 / 0.3); }
+html.light .border-amber-500\/35 { border-color: rgb(194 65 12 / 0.35); }
+html.light .border-amber-500\/40 { border-color: rgb(194 65 12 / 0.4); }
+html.light .border-amber-500\/60 { border-color: rgb(194 65 12 / 0.6); }
+html.light .border-amber-700\/50 { border-color: rgb(194 65 12 / 0.5); }
+html.light .hover\:bg-amber-400\/25:hover { background-color: rgb(194 65 12 / 0.125); }
+html.light .hover\:bg-amber-500\/10:hover { background-color: rgb(194 65 12 / 0.05); }
+html.light .hover\:bg-amber-500\/15:hover { background-color: rgb(194 65 12 / 0.075); }
+html.light .hover\:bg-amber-500\/20:hover { background-color: rgb(194 65 12 / 0.1); }
+html.light .hover\:bg-amber-500\/25:hover { background-color: rgb(194 65 12 / 0.125); }
+html.light .hover\:text-amber-300:hover { color: rgb(175 59 11); }
+html.light .ring-amber-400 { --tw-ring-color: rgb(194 65 12); }
+html.light .ring-amber-600 { --tw-ring-color: rgb(194 65 12); }
+html.light .text-amber-200 { color: rgb(175 59 11); }
+html.light .text-amber-300 { color: rgb(175 59 11); }
+html.light .text-amber-400 { color: rgb(175 59 11); }
+html.light .text-amber-500 { color: rgb(175 59 11); }
+html.light .text-amber-600 { color: rgb(175 59 11); }
+html.light .text-amber-700 { color: rgb(175 59 11); }
+html.light .text-amber-800 { color: rgb(175 59 11); }
 html.light .text-sky-300 { color: #0369A1; }
 html.light .text-rose-300 { color: #BE123C; }
 html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
@@ -2302,7 +2112,6 @@ html.light .text-blue-300 { color: #1D4ED8; }
 /* ⚠ -400 계열이 빠져 있었다. 보정 목록이 -200/-300 까지만 덮어서, 표준 경고색인 text-amber-400
    (승인 대기·일시정지·예약중 등 39곳)이 흰 배경에서 1.5:1 로 사실상 안 보였다.
    '상태를 알리는 색'이 상태를 못 알리면 색이 아니라 장식이다. */
-html.light .text-amber-400  { color: #92600A; }
 html.light .text-rose-400   { color: #BE123C; }
 html.light .text-red-400    { color: #C81E2B; }
 html.light .text-blue-400   { color: #1D4ED8; }
@@ -2313,7 +2122,7 @@ html.light .text-pink-400   { color: #BE185D; }
 html.light .text-green-400  { color: #15803D; }
 html.light .text-orange-400 { color: #9A3412; }  /* 종전 #B45309 는 surface-high 위 4.47(관리자 '정지 중', 재점검 1회차 L1-12) → 6.50 */
 html.light .text-emerald-200 { color: #0A8F5C; }
-html.light .text-accent-100 { color: #5C3BBF; }
+html.light .text-accent-100 { color: #7A5212; }
 html.light .text-pink-300 { color: #BE185D; }
 /* 어두운 포스터 위 배지(M-01, 2026-10-01) — 위 딥 톤 보정은 **밝은 지면**을 전제한다. 포스터·그라데이션 위에서는
    딥 톤이 오히려 1.9:1 로 묻혔다(MTT 1.87 · GTD 1.96). 이미지 위 배지 줄에 data-on-dark 를 붙이면 그 줄만 밝은 파스텔을 유지한다.
@@ -2997,34 +2806,10 @@ html:not([data-overlay]) footer { view-transition-name: app-footer; }
    그라데이션 필 + 액센트 글로우. SlidingPill/활성 탭 배경 클래스로 사용.
    .card-elev: 단색 카드 위에 얹는 미묘한 수직 광원(위 밝음) + 상단 하이라이트
    헤어라인(DatawizzAI 카드 문법). bg-surface-* 와 함께 쓴다(배경색은 그대로). */
+/* 2026-10-04 오너 결정 'E+황동' — 그라데이션 필·광택·후광(블룸)을 걷은 **단색 강조 면**. 커뮤니티 서브탭 micro LED 도 삭제. */
 .pill-active {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12) 0%, rgb(255 255 255 / 0) 55%), var(--grad-cta); /* v6.1 광택 한 겹 */
-  /* v6 실측 --aura-glow-primary 는 '3px 스프레드 링 + 20px 블룸' 이었으나, 우리 네이비 지면에선 3px 링(반지름이 알약보다 3px 커진 띠)이
-     알약 뒤의 '두 번째 판'처럼 보였다(오너 지적 2026-09-02, 탭바·사이드바·칩 공통). v6.5: 스프레드 링 제거, 부드러운 블룸 한 겹만. */
-  box-shadow: 0 0 18px rgb(129 140 248 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.14);
+  background-color: rgb(var(--accent-300));
 }
-html.light .pill-active {
-  box-shadow: 0 0 14px rgb(99 102 241 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.35);
-}
-/* 커뮤니티 서브탭 **한정** micro LED (2026-09-10, 오너 지시 §5.7).
-   전역 .pill-active(34곳)는 손대지 않는다 — 하단 탭바·GTO 레인·순위 탭이 같은 클래스를 쓴다.
-   여기만 18px/0.28 → 12px/0.22 로 낮춘다: 알약이 32px 로 얇아지면서 같은 블룸이
-   글자 주변 보라 안개로 읽혔다(§5.7 '텍스트 주변까지 번지면 강도를 낮춤').
-   토큰 이름은 [data-aura] 와 같은 것을 쓴다 — 같은 LED 시스템의 micro 단계다. */
-[data-community-secbar] [data-sliding-pill].pill-active {
-  --aura-led-rgb: 129 140 248;
-  --aura-led-blur: 12px;
-  --aura-led-a: 0.22;
-  box-shadow: 0 0 var(--aura-led-blur) rgb(var(--aura-led-rgb) / var(--aura-led-a)), inset 0 1px 0 rgb(255 255 255 / 0.14);
-}
-html.light [data-community-secbar] [data-sliding-pill].pill-active {
-  --aura-led-blur: 10px;
-  --aura-led-a: 0.12;
-  box-shadow: 0 0 var(--aura-led-blur) rgb(99 102 241 / var(--aura-led-a)), inset 0 1px 0 rgb(255 255 255 / 0.35);
-}
-@media (prefers-reduced-transparency: reduce) { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14); } }
-@media (prefers-contrast: more)               { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14); } }
-@media (forced-colors: active)                { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: none; } }
 /* 키보드 포커스 링이 레일에 잘리던 것(2026-09-10 실측 — 변경 전에도 같았다).
    레일은 overflow-x:auto 라 세로도 auto 로 계산되고(CSS 규칙: 한 축이 visible 이 아니면 다른 축의 visible 은 auto 가 된다),
    버튼 높이 = 레일 높이라 바깥으로 2px+2px 나가는 outline 이 위아래 모두 0px 여유에서 통째로 잘렸다.
@@ -3036,35 +2821,15 @@ html.light [data-community-secbar] [data-sliding-pill].pill-active {
    card-elev 의 상단 워시(다크 white/0.035)를 얹으면 그 지점이 다크 4.08 / 라이트 4.24 로 AA 아래로 떨어진다.
    surface-low 위에서는 같은 워시가 5.01 로 남아 안전하다(그래서 ToolCard·DashCard·KPI 는 전부 surface-low).
    surface-high 타일에 깊이가 필요하면 밝히지 말고 아래 .card-sink 를 쓸 것(같은 깊이, 대비는 오히려 상승). */
-.card-elev {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035) 0%, rgb(255 255 255 / 0) 55%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
-}
+/* 🔴 2026-10-04 'E+황동' ② — .card-elev/.card-sink 의 그라데이션 워시와 위 1px 하이라이트를 걷었다(카드는 면 밝기 단계만).
+   클래스는 호출부에 남아 아무것도 칠하지 않는다. 아래 주석은 역사다. */
 /* .card-sink — card-elev 의 짝. surface-high 처럼 '밝힐 헤드룸이 없는' 타일에 깊이를 주는 유일한 방법.
    다크는 밝히는 대신 **아래를 낮추고**(--grad-surface 와 같은 문법), 라이트는 card-elev 와 동일하게 위를 올린다.
    두 방향 모두 그 테마의 글자색과 배경의 거리를 **넓히므로** 대비가 떨어질 수 없다(단조 안전):
    실측 ink-muted on surface-high — 다크 4.53→4.89 / 라이트 4.69→5.02. ΔL* 다크 2.73 · 라이트 2.68(≤3).
    상단 하이라이트 헤어라인은 양쪽 다 유지 — '위에서 빛이 온다'는 신호는 그라데이션이 아니라 이 1px 가 만든다. */
-.card-sink {
-  background-image: linear-gradient(180deg, rgb(8 6 16 / 0) 45%, rgb(8 6 16 / 0.16) 100%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
-}
-html.light .card-elev,
-html.light .card-sink {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 60%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8);
-}
 
-/* ── 상시 크롬의 결(--grad-bar) — 헤더 · 모바일 하단 탭바 알약 ─────────────────
-   둘 다 background-color(bg-surface-base / bg-surface-mid)만 갖고 background-image 는 비어 있어
-   충돌 없음. 이 블록은 unlayered 라 Tailwind utilities 를 이긴다.
-   ⚠ PC GNB([data-stack-tabbar])는 일부러 제외 — 헤더 바로 아래 붙는 두 번째 바라, 여기에도
-   같은 그라데이션을 주면 헤더 끝(평면)에서 다시 밝아지는 '리셋 선'이 생긴다. 헤더+GNB 는 한 덩어리다.
-   ⚠ 탭바 셀렉터는 nav 의 두 자식 중 커튼(aria-hidden)이 아닌 쪽 = 알약. App.tsx 구조 변경 시 함께 볼 것. */
-[data-stack-header],
-nav[aria-label="하단 내비게이션"] > div:not([aria-hidden]) {
-  background-image: var(--grad-bar);
-}
+
 
 /* .ring-conic: 정적 conic 시그니처 보더(OUTFLAME 문법) — '앱 전체에서 손에 꼽는 곳만' 규율.
    현재 사용처 2곳: ① 비로그인 랜딩 로그인 카드 ② 랭킹 TOP3 포디움 1위 타일(2026-08-28 오너 '포인트 1곳').
@@ -3075,18 +2840,9 @@ nav[aria-label="하단 내비게이션"] > div:not([aria-hidden]) {
    1px 보더 기법: 이중 배경 — 안쪽은 padding-box 로 카드색 채움, 바깥 1px 링만 border-box conic 이 비친다.
    페인트 1회 정적(애니메이션 금지 §20.4). 내부 채움·링 모두 테마 토큰이라 라이트 전환 자동.
    ⚠ card-elev 와 같은 요소에 병용 금지 — 둘 다 background-image 라 나중 규칙이 통째로 이긴다. */
+/* 2026-10-04 'E+황동': conic 그라데이션 링을 걷고 강조색 1px 테두리 한 줄(같은 두 곳 · 상자 크기 불변). */
 .ring-conic {
-  border: 1px solid transparent;
-  background-image:
-    linear-gradient(rgb(var(--surface-low)), rgb(var(--surface-low))),
-    conic-gradient(
-      rgb(var(--accent-300) / 0.5) 0deg,
-      rgb(var(--accent-300) / 0) 120deg,
-      rgb(var(--accent-300) / 0) 240deg,
-      rgb(var(--accent-300) / 0.5) 360deg
-    );
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  border: 1px solid rgb(var(--accent-300) / 0.6);
 }
 
 /* ── 클락 스테이지(ClockStage) 레이아웃 전환 — 컨테이너 기준 ────────────────────

@@ -188,14 +188,15 @@ export const BLACK_MARBLE_GOLD_BG = [
 //   ② 비네트 한 겹 추가 — 방송 스코어버그가 중앙 위계를 지키는 고전적 수단이다.
 //   ③ 116° 시닌 알파 .035 → .03. 순흑 위에서 백색 .035 가 화면 중앙 우측에 **얼룩처럼** 보였다.
 //   그리고 메시 3점째(인디고)를 넣어 두 오로라 사이가 끊기지 않게 했다.
+// 🔴 2026-10-04 오너 결정 'E+황동' — 기본 룩(NURI 시그니처)도 앱과 같은 브랜드로: 바이올렛·인디고·틸 오로라 3점을 걷고
+//   무채색 바탕(#0C0C0D) 위 황동 한 점(좌상, 알파 .16)만 남긴다. 비네트 2겹·116° 시닌은 그대로(중앙 위계·면 질감).
+//   다른 프리셋(아우라·아우라 골드·네온 나이트 …)은 매장이 고르는 테마라 **그대로 보존**한다.
 export const NURI_SIGNATURE_BG = [
   'radial-gradient(52% 46% at 50% 50%, rgba(0,0,0,.50) 0%, rgba(0,0,0,.24) 54%, transparent 78%)',
   'radial-gradient(140% 100% at 50% 50%, transparent 55%, rgba(0,0,0,.34) 100%)',
-  'radial-gradient(64vmax 44vmax at 4% -10%, rgba(139,92,246,.28) 0%, transparent 60%)',
-  'radial-gradient(40vmax 30vmax at 30% 112%, rgba(99,68,206,.14) 0%, transparent 60%)',
-  'radial-gradient(56vmax 40vmax at 104% 108%, rgba(20,184,166,.20) 0%, transparent 60%)',
+  'radial-gradient(64vmax 44vmax at 4% -10%, rgba(140,94,20,.16) 0%, transparent 60%)',
   'linear-gradient(116deg, transparent 34%, rgba(255,255,255,.03) 50%, transparent 66%)',
-  '#090B18',
+  '#0C0C0D',
 ].join(', ');
 
 /** 메인 타이머 색 — **모든 프리셋이 공유하는 하나의 값**이다(accent 로 새면 안 된다).
@@ -214,7 +215,7 @@ export const CLOCK_DEFAULTS = {
   //   ⚠ 이 줄을 바꾸면 **테마를 고른 적 없는 매장**의 TV 가 바뀐다(프리셋을 저장해 둔 매장은 그대로다 —
   //     저장값은 id 로 대조되고 'aura' 는 프리셋 목록에 그대로 남아 있다).
   bg: NURI_SIGNATURE_BG,
-  accent: '#B5A6FF',       // 누리 바이올렛 — 앱 주색 계열. #05060D 위 9.4:1(인디고 400 의 6.9:1 보다 높다).
+  accent: '#D9B25A',       // 2026-10-04 진한 황동의 글자 단계(앱 accent-200) — #0C0C0D 위 9.7:1. (종전 누리 바이올렛 #B5A6FF)
   //   ⚠ **스와치(CLOCK_ACCENT_SWATCHES)에 없는 값이어야 한다.** 스와치 값을 프리셋 기본으로 쓰면
   //     '매장이 직접 고른 색'과 '프리셋 기본색'을 구분할 수 없어진다 — clockTheme.test.ts:198 이 그것을 지킨다.
   //     처음에 #A78BFA(바이올렛 스와치)를 썼다가 그 계약에 걸려 바꿨다.
@@ -295,7 +296,7 @@ export interface ClockThemePreset {
 // 새 프리셋은 여기 한 줄이면 관리자 패널 미리보기·저장·TV 송출에 전부 붙는다(id 는 DB 왕복 키 — 바꾸지 않는다).
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   // 기본 = NURI 시그니처. 목록 맨 앞에 둔다(관리자 패널이 이 순서로 스와치를 그린다).
-  { id: 'nuri-signature', label: 'NURI 시그니처(기본)', kind: 'gradient', bg: NURI_SIGNATURE_BG, accent: '#B5A6FF', timer: CLOCK_TIMER_INK },
+  { id: 'nuri-signature', label: 'NURI 시그니처(기본)', kind: 'gradient', bg: NURI_SIGNATURE_BG, accent: '#D9B25A', timer: CLOCK_TIMER_INK },
   // 구 기본. **id 를 지우지 않는다** — 이걸 저장해 둔 매장의 DB 값이 그대로 살아 있어야 한다.
   { id: 'aura', label: '아우라(인디고)', kind: 'gradient', bg: AURA_BG, accent: '#818CF8', timer: CLOCK_TIMER_INK },
   { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: CLOCK_TIMER_INK },

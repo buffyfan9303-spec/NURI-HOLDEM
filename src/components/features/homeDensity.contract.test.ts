@@ -114,7 +114,8 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
   });
   it('금액 칸: 보장(guaranteed && prizePool)이면 금색 금액, 아니면 초록 "데일리" · 아래 참가비 · 라벨 글자 없음', () => {
     expect(TT).toMatch(/const gtd = schedule\.guaranteed && schedule\.prizePool \? formatPrize\(schedule\.prizePool\) : null;/);
-    expect(TT).toMatch(/data-testid="schedule-prize" className=\{`[^`]*text-gold-300`\}>\{gtd\}/);
+    // 2026-10-04 오너 결정: 금액(GTD)은 본문 색 — 금색은 순위·성취 전용(종전 단언: text-gold-300).
+    expect(TT).toMatch(/data-testid="schedule-prize" className=\{`[^`]*text-ink-primary`\}>\{gtd\}/);
     // 억 단위 금액은 한 단계 작게(대체 폰트에서도 한 줄) — 2026-09-25 CI 리눅스 실측
     expect(TT).toMatch(/gtd\.includes\('억'\) \? 'text-\[0\.75rem\]'/);
     expect(TT).toMatch(/data-testid="schedule-daily" data-kind=\{kind\.text\} className=\{`[^`]*\$\{kind\.cls\}`\}>\{kind\.text\}</);
@@ -251,13 +252,14 @@ describe('배너 가로폭', () => {
 });
 
 describe('첫 줄 = GTO 진입(오너 H2 · 2026-09-29 항상)', () => {
-  it('줄 전체가 onTools 버튼 · 44px 고정 · 글로우 박스 없이 글씨만 네온', () => {
+  // 2026-10-04 오너 결정 'E+황동' — '글씨만 네온'(2026-09-29)도 후광이라 걷었다. 강조는 색 하나(text-accent-200)뿐이다.
+  it('줄 전체가 onTools 버튼 · 44px 고정 · 글로우 박스도 글자 후광도 없다', () => {
     expect(HOME).toMatch(/data-testid="home-today-line" className="flex h-\[44px\] items-center/);
     const btn = HOME.slice(HOME.indexOf('data-testid="home-gto-entry"') - 80, HOME.indexOf('data-testid="home-gto-entry"') + 900);
     expect(btn).toMatch(/onClick=\{onTools\}/);
     expect(btn).toMatch(/h-\[44px\]/);
     expect(btn).not.toMatch(/className="[^"]*stat-pill/);   // 주석의 기록 말고 **걸린 클래스**만 본다
-    expect(btn).toMatch(/dark:\[text-shadow:/);
+    expect(btn, '글자 후광(text-shadow)이 되돌아왔다').not.toMatch(/text-shadow:/);
     expect(btn).toMatch(/프로처럼 치는/);   // 2026-09-29 후킹 문구
     expect(btn).toMatch(/무료 GTO \{GTO_TOOL_COUNT\}개/);
   });
@@ -280,7 +282,8 @@ describe('빠른 카드 두 개', () => {
     expect(HOME).toMatch(/\{quickEventFailed \? '불러오기 실패 · 다시' : eventShown === 'menu' \? '진행 중 이벤트 없음' : '이벤트 보기'\}/);
   });
   it('진행 이벤트가 없으면 행동 줄이 흐린 글자로 사실을 말한다(2026-09-25) — 진입 버튼은 그대로', () => {
-    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-gold-300'/);
+    // 2026-10-05 오너: 이벤트 진입(누를 수 있음)은 황동 — 금색은 순위·성취 전용(종전 단언: 금색).
+    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-accent-300'/);
     expect(HOME).toMatch(/<button type="button" onClick=\{\(\) => onEvent\(\)\} data-testid="home-quick-event"/);
   });
 });

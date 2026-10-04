@@ -213,7 +213,7 @@ function SortableVenueRow({ venue, order, handlers }: { venue: Venue; order: num
       className={[
         'rounded-aura border card-aura p-2.5 space-y-2',
         // 드래그 중엔 accent 테두리 + 링(유틸이 card-aura 의 테두리·그림자를 이긴다). 평소 테두리는 card-aura 몫.
-        isDragging ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] opacity-90 z-10' : '',
+        isDragging ? 'border-accent-400 opacity-90 z-10' : '',
       ].join(' ')}
     >
       <RowContent

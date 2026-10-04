@@ -541,7 +541,7 @@ const AppHeader = memo(function AppHeader({
                   //   돌려주는 문자열 API 라(다른 호출부가 `${...}aa` 로 알파를 문자열 결합해 계약을 못 바꾼다)
                   //   라이트에서 이 링이 지면에 묻혔다. 이 링은 별도 배지 없이 **등급을 알리는 유일한 표시**라
                   //   안 보이면 기능이 사라진 것과 같다 → 장식용 --tier-*-vivid 토큰(테마별 정의)으로 직접 참조.
-                  style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
+                  style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}` /* 2026-10-05: 확산 후광 제거 — 등급 링(정보)만 */ }}
                   title="내 활동 등급"
                 >
                   {/* 2026-09-04: 이니셜 위에 img 를 absolute 로 얹던 패턴 제거 — contain 이미지(로고형)에서
@@ -906,7 +906,10 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
     <nav
       // U06: 억제되면 보조기술·Tab 순서에서도 빠진다. 래퍼의 pointer-events 만으로는 키보드를 못 막는다.
       aria-hidden={suppressed || undefined}
-      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-(--dur-panel)',
+      // 2026-10-04 오너 결정 'E+황동' — 떠 있는 유리 알약 → **바닥에 붙은 평평한 바**. 면·윗선은 nav 자신이 칠한다
+      //   (아래 safe-area 상한 padding 까지 같은 면이라 바와 화면 끝 사이 틈이 없다). 높이는 종전 nav 와 **같은** 62 + min(safe, .5rem)
+      //   (윗선 1 + 버튼 58 + 아래 3) — --tabbar-safe/--tabbar-float·글쓰기 FAB·맨 위로·토스트 기준선이 한 치도 안 움직인다.
+      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none border-t border-border-default bg-surface-base transition-transform duration-(--dur-panel)',
         hidden ? 'translate-y-[120%]' : 'translate-y-0',
         suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
       // 🔴 B2(2026-09-21 오너) — 실기기에서 **알약 아래만 크게 벌어진다.** 실측(운영 375×812 에
@@ -916,7 +919,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
       //   아래를 벌리는 **지배항은 여기 `env(safe-area-inset-bottom)`** 하나다. 그래서 값을 없애지 않고 **상한**만 씌운다.
       //     safe-area 0(하네스·브라우저 모드): `min(0, 8.5) = 0` → **오늘과 완전히 동일**. 기존 계약 무손상.
       //     safe-area 24~34px(설치형 PWA·홈 인디케이터): 8.5px 로 고정 → 알약 아래 총 `mb 2.125 + 8.5 = 10.625px`.
-      //     이 값은 레일 좌우 여백 `mx-2.5`(10.625px)와 **정확히 같고** 알약 위(9.5px)와 1px 차다 — '위랑 맞춰' 가 이 지점이다.
+      //     이 값은 레일 좌우 여백 `mx‑2.5`(10.625px — 2026-10-05 평평한 바로 바뀌며 지금은 없다)와 **정확히 같고** 알약 위(9.5px)와 1px 차다 — '위랑 맞춰' 가 이 지점이다.
       //   ⚠ 대가: 라벨 행이 홈 인디케이터 예약구간 안으로 들어간다(아이콘·터치 표적 대부분은 바깥).
       //     실기기에서 답답하면 **이 상한만** 키워라(`0.75rem`=12.75px · `1.25rem`=21.25px). 다른 곳은 손대지 마라.
       //   ⚠ `--tabbar-safe`/`--tabbar-float`(index.css:65-66)는 푸터·토스트·FAB·알림패널·정산바가 공유하는
@@ -925,11 +928,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
       style={{ paddingBottom: 'min(env(safe-area-inset-bottom), 0.5rem)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
-      {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 알약 뒤는 **불투명** 커튼, 그 위 12px 만 짧게 페이드.
-          예전엔 '아래 불투명 → 위 완전 투명' 한 장이라 상단 30px 가 거의 유리였고 푸터 글자가 그대로 비쳐
-          "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
-      <div aria-hidden className="absolute inset-0 glass-strong" />
-      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-linear-to-t/srgb from-surface-base/80 to-transparent" />
+      {/* (알약 뒤 불투명 커튼·위 12px 페이드 — 2026-10-04 평평한 바로 바꾸며 삭제. 바 자체가 화면 끝까지 불투명 면이다) */}
       {/* 🔴 B1(2026-09-21) — 하단바 알약 **아래 여백**. 운영 390×844 실측에서 `nav` 는 bottom:0 · 높이 74.25 CSS px 인데
           알약 아래가 8.5 CSS px 남아 "하단바가 너무 위에 떠 있다" 로 보였다(safe-area 0 환경).
           ⚠ 루트 폰트가 **17px** 이라 0.5rem = 8.5px 다(16px 가정하면 계산이 틀린다 — 이 저장소 고유 함정).
@@ -948,7 +947,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           남았고 라벨 span 만 82% 가려져 "아이콘 아래 빈 공간" 으로 보였다(아이콘 위 9.5px vs 아래 24.4px).
           → `relative` 한 단어. 이제 레일 전체(배경·테두리·라벨)가 커튼 위에 그려진다 — 커튼의 설계 의도
           ('알약 **뒤**는 불투명 커튼')가 비로소 맞는다. 라벨이 보이면 아래 24.4px 는 빈 공간이 아니라 라벨 행이다. */}
-      <div className="pointer-events-auto relative mx-2.5 mb-[calc(0.125rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
+      {/* pb-[3px] = 종전 알약의 아래 테두리 1 + mb 2 — nav 높이(62 @safe 0)·라벨 하단→화면 바닥(7px)·글쓰기 FAB 간격을 종전 그대로 둔다
+          (없으면 바가 3px 낮아져 FAB–탭바 간격 17 > 16 · 라벨이 바닥에서 4px — e2e board-oneline ⑫ · mobile-tab-transition B1 실측). */}
+      <div className="pointer-events-auto relative mb-(--tabbar-lift) flex pb-[3px]">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
@@ -999,7 +1000,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
                     // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
                     // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-mid">
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base">
                     {count![tab]}
                   </span>
                 )}
@@ -4307,7 +4308,7 @@ export default function App() {
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
                   className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-chip px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {hasActiveSearchFilter && (
@@ -4373,8 +4374,8 @@ export default function App() {
                 D1: 로딩 중에도 같은 줄을 invisible 로 세워 자리(38px)를 잡는다 — 도착 때 아래 목록이 +38px 밀리던 자리. */}
             {(!schedulesLoaded || visibleSchedules.length > 0) && (
               <p aria-hidden={!schedulesLoaded || undefined}
-                className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary text-grad-violet', schedulesLoaded ? '' : 'invisible'].join(' ')}>
-                대회 <span className="text-sm font-bold tabular-nums text-accent-300 text-grad-keep">{schedulesLoaded ? visibleSchedules.length : 0}</span>
+                className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary', schedulesLoaded ? '' : 'invisible'].join(' ')}>
+                대회 <span className="text-sm font-bold tabular-nums text-ink-secondary">{schedulesLoaded ? visibleSchedules.length : 0}</span>
               </p>
             )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}

@@ -1814,8 +1814,8 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
         {sep}
-        {!summary ? <span className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{gLabel}</span>
-          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink truncate font-bold text-accent-300">{sumLabel}</span>
+        {!summary ? <span className="min-w-0 max-w-[50%] shrink truncate font-bold text-ink-primary">{gLabel}</span>
+          : sumState === 'ok' ? <span data-summary-game="" className="min-w-0 max-w-[50%] shrink truncate font-bold text-ink-primary">{sumLabel}</span>
           : <span data-summary-game="" role="img" aria-label={sumState === 'fail' ? '오늘 게임 정보 없음' : '오늘 게임 불러오는 중'}
               className={['inline-block h-[1em] w-16 shrink-0 rounded-badge bg-surface-high', sumState === 'loading' ? 'animate-pulse' : ''].join(' ')} />}
       </p>

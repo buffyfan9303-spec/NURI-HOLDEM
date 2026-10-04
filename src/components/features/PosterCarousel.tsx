@@ -59,17 +59,17 @@ const BRAND_SLIDES: {
   img: string;
   title: string; sub: string; titleColor: string; subColor: string;
 }[] = [
-  /* 배경 — 딥 그라운드 위 저채도 바이올렛 빔(정적 CSS 그라데이션, 애니메이션 없음).
-     대비 실측(피크 최악 겹침 기준): mind title 10.21/sub 5.67 · nuri 6.74/10.41 — 전부 AA 이상. */
+  /* 배경 — 2026-10-04 오너 결정 'E+황동': 바이올렛 빔을 걷은 무채색 지면(아트워크가 못 뜰 때의 폴백 겸).
+     아트워크(public/banners/*.webp)도 같은 날 보라 블룸·별 반짝임을 걷고 무채색 + 황동 선으로 다시 그렸다. */
   {
     key: 'mind', action: 'nurimind', alt: '오늘의 NURI MIND · 외부 사이트 nurimind.co.kr 에서 오늘의 운세 보기',
-    bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
+    bg: '#121316',
     img: '/banners/mind.webp',
-    title: BRAND_SLIDE_TITLES.mind, sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
+    title: BRAND_SLIDE_TITLES.mind, sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#F0F0F0', subColor: '#B4B7BA',
   },
   {
     key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 전국 홀덤 일정 한곳에서 보기',
-    bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
+    bg: '#121316',
     img: '/banners/nuri.webp',
     title: BRAND_SLIDE_TITLES.nuri, sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
@@ -259,12 +259,8 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
     const ev = s.event;
     // 목적지가 없으면 <div> 로 그린다 — 커서·hover·포커스가 '누를 수 있다'고 거짓말하지 않게.
     const Tag = (s.onClick ? 'button' : 'div') as 'button' | 'div';
-    // 이벤트 슬라이드 배경 — live 만 브랜드 보라 빔, 그 밖은 중립(참여 가능을 색으로 거짓말하지 않는다). 정적 그라데이션, 애니메이션 없음.
-    const evBg = ev
-      ? (ev.live
-        ? 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.16) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.22) 0%, transparent 60%), linear-gradient(180deg, #1c1633 0%, #120f22 100%)'
-        : 'linear-gradient(180deg, #15131f 0%, #0f0e18 100%)')
-      : undefined;
+    // 이벤트 슬라이드 배경 — live 만 따뜻한 황동 기운 면, 그 밖은 무채색(참여 가능을 색으로 거짓말하지 않는다). 2026-10-04 보라 빔 삭제.
+    const evBg = ev ? (ev.live ? '#1B1812' : '#121316') : undefined;
     return (
       <Tag
         key={`${s.key}:${dup ? 'd' : 'o'}`}
@@ -291,9 +287,9 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
             <span className="flex flex-wrap items-center gap-1.5">
               {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
               <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
-              <span className="font-display text-[21px] font-extrabold leading-[28px] text-[#EEECFA] md:text-[22px] md:leading-[30px]">{ev.title}</span>
+              <span className="font-display text-[21px] font-extrabold leading-[28px] text-[#F0F0F0] md:text-[22px] md:leading-[30px]">{ev.title}</span>
             </span>
-            <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B2ACEC]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
+            <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B4B7BA]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
           </span>
         ) : b ? (
           <>

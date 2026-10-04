@@ -7,7 +7,7 @@
 //     절대 21px 이라 둘이 따로 놀던 결함(P0-B 후속 3건 중 3번)의 회귀 가드다.
 //     ⚠ 크기 단언만으로는 안 된다 — `21px` 을 적어도 100% 에서는 통과한다.
 //       **루트를 34px 로 키워 비례가 유지되는지**가 이 테스트의 핵심이다.
-//  ② 다크에서 액센트 '글자'는 채운 버튼 색(#6344CE)이 아니라 텍스트 단계로 승격된다.
+//  ② 다크에서 액센트 '글자'는 채운 버튼 색(#8C5E14 — 2026-10-04 황동, 종전 #6344CE)이 아니라 텍스트 단계로 승격된다.
 //     승격이 없으면 지면 대비 3.10 으로 본문 AA(4.5) 미달이다.
 //  ③ 라이트 달력 주말 표시(`text-sky-400/60`·`text-danger-light/70`)는 알파 변형이라
 //     라이트 보정 목록에서 **조용히 빠져 있었다**(실측 2.00 / 2.08).
@@ -153,7 +153,7 @@ test('② 다크에서 액센트 글자가 본문 AA 를 넘는다 (버튼 면 �
   await probe(page, '<span id="p-bg" class="bg-accent-300 text-white">채운 버튼</span>');
   const fill = await page.evaluate(() => getComputedStyle(document.querySelector('#p-bg')!).backgroundColor);
   console.log('ACCENT-FILL ' + fill);
-  expect(fill.replace(/\s/g, ''), '채운 면까지 텍스트 단계로 바뀌었다').toBe('rgb(99,68,206)');
+  expect(fill.replace(/\s/g, ''), '채운 면까지 텍스트 단계로 바뀌었다').toBe('rgb(140,94,20)'); // 2026-10-04 'E+황동' #8C5E14(종전 #6344CE)
 });
 
 test('③ 라이트 달력 주말 표시가 보인다 (알파 변형도 보정된다)', async ({ page, context }) => {
@@ -229,27 +229,28 @@ test('⑤ 비활성 버튼이 활성 버튼과 구별된다', async ({ page, con
   expect(r.iOff.cursor).toBe('not-allowed');
 });
 
-test('⑥ 라이트 지면에 옅은 보라를 반복하지 않는다', async ({ page, context }) => {
+// 2026-10-04 오너 결정 'E+황동' — 블룸(보라·남보라·자홍 빛번짐)을 **양 테마 모두** 걷었다.
+//   종전 ⑥ 은 '라이트 블룸 알파 ≤ .06 · 다크는 > .1 유지' 였다. 이제 뜻은 '지면 어디에도 빛번짐 그라데이션이 없다' 이다.
+test('⑥ 지면에 빛번짐(radial 블룸)이 없다 — 다크·라이트 둘 다', async ({ page, context }) => {
   await offline(context);
   await page.setViewportSize({ width: 390, height: 844 });
   await boot(page, 'light');
-  const a = await page.evaluate(() => {
-    const cs = getComputedStyle(document.documentElement);
-    return { a1: parseFloat(cs.getPropertyValue('--aura-a1')), a2: parseFloat(cs.getPropertyValue('--aura-a2')),
-             a3: parseFloat(cs.getPropertyValue('--aura-a3')) };
+  const probe = () => page.evaluate(() => {
+    const bg = document.querySelector<HTMLElement>('.aura-bg');
+    return {
+      auraBg: bg ? getComputedStyle(bg).backgroundImage : 'missing',
+      bodyBefore: getComputedStyle(document.body, '::before').backgroundImage,
+      a2: getComputedStyle(document.documentElement).getPropertyValue('--aura-a2').trim(),
+    };
   });
-  console.log('LIGHT-BLOOM ' + JSON.stringify(a));
-  // --aura-a2 는 .aura-bg 의 전면 블룸이자 **모든 sticky 서브탭 바**가 미리 섞는 보라의 계수다.
-  // 여기가 높으면 '모든 박스가 옅은 보라' 라는 인상이 지면과 바 양쪽에서 동시에 만들어진다.
-  expect(a.a2, '라이트 블룸 알파가 되돌아갔다 — 지면과 모든 서브탭 바가 다시 보라로 물든다').toBeLessThanOrEqual(0.06);
-  expect(a.a1).toBeLessThanOrEqual(0.06);
-  expect(a.a3).toBeLessThanOrEqual(0.05);
-
-  // 다크는 반대다 — 어두운 지면에서 블룸은 얼룩이 아니라 깊이라 내리지 않았다.
-  await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
-  const dark = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--aura-a2')));
-  console.log('DARK-BLOOM a2=' + dark);
-  expect(dark, '다크 블룸까지 같이 내려갔다 — 다크는 대상이 아니다').toBeGreaterThan(0.1);
+  for (const theme of ['light', 'dark'] as const) {
+    if (theme === 'dark') await page.evaluate(() => { document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); });
+    const p = await probe();
+    console.log(`BLOOM ${theme} ` + JSON.stringify(p));
+    expect(p.auraBg, `${theme}: .aura-bg 가 다시 블룸을 칠한다`).not.toMatch(/radial-gradient/);
+    expect(p.bodyBefore, `${theme}: body::before 에 상단 글로우가 되돌아왔다`).not.toMatch(/radial-gradient/);
+    expect(p.a2, `${theme}: 블룸 알파 토큰이 되살아났다`).toBe('');
+  }
 });
 
 // ⑦ 일정 목록 카드의 실제 높이와 --card-h-list 가 맞는가.

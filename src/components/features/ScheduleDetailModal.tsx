@@ -326,7 +326,7 @@ export default function ScheduleDetailModal({
               <span className="font-semibold tracking-wider">{schedule.format}</span>
               {rating && rating.count > 0 && (
                 <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                  <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  <Icon name="star-fill" size={12} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                 </span>
               )}
             </p>
@@ -732,7 +732,7 @@ export default function ScheduleDetailModal({
                 <>
                   <span className="text-ink-muted">·</span>
                   <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`}>
-                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}
+                    <Icon name="star-fill" size={12} className="shrink-0 text-ink-secondary" />{rating.avg.toFixed(1)}
                   </span>
                   <span className="text-ink-muted">방문 후기 {rating.count}건 평균</span>
                 </>
@@ -1065,9 +1065,9 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
       <button type="button" onClick={toggleLike} disabled={likeBusy} aria-pressed={liked}
         // D3(2026-09-29): 보이는 높이 36 → 누름 44(min-h). 두 칸 격자라 옆 칸도 같이 44 로 선다.
         className={['flex min-h-[44px] items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
-          // .chip-aura 가 border:1px solid 를 자체 공급한다 — border-transparent 를 같이 주면 다크에서만
+          // .chip-on(선택 칩 — 2026-10-05 .chip-aura 에서 분리)이 border:1px solid 를 자체 공급한다 — border-transparent 를 같이 주면 다크에서만
           // 그 테두리를 덮어 라이트와 모양이 갈리고, hover 때 없던 인디고 선이 튀어나온다(3fd2c47 과 같은 계열).
-          liked ? 'chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
+          liked ? 'chip-on' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
         <Icon name={liked ? 'heart-fill' : 'heart'} size={14} className="shrink-0" />{liked ? '찜함' : '찜'}
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
@@ -1573,7 +1573,7 @@ function SummaryCell({ label, value, badge, accent = false, sub, nowrap = false,
     <div data-testid={testId} className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className={`min-w-0 flex-1 ${nowrap ? 'whitespace-nowrap text-xs min-[360px]:text-sm' : 'break-keep wrap-anywhere text-sm'} font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+        <span className={`min-w-0 flex-1 ${nowrap ? 'whitespace-nowrap text-xs min-[360px]:text-sm' : 'break-keep wrap-anywhere text-sm'} font-bold leading-snug tabular-nums ${accent ? 'font-extrabold' : ''} text-ink-primary`}>
           {value}
         </span>
         {badge}

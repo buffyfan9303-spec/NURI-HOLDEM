@@ -388,7 +388,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                 data-cal-date={key}
                 className={[
                   'cal-day relative flex h-[50px] min-w-0 flex-col items-center justify-start gap-px rounded-input pt-1 md:h-[58px]',
-                  isPicked ? 'chip-aura shadow-glow' : net && net > 0 ? 'bg-emerald-400/8 hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/8 hover:bg-danger/15' : 'hover:bg-surface-high/50',
+                  isPicked ? 'chip-on' : net && net > 0 ? 'bg-emerald-400/8 hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/8 hover:bg-danger/15' : 'hover:bg-surface-high/50',
                 ].join(' ')}>
                 {/* 다른 달 칸 — 칸 전체 opacity 0.35 를 걷고 날짜 숫자만 보조색으로(M-03, 2026-10-01).
                     눌리는 버튼인데 라이트 2.27:1 로 읽히지 않았다(AA 미달 11/42 → 0/42). */}
@@ -690,7 +690,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
   // 트레이 안에 반반 — 활성만 상자였을 때는 왼쪽만 컨트롤처럼 보이고 오른쪽은 떠 있는 글자로 읽혔다.
   const tabCls = (on: boolean) => [
     'min-h-[44px] flex-1 rounded-[6px] px-3 text-xs font-bold transition-colors',
-    on ? 'chip-aura' : 'text-ink-muted hover:text-ink-secondary',
+    on ? 'chip-on' : 'text-ink-muted hover:text-ink-secondary',
   ].join(' ');
 
   return (

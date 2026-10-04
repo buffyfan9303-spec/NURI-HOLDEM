@@ -169,13 +169,13 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           //  왼쪽 갈래로 간다. 2026-09-19 검증 — 이번 변경 이전에도 같았으니 회귀가 아니다.)
           // **그래도 지우지 마라** — 표가 비는 조합이 생기는 날(깊이 추가·격리 해제·표 유실)의 폴백이다.
           // 도달 불가를 '죽은 코드' 로 읽고 지우면 그날 빈 행렬(전부 0 = 전부 폴드)이 조언으로 나간다.
-          <div role="status" data-testid="pushfold-no-data" className="rounded-input border border-aura-300/40 bg-aura-300/10 px-3 py-3 text-left text-xs text-ink-primary">
+          <div role="status" data-testid="pushfold-no-data" className="rounded-input border border-accent-300/40 bg-accent-300/10 px-3 py-3 text-left text-xs text-ink-primary">
             {isNashQuarantined(stack, NASH_BIG_ANTE, k, effView) ? (
               <>
                 {/* 2026-10-01 오너 "일단 숨기고 재생성"(감사 N7) 때 빅앤티 2~5bb · 뒤 3명+ 가 이 갈래로 왔다.
                     2026-10-02 다인 균형(solve-deal.mjs)으로 다시 만들어 격리에서 뺐으므로 **지금은 이 갈래에 오는 칸이 없다.**
                     숨김 해제 커밋을 되돌리면 다시 이 갈래가 쓰인다 — 지우지 마라. */}
-                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 <b className="text-aura-300">준비 중</b>입니다.</p>
+                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 <b className="text-accent-300">준비 중</b>입니다.</p>
                 <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
                   예전 추정값이 공개된 Nash 표와 크게 달라 내렸고, 다시 계산하고 있습니다. 가까운 깊이로 대체하지 않습니다.
                   눈금에서 점선으로 표시된 깊이(

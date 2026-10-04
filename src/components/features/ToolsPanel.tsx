@@ -568,8 +568,8 @@ export default function ToolsPanel() {
         <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
           <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
           <span className="inline-flex items-center gap-1 text-ink-muted">
-            <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
-            <b className="tabular-nums text-accent-200">{prog.streak}</b>일
+            <Icon name="flame" size={12} className="text-ink-muted" aria-hidden />
+            <b className="tabular-nums text-ink-primary">{prog.streak}</b>일
           </span>
           <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
         </span>
@@ -626,7 +626,7 @@ export default function ToolsPanel() {
         <section data-main-enter className="space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
-              <Icon name="star-fill" size={13} className="text-accent-300" aria-hidden /> 즐겨찾기
+              <Icon name="star-fill" size={13} className="text-ink-muted" aria-hidden /> 즐겨찾기
             </h2>
             <span className="text-2xs font-semibold tabular-nums text-ink-muted">{favTools.length}개</span>
           </div>
@@ -639,7 +639,7 @@ export default function ToolsPanel() {
         <section data-main-enter data-testid="tools-featured" className="space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
-              <Icon name="trophy" size={13} className="text-accent-300" aria-hidden /> 자주 쓰는 도구
+              <Icon name="trophy" size={13} className="text-ink-muted" aria-hidden /> 자주 쓰는 도구
             </h2>
             <span className="text-2xs font-semibold tabular-nums text-ink-muted">{FEATURED_KEYS.length}개</span>
             <span className="min-w-0 text-2xs text-ink-secondary">스팟 · 차트 · GTO 분석 바로가기</span>
@@ -668,7 +668,7 @@ export default function ToolsPanel() {
                   소제목 줄을 wrap 시켜 설명이 필요하면 아랫줄로 흐르게 한다. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
                 <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
-                  <Icon name={l.icon} size={13} className="text-accent-300" aria-hidden /> {l.label}
+                  <Icon name={l.icon} size={13} className="text-ink-muted" aria-hidden /> {l.label}
                 </h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
                 {/* 🔴 2026-09-18: 레인 소제목(l.desc)을 화면에서 뺐다 — 바로 아래 카드 그리드가
@@ -739,7 +739,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
     <section
       data-main-enter
       data-testid="spot-hero"
-      className="relative rounded-card border border-accent-400/30 bg-surface-mid p-3"
+      className="relative rounded-card border border-border-default bg-surface-mid p-3"
       // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
       // 2026-09-18: 인라인 rgb 글로우 → 토큰 LED([data-aura] hero). 라이트에서 약해지고 고대비·강제색에서 꺼진다.
       data-aura data-aura-level="hero" data-aura-variant="violet"
@@ -758,7 +758,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
         <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
-          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
+          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2A2D31 0%, #18191C 58%, #0E0F11 100%)' /* 2026-10-04 네이비 → 무채색 */ }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">

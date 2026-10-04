@@ -68,7 +68,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
         <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-extrabold leading-none text-white">AD</span>
       )}
       {post.pinnedAt && (
-        <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>
+        <span className="shrink-0 rounded-badge bg-surface-high px-1 text-2xs font-extrabold leading-none text-ink-primary">고정</span>
       )}
       {isBumped(post) && (
         <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>
@@ -96,7 +96,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
           {post.title || post.content.slice(0, 40)}
         </span>
         {(replay || hand || isSpot) && (
-          <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : isSpot && !hand ? 'NURI SPOT' : '핸드 첨부'}>
+          <span className="ml-1 shrink-0 text-ink-secondary" aria-label={replay ? '리플레이 첨부' : isSpot && !hand ? 'NURI SPOT' : '핸드 첨부'}>
             <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
           </span>
         )}
@@ -105,7 +105,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
             <Icon name="image" size={12} className="inline align-[-2px]" />{imgCount > 1 ? imgCount : ''}
           </span>
         )}
-        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-2xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
+        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-2xs font-bold tabular-nums text-ink-secondary">[{post.commentCount}]</span>}
       </span>
       {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
           flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
@@ -179,7 +179,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
                   <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300 px-1 font-extrabold leading-none text-white">AD</span>
                 )}
                 {post.pinnedAt && (
-                  <span className="shrink-0 inline-flex items-center rounded-badge bg-gold-400/15 px-1 font-extrabold leading-none text-gold-400">고정</span>
+                  <span className="shrink-0 inline-flex items-center rounded-badge bg-surface-high px-1 font-extrabold leading-none text-ink-primary">고정</span>
                 )}
                 {isBumped(post) && (
                   <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none text-accent-200">끌올</span>
