@@ -89,8 +89,11 @@ type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 let lastCommunitySection: Section = 'venues';
 // 글쓰기 FAB 가 달라붙은 자리에서 이만큼 올라가면 '떠났다' — '맨 위로'(높이·자리 포함 윗변 ≈ 탭바 위 9rem)보다 충분히 위.
 const FAB_RISEN_PX = 120;
-// 위 기준에 더하는 '앞서보기' — 방금 프레임 스크롤 거리 × 이 값. scroll 이벤트·렌더가 한두 프레임 늦는 것을 덮는다.
+// 위 기준에 더하는 '앞서보기' — FAB 가 다가올 때만, 방금 프레임 스크롤 거리 × 이 값. scroll 이벤트·렌더가 한두 프레임 늦는 것을 덮는다.
 const FAB_LEAD_FRAMES = 2;
+// 왼쪽(FAB 옆)에 간 뒤 오른쪽 기둥으로 돌아가려면 기준보다 이만큼 더 떠야 한다 — 기준 근처에서 멈췄다 움직일 때 왕복하지 않게(히스테리시스).
+// 피드 끝 최대 들림(24글 목킹 실측 427~467px, 390·360·320)보다 충분히 작아 끝에서는 기둥으로 돌아간다(board-oneline ⑫-d).
+const FAB_HYST_PX = 8;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
@@ -151,8 +154,9 @@ function CommunityTab({
   //
   // 규칙(PR #171 독립 검증 P3, 2026-10-05): **두 버튼이 세로로 겹칠 수 있는 동안 '맨 위로'는 가로로 움직이지 않는다.**
   //   ① 판정은 scroll 이벤트 안에서 칸의 실제 위치로 **동기** 한다(예전엔 관찰자 콜백→React 상태→속성이라 8프레임 늦었다).
-  //   ② 오른쪽 기둥으로 보내는 기준 = FAB 가 FAB_RISEN_PX 이상 올라감 + 방금 프레임에 스크롤한 거리 × FAB_LEAD_FRAMES.
-  //      빨리 튕길수록 기준이 멀어져 '확실히 멀리 떠난 뒤'에만 돌아간다(feed 끝 여유는 ~142px 라 ≥15px/프레임에선 끝까지 왼쪽에 머문다 — 왼쪽은 어디서나 안전).
+  //   ② FAB 가 다가오는 중(위로 스크롤)이면 기준 FAB_RISEN_PX + 방금 프레임 거리 × FAB_LEAD_FRAMES 안에 들어오는 즉시 왼쪽으로 간다(왼쪽은 어디서나 안전).
+  //      오른쪽으로 돌아가는 것은 FAB 가 멀어지거나 멈췄을 때 기준 + FAB_HYST_PX 를 넘은 뒤에만 — 한 방향 스크롤에서 전환은 최대 1회다
+  //      (검토 P2: 방향 없이 |dy| 를 더했더니 내림 스크롤 속도 흔들림에 기준이 출렁여 왼쪽↔오른쪽을 왕복했다).
   //   ③ 왼쪽으로 가는 것은 CSS 가 **전환 없이 즉시**(index.css 규칙) — 오른쪽 기둥에서 미끄러지는 동안 FAB 가 돌아와 겹치는 구간이 없다.
   //   ④ 스크롤이 멈추면 120ms 뒤 속도 0 으로 다시 판정한다(멈춘 자리에서 돌아가야 하는 경우).
   const boardFab = active && section === 'board';
@@ -161,23 +165,36 @@ function CommunityTab({
     if (!boardFab) { root.removeAttribute('data-board-fab'); return; }
     let lastY = window.scrollY;
     let settle = 0;
+    let left = true;                                  // 지금 '맨 위로'가 FAB 옆(왼쪽)에 있나 = data-board-fab
+    let slot: HTMLElement | null = null;
+    let stuck = NaN;
+    // 칸과 달라붙은 자리의 bottom(px)은 레이아웃이 바뀔 때만 잰다 — scroll 마다 getComputedStyle 을 부르지 않는다(검토 실측 +0.6ms/이벤트@CPU4).
+    // bottom 은 env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC)·칸 없음 → 들림 0 → 신호 유지.
+    const measure = () => {
+      slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
+      stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
+    };
+    // dy = 방금 스크롤 변화(부호 있음). dy < 0(위로 스크롤)이면 FAB 가 '맨 위로' 쪽으로 **내려오는** 중이다.
     const sync = (dy: number) => {
-      const slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
-      // 달라붙은 자리의 bottom(px) — env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC)·칸 없음 → 들림 0 → 신호 유지.
-      const stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
+      if (!slot?.isConnected) measure();
       const r = slot?.getBoundingClientRect();
       const lift = r && r.height > 0 && Number.isFinite(stuck) ? root.clientHeight - stuck - r.bottom : 0;
-      root.toggleAttribute('data-board-fab', !(lift > FAB_RISEN_PX + FAB_LEAD_FRAMES * dy));
+      // 왼쪽 → 오른쪽: FAB 가 다가오는 중이 아니고(멀어지거나 멈춤) 기준 + 여유(FAB_HYST_PX)를 넘었을 때만.
+      // 오른쪽 → 왼쪽: 기준 + 앞서보기 — 앞서보기는 FAB 가 다가올 때만 더한다(멀어질 때 더하면 속도 흔들림에 기준이 출렁여 왕복했다 — PR #171 검토 P2).
+      left = left
+        ? !(dy >= 0 && lift > FAB_RISEN_PX + FAB_HYST_PX)
+        : lift <= FAB_RISEN_PX + FAB_LEAD_FRAMES * Math.max(0, -dy);
+      root.toggleAttribute('data-board-fab', left);
     };
     const onScroll = () => {
       const y = window.scrollY;
-      const dy = Math.abs(y - lastY);
+      const dy = y - lastY;
       lastY = y;
       sync(dy);
       window.clearTimeout(settle);
       settle = window.setTimeout(() => sync(0), 120);
     };
-    const onLayout = () => { lastY = window.scrollY; sync(0); };
+    const onLayout = () => { lastY = window.scrollY; measure(); sync(0); };
     sync(0);
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onLayout);
