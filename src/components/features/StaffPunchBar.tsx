@@ -95,7 +95,8 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
   const status = err ? err
     : !ready ? '불러오는 중…'
       : v.phase === 'none' ? '오늘 배정된 근무가 없습니다 — 매장 운영자가 스케줄에 배정하면 버튼이 열립니다'
-        : v.phase === 'before' ? (v.inYesterday ? '출근 전 · 어제 근무' : '출근 전')
+        : v.inBlockedByOut ? `퇴근(${t?.checkOut})이 먼저 적혀 있어 출근을 찍을 수 없어요 — 시각 고치기에서 퇴근 칸을 비워 주세요`
+          : v.phase === 'before' ? (v.inYesterday ? '출근 전 · 어제 근무' : '출근 전')
           : v.phase === 'on' ? `근무 중 · ${v.outTarget?.checkIn} 출근${v.outTarget?.date !== today ? ' (어제)' : ''}`
             : `오늘 근무 끝 · ${t?.checkIn}~${t?.checkOut}`;
   const btn = 'flex h-14 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-card border text-base font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';

@@ -5,6 +5,7 @@
 //         단 KST 00:00~01:59 에는 어제 근무 중 출근·퇴근이 모두 빈 행이 **먼저**다(자정 넘어 오는 어제 야간 근무자 · 오너 2026-09-30).
 //         그 시각에 어제 근무가 이미 출근 상태(퇴근 전)이면 출근은 닫는다(방금 찍은 뒤의 재탭·근무 중 오탭).
 //   퇴근: 출근이 찍혀 있고 퇴근이 빈 내 근무 — 오늘 것 먼저, 없으면 어제(자정을 넘긴 야간 근무).
+//   20261004f: 퇴근이 먼저 적힌 행(출근 X · 퇴근 O)에는 출근을 열지 않는다 — 서버도 거절한다(같은 분 24시간·역전 23시간 59분 급여, critical X1~X3).
 // 서버가 최종 판정을 한다(연타·동시 요청은 서버가 첫 기록만 남긴다). 여기서는 잘못 누를 버튼을 미리 막을 뿐이다.
 
 /** 출퇴근 기록이 바뀌었다는 창 이벤트(detail.venueId) — 맨 위 버튼 줄과 '출근 관리' 목록이 서로 바로 다시 읽는다. */
@@ -37,6 +38,8 @@ export interface PunchView {
   inTarget: PunchRow | null;
   /** 이 출근이 어제 근무에 찍히는가(00:00~01:59 창) */
   inYesterday: boolean;
+  /** 오늘 근무에 퇴근만 먼저 적혀 있어 출근을 막았는가 — 퇴근 칸을 비우라고 안내한다 */
+  inBlockedByOut: boolean;
 }
 
 export function punchView(rows: PunchRow[], today: string, yesterday: string, kstMin: number = 12 * 60): PunchView {
@@ -47,12 +50,13 @@ export function punchView(rows: PunchRow[], today: string, yesterday: string, ks
   const win = kstMin < PUNCH_YESTERDAY_UNTIL_MIN;
   const inTarget = win && y && !y.checkIn && !y.checkOut ? y
     : win && open(y) ? null
-      : t && !t.checkIn ? t : null;
+      : t && !t.checkIn && !t.checkOut ? t : null;
   const canIn = inTarget != null;
   const canOut = outTarget != null;
   const phase: PunchPhase = outTarget ? 'on'
     : inTarget ? 'before'
       : t?.checkIn && t.checkOut ? 'done'
         : t ? 'before' : 'none';
-  return { phase, canIn, canOut, today: t, outTarget, inTarget, inYesterday: inTarget != null && inTarget === y };
+  const inBlockedByOut = !canIn && !outTarget && !!t && !t.checkIn && !!t.checkOut;
+  return { phase, canIn, canOut, today: t, outTarget, inTarget, inYesterday: inTarget != null && inTarget === y, inBlockedByOut };
 }

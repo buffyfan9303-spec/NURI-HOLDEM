@@ -9,7 +9,7 @@ import { getMyVenueStaff } from '../../api/auth';
 // 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { avgClockHm, belowMinWage, hoursText, kstHm, laborSummary, selfShiftWriteError, shiftHoursNote, shiftMinutes, weekStartOf, type LaborRow, type PayRules, type ShiftSpanError } from '../../lib/staffPay';
+import { avgClockHm, belowMinWage, hoursText, kstHm, laborSummary, selfShiftWriteError, shiftHoursNote, shiftMinutes, weekStartOf, type LaborRow, type PayRules, type SelfShiftWriteError } from '../../lib/staffPay';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
@@ -449,7 +449,9 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
 
 // ── 직원 본인 출퇴근 입력(셀프) ───────────────────────────────────────────────
 /** 근무 1회 길이 규칙(selfShiftWriteError)에 막힌 이유 — 화면 안내·토스트 한 벌. */
-function selfShiftNote(field: 'checkIn' | 'checkOut', e: ShiftSpanError): string {
+function selfShiftNote(field: 'checkIn' | 'checkOut', e: SelfShiftWriteError): string {
+  if (e === 'SHIFT_NO_IN') return '출근 기록이 없어 퇴근을 찍을 수 없어요 — 먼저 출근을 눌러 주세요.';
+  if (e === 'SHIFT_OUT_BEFORE_IN') return '퇴근 시각이 먼저 적혀 있어 지금 출근을 기록할 수 없어요 — 퇴근 칸을 비우거나 실제 출근 시각을 넣어 주세요.';
   if (e === 'SHIFT_OVER_24H') return '출근 뒤 24시간이 지나 지금 시각으로는 퇴근을 기록할 수 없어요 — 퇴근 칸에 실제 퇴근 시각을 넣거나 업주에게 수정을 요청해 주세요.';
   return field === 'checkOut'
     ? '방금 출근했어요 — 같은 분에 퇴근하면 하루(24시간) 근무로 계산돼요. 1분 뒤에 눌러 주세요.'
@@ -540,6 +542,9 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
             const m = shiftMinutes(s.date, s, rules);
             const inBlock = isToday ? selfShiftWriteError(s, 'checkIn', 'now', nowMs) : null;
             const outBlock = selfShiftWriteError(s, 'checkOut', 'now', nowMs);
+            // 출근 전 행의 '지금 퇴근' 은 막기만 하고 안내는 띄우지 않는다(모든 새 행에 문구가 붙는다)
+            const note: [field: 'checkIn' | 'checkOut', e: SelfShiftWriteError] | null =
+              outBlock && outBlock !== 'SHIFT_NO_IN' ? ['checkOut', outBlock] : inBlock ? ['checkIn', inBlock] : null;
             return (
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
@@ -556,7 +561,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   {m && <span data-testid="self-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hoursText(m.net)}</span>}
-                  {canSelfEdit(s.date) && (outBlock || inBlock) && <span data-testid="self-punch-note" data-reason={outBlock ?? inBlock ?? undefined} className="basis-full text-2xs text-amber-700 dark:text-amber-300">{outBlock ? selfShiftNote('checkOut', outBlock) : selfShiftNote('checkIn', inBlock!)}</span>}
+                  {canSelfEdit(s.date) && note && <span data-testid="self-punch-note" data-reason={note[1]} className="basis-full text-2xs text-amber-700 dark:text-amber-300">{selfShiftNote(note[0], note[1])}</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>
               </div>

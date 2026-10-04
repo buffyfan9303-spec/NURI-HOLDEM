@@ -13,6 +13,10 @@ describe('punchView — 출근·퇴근 버튼은 상태에 맞는 것만 열린�
   it('근무 중 → 퇴근만(출근 다시 누르기 막힘)', () => {
     expect(punchView([{ date: T, checkIn: '09:00', checkOut: null }], T, Y)).toMatchObject({ phase: 'on', canIn: false, canOut: true });
   });
+  it('퇴근만 먼저 적힌 오늘 근무 → 출근 닫힘 + 안내(20261004f, critical X1~X3: 같은 분 24h·역전 23h59m 급여)', () => {
+    expect(punchView([{ date: T, checkIn: null, checkOut: '18:30' }], T, Y)).toMatchObject({ phase: 'before', canIn: false, canOut: false, inBlockedByOut: true });
+    expect(punchView([{ date: T, checkIn: null, checkOut: null }], T, Y).inBlockedByOut).toBe(false);
+  });
   it('퇴근 후 → 둘 다 닫힘', () => {
     expect(punchView([{ date: T, checkIn: '09:00', checkOut: '18:00' }], T, Y)).toMatchObject({ phase: 'done', canIn: false, canOut: false });
   });

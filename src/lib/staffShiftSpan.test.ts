@@ -58,13 +58,20 @@ describe('selfShiftWriteError — 내 출근 관리 쓰기(set_my_shift_time 과
     expect(selfShiftWriteError({ checkIn: '00:30', checkInAt: at('2026-10-04', '00:30:00') }, 'checkOut', 'now', now)).toBeNull();
     expect(selfShiftWriteError({ checkIn: '00:30' }, 'checkOut', 'now', now)).toBeNull();
   });
-  it('지금 출근: 퇴근이 같은 분이면 거절, 다르면 허용 · 퇴근이 없으면 허용', () => {
-    expect(selfShiftWriteError({ checkOut: kstHm(NOW) }, 'checkIn', 'now', NOW)).toBe('SHIFT_TOO_SHORT');
-    expect(selfShiftWriteError({ checkOut: '03:00' }, 'checkIn', 'now', NOW)).toBeNull();
+  it('지금 출근: 퇴근이 먼저 적힌 행이면 거절(critical X1·X3) · 퇴근이 없으면 허용', () => {
+    expect(selfShiftWriteError({ checkOut: kstHm(NOW) }, 'checkIn', 'now', NOW)).toBe('SHIFT_OUT_BEFORE_IN');
+    expect(selfShiftWriteError({ checkOut: '03:00' }, 'checkIn', 'now', NOW)).toBe('SHIFT_OUT_BEFORE_IN');
     expect(selfShiftWriteError({}, 'checkIn', 'now', NOW)).toBeNull();
   });
-  it('비우기·출근 없는 퇴근은 규칙 밖(기존 동작)', () => {
+  it('출근 없는 지금 퇴근은 거절(출근 버튼 punch out 의 P0002 와 같다 — critical X1a)', () => {
+    expect(selfShiftWriteError({}, 'checkOut', 'now', NOW)).toBe('SHIFT_NO_IN');
+  });
+  it('직접 입력은 바로잡기 경로 — 출근 없는 퇴근칸·퇴근 있는 행의 출근칸은 받는다(같은 분만 거절)', () => {
+    expect(selfShiftWriteError({}, 'checkOut', '18:30', NOW)).toBeNull();
+    expect(selfShiftWriteError({ checkOut: '18:30' }, 'checkIn', '13:30', NOW)).toBeNull();
+    expect(selfShiftWriteError({ checkOut: '18:30' }, 'checkIn', '18:30', NOW)).toBe('SHIFT_TOO_SHORT');
+  });
+  it('비우기는 규칙 밖(기존 동작)', () => {
     expect(selfShiftWriteError({ checkIn: '18:00', checkOut: '18:00' }, 'checkOut', null, NOW)).toBeNull();
-    expect(selfShiftWriteError({}, 'checkOut', 'now', NOW)).toBeNull();
   });
 });

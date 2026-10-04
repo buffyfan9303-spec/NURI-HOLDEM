@@ -100,3 +100,28 @@ test('R4-01 양성: 2시간 근무의 지금 퇴근은 열려 있고 서버 시�
   expect(setCalls[0]).toMatchObject({ p_field: 'check_out', p_value: 'now' });
   await expect(pane.getByTestId('self-shift-hours')).toHaveText('2.0h');
 });
+
+test('R4-01 critical X1~X3: 퇴근이 먼저 적힌 근무에는 출근 버튼·지금 출근이 막히고, 출근 없는 지금 퇴근도 막힌다', async ({ page }) => {
+  const t0 = Date.now();
+  await page.clock.setFixedTime(new Date(t0));
+  const rows: Row[] = [{ work_date: MOCK_DAY, staff_name: '김직원', start_hm: null, end_hm: null, check_in: null, check_out: hmOf(t0 - 60_000), check_in_at: null, confirmed: false }];
+  const bar = page.locator('[data-tab="my-store"] [data-testid="staff-punch-bar"]');
+  const { pane, setCalls } = await boot(page, rows, t0);
+  // 맨 위 출근 버튼: 서버가 거절하는 출근을 화면도 열지 않고 이유를 말한다
+  await expect(bar.getByTestId('punch-in'), '퇴근만 있는 행에 출근 버튼이 열려 있다(1분 뒤 출근 = 23h59m 급여)').toBeDisabled();
+  await expect(bar.getByTestId('punch-status')).toContainText('퇴근 칸을 비워');
+  // 내 출근 관리: 지금 출근·지금 퇴근 둘 다 막힘, 안내는 순서 규칙
+  await expect(pane.getByRole('button', { name: '지금 출근' })).toBeDisabled();
+  await expect(pane.getByRole('button', { name: '지금 퇴근' })).toBeDisabled();
+  await expect(pane.getByTestId('self-punch-note')).toHaveAttribute('data-reason', 'SHIFT_OUT_BEFORE_IN');
+  await pane.getByRole('button', { name: '지금 출근' }).evaluate((b: HTMLButtonElement) => b.click());
+  await page.waitForTimeout(400);
+  expect(setCalls).toHaveLength(0);
+  // 퇴근 칸을 비우면 출근이 다시 열린다(바로잡기 경로)
+  await pane.locator('label', { hasText: '퇴근' }).locator('input[type="time"]').fill('');
+  await expect.poll(() => setCalls.length).toBe(1);
+  expect(setCalls[0]).toMatchObject({ p_field: 'check_out', p_value: null });
+  await expect(pane.getByRole('button', { name: '지금 출근' })).toBeEnabled();
+  await expect(pane.getByRole('button', { name: '지금 퇴근' }), '출근 없는 지금 퇴근이 열려 있다').toBeDisabled();
+  await expect(pane.getByTestId('self-punch-note')).toHaveCount(0);
+});

@@ -27,6 +27,33 @@
 -- 라이브 정의가 정본이다(2026-10-04 pg_get_functiondef):
 --   punch_my_shift b757368a… · set_my_shift_time 66aeb2dd… · _remind_open_shifts 6bc1a879… · is_my_shift_row b260fc66…(불변) · _shift_start_at f6abf173…(불변)
 --   반환 형식·인자는 셋 다 그대로다(CREATE OR REPLACE → ACL 보존, 아래 REVOKE/GRANT 도 다시 적는다).
+--
+-- critical 반증(2026-10-04, 검토 기억 critical-reviewer/shift_guard_r401_review_1004.md · 반례 crsg/30_review.sql X1~X3) 반영 — 리드 결정 ①~④:
+--   '반대쪽 칸을 나중에 쓰는 경로' 가 남아 있었다 — 출근 전 '지금 퇴근' 이 출근 없이 받아지고, 그 뒤 출근 버튼이 이미 퇴근이 있는 행에
+--   규칙 없이 출근을 써서 18:31|18:31(1440분)·18:31|18:30(1439분) 급여가 됐다(라이브에도 같은 결과 — 회귀 아님, 미해결 형제 경로).
+--   ① set_my_shift_time 'now' 퇴근은 출근이 없으면 거절(punch 'out' 의 P0002 와 같은 문장)
+--   ② 출근 버튼(punch 'in')과 '지금 출근'(set_my_shift_time 'now' 출근)은 같은 행에 퇴근이 이미 있으면 거절(hint SHIFT_OUT_BEFORE_IN)
+--      — 퇴근을 먼저 비우거나 업주가 고친다. 직접 입력한 출근 시각(HH:MM)은 바로잡기 경로라 막지 않는다(같은 분만 규칙이 거절).
+--   ③ 화면 punchView.canIn · selfShiftWriteError 가 같은 조건에서 버튼을 막는다  ④ 아래 적용 직전 운영 정의 확인 가드.
+
+-- ── ⓪ 적용 직전 가드 — 이 파일이 바꾸는 세 함수가 작성 때 본 운영 정의 그대로인지(또는 이미 이 파일이 적용됐는지) ─────
+do $guard$
+declare f record;
+begin
+  for f in select * from (values
+      ('public.set_my_shift_time(uuid,date,text,text)', '66aeb2dd0edb82c47037d3c92a3123d7'),
+      ('public.punch_my_shift(uuid,text)', 'b757368a9de9d53c7b727bd68a236a05'),
+      ('public._remind_open_shifts()', '6bc1a87962553bc35e5d36f892299c30')
+    ) as t(sig, md5)
+  loop
+    if (select md5(prosrc) from pg_proc where oid = f.sig::regprocedure) is distinct from f.md5
+       and position('_shift_span_check' in (select prosrc from pg_proc where oid = f.sig::regprocedure)) = 0
+       and position('_shift_row_owner' in (select prosrc from pg_proc where oid = f.sig::regprocedure)) = 0 then
+      raise exception '20261004f 가드: % 가 작성 때(2026-10-04) 본 운영 정의와 다르다 — 바뀐 본문을 먼저 반영하라', f.sig;
+    end if;
+  end loop;
+end
+$guard$;
 
 -- ── ① 규칙 한 벌 ────────────────────────────────────────────────────────────
 -- 시작~끝이 24시간을 넘으면(정확히 24시간은 허용) · 60초 미만이면 사용자 문장으로 거절한다(P0001 · hint 로 구분).
@@ -126,6 +153,11 @@ begin
     if v_id is null then
       raise exception '오늘 배정된 본인 근무가 없습니다 — 업주에게 스케줄 배정을 요청해 주세요' using errcode = 'P0002';
     end if;
+    -- 20261004f ②(critical X1~X3): 퇴근이 먼저 적힌 행에는 출근을 쓰지 않는다 — 같은 분이면 24시간, 1분 뒤면 23시간 59분으로 계산된다.
+    if exists (select 1 from public.staff_schedule s where s.id = v_id and s.check_in is null and s.check_out is not null) then
+      raise exception '퇴근 시각이 먼저 적혀 있어 출근을 기록하지 않습니다 — 출근 관리(시각 고치기)에서 퇴근 칸을 비우고 다시 누르거나 업주에게 수정을 요청해 주세요'
+        using hint = 'SHIFT_OUT_BEFORE_IN';
+    end if;
     return query
       with u as (
         update public.staff_schedule s set check_in = v_hm, check_in_at = v_now, checkout_reminded_at = null
@@ -199,6 +231,17 @@ begin
      and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
    limit 1;
   if v_id is null then raise exception '그 날짜에 배정된 본인 일정이 없습니다'; end if;
+  -- 20261004f ①②(critical X1~X3): '지금' 은 출근·퇴근 버튼과 같은 순서 규칙을 따른다.
+  if v_is_now then
+    select s.check_in, s.check_out into v_row from public.staff_schedule s where s.id = v_id;
+    if p_field = 'check_out' and v_row.check_in is null then
+      raise exception '출근 기록이 없어 퇴근을 찍을 수 없습니다' using errcode = 'P0002';
+    end if;
+    if p_field = 'check_in' and v_row.check_out is not null then
+      raise exception '퇴근 시각이 먼저 적혀 있어 출근을 기록하지 않습니다 — 출근 관리(시각 고치기)에서 퇴근 칸을 비우고 다시 누르거나 업주에게 수정을 요청해 주세요'
+        using hint = 'SHIFT_OUT_BEFORE_IN';
+    end if;
+  end if;
   if p_field = 'check_in' then
     if v_is_now then
       -- 지금 출근은 출근 버튼과 같이 서버 출근 표지를 남기고 알림 표지를 비운다(재출근).
@@ -292,6 +335,10 @@ begin
   end loop;
   if position('_shift_span_check(v_start, v_now)' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0 then
     bad := bad || ' punch_body';
+  end if;
+  if position('SHIFT_OUT_BEFORE_IN' in (select prosrc from pg_proc where oid = 'public.punch_my_shift(uuid,text)'::regprocedure)) = 0
+     or position('SHIFT_OUT_BEFORE_IN' in (select prosrc from pg_proc where oid = 'public.set_my_shift_time(uuid,date,text,text)'::regprocedure)) = 0 then
+    bad := bad || ' order_rule';
   end if;
   if position('_shift_span_check(v_start, v_start + v_gap)' in (select prosrc from pg_proc where oid = 'public.set_my_shift_time(uuid,date,text,text)'::regprocedure)) = 0
      or position('check_in_at = v_now' in (select prosrc from pg_proc where oid = 'public.set_my_shift_time(uuid,date,text,text)'::regprocedure)) = 0 then
