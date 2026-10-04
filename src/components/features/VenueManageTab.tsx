@@ -1132,7 +1132,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   data-testid: 라벨이 바뀌므로 셀렉터는 이 id 로 잡는다(e2e/partners-fit.spec.ts). */}
               <div data-main-enter className="lg:hidden">
                 <button type="button" data-testid="mystore-menu-toggle" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
-                  className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
                   {/* C1 H-3(2026-10-02) — 단계 바가 없는 섹션도 바로 아래 판 제목이 '지금 어디'를 말한다('직원 관리' 토글 밑 '직원 관리' 제목 두 겹).
                       토글은 어느 섹션에서나 '전체 메뉴'(다른 섹션으로 가는 길)로 둔다. 현재 항목은 펼친 목록의 강조가 그대로 보인다. */}
                   <span className="shrink-0 text-accent-300" aria-hidden><Icon name="menu" size={16} /></span>

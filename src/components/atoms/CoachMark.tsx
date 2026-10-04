@@ -38,9 +38,9 @@ export default function CoachMark({ id, children }: { id: string; children: Reac
       <Icon name="lightbulb" size={15} className="mt-0.5 shrink-0 text-accent-200" />
       <p className="min-w-0 flex-1 text-xs leading-5 text-ink-secondary">{children}</p>
       {/* D4(2026-09-29): 보이는 칸(h-8) 그대로, 누름면만 위아래로 넓혀 44px 이상(의사요소 — 흐름·카드 높이 불변).
-          2026-10-05 루트 16px: h-8 이 34 → 32px 라 5px 로는 42px — 7px(=46, px 고정)로. */}
+          2026-10-05 루트 16px: h-8 이 34 → 32px 라 5px 로는 42px — 7px(=46, px 고정)로. 가로도 '확인' 40.75px 라 좌우 3px(=46.75). */}
       <button type="button" onClick={dismiss}
-        className="relative shrink-0 -my-1 inline-flex h-8 items-center rounded-input px-2.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors before:absolute before:inset-x-0 before:-inset-y-[7px] before:content-['']">
+        className="relative shrink-0 -my-1 inline-flex h-8 items-center rounded-input px-2.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors before:absolute before:-inset-x-[3px] before:-inset-y-[7px] before:content-['']">
         확인
       </button>
     </div>

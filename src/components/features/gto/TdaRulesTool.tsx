@@ -176,8 +176,10 @@ export default function TdaRulesTool() {
           <h3 className="min-w-0 flex-1 text-sm font-bold text-ink-primary">2026 TDA 규칙</h3>
           <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{browse.length}개</span>
         </div>
-        {/* 가로 스크롤 레일은 위아래를 자른다 — py-1.5(6.375px) 가 칩 히트 확장 자리다(잘려도 44.75px). mt-0.5+py-1.5 = 종전 mt-2 와 같은 위 간격. */}
-        <div className="mt-0.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none">
+        {/* 가로 스크롤 레일은 위아래를 자른다 — py-[7px] 가 칩 히트 확장 자리다(잘려도 46px, gto/chip.ts). mt-px+py-[7px] = 종전 mt-2 와 같은 위 간격(8px),
+            -mb-px 로 아래 간격도 종전 그대로. 테두리 없는 활성 칩의 확장(8px)이 7px 를 1px 넘어 생기던 세로 넘침은 overflow-y-hidden 으로 없앤다
+            (2026-10-05 루트 16px: py-1.5 가 6px 로 줄어 넘침 1px · 누름 44.98 실측). */}
+        <div className="-mb-px mt-px flex gap-1 overflow-x-auto overflow-y-hidden py-[7px] scrollbar-none">
           {sections.map((s) => (
             <button key={s} type="button" onClick={() => setSection(s)}
               className={[CHIP_HIT, 'h-[32px] shrink-0 whitespace-nowrap rounded-chip px-2.5 text-2xs font-semibold transition-colors',
