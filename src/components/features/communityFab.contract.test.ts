@@ -7,7 +7,7 @@
 //     탭바(fixed bottom-0)와 따로 논다. 하네스(Pixel 7)는 주소창 접힘이 없어 **재현이 안 되므로** 소스에서 막는다.
 //   · 탭바 nav 의 safe-area 항(App.tsx nav paddingBottom)과 **같은 식**을 써야 홈 인디케이터 기기에서도 간격이 유지된다.
 //   · sticky 여야 한다 — 피드 끝에서 제 칸에 내려앉아 아래 푸터(법정 고지·사업자 정보)를 덮지 않는다(board-oneline ⑧).
-//   · 게시판에서 '맨 위로'(같은 right-4 열)가 FAB 위로 비켜서는 신호(html[data-board-fab])와 그 CSS 규칙이 짝으로 있어야 한다.
+//   · 게시판에서 '맨 위로'(같은 right-4 열)가 FAB 왼쪽 같은 줄로 비켜서는 신호(위로 비키면 피드 끝에서 sticky FAB 가 쓸려 올라와 겹쳤다 — PR #155 검토 P1)(html[data-board-fab])와 그 CSS 규칙이 짝으로 있어야 한다.
 // 실측(2026-10-04, 390×640 · 운영 데이터): 수정 전 FAB–탭바 간격 112px → 수정 후 15px. 실화면 단언은 e2e/board-oneline.spec.ts ⑤·⑫.
 // 실행: npx vitest run src/components/features/communityFab.contract.test.ts
 import { describe, it, expect } from 'vitest';
@@ -53,9 +53,15 @@ describe('게시판 글쓰기 FAB 는 탭바 바로 위 오른쪽에 선다', ()
     expect(slot).toMatch(/\blg:hidden\b/);
   });
 
-  it("게시판에서 '맨 위로'가 FAB 위로 비켜선다 — 신호와 규칙이 짝으로 있다", () => {
+  it("게시판에서 '맨 위로'가 FAB 왼쪽 같은 줄로 비켜선다 — 신호와 규칙이 짝으로 있다", () => {
     expect(TAB).toMatch(/toggleAttribute\('data-board-fab', boardFab\)/);
     expect(TAB).toMatch(/const boardFab = active && section === 'board'/);
-    expect(CSS).toMatch(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transform: translateY\(-2\.25rem\); \} \}/);
+    const rule = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transform: ([^;]+); \} \}/)?.[1] ?? '';
+    expect(rule, "게시판 '맨 위로' 규칙을 못 찾았다").not.toBe('');
+    // 옆 칸: 가로로 FAB 지름(3rem)+간격만큼 왼쪽 — 세로로만 비키면 피드 끝에서 sticky FAB 가 쓸려 올라와 겹친다(PR #155 P1)
+    expect(rule).toMatch(/^translate\(-3\.5rem, /);
+    // 세로 중심 맞춤 — 두 버튼의 safe-area 항(맨 위로 = max(…,12px), FAB = min(…,0.5rem))을 같이 따라간다
+    expect(rule).toContain('max(env(safe-area-inset-bottom), 12px)');
+    expect(rule).toContain(`- ${SAFE}`);
   });
 });

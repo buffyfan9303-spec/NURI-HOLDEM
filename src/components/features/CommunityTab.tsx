@@ -140,7 +140,7 @@ function CommunityTab({
   const [visitedSecs] = useState(() => new Set<Section>([section]));
   useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
   // 게시판 글쓰기 FAB 가 탭바 바로 위 오른쪽 칸을 쓰는 동안 문서에 알린다 — '맨 위로'(App.tsx .scroll-top-fab)가
-  // CSS 만으로 FAB 위로 비켜선다(index.css html[data-board-fab]). App 의 data-tabbar-hidden 과 같은 조리법.
+  // CSS 만으로 FAB 왼쪽 같은 줄로 비켜선다(index.css html[data-board-fab]). App 의 data-tabbar-hidden 과 같은 조리법.
   const boardFab = active && section === 'board';
   useEffect(() => {
     document.documentElement.toggleAttribute('data-board-fab', boardFab);
@@ -1134,7 +1134,7 @@ function FeedSection({
             bottom = 탭바 높이(65.75px ≈ 3.875rem) + 15px(0.875rem) + 탭바 nav 와 **같은** safe-area 항(App.tsx nav paddingBottom).
             뷰포트 높이(vh·svh·lvh·dvh·innerHeight·visualViewport)를 쓰지 않는다 — 탭바(fixed bottom-0)와 같은 '레이아웃 뷰포트 아래'
             기준이라 주소창이 위/아래·접힘/펼침이어도 탭바와 같이 움직인다(communityFab.contract.test.ts).
-            '맨 위로'는 게시판에서만 FAB 위로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 토스트(z-120)는 잠깐 FAB 위를 덮는다.
+            '맨 위로'는 게시판에서만 FAB 왼쪽 같은 줄로 비켜선다(html[data-board-fab] — 위 useEffect · index.css). 토스트(z-120)는 잠깐 FAB 위를 덮는다.
           · 피드 끝이 올라오면 이 칸에 내려앉아 피드와 함께 올라간다 → 아래 푸터(계정 삭제 안내·공지·소개문·사업자 정보)를 절대 덮지 않는다.
             예전 fixed 는 360 맨 끝 스크롤에서 푸터 문구 오른쪽을 덮었다(2026-10-04 실측). 공용 --footer-reserve 는 쓰지 않는다.
           · 글이 적어 피드가 화면보다 짧으면 마지막 글 바로 아래 오른쪽에 선다(sticky 는 제자리보다 아래로 내려가지 않는다).

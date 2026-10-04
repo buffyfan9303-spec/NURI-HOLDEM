@@ -7,7 +7,8 @@
 //   ③ ⇅ 메뉴는 화면 안에 열리고, '인기'를 고르면 정렬 이름이 바뀌고 닫힌다. 바깥을 누르면 닫힌다.
 //   ④ 보기 토글 하나가 모아보기↔펼쳐보기를 오가고 저장한다(기본 compact — N08 는 board-view-toggle.spec 이 따로 본다).
 //   ⑤ FAB: 하단 탭바·'맨 위로'·마지막 글(최대 스크롤)과 겹치지 않고, 비로그인이면 로그인 유도를 띄운다.
-//   ⑫ FAB 가 탭바 바로 위(12~16px)·오른쪽 16px — 높이·주소창 흉내(뷰포트 축소·visualViewport 가짜)에도 탭바 기준 유지, '맨 위로'는 게시판에서만 FAB 위.
+//   ⑫ FAB 가 탭바 바로 위(12~16px)·오른쪽 16px — 높이·주소창 흉내(뷰포트 축소·visualViewport 가짜)에도 탭바 기준 유지, '맨 위로'는 게시판에서만 FAB 왼쪽 같은 줄.
+//   ⑫-c 스크롤 0→끝→0 을 4px 단위로 훑어 FAB·'맨 위로' 겹침 0, FAB 중심 누름 = 글쓰기(PR #155 검토 P1).
 //   ⑥ 실제 손가락(CDP 터치): 칩 레일을 밀면 가로로 움직이고, 칩·🔍 를 눌러(누름 120ms) 동작한다.
 //   ⑦ 동작 줄이기(reduced-motion)에서도 같은 결과이고 열림·메뉴에 1ms 넘는 애니메이션·전환이 없다(전역 규칙의 0.01ms 전환은 센다지 않는다).
 // 게시글은 운영 DB 읽기(_fixtures 가 쓰기를 막는다).
@@ -328,7 +329,7 @@ test('⑪ 검색칸 × 는 하나(닫기) · ⇅ 메뉴는 ↑↓ 로 항목을 
 //    수정 전(bottom = --tabbar-float + 4rem) 390·360·320×640 실측 간격 112px — 여기서 실패한다.
 //    주소창은 하네스에 없다(재현 못 함 ≠ 없음): ⓐ 뷰포트를 주소창 높이만큼 줄여도(640→584) ⓑ innerHeight·visualViewport 를
 //    가짜로 줄여 resize 를 쏴도 탭바 기준 간격이 그대로인지 본다. 소스 쪽은 communityFab.contract.test.ts 가 막는다.
-//    '맨 위로'(같은 right-4 열)는 게시판에서만 FAB 위로 비켜서고(탭바 숨김에도), 다른 하위 탭·PC 에서는 예전 자리다.
+//    '맨 위로'(같은 right-4 열)는 게시판에서만 FAB 왼쪽 같은 줄로 비켜서고(탭바 숨김에도 — 세로 중심 일치), 다른 하위 탭·PC 에서는 예전 자리다.
 //    운영 익명 피드는 글이 적어 FAB 가 피드 끝 칸에 내려앉는다(390×640 에서도) — 떠 있는 상태를 재려고 목록을 24건으로 목킹한다.
 const longFeed = (page: Page) => page.route(/\/rest\/v1\/community_posts\?/, (r) => {
   if (r.request().method() !== 'GET') return r.fallback();
@@ -349,7 +350,7 @@ for (const [w, h] of [[390, 640], [360, 640], [320, 640], [390, 700], [360, 740]
       const nav = document.querySelector('nav[aria-label="하단 내비게이션"]')!.getBoundingClientRect();
       const st = document.querySelector('.scroll-top-fab')!.getBoundingClientRect();
       const below = [...document.querySelectorAll('[data-sec="board"] [data-board-loaded] li')].some((li) => (li as HTMLElement).offsetParent && li.getBoundingClientRect().top > fab.bottom);
-      return { gap: nav.top - fab.bottom, right: innerWidth - fab.right, fabT: fab.top, fabB: fab.bottom, fabL: fab.left, stT: st.top, stB: st.bottom, stL: st.left, below, boardFab: document.documentElement.hasAttribute('data-board-fab') };
+      return { gap: nav.top - fab.bottom, right: innerWidth - fab.right, fabT: fab.top, fabB: fab.bottom, fabL: fab.left, stT: st.top, stB: st.bottom, stL: st.left, stR: st.right, fabR: fab.right, below, boardFab: document.documentElement.hasAttribute('data-board-fab') };
     });
     const p = await probe();
     expect(p.below, '피드가 FAB 아래로 이어지지 않는다 — 떠 있는 FAB 를 잴 조건이 아니다(목킹이 안 먹었다)').toBe(true);
@@ -357,7 +358,7 @@ for (const [w, h] of [[390, 640], [360, 640], [320, 640], [390, 700], [360, 740]
     expect(p.gap, `FAB–탭바 간격 ${p.gap}px — 목록 한가운데 떠 있다`).toBeLessThanOrEqual(16);
     expect(Math.abs(p.right - 16), `오른쪽 여백 ${p.right}px`).toBeLessThanOrEqual(1.5);
     expect(p.boardFab, '게시판 신호(html[data-board-fab])가 안 켜졌다').toBe(true);
-    const noOverlap = (q: typeof p) => q.stB <= q.fabT || q.stT >= q.fabB || q.stL >= q.fabL + 51;
+    const noOverlap = (q: typeof p) => q.stB <= q.fabT || q.stT >= q.fabB || q.stR <= q.fabL || q.stL >= q.fabR;
     expect(noOverlap(p), `'맨 위로'(${p.stT}–${p.stB})와 FAB(${p.fabT}–${p.fabB})가 겹친다`).toBe(true);
     // 탭바 자동 숨김 상태에서도 '맨 위로'가 FAB 위에 남는다(내려오면 겹친다)
     await page.evaluate(() => document.documentElement.setAttribute('data-tabbar-hidden', ''));
@@ -389,10 +390,69 @@ for (const [w, h] of [[390, 640], [360, 640], [320, 640], [390, 700], [360, 740]
   });
 }
 
+// ⑫-c PR #155 독립 검토 P1: 피드 끝이 올라오는 구간에서 sticky FAB 가 위로 쓸려 올라가며, FAB 위로 비켜서 있던 '맨 위로'와 겹쳐
+//      FAB 중심을 누르면 '맨 위로'가 눌렸다(390×844 y 604–676 등 6개 크기 전부). 스크롤 0→끝→0 을 4px 단위로 훑으며 매 단계
+//      ① 두 버튼 겹침 0 ② FAB 중심 elementFromPoint = 글쓰기 ③ '맨 위로'가 보이면 그 중심 = '맨 위로' ④ FAB 가 떠 있을 때 두 버튼 세로 중심 일치(≤1px).
+for (const [w, h] of [[390, 844], [390, 640], [360, 800], [320, 640], [412, 915], [360, 740]] as const) {
+  test(`⑫-c ${w}×${h}: 스크롤 0→끝→0 4px 훑기 — FAB 와 '맨 위로' 겹침 0 · FAB 중심 누름 = 글쓰기`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: w, height: h });
+    await longFeed(page);
+    await openBoard(page);
+    const r = await page.evaluate(async () => {
+      const fab = document.querySelector<HTMLElement>('[data-testid="board-write"]')!;
+      const st = document.querySelector<HTMLElement>('.scroll-top-fab')!;
+      const bar = document.querySelector<HTMLElement>('[data-community-secbar]')!;
+      const nav = document.querySelector<HTMLElement>('nav[aria-label="하단 내비게이션"]')!;
+      const raf = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const bad: Record<'overlap' | 'fabHit' | 'topHit' | 'align', string[]> = { overlap: [], fabHit: [], topHit: [], align: [] };
+      let steps = 0, shownSteps = 0, floatSteps = 0;
+      const step = async (dir: string) => {
+        await raf(); steps++;
+        const f = fab.getBoundingClientRect(), s = st.getBoundingClientRect();
+        const shown = getComputedStyle(st).opacity !== '0' && getComputedStyle(st).pointerEvents !== 'none';
+        const ix = Math.min(f.right, s.right) - Math.max(f.left, s.left), iy = Math.min(f.bottom, s.bottom) - Math.max(f.top, s.top);
+        const tag = `${dir} y=${Math.round(scrollY)} hid=${document.documentElement.hasAttribute('data-tabbar-hidden')}`;
+        if (shown) {
+          shownSteps++;
+          if (ix > 0 && iy > 0) bad.overlap.push(`${tag}: 겹침 ${ix.toFixed(1)}×${iy.toFixed(1)}`);
+          const se = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2);
+          if (!se?.closest('.scroll-top-fab')) bad.topHit.push(`${tag}: '맨 위로' 중심이 ${se?.closest('[data-testid]')?.getAttribute('data-testid') ?? se?.tagName}`);
+        }
+        const cx = f.left + f.width / 2, cy = f.top + f.height / 2;
+        const b = bar.getBoundingClientRect(), n = nav.getBoundingClientRect();
+        if (cy > b.bottom + 1 && cy < n.top - 1 && cy < innerHeight) {
+          const e = document.elementFromPoint(cx, cy);
+          if (!e?.closest('[data-testid="board-write"]')) bad.fabHit.push(`${tag}: FAB 중심 누름이 ${e?.closest('.scroll-top-fab') ? "'맨 위로'" : (e?.closest('[data-testid]')?.getAttribute('data-testid') ?? e?.tagName)}`);
+        }
+        // 떠 있는 FAB(뷰포트 아래 기준 80.75px 자리)와 '맨 위로' 세로 중심
+        if (Math.abs((innerHeight - f.bottom) - 80.75) < 1) {
+          floatSteps++;
+          const d = Math.abs(cy - (s.top + s.height / 2));
+          if (d > 1) bad.align.push(`${tag}: 세로 중심 차 ${d.toFixed(2)}px`);
+          if (s.right > f.left - 4) bad.align.push(`${tag}: '맨 위로'가 FAB 왼쪽 옆이 아니다(오른쪽 ${s.right.toFixed(1)} vs FAB 왼쪽 ${f.left.toFixed(1)})`);
+        }
+      };
+      for (let y = 0; y <= max; y += 4) { window.scrollTo({ top: y, behavior: 'instant' }); await step('down'); }
+      for (let y = max; y >= 0; y -= 4) { window.scrollTo({ top: y, behavior: 'instant' }); await step('up'); }
+      return { max, steps, shownSteps, floatSteps, bad };
+    });
+    expect(r.max, '문서가 짧아 훑을 구간이 없다(목킹 확인)').toBeGreaterThan(600);
+    expect(r.shownSteps, "'맨 위로'가 한 번도 안 보였다 — 겹침을 잴 조건이 아니다").toBeGreaterThan(20);
+    expect(r.floatSteps, '떠 있는 FAB 를 한 번도 못 쟀다').toBeGreaterThan(20);
+    // P1 본체(겹침·가로챔)를 먼저 단언한다 — 수정 전 빌드에서 어느 쪽으로 실패했는지가 메시지에 남게.
+    expect(r.bad.overlap.slice(0, 8), `FAB·'맨 위로' 겹침 ${r.bad.overlap.length}단계 / ${r.steps}`).toEqual([]);
+    expect(r.bad.fabHit.slice(0, 8), `FAB 중심 누름 가로챔 ${r.bad.fabHit.length}단계 / ${r.steps}`).toEqual([]);
+    expect(r.bad.topHit.slice(0, 8), `'맨 위로' 중심 가로챔 ${r.bad.topHit.length}단계`).toEqual([]);
+    expect(r.bad.align.slice(0, 8), `옆 칸·세로 중심 ${r.bad.align.length}단계`).toEqual([]);
+  });
+}
+
 test("⑫-b '맨 위로'는 게시판 밖(다른 하위 탭)·PC 1440 에서 예전 자리 그대로", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await openBoard(page);
-  const st = () => page.evaluate(() => { const el = document.querySelector('.scroll-top-fab')!; return { b: innerHeight - el.getBoundingClientRect().bottom, tf: getComputedStyle(el).transform, sig: document.documentElement.hasAttribute('data-board-fab') }; });
+  const st = () => page.evaluate(() => { const el = document.querySelector('.scroll-top-fab')!; return { b: innerHeight - el.getBoundingClientRect().bottom, rg: innerWidth - el.getBoundingClientRect().right, tf: getComputedStyle(el).transform, sig: document.documentElement.hasAttribute('data-board-fab') }; });
   const onBoard = await st();
   expect(onBoard.sig).toBe(true);
   // 게시판 밖 — '실시간' 하위 탭
@@ -411,7 +471,7 @@ test("⑫-b '맨 위로'는 게시판 밖(다른 하위 탭)·PC 1440 에서 예
   await page.waitForTimeout(500);
   const back = await st();
   expect(back.sig).toBe(true);
-  expect(back.b - off.b, "게시판에서 '맨 위로'가 FAB 위로 올라가지 않았다").toBeGreaterThan(30);
+  expect(back.rg - off.rg, "게시판에서 '맨 위로'가 FAB 왼쪽 옆으로 비켜서지 않았다").toBeGreaterThan(55);
   // PC — FAB 숨김, '맨 위로'는 오른쪽 아래 1.25rem(transform 없음)
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(400);

@@ -104,11 +104,11 @@ const fmt = (p: Probe) => `winY=${p.winY} headerH=${p.headerH} secbarY=${p.secba
 test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 (390×844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('🔴 첫 방문: 게시판 56px 에서 랭킹을 눌러도 scrollY·헤더·서브탭 바가 2px 이내', async ({ page }) => {
+  test('🔴 첫 방문: 게시판 66px 에서 랭킹을 눌러도 scrollY·헤더·서브탭 바가 2px 이내', async ({ page }) => {
     await openCommunity(page);
-    const before = await gotoBoardAt(page, 56);
+    const before = await gotoBoardAt(page, 66);
     // 전제: 판 윗변이 이미 바 밑이라 D8(아래 짧은 섹션 케이스)이 돌지 않는 자리 — 여기서 움직이면 그건 UI-06 회귀다.
-    expect(panelGap(before), `전제 조건: 56px 에서 판 윗변이 바에 가려져 있다(${fmt(before)}) — D8 이 도는 자리라 '유지' 검사가 성립하지 않는다`).toBeGreaterThanOrEqual(-1);
+    expect(panelGap(before), `전제 조건: 66px 에서 판 윗변이 바에 가려져 있다(${fmt(before)}) — D8 이 도는 자리라 '유지' 검사가 성립하지 않는다`).toBeGreaterThanOrEqual(-1);
     const { raf, t140, t1000 } = await clickAndTimeline(page, 'rank');
     const log = `\n  진입 전 ${fmt(before)}\n  rAF     ${fmt(raf)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
     for (const [name, p] of [['rAF', raf], ['+140ms', t140], ['+1000ms', t1000]] as const) {
@@ -145,13 +145,15 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
   // 두 분기를 **고정 Y** 로 둘 다 돈다(2026-09-30). 예전엔 목표 Y 를 '홀덤펍 섹션 최대 스크롤' 로 골라(게시판 길이가 아니다)
   // 운영 매장이 3곳 늘자 80 → 300 으로 바뀌고 D8 분기가 갑자기 돌아 빨개졌다. 이제 Y 는 데이터와 무관하고, 문서가 짧아
   // 그 Y 에 못 가면 gotoBoardAt 이 이유를 적어 **실패**한다(아무것도 안 재고 초록이 되는 길이 없다).
-  //   · Y=56  : 판 윗변이 이미 바 밑 → D8 이 안 돈다 → UI-06 계약(유지, 짧으면 물리 클램프).
+  //   · Y=66  : 판 윗변이 이미 바 밑 → D8 이 안 돈다 → UI-06 계약(유지, 짧으면 물리 클램프).
   //   · Y=130 : 판 윗변이 바 밑에 말려 있다 → D8(CommunityTab 첫 방문 else 분기, 오너 2026-09-29)이 판 윗변을 바 밑까지 올린다.
   //     ⚠ 2026-10-04 200 → 130: 게시판 상단 세 줄을 한 줄로 합쳐(안 A) 문서가 ~107px 짧아졌다(운영 글 4건 · 390 최대 스크롤 152).
   //       130 도 판 윗변이 바 밑에 말리는 자리라 검사 의미는 같다(Y=80 은 아직 안 말린다 — 전제 조건 단언이 둘 다 확인한다).
   //     ⚠ 2026-10-04 80 → 56: 외치기 칸 위아래 공백을 줄여(오너) 판이 24.4px 위로 왔다 — 80 에서는 판 윗변이 바 밑에 2.12px 말려
   //       D8 이 도는 자리가 됐다(전제 조건 단언이 잡았다). 56 = 80 − 24 로 '안 말린 자리' 의미를 그대로 둔다.
-  for (const c of [{ y: 56, d8: false }, { y: 130, d8: true }]) {
+  //     ⚠ 2026-10-04 56 → 66: 56 은 headerShrink.ts nextHeaderShrunk(y > 56) 의 경계값이라 헤더 **미축소** 상태를 재고 있었다(PR #155 검토).
+  //       66 = 헤더 축소(47.75)·판 간격 +11.88 로 '안 말린 자리' 의미 유지.
+  for (const c of [{ y: 66, d8: false }, { y: 130, d8: true }]) {
     test(`짧은 섹션(별도 케이스) Y=${c.y}: ${c.d8 ? '판 윗변이 바 밑에 가려져 있으면 바 밑으로 정렬된다(D8)' : '유지할 수 없으면 새 문서 최대로 클램프되고 그 뒤 더 움직이지 않는다'}`, async ({ page }) => {
       await openCommunity(page);
       const before = await gotoBoardAt(page, c.y);
