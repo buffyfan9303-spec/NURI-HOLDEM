@@ -29,7 +29,9 @@ const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
 const TEMPERATURE = 0.3;
 const MAX_OUTPUT_TOKENS = 1024;
 const UPSTREAM_TIMEOUT_MS = 20_000;
-const ATTEMPT_LIMIT = 6;   // 유저·일 **시도** 상한(consume_ai_quota). 과금 상한 3회는 DB(_spot_ai_begin)가 따로 센다.
+const ATTEMPT_LIMIT = 6;
+/** 하루 과금 상한 — DB(_spot_ai_begin)가 세고 막는다. 화면 src/lib/spotAiLimits.ts 의 SPOT_AI_DAILY_LIMIT 과 같아야 한다(spotReview.test.ts 계약). */
+const DAILY_LIMIT = 3;   // 유저·일 **시도** 상한(consume_ai_quota). 과금 상한 3회는 DB(_spot_ai_begin)가 따로 센다.
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -50,7 +52,7 @@ async function requireUser(req: Request): Promise<string | null> {
 const CODE_MSG: Record<string, string> = {
   NOT_OWNER: '내가 저장한 스팟만 AI 코칭을 받을 수 있습니다.',
   SANCTIONED: '이용이 제한된 계정입니다.',
-  DAILY_LIMIT: '오늘 AI 코칭 3회를 모두 썼습니다. 내일 다시 이용해 주세요.',
+  DAILY_LIMIT: `오늘 AI 코칭 ${DAILY_LIMIT}회를 모두 썼습니다. 내일 다시 이용해 주세요.`,
   DISABLED: '지금은 AI 코칭을 이용할 수 없습니다.',
   INSUFFICIENT: '포인트가 부족합니다.',
   PENDING: '이 스팟의 코칭을 만드는 중입니다. 잠시 후 다시 열어 주세요.',
@@ -121,11 +123,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'AI 답변을 받지 못했습니다. 포인트는 5분 안에 자동으로 돌려드려요. 결과가 저장됐다면 내 스팟에서 확인할 수 있어요.', code: 'REFUND_PENDING', refunded: false }, 502);
   };
   try {
-    const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json({ error: 'AI 미설정: GEMINI_API_KEY 시크릿을 등록하세요.' }, 503);
-
+    // 호출자 증명이 **첫 분기**다(보안 표준 4) — 키 유무(503)를 비로그인에게 먼저 알려 주지 않는다(2026-10-04).
     const userId = await requireUser(req);
     if (!userId) return json({ error: '로그인이 필요합니다.' }, 401);
+
+    const key = Deno.env.get('GEMINI_API_KEY');
+    if (!key) return json({ error: 'AI 미설정: GEMINI_API_KEY 시크릿을 등록하세요.' }, 503);
 
     const bodyIn = await req.json().catch(() => ({} as Record<string, unknown>));
     const spotId = typeof bodyIn.spotId === 'string' ? bodyIn.spotId.trim() : '';
@@ -138,7 +141,7 @@ Deno.serve(async (req: Request) => {
     if (q.error || !qd) return json({ error: 'AI 사용량 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' }, 429);
     if (!qd.ok) return json({ error: '오늘 AI 코칭 요청이 너무 많습니다. 내일 다시 이용해 주세요.', code: 'ATTEMPT_LIMIT' }, 429);
 
-    const b = await admin.rpc('_spot_ai_begin', { p_user: userId, p_spot: spotId, p_limit: 3 });
+    const b = await admin.rpc('_spot_ai_begin', { p_user: userId, p_spot: spotId, p_limit: DAILY_LIMIT });
     if (b.error || !b.data) {
       console.error('[spot-review] begin 실패', b.error?.message);
       return json({ error: 'AI 코칭을 시작하지 못했습니다. 포인트는 차감되지 않았습니다.' }, 500);
@@ -176,7 +179,8 @@ Deno.serve(async (req: Request) => {
       return await failRefunded();
     }
     pendingId = null;
-    return json({ ok: true, cached: false, body: passed.body, used: bd.used, available: bd.available });
+    // free·free_left: 이번 요청이 무료 회차였는지(20261004g) — 화면은 짐작하지 않고 이 값으로 안내한다(critical P3).
+    return json({ ok: true, cached: false, body: passed.body, used: bd.used, available: bd.available, free: bd.free === true, free_left: bd.free_left });
   } catch (e) {
     console.error('[spot-review]', e);
     if (pendingId !== null) return await failRefunded();

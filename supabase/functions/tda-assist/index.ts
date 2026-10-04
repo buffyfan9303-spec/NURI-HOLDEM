@@ -111,11 +111,12 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'POST만 허용됩니다.' }, 405);
   try {
-    const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json({ error: 'AI 미설정: GEMINI_API_KEY 시크릿을 등록하세요.' }, 503);
-
+    // 호출자 증명이 **첫 분기**다(보안 표준 4) — 키 유무(503)를 비로그인에게 먼저 알려 주지 않는다(2026-10-04).
     const userId = await requireUser(req);
     if (!userId) return json({ error: '로그인이 필요합니다.' }, 401);
+
+    const key = Deno.env.get('GEMINI_API_KEY');
+    if (!key) return json({ error: 'AI 미설정: GEMINI_API_KEY 시크릿을 등록하세요.' }, 503);
 
     const bodyIn = await req.json().catch(() => ({} as Record<string, unknown>));
 

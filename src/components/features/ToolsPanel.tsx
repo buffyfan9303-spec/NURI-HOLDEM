@@ -31,6 +31,7 @@ import type { HandReviewInit } from './gto/HandReviewTool';
 import type { SpotReview } from '../../lib/spot';
 import { matchesToolQuery } from '../../lib/toolSearch';
 import { josa } from '../../lib/josa';
+import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT, SPOT_AI_PRICE } from '../../lib/spotAiLimits';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
@@ -762,6 +763,8 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
+          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버. */}
+          <p className="text-2xs text-ink-muted" data-testid="spot-hero-ai">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 · 이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</p>
           {/* ⚠ §7(2026-09-12 실측): 360px 에서 `truncate` 로 잘려 87 < 142 였다.
               이미 11.69px 라 **더 줄이면 안 되는 구간**이므로 글자를 키우지도 줄이지도 않고
               줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).

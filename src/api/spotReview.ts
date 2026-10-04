@@ -5,6 +5,7 @@
 // 과금(30P)·하루 3회·실패 환불은 DB(20260923c)가 강제한다. 여기 값은 화면 안내용일 뿐이다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { toJSON, type SpotReview } from '../lib/spot';
+import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT } from '../lib/spotAiLimits';
 
 /**
  * AI 코칭을 받을 만큼 채워졌는가 — 내 카드 2장 + 내 선택 + 액션 1개 이상.
@@ -24,6 +25,9 @@ export interface SpotAiStatus {
   usedToday: number;
   limit: number;
   available: number;
+  /** 평생 무료 횟수와 남은 무료(20261004g). 옛 서버(필드 없음)면 freeLeft 0 — 예전처럼 30P 로 안내한다. */
+  freeLimit: number;
+  freeLeft: number;
 }
 
 /** spot_ai_status() — 꺼져 있거나 읽지 못하면 null(버튼을 숨긴다). */
@@ -37,8 +41,10 @@ export async function getSpotAiStatus(): Promise<SpotAiStatus | null> {
     enabled: true,
     price: d.price,
     usedToday: Number(d.used_today ?? 0),
-    limit: Number(d.limit ?? 3),
+    limit: Number(d.limit ?? SPOT_AI_DAILY_LIMIT),
     available: Number(d.available ?? 0),
+    freeLimit: Number(d.free_limit ?? SPOT_AI_FREE_COUNT),
+    freeLeft: Math.max(0, Number(d.free_left ?? 0)),
   };
 }
 
@@ -51,12 +57,20 @@ export class SpotAiError extends Error {
   constructor(code: SpotAiCode, message: string) { super(message); this.code = code; }
 }
 
+/** 활동 포인트를 모으는 길 — CommunityShoutBar 의 '활동점수는 접속·글쓰기·댓글로 쌓입니다' 와 같은 사실. */
+export const SPOT_AI_EARN_HINT = '활동 포인트는 접속·글쓰기·댓글로 쌓입니다.';
+
+/** 포인트가 모자랄 때 버튼 아래 안내(오너 2026-10-04 B) — 왜 막혔는지(보유·필요)와 모으는 길을 함께 말한다. */
+export function spotAiPoorText(available: number, price: number): string {
+  return `활동 포인트가 부족합니다 — 보유 ${available}P · 필요 ${price}P. ${SPOT_AI_EARN_HINT}`;
+}
+
 /** 코드별 안내 — 서버 문구보다 이쪽이 우선이다(화면 문구를 한곳에서 고친다). */
 export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; price?: number }): string {
   switch (code) {
     case 'INSUFFICIENT':
-      return `포인트가 부족합니다${extra?.available !== undefined && extra?.price !== undefined ? ` (사용 가능 ${extra.available}P · 필요 ${extra.price}P)` : ''}. 포인트는 차감되지 않았습니다.`;
-    case 'DAILY_LIMIT': return '오늘 AI 코칭 3회를 모두 사용했습니다. 내일(자정 기준) 다시 이용해 주세요.';
+      return `포인트가 부족합니다${extra?.available !== undefined && extra?.price !== undefined ? ` (보유 ${extra.available}P · 필요 ${extra.price}P)` : ''}. 포인트는 차감되지 않았습니다. ${SPOT_AI_EARN_HINT}`;
+    case 'DAILY_LIMIT': return `오늘 AI 코칭 ${SPOT_AI_DAILY_LIMIT}회를 모두 사용했습니다. 내일(자정 기준) 다시 이용해 주세요.`;
     case 'DISABLED': return '지금은 AI 코칭을 이용할 수 없습니다.';
     case 'NOT_OWNER': return '내가 저장한 스팟만 AI 코칭을 받을 수 있습니다.';
     case 'SANCTIONED': return '이용이 제한된 계정입니다.';
@@ -73,7 +87,7 @@ export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; pr
 const KNOWN: readonly SpotAiCode[] = ['INSUFFICIENT', 'DAILY_LIMIT', 'DISABLED', 'NOT_OWNER', 'SANCTIONED', 'PENDING', 'AI_FAILED', 'REFUND_PENDING', 'ATTEMPT_LIMIT'];
 
 /** 저장된 스팟 하나에 AI 코칭을 요청한다. 같은 스팟의 재요청은 서버가 무료로 돌려준다(cached). */
-export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean }> {
+export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean; free?: boolean; freeLeft?: number }> {
   if (IS_MOCK) throw new SpotAiError('DISABLED', spotAiMessage('DISABLED'));
   const { data, error } = await supabase.functions.invoke('spot-review', { body: { spotId: spotReviewId } });
   if (error) {
@@ -94,7 +108,12 @@ export async function requestSpotAi(spotReviewId: string): Promise<{ body: strin
   }
   const body = typeof data?.body === 'string' ? data.body.trim() : '';
   if (!body) throw new SpotAiError('UNKNOWN', spotAiMessage('UNKNOWN'));
-  return { body, cached: data?.cached === true };
+  // free·free_left 는 서버(_spot_ai_begin)가 실제로 쓴 것 — 옛 엣지(필드 없음)면 undefined.
+  return {
+    body, cached: data?.cached === true,
+    free: typeof data?.free === 'boolean' ? data.free : undefined,
+    freeLeft: typeof data?.free_left === 'number' ? data.free_left : undefined,
+  };
 }
 
 /**

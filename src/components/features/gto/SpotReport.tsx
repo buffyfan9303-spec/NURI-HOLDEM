@@ -11,7 +11,7 @@
 //
 // ⚠ 지운 것은 **판정 표시**뿐이다. 입력 검증(IssueList)·저장 스냅샷(`evaluation`)·
 //   공유 확인 시트(F16 계약)·트레이너 도구는 전부 그대로다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import Modal from '../../atoms/Modal';
 import { ensureLogin } from '../../../lib/requireLogin';
@@ -23,7 +23,7 @@ import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { kstToday } from '../../../lib/kst';
 import { clampSpotDate } from '../../../lib/spotDate';
 import {
-  getSpotAiStatus, requestSpotAi, findSavedSpotId, spotCompleteness, SpotAiError, spotAiMessage, type SpotAiStatus,
+  getSpotAiStatus, requestSpotAi, findSavedSpotId, listSpotAiReviews, spotCompleteness, SpotAiError, spotAiMessage, spotAiPoorText, type SpotAiStatus,
 } from '../../../api/spotReview';
 import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
@@ -306,7 +306,8 @@ function ShareConfirmSheet({
 }
 
 /**
- * AI 아쉬운 포인트(2026-09-23 오너 결정) — 저장된 스팟에 30P 로 정성 코칭을 받는다.
+ * AI 아쉬운 포인트(2026-09-23 오너 결정) — 저장된 스팟에 정성 코칭을 받는다.
+ *  · 2026-10-04 오너: 계정마다 평생 첫 3회 무료(spot_ai_status.free_left), 그 뒤 회당 30P · 하루 3회(무료도 센다).
  *
  *  · 켜짐·가격·오늘 사용·잔여는 서버(spot_ai_status)가 말한다. 꺼져 있으면 **버튼 자체가 없다**.
  *  · spotCompleteness(내 카드 2장·액션 1개·내 선택)는 **이 버튼만** 막는다 — 저장·공유는 그대로다.
@@ -322,7 +323,10 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ key: string; body: string } | null>(null);
+  const resultRef = useRef<HTMLElement>(null);
   const userId = user?.id ?? null;
+  const key = spotKey(spot);
+  const ready = status !== null;
 
   useEffect(() => {
     if (!userId) { setStatus(null); return; }
@@ -331,19 +335,68 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
     return () => { alive = false; };
   }, [userId]);
 
+  // 이미 받은 코칭(오너 2026-10-04 D) — 저장된 같은 스팟에 끝난 코칭이 있으면 먼저 보여 주고 버튼은 '무료로 다시 보기'.
+  //   서버도 같은 스냅샷(spot_hash)은 한도·포인트 검사 **전에** 무료로 돌려준다(_spot_ai_begin) — 화면이 그 사실을 먼저 말한다.
+  //   '내 스팟' 에서 연 스팟이 여기서 "30P 차감" 으로 보이던 자리다. 조회 실패는 조용히 넘긴다(요청하면 서버가 캐시로 답한다).
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    (async () => {
+      const id = savedId ?? await findSavedSpotId(spot);
+      if (!id || !alive) return;
+      const body = (await listSpotAiReviews([id])).get(id);
+      if (alive && body) setResult((r) => (r?.key === key ? r : { key, body }));
+    })().catch(() => { /* 위 주석 */ });
+    return () => { alive = false; };
+    // spot 은 key(spotKey) 로 대표한다 — 객체 정체성이 바뀔 때마다 다시 읽지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, key, savedId]);
+
   if (!status) return null;   // 꺼짐·비로그인·읽기 실패 — 버튼을 그리지 않는다
 
-  const key = spotKey(spot);
   const complete = spotCompleteness(spot);
   const left = status.available - status.price;
   const outOfDay = status.usedToday >= status.limit;
-  const poor = left < 0;
-  const disabled = !complete.ok || blocked || outOfDay || poor || busy;
+  /** 평생 첫 무료 회차가 남았다(오너 2026-10-04) — 포인트를 보지 않는다. 서버 _spot_ai_begin 도 같은 순서(한도 → 무료 → 포인트). */
+  const free = status.freeLeft > 0;
+  const freeTag = `무료 ${status.freeLeft}/${status.freeLimit} 남음`;
+  /** 포인트 부족 안내는 무료를 다 쓴 뒤에만. */
+  const poor = !free && left < 0;
   const shown = result?.key === key ? result.body : null;
+  /** 이 스팟은 이미 코칭을 받았다 — 다시 보기는 무료라 포인트·한도로 막지 않는다(서버와 같은 규칙). */
+  const prior = shown !== null;
+  const disabled = prior ? busy : (!complete.ok || blocked || outOfDay || poor || busy);
+
+  /** 지금 서버 기준으로 새 요청이 막히는가(하루 한도 · 무료 소진 뒤 포인트 부족) — 버튼의 disabled 와 같은 규칙. */
+  const blockedBy = (s: SpotAiStatus) => s.usedToday >= s.limit || (s.freeLeft <= 0 && s.available < s.price);
+
+  // critical P3(2026-10-04): status 는 화면 처음에 한 번 받는다 — 다른 탭·기기에서 마지막 무료를 쓰면 화면은 아직 '무료' 다.
+  //   그대로 시트를 열면 '무료로 코칭 받기' 를 누른 사람에게 서버가 30P 를 쓴다(과금 표시 불일치).
+  //   → 시트를 **열 때** 서버의 지금 상태로 다시 맞추고(무료 소진이면 30P 시트), 막히면 열지 않는다.
+  const openSheet = async () => {
+    if (!ensureLogin(user)) return;
+    setBusy(true);
+    try {
+      const fresh = await getSpotAiStatus();
+      if (!fresh) { toast.show(spotAiMessage('UNKNOWN'), 'error'); return; }
+      setStatus(fresh);
+      if (!blockedBy(fresh)) setAsking(true);
+    } finally { setBusy(false); }
+  };
 
   const run = async () => {
     setBusy(true);
     try {
+      // 시트가 떠 있는 사이에 무료가 소진됐을 수 있다 — 무료로 보여 준 시트에서는 과금 가능한 요청을 보내지 않는다.
+      if (free) {
+        const fresh = await getSpotAiStatus();
+        if (fresh && fresh.freeLeft <= 0) {
+          setStatus(fresh);
+          if (blockedBy(fresh)) setAsking(false);
+          toast.show(`무료 ${fresh.freeLimit}회를 모두 사용했습니다 — 이제 회당 ${fresh.price}P입니다. 다시 확인해 주세요.`, 'info');
+          return;
+        }
+      }
       // AI 는 저장된 행에만 붙는다 — 없으면 같은 내용 행을 찾고, 그래도 없으면 지금 저장한다.
       let id = savedId ?? await findSavedSpotId(spot);
       if (!id) {
@@ -355,7 +408,11 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       const r = await requestSpotAi(id);
       setResult({ key, body: r.body });
       setAsking(false);
-      if (!r.cached) setStatus((s) => (s ? { ...s, usedToday: s.usedToday + 1, available: s.available - s.price } : s));
+      // 무엇이 실제로 쓰였는지는 서버 응답(free·free_left)이 말한다 — 화면이 짐작한 값으로 안내하지 않는다.
+      if (!r.cached && r.free !== undefined) {
+        toast.show(r.free ? `무료 코칭을 받았습니다 (무료 ${r.freeLeft ?? 0}/${status.freeLimit} 남음)` : `활동 포인트 ${status.price}P를 사용했습니다`, 'success');
+      }
+      getSpotAiStatus().then((s) => { if (s) setStatus(s); });
     } catch (e) {
       toast.show(msgOf(e, spotAiMessage('UNKNOWN')), 'error');
       setAsking(false);
@@ -367,21 +424,31 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   return (
     <div className="mt-2.5 space-y-1.5 border-t border-border-subtle pt-2.5" data-testid="spot-ai">
       <p className="text-2xs tabular-nums text-ink-muted" data-testid="spot-ai-meta">
-        {status.price}P · 오늘 {status.usedToday}/{status.limit} · 사용 가능 {poor ? `${status.available}P (부족)` : `${status.available}P→${left}P`}
+        {free
+          ? `${freeTag} · 오늘 ${status.usedToday}/${status.limit}`
+          : `${status.price}P · 오늘 ${status.usedToday}/${status.limit} · 사용 가능 ${poor ? `${status.available}P (부족)` : `${status.available}P→${left}P`}`}
       </p>
-      <button type="button" onClick={() => { if (ensureLogin(user)) setAsking(true); }} disabled={disabled}
+      <button type="button" disabled={disabled}
+        onClick={() => {
+          // 이미 받은 코칭은 아래에 펼쳐져 있다 — 시트(30P 차감 안내)를 열지 않고 그 자리로 데려간다.
+          if (prior) { resultRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+          void openSheet();
+        }}
         data-testid="spot-ai-open"
         className="btn-ghost flex min-h-[44px] w-full items-center justify-center gap-1.5 whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-        <Icon name="sparkles" size={13} aria-hidden />AI 아쉬운 포인트 보기
+        <Icon name="sparkles" size={13} aria-hidden />{prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'}
       </button>
-      {!complete.ok && (
+      {!prior && poor && (
+        <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-poor">{spotAiPoorText(status.available, status.price)}</p>
+      )}
+      {!prior && !complete.ok && (
         <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-missing">
           {complete.missing.join(' · ')} 항목을 채우면 AI 코칭을 받을 수 있습니다.
         </p>
       )}
-      {complete.ok && outOfDay && <p className="text-2xs text-ink-muted">{spotAiMessage('DAILY_LIMIT')}</p>}
+      {!prior && complete.ok && outOfDay && <p className="text-2xs text-ink-muted">{spotAiMessage('DAILY_LIMIT')}</p>}
       {shown && (
-        <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트"
+        <section ref={resultRef} data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트"
           className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
           <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 볼 수 있으며 게시판에 올라가지 않습니다)</span></h4>
           <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{shown}</p>
@@ -392,9 +459,11 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         <div className="space-y-3 p-4" data-spot-ai-confirm>
           <ul className="space-y-1.5">
             {[
-              `활동 포인트 ${status.price}P가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료입니다.`,
+              free
+                ? `첫 ${status.freeLimit}회는 무료 — 이번 요청은 포인트가 들지 않습니다(${freeTag}). 무료를 다 쓰면 회당 ${status.price}P입니다. 같은 스팟을 다시 보면 무료입니다.`
+                : `활동 포인트 ${status.price}P가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료입니다.`,
               `오늘 ${status.usedToday}/${status.limit}회 사용 — 하루 최대 ${status.limit}회입니다.`,
-              'AI 가 답을 주지 못하면 포인트를 돌려드립니다.',
+              free ? 'AI 가 답을 주지 못하면 무료 횟수를 돌려드립니다.' : 'AI 가 답을 주지 못하면 포인트를 돌려드립니다.',
               savedId ? '저장된 이 스팟으로 요청합니다.' : "아직 저장하지 않은 스팟이라 '내 스팟'에 먼저 저장한 뒤 요청합니다.",
               '보내는 내용: 스팟(자리·스택·카드·액션·내 선택)과 메모(앞 300자). 닉네임·이름 같은 계정 정보는 보내지 않습니다.',
               '외부 AI(Google Gemini)가 만든 참고용 정성 코칭이며, 결과는 나만 볼 수 있습니다.',
@@ -415,7 +484,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
               className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">취소</button>
             <button type="button" onClick={run} disabled={busy} data-testid="spot-ai-confirm"
               className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-              {busy ? '코칭 받는 중…' : `${status.price}P로 코칭 받기`}
+              {busy ? '코칭 받는 중…' : free ? '무료로 코칭 받기' : `${status.price}P로 코칭 받기`}
             </button>
           </div>
         </div>
