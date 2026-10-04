@@ -39,6 +39,9 @@ const sizeOf = (el: Element | null | undefined): Box =>
  *   (타원 면의 좌우 여백은 feltLayout 의 OVAL_SIDE 를 그대로 쓴다 — 판정과 그림이 같은 값이다.)
  *   (구현 1차는 각도 % 로만 놓아 보드 4~5장에서 이름표가 보드를 덮었다 — e2e/spot-felt-geometry.spec.ts 가 잰다.)
  * 첫 그림은 레이아웃 효과에서 재고 바로 다시 그리므로(그리기 전) 자리 없는 프레임은 보이지 않는다.
+ *   ⚠ 프로파일에서 아래 run() 의 clientWidth 가 '강제 레이아웃 1위' 로 잡혀도 읽는 시점이 원인이 아니다(M3-03, 2026-10-04 실측):
+ *   ResizeObserver 로 옮긴 빌드는 같은 레이아웃(567ms)을 App.tsx 의 다음 읽기가 그대로 치렀고 rAF 최대 간격도 같았다(283 vs 317ms, CPU4).
+ *   비용은 그 레이아웃 **안**의 글꼴 대체 탐색이었다(카드 무늬 글자 → ShareParts 에서 SVG 로 바꿔 해결). 이 화면의 첫 레이아웃 자체는 누가 읽든 한 번 치른다.
  */
 function Felt({ v, big }: { v: ShareView; big: boolean }) {
   const ring = positionsFor(v.tableSize);

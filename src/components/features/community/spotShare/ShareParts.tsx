@@ -8,7 +8,11 @@ import type { ReactNode } from 'react';
 import Icon from '../../../atoms/Icon';
 import type { ShareView, ViewStreet } from './shareView';
 
-const SUIT = { s: '♠', h: '♥', d: '♦', c: '♣' } as const;
+// 무늬는 글자(♠♥♦♣)가 아니라 Icon 글리프(SVG)다 — M3-03(2026-10-04). Pretendard 에 ♥ 만 있고 ♠♦♣ 는 없어서(e2e/font-coverage 주석),
+//   글자로 쓰면 SPOT 상세를 처음 열 때 글꼴 대체 탐색이 웹폰트 면을 15개 새로 만들었다(트레이스 FontDataManager::onMakeFromStreamArgs
+//   15회 363ms · 그 레이아웃 606ms → 무늬를 빼면 0회 · 130ms, CPU4). 그 비용이 첫 레이아웃 한 번에 몰려 열기가 0.3초 멈췄다.
+//   SVG 는 글꼴을 타지 않는다. iOS·일부 안드로이드의 ♥♦ 컬러 이모지 승격도 함께 사라진다(VenueThumb 의 [DS] IMG-2 와 같은 이유).
+const SUIT = { s: 'spade', h: 'heart-suit', d: 'diamond', c: 'club' } as const;
 const SUIT_NAME = { s: '스페이드', h: '하트', d: '다이아몬드', c: '클럽' } as const;
 const SUIT_HEX = { s: '#111827', h: '#C81E2B', d: '#0369A1', c: '#167247' } as const;
 type SuitKey = keyof typeof SUIT;
@@ -37,7 +41,8 @@ export function PlayingCard({ code, size = 'md' }: { code: string; size?: CardSi
       className="inline-flex shrink-0 flex-col items-center justify-center bg-white font-extrabold leading-none"
       style={{ width: z.w, height: z.h, borderRadius: z.r, color: SUIT_HEX[s], boxShadow: CARD_EDGE }}>
       <span style={{ fontSize: z.rank, letterSpacing: rank === '10' ? '-0.06em' : undefined }} className="tabular-nums">{rank}</span>
-      <span aria-hidden style={{ fontSize: z.suit, marginTop: 1 }}>{SUIT[s]}</span>
+      {/* 글자 무늬(줄 높이 z.suit + 위 1px)와 같은 세로 자리 = 2px 큰 SVG + 위 −1px — SVG 무늬는 상자 안 여백이 있어 같은 크기면 ♠♣ 가 작아 보였다(390 전후 사진 비교) */}
+      <Icon name={SUIT[s]} size={z.suit + 2} style={{ marginTop: -1 }} />
     </span>
   );
 }
