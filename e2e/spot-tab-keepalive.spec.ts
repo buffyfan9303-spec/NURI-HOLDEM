@@ -12,8 +12,10 @@ import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 
 const CARDS = [['As', 'Kd'], ['Qh', 'Qc'], ['7s', '8s'], ['Ah', '5h'], ['Jc', 'Td'], ['9d', '9s'], ['Kc', 'Qs'], ['6h', '7h'], ['Ad', 'Jd'], ['2c', '2d']];
+// 오너 2026-10-04: 신뢰도 배지 5종(솔버·차트/Nash·유사 스팟·범위 밖·수학 참고)은 화면에 없다 — 다섯 coverage 를 모두 돌려 그 말이 0 인지 본다.
+const KINDS = ['exact_solver', 'chart_nash', 'normalized_reference', 'math_only', 'unsupported'];
 const ROWS = CARDS.map((hero, i) => ({
-  id: `00000000-0000-4000-8000-00000000${100 + i}`, coverage_kind: 'math_only', source_label: null, dataset_version: 'v1',
+  id: `00000000-0000-4000-8000-00000000${100 + i}`, coverage_kind: KINDS[i % KINDS.length], source_label: null, dataset_version: 'v1',
   created_at: new Date(Date.UTC(2026, 8, 20, 12 - i)).toISOString(),
   spot: { v: 3, game: 'nlhe', format: 'mtt', tableSize: 6, sbBb: 0.5, anteBb: 0, effectiveBb: 40, heroPos: 'BTN', villainPos: 'BB',
     hero, villain: [], board: [], street: 'preflop', actions: [{ street: 'preflop', actor: 'hero', type: 'raise', sizeBb: 2.5 }], heroAction: 'raise', heroActionSizeBb: 3 },
@@ -58,7 +60,7 @@ test('🔴 작성↔내 스팟 3왕복 — 단계 유지 · 재조회 1회 · �
   const rows = dlg.getByRole('listitem');
   await expect(rows).toHaveCount(ROWS.length, { timeout: 10_000 });
   // 오너 2026-10-04: 정답표 없는(math_only) 행에 '수학 참고' 배지를 그리지 않는다 — 행은 있고 그 말만 0.
-  await expect(dlg.getByText('수학 참고'), "math_only 행에 '수학 참고' 배지가 남아 있다").toHaveCount(0);
+  await expect(dlg.getByText(/솔버 기준|차트\/Nash 기준|유사 스팟 참고|정확한 분석 범위 밖|수학 참고/), '신뢰도 배지가 행에 남아 있다').toHaveCount(0);
   await page.waitForTimeout(400);
   await page.evaluate(() => { document.querySelector<HTMLElement>('[role="dialog"] .overflow-y-auto')!.scrollTop = 240; });
   await page.waitForTimeout(100);
