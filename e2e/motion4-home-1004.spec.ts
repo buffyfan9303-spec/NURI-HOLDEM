@@ -90,7 +90,7 @@ test.describe('M4-01 내 정보 — 안쪽 끝에서 더 밀어도 뒤 문서가
   });
 });
 
-test('🔴 M4-02 헤더 축소·복원 — 입력 없는 레이아웃 이동 0 · 축소는 그대로(보이는 밑면 47.75 · 아이콘 가운데)', async ({ page }) => {
+test('🔴 M4-02 헤더 축소·복원 — 입력 없는 레이아웃 이동 0 · 축소는 그대로(보이는 밑면 45 · 아이콘 가운데)', async ({ page }) => {
   test.setTimeout(120_000);
   await bootTools(page, false);
   await page.evaluate(() => {

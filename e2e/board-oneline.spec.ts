@@ -477,7 +477,7 @@ test("⑫-b '맨 위로'는 게시판 밖(다른 하위 탭)·PC 1440 에서 예
   await page.waitForTimeout(400);
   const pc = await st();
   expect(pc.tf, "PC 에서 '맨 위로'가 옮겨졌다").toBe('none');
-  expect(Math.abs(pc.b - 21.25), `PC '맨 위로' 아래 여백 ${pc.b}`).toBeLessThanOrEqual(1);
+  expect(Math.abs(pc.b - 1.25 * 16), `PC '맨 위로' 아래 여백 ${pc.b}`).toBeLessThanOrEqual(1); // 1.25rem — 루트 16px 에서 20(17px 시절 21.25)
   await expect(page.getByTestId('board-write')).toBeHidden();
 });
 
