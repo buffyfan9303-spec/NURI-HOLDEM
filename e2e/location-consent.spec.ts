@@ -2,10 +2,13 @@
 //
 // 위치정보법 제15조①(동의 없이 수집·이용 금지) · 제24조(철회·일시중지·열람) — 화면 쪽 계약:
 //   · 동의 기록이 없으면 출석 전에 시트로 묻는다. 거절·닫기면 좌표 없이 출석이 **된다**(매장 id 만 전송).
-//   · 수락하면 동의(약관 제2판)를 저장하고 좌표를 실어 check_in.
+//   · 수락하면 동의(약관 제3판)를 저장하고 좌표를 실어 check_in.
+//   · 20261004d(오너 결정 (다)): 매장이 '위치 확인 출석'을 켰을 때만 묻는다(L10). 켠 매장의 시행일 뒤에는 서버가 동의 없는 출석을
+//     {code:'geo_consent_required'} 로 돌려주고, 재시도 시트가 대체 경로(직원·참가 신청)를 안내한 뒤 'required' 동의 시트로 다시 묻는다(L9).
 //   · 내 정보 › 보안에서 동의 상태를 보고, 철회하고, 이용 내역을 연다.
 // 운영 DB 에 쓰지 않는다 — app_settings·RPC 를 route 로 가로챈다(_fixtures 가드가 한 겹 더 막는다).
-// 음성 대조: checkins.ts 의 `&& await ensureLocationConsent()` 를 지우면 L1·L3 이 빨개진다(좌표가 나간다·시트가 안 뜬다).
+// 음성 대조(2026-09-26 확인): checkins.ts 의 동의 확인(지금은 `if (await ensureLocationConsent(undefined, …))`)을 빼면 L1·L3 이 빨개진다(좌표가 나간다·시트가 안 뜬다).
+//   L10 은 20261004d 의 매장 조건(`await getVenueCheckinGeoRequired(venueId)`)을 지키는 짝이다 — 단위 대조는 src/api/checkins.geo.test.ts.
 // 실행: E2E_BASE_URL=http://localhost:4660 npx playwright test e2e/location-consent.spec.ts --project=mobile-chromium
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
@@ -15,14 +18,18 @@ const VENUE = '11111111-2222-3333-4444-555555555555';
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const SHOT = process.env.LOC_SHOT_DIR;
 
-interface Calls { checkIn: Record<string, unknown>[]; setConsent: Record<string, unknown>[]; logReads: number }
+interface Calls { checkIn: Record<string, unknown>[]; setConsent: Record<string, unknown>[]; logReads: number; venueFlagReads: number }
 
-async function setup(page: Page, consent: Record<string, unknown>, loggedIn = true): Promise<Calls> {
-  const calls: Calls = { checkIn: [], setConsent: [], logReads: 0 };
+/** checkInReply — 순서대로 돌려줄 check_in 응답(마지막 것을 반복). 기본은 출석 성공. */
+async function setup(page: Page, consent: Record<string, unknown>, loggedIn = true,
+  { venueGeo = true, checkInReply = [{ name: '검증 홀덤', points: 3, streak: 1 }] as unknown[] } = {}): Promise<Calls> {
+  const calls: Calls = { checkIn: [], setConsent: [], logReads: 0, venueFlagReads: 0 };
   let cur = consent;
   await stabilizeBackstack(page);
   if (loggedIn) await stubLogin(page);
   await page.route(/\/rest\/v1\/app_settings\?.*checkin_geo_enabled/, (r) => r.fulfill(json({ value: 'on' })));
+  // 20261004d: 위치는 매장이 '위치 확인 출석'을 켰을 때만 묻는다 — 이 스펙의 매장은 켠 매장이다(maybeSingle 이라 객체 한 개).
+  await page.route(/\/rest\/v1\/venues\?.*select=checkin_geo_required/, (r) => { calls.venueFlagReads++; return r.fulfill(json({ checkin_geo_required: venueGeo })); });
   await page.route(/\/rest\/v1\/rpc\/get_my_location_consent/, (r) => r.fulfill(json(cur)));
   await page.route(/\/rest\/v1\/rpc\/set_my_location_consent/, (r) => {
     const body = JSON.parse(r.request().postData() ?? '{}');
@@ -41,7 +48,7 @@ async function setup(page: Page, consent: Record<string, unknown>, loggedIn = tr
   });
   await page.route(/\/rest\/v1\/rpc\/check_in/, (r) => {
     calls.checkIn.push(JSON.parse(r.request().postData() ?? '{}'));
-    return r.fulfill(json({ name: '검증 홀덤', points: 3, streak: 1 }));
+    return r.fulfill(json(checkInReply[Math.min(calls.checkIn.length - 1, checkInReply.length - 1)]));
   });
   return calls;
 }
@@ -61,16 +68,22 @@ test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이
   const calls = await setup(page, { state: 'unset' });
   const sheet = await openSheet(page);
   expect(calls.checkIn, '동의를 묻기 전에 check_in 이 나갔다').toEqual([]);
-  await expect(sheet).toContainText('동의하지 않아도 출석할 수 있습니다');
+  // 제3판(20261004d): 동의는 선택이지만 시행일부터 위치 확인 출석 매장의 QR 출석은 동의가 필요 — 대체 경로와 함께 말한다.
+  await expect(sheet).toContainText('동의는 선택입니다');
+  await expect(sheet).toContainText('2026년 11월 5일부터 위치 확인 출석 매장에서는 동의하지 않으면 QR 출석이 되지 않으며');
+  await expect(sheet).toContainText('매장 직원에게 참가를 요청');
+  await expect(sheet).not.toContainText('동의하지 않아도 출석할 수 있습니다');
+  await expect(page.getByTestId('location-consent-required'), '시행일 전인데 필수 매장 안내가 떴다').toHaveCount(0);
+  await expect(page.getByTestId('location-consent-decline')).toHaveText('동의하지 않고 출석');
   if (SHOT) await page.screenshot({ path: `${SHOT}/after-consent-sheet.png` });
   await page.getByTestId('location-consent-decline').click();
   await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(1);
-  expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 2 }]);
+  expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 3 }]);
   expect(calls.checkIn[0], '거절했는데 좌표가 나갔다').toEqual({ p_venue_id: VENUE });
   await expect(page.getByText('검증 홀덤 출석 완료!', { exact: false })).toBeVisible();
 });
 
-test('🔴 L2 수락 — 동의(제2판)를 저장하고 좌표를 실어 check_in', async ({ page, context }) => {
+test('🔴 L2 수락 — 동의(제3판)를 저장하고 좌표를 실어 check_in', async ({ page, context }) => {
   test.setTimeout(60_000);
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ latitude: 37.5, longitude: 127.0, accuracy: 20 });
@@ -78,7 +91,7 @@ test('🔴 L2 수락 — 동의(제2판)를 저장하고 좌표를 실어 check_
   await openSheet(page);
   await page.getByTestId('location-consent-agree').click();
   await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(1);
-  expect(calls.setConsent).toEqual([{ p_granted: true, p_terms_version: 2 }]);
+  expect(calls.setConsent).toEqual([{ p_granted: true, p_terms_version: 3 }]);
   expect(calls.checkIn[0]).toMatchObject({ p_venue_id: VENUE, p_lat: 37.5, p_lng: 127.0, p_accuracy: 20 });
   await expect(page.getByTestId('location-consent-sheet')).toHaveCount(0);
 });
@@ -96,7 +109,7 @@ test('🔴 L3 닫기 — 저장하지 않고 이번 출석만 좌표 없이', as
 
 test('🔴 L4 이미 동의 안 함 — 다시 묻지 않고 좌표 없이 출석', async ({ page }) => {
   test.setTimeout(60_000);
-  const calls = await setup(page, { state: 'denied', terms_version: 2 });
+  const calls = await setup(page, { state: 'denied', terms_version: 3 });
   await page.goto(`/?checkin=${VENUE}`);
   await expect.poll(() => calls.checkIn.length, { timeout: 20_000 }).toBe(1);
   expect(calls.checkIn[0]).toEqual({ p_venue_id: VENUE });
@@ -105,7 +118,7 @@ test('🔴 L4 이미 동의 안 함 — 다시 묻지 않고 좌표 없이 출�
 
 test('🔴 L5 내 정보 › 보안 — 상태 · 이용 내역 열람 · 철회', async ({ page }) => {
   test.setTimeout(60_000);
-  const calls = await setup(page, { state: 'granted', terms_version: 2, granted_at: '2026-09-26T01:00:00Z', revoked_at: null });
+  const calls = await setup(page, { state: 'granted', terms_version: 3, granted_at: '2026-09-26T01:00:00Z', revoked_at: null });
   await page.goto('/');
   await expect(page.getByRole('dialog', { name: '로그인' }), '로그인된 세션인데 로그인 창이 떴다').toHaveCount(0);
   await page.getByRole('button', { name: '검증계정 메뉴' }).click();
@@ -114,7 +127,7 @@ test('🔴 L5 내 정보 › 보안 — 상태 · 이용 내역 열람 · 철회
   const tab = page.locator('[data-profile-tabbar]').getByRole('tab', { name: '보안', exact: true });
   await tab.evaluate((b) => (b as HTMLElement).click());
   const card = page.getByTestId('location-privacy-card');
-  await expect(card.getByTestId('location-consent-state')).toContainText('동의함 · 제2판');
+  await expect(card.getByTestId('location-consent-state')).toContainText('동의함 · 제3판');
   expect(calls.logReads, '탭을 여는 것만으로 이용 내역(열람 기록)을 불렀다').toBe(0);
 
   await card.getByTestId('location-log-open').click();
@@ -126,7 +139,7 @@ test('🔴 L5 내 정보 › 보안 — 상태 · 이용 내역 열람 · 철회
 
   await card.getByTestId('location-consent-revoke').click();
   await expect(card.getByTestId('location-consent-state')).toContainText('동의하지 않음');
-  expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 2 }]);
+  expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 3 }]);
   await expect(list, '철회했는데 삭제된 이용 내역이 화면에 남았다').toHaveCount(0);
   await expect(card.getByTestId('location-consent-grant')).toBeVisible();
 });
@@ -206,6 +219,48 @@ test('🔴 L7 로그인 안 된 딥링크 — 로그인 → 로그인 시트 퇴
   await page.getByTestId('location-consent-decline').click();
   await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(1);
   expect(calls.checkIn[0]).toEqual({ p_venue_id: VENUE });
+});
+
+test('🔴 L9 시행일 뒤 켠 매장 — 거절하면 서버가 거부 → 대체 경로 시트 → 다시 묻기(required) → 동의하면 좌표로 출석', async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await context.grantPermissions(['geolocation']);
+  await context.setGeolocation({ latitude: 37.5, longitude: 127.0, accuracy: 20 });
+  const refused = { code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 QR 출석이 됩니다. 동의하지 않으시면 매장 직원에게 참가를 요청하거나 오늘 대회의 참가 신청을 이용해 주세요' };
+  const calls = await setup(page, { state: 'unset' }, true, { checkInReply: [refused, { name: '검증 홀덤', points: 3, streak: 1 }] });
+  await openSheet(page);
+  await page.getByTestId('location-consent-decline').click();
+  await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(1);
+  expect(calls.checkIn[0], '거절했는데 좌표가 나갔다').toEqual({ p_venue_id: VENUE });
+  // 서버 거부 → 재시도 시트: 사유 + 대체 경로 + '동의하고 출석'
+  const retry = page.getByTestId('checkin-geo-retry');
+  await expect(retry).toBeVisible({ timeout: 10_000 });
+  await expect(retry).toContainText('위치정보 이용에 동의해야 QR 출석이 됩니다');
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toContainText("매장 직원에게 참가를 요청하거나, 오늘 대회 상세의 '참가 신청'으로 요청하면 매장이 승인합니다");
+  if (SHOT) await page.screenshot({ path: `${SHOT}/after-required-retry.png` });
+  await page.getByTestId('checkin-geo-retry-btn').click();
+  // '동의 안 함' 기록자에게도 required 모드로 다시 묻는다 — 거절 버튼은 '출석'을 약속하지 않는다
+  const sheet = page.getByTestId('location-consent-sheet');
+  await expect(sheet).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('location-consent-required')).toContainText('이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 QR 출석이 되지 않습니다.');
+  await expect(page.getByTestId('location-consent-decline')).toHaveText('동의하지 않음');
+  if (SHOT) await page.screenshot({ path: `${SHOT}/after-required-consent.png` });
+  await page.getByTestId('location-consent-agree').click();
+  await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(2);
+  expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 3 }, { p_granted: true, p_terms_version: 3 }]);
+  expect(calls.checkIn[1]).toMatchObject({ p_venue_id: VENUE, p_lat: 37.5, p_lng: 127.0, p_accuracy: 20 });
+  await expect(page.getByText('검증 홀덤 출석 완료!', { exact: false })).toBeVisible();
+});
+
+test('🔴 L10 위치 확인 출석을 안 켠 매장 — 스위치가 켜져도 동의를 묻지 않고 좌표 없이 출석(지금과 같다)', async ({ page }) => {
+  test.setTimeout(60_000);
+  const calls = await setup(page, { state: 'unset' }, true, { venueGeo: false });
+  await page.goto(`/?checkin=${VENUE}`);
+  await expect.poll(() => calls.checkIn.length, { timeout: 20_000 }).toBe(1);
+  expect(calls.venueFlagReads, '매장 설정을 읽지 않았다(대조 무효)').toBeGreaterThan(0);
+  expect(calls.checkIn[0]).toEqual({ p_venue_id: VENUE });
+  await expect(page.getByText('검증 홀덤 출석 완료!', { exact: false })).toBeVisible();
+  await expect(page.getByTestId('location-consent-sheet'), '안 켠 매장인데 동의를 물었다').toHaveCount(0);
+  expect(calls.setConsent).toEqual([]);
 });
 
 test('🔴 L8 동의 시트 버튼 높이 ≥ 44px(동의 · 동의하지 않고 출석 · 약관 전문)', async ({ page }) => {

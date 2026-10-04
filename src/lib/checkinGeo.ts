@@ -18,9 +18,9 @@ export const parseCheckinGeoEnabled = (v: string | null | undefined): boolean =>
 
 let flagCache: Promise<boolean> | null = null;
 /** 스위치 값(세션 캐시 — 성공한 조회만 캐시, 실패는 다음 호출에서 다시 묻는다).
- *  🔴 조회 실패 = **꺼짐**(fail-open). 서버 check_in 은 3단계 전까지 좌표 없는 호출을 통과시키므로,
- *  꺼짐으로 읽으면 결과가 이 번들 이전 운영과 똑같다. 켜짐으로 읽으면 네트워크가 한 번 흔들린 손님이
- *  좌표 없는 매장에서 출석을 거부당한다 — 막지 않는 쪽이 기존 동작이다. */
+ *  🔴 조회 실패 = **꺼짐**(fail-open). 꺼짐으로 읽으면 좌표 없이 매장 id 만 보낸다 — 위치 확인을 켜지 않은 매장은 그게 정상이고,
+ *  켠 매장(20261004d 시행일 뒤)이면 서버가 {code:'geo_consent_required'} 로 돌려줘 재시도 시트가 뜬다(그 버튼은 스위치를 다시 묻지 않는다).
+ *  켜짐으로 잘못 읽으면 위치를 켜지 않은 매장에서까지 손님에게 위치를 묻게 된다 — 묻지 않는 쪽이 최소 수집이다. */
 export function isCheckinGeoEnabled(): Promise<boolean> {
   if (flagCache) return flagCache;
   const p: Promise<boolean> = getAppSetting(CHECKIN_GEO_FLAG_KEY)
@@ -58,6 +58,22 @@ export class CheckinGeoError extends Error {
     super(CHECKIN_GEO_MESSAGE[code]);
     this.name = 'CheckinGeoError';
     this.code = code;
+  }
+}
+
+/** 20261004d — 위치 확인을 켠 매장(시행일 뒤)에서 서버가 출석을 받지 않은 이유. 서버 응답 {error, code} 의 code 와 1:1.
+ *  'consent' = 위치정보 이용 동의(현재 판)가 없음 · 'position' = 동의는 있는데 좌표가 안 왔음. 판정은 서버만 한다. */
+export type CheckinGeoRequiredReason = 'consent' | 'position';
+export const GEO_REQUIRED_CODES: Record<string, CheckinGeoRequiredReason> = {
+  geo_consent_required: 'consent',
+  geo_position_required: 'position',
+};
+export class CheckinGeoRequiredError extends Error {
+  readonly reason: CheckinGeoRequiredReason;
+  constructor(reason: CheckinGeoRequiredReason, message: string) {
+    super(message);
+    this.name = 'CheckinGeoRequiredError';
+    this.reason = reason;
   }
 }
 

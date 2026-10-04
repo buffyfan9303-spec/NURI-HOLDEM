@@ -33,12 +33,44 @@ describe('CheckinLocationSection', () => {
     expect(iOk).toBeGreaterThan(iRead);
     expect(fn).toMatch(/s\.lat == null \|\| s\.lng == null/);
   });
-  it('좌표 없음 경고 문구 — 스위치 꺼짐이면 "출석할 수 없어요"라고 말하지 않는다', () => {
-    expect(body).toMatch(/geoOn \? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '출석 위치 확인을 켜기 전에/);
+  it('좌표 없음 경고 문구 — 운영 스위치와 매장 스위치가 둘 다 켜졌을 때만 "출석할 수 없어요"라고 말한다', () => {
+    expect(body).toMatch(/geoOn && geoReq \? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '위치 확인 출석을 켜기 전에/);
   });
-  it('출석 QR 안내의 위치 권한 문구는 스위치가 켜졌을 때만', () => {
+  it('출석 QR 안내의 위치 문구는 운영 스위치 + 이 매장의 위치 확인 출석이 켜졌을 때만(20261004d — 안 켠 매장은 위치를 안 본다)', () => {
     const modal = readFileSync(fileURLToPath(new URL('./CheckinModal.tsx', import.meta.url)), 'utf8');
-    expect(modal).toMatch(/\{geoOn && <>[^}]*위치 확인에 동의한 손님은 매장 안에서만 출석됩니다/);
-    expect(modal.match(/위치 확인에 동의한 손님은 매장 안에서만 출석됩니다/g)).toHaveLength(1);
+    expect(modal).toMatch(/const geoHint = geoOn && venueGeo\?\.venueId === venueId && venueGeo\.on;/);
+    expect(modal).toMatch(/\{geoHint && <><br \/><b data-testid="checkin-geo-hint"/);
+    expect(modal).not.toMatch(/\{geoOn && <>/);
+    expect(modal).toMatch(/그 밖의 손님은 장부에 직접 등록하거나 참가 신청을 승인해 주세요/);
+  });
+});
+
+// 20261004d(오너 결정 (다)) — 「위치 확인 출석」 매장 스위치. 저장은 RPC, 확인은 서버 재조회, 좌표 없으면 켤 수 없다.
+// 음성 대조: toggleGeo 에서 `await getVenueCheckinSpot(id)` 를 빼면 '재조회', disabled 의 `(!has && !geoReq)` 를 빼면 '좌표 없음' 이 빨개진다.
+describe('CheckinLocationSection — 위치 확인 출석 스위치', () => {
+  const fn = body.slice(body.indexOf('const toggleGeo'), body.indexOf('const has ='));
+  it('토글을 찾았다(공허한 통과 방지)', () => {
+    expect(fn.length).toBeGreaterThan(100);
+  });
+  it('RPC 저장 → 서버 재조회 → 재조회 값으로만 성공을 말한다 · 매장 전환 가드', () => {
+    const iSave = fn.indexOf('await setVenueCheckinGeoRequired(id, next)');
+    const iRead = fn.indexOf('await getVenueCheckinSpot(id)');
+    const iGuard = fn.indexOf('if (venueRef.current !== id) return;');
+    const iOk = fn.indexOf("tone: 'ok'");
+    expect(iSave).toBeGreaterThan(-1);
+    expect(iRead).toBeGreaterThan(iSave);
+    expect(iGuard).toBeGreaterThan(iRead);
+    expect(iOk).toBeGreaterThan(iGuard);
+    expect(fn).toMatch(/if \(s\.geoRequired !== next\)/);
+  });
+  it('switch 역할·이름·44px · 좌표가 없으면(켜져 있지 않은 한) 켤 수 없다', () => {
+    expect(body).toMatch(/role="switch" aria-checked=\{geoReq\} aria-labelledby="checkin-geo-required-label"/);
+    expect(body).toMatch(/disabled=\{!!busy \|\| spot == null \|\| \(!has && !geoReq\)\}/);
+    expect(body).toMatch(/min-h-\[44px\] min-w-\[44px\]/);
+  });
+  it('업주에게 시행일·거부 효과·대체 처리(장부 직접 등록·참가 신청 승인)를 알린다', () => {
+    expect(body).toMatch(/\{LOCATION_TERMS_EFFECTIVE_KO\}부터/);
+    expect(body).toMatch(/QR 출석이 되지 않습니다/);
+    expect(body).toMatch(/장부에 직접 등록하거나 손님의 「참가 신청」을 승인해 주세요/);
   });
 });

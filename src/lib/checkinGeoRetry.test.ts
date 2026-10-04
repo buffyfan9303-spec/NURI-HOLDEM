@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
 
 vi.mock('../api/settings', () => ({ getAppSetting: async () => null }));
 
-import { CheckinGeoError, CHECKIN_GEO_MESSAGE, type CheckinGeoErrorCode } from './checkinGeo';
+import { CheckinGeoError, CheckinGeoRequiredError, CHECKIN_GEO_MESSAGE, type CheckinGeoErrorCode } from './checkinGeo';
+import { CHECKIN_ALT_PATH } from './locationTerms';
 import { checkinFailureAction, checkinGeoRetryCopy, isKakaoInApp } from './checkinGeoRetry';
 
 const CODES: CheckinGeoErrorCode[] = ['denied', 'unavailable', 'timeout', 'unsupported'];
@@ -21,6 +22,10 @@ describe('① 분기 — 위치 실패는 시트, 나머지는 토스트', () =>
   });
   it('서버 거부(평범한 Error) → 원문 토스트(종전 그대로)', () => {
     expect(checkinFailureAction(new Error('매장에서 300m 밖이에요'))).toEqual({ kind: 'toast', message: '매장에서 300m 밖이에요' });
+  });
+  it('20261004d 서버 거부: 동의 없음 → consent 시트 · 좌표 없음 → 위치 시트(재시도 버튼이 다시 묻고 위치를 받는다)', () => {
+    expect(checkinFailureAction(new CheckinGeoRequiredError('consent', 'x'))).toEqual({ kind: 'sheet', code: 'consent' });
+    expect(checkinFailureAction(new CheckinGeoRequiredError('position', 'x'))).toEqual({ kind: 'sheet', code: 'unavailable' });
   });
   it('Error 가 아닌 값 → 기본 문구 토스트', () => {
     expect(checkinFailureAction('x')).toEqual({ kind: 'toast', message: '출석 실패' });
@@ -36,6 +41,15 @@ describe('② 시트 문구', () => {
     expect(checkinGeoRetryCopy('denied', CHROME).hint).toMatch(/권한 → 위치/);
     expect(checkinGeoRetryCopy('timeout', CHROME).hint).toBeNull();
   });
+  it('모든 사유에 대체 경로(직원 요청·참가 신청)를 붙인다 — 이 시트는 위치 확인 출석 매장에서만 뜬다(오너 결정 (다)-(a))', () => {
+    for (const c of [...CODES, 'consent' as const]) {
+      const copy = checkinGeoRetryCopy(c, CHROME);
+      expect(copy.alt).toBe(`QR 출석이 어려우면 ${CHECKIN_ALT_PATH}`);
+      expect(copy.alt).toMatch(/매장 직원에게 참가를 요청/);
+    }
+    expect(checkinGeoRetryCopy('consent', CHROME)).toMatchObject({ reason: expect.stringMatching(/위치정보 이용에 동의해야 QR 출석/), action: '동의하고 출석' });
+    expect(checkinGeoRetryCopy('denied', CHROME).action).toBe('위치 확인 후 출석');
+  });
   it('카카오 인앱 → 코드와 무관하게 외부 브라우저 안내', () => {
     expect(isKakaoInApp(KAKAO)).toBe(true);
     expect(isKakaoInApp(CHROME)).toBe(false);
@@ -49,7 +63,7 @@ describe('③ App.tsx 배선 — runCheckin 이 이 분기를 쓰고, 시트는 
   const body = app.slice(start, app.indexOf('}, [toast, refreshProfile]);', start));
   it('runCheckin 을 찾았다(공허한 통과 방지)', () => {
     expect(start).toBeGreaterThan(0);
-    expect(body).toContain('checkIn(venueId)');
+    expect(body).toContain('checkIn(venueId, opts)');
   });
   it('catch 가 checkinFailureAction 으로 갈라 CheckinGeoError 는 시트 상태로 보낸다', () => {
     // 렌더 시점 계정 — uidRef 는 QR effect 보다 늦게 선언된 effect 가 채워 첫 호출에서 null 이었다(e2e G1 실측).
@@ -65,9 +79,11 @@ describe('③ App.tsx 배선 — runCheckin 이 이 분기를 쓰고, 시트는 
   });
   it('시트는 요청 시점 uid 와 지금 계정이 같을 때만 그리고, 재시도 버튼이 runCheckin 을 다시 부른다', () => {
     expect(app).toMatch(/geoRetry && geoRetry\.uid === \(user\?\.id \?\? null\) &&/);
-    const sheet = app.slice(app.indexOf('data-testid="checkin-geo-retry"'), app.indexOf('data-testid="checkin-geo-retry"') + 900);
-    expect(sheet).toMatch(/runCheckin\(v\)/);
-    expect(sheet).toContain('위치 확인 후 출석');
+    const sheet = app.slice(app.indexOf('data-testid="checkin-geo-retry"'), app.indexOf('data-testid="checkin-geo-retry"') + 1400);
+    // 재시도는 '켠 매장'으로 보고 다시 묻는다(스위치·매장 조회 실패가 반복돼도 시트에서 빠져나갈 길이 있다)
+    expect(sheet).toMatch(/runCheckin\(v, \{ geoRequired: true \}\)/);
+    expect(sheet).toContain('{copy.action}');
+    expect(sheet).toMatch(/data-testid="checkin-geo-retry-alt"[^>]*>\{copy\.alt\}/);
   });
   it('늦은 응답을 setter 에 직접 물리지 않는다(`.then(set…` 0건 — 이번 배선 구간)', () => {
     expect(body).not.toMatch(/\.then\(set[A-Z]/);

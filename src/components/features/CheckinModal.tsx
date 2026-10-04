@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
-import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '../../api/checkins';
+import { listVenueCheckins, subscribeCheckins, checkinUrl, getVenueCheckinGeoRequired, type Checkin } from '../../api/checkins';
+import { LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow } from '../../lib/locationTerms';
 import { getVenueVisitorStats } from '../../api/crm';
 import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
@@ -38,8 +39,16 @@ export function canSendVoucher(c: Pick<Checkin, 'venueId' | 'userId'>, venueId: 
 
 export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
   const toast = useToast();
-  // CHECKIN-GEO — 위치 안내는 운영 스위치가 켜졌을 때만(꺼짐이면 위치를 안 보므로 거짓 안내가 된다).
+  // CHECKIN-GEO — 위치 안내는 운영 스위치 + 이 매장의 「위치 확인 출석」이 둘 다 켜졌을 때만(20261004d — 매장이 안 켰으면 위치를 안 본다).
   const geoOn = useCheckinGeoEnabled();
+  const [venueGeo, setVenueGeo] = useState<{ venueId: string; on: boolean } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    (async () => { const on = await getVenueCheckinGeoRequired(venueId); if (alive) setVenueGeo({ venueId, on }); })();
+    return () => { alive = false; }; // 매장 전환 뒤 늦게 온 앞 매장 값은 버린다
+  }, [open, venueId]);
+  const geoHint = geoOn && venueGeo?.venueId === venueId && venueGeo.on;
   /** 지금 이용권을 보낼 손님(체크인 행 id). null 이면 아무 행도 안 펼쳐져 있다. */
   const [sendTo, setSendTo] = useState<string | null>(null);
   const [customCount, setCustomCount] = useState('');
@@ -154,7 +163,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
             : qrFailed
               ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR을 만들지 못했습니다</div>
               : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoOn && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인에 동의한 손님은 매장 안에서만 출석됩니다</b></>}</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoHint && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인 출석 매장 · {isGeoRequiredNow() ? '동의하고 매장 안에 있는 손님만 QR로 출석됩니다' : `${LOCATION_TERMS_EFFECTIVE_KO}부터 동의하고 매장 안에 있는 손님만 QR로 출석됩니다`}</b><br />그 밖의 손님은 장부에 직접 등록하거나 참가 신청을 승인해 주세요</>}</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
         <div>

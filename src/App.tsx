@@ -15,7 +15,7 @@ import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { flushSignupLocationConsent } from './lib/locationConsent';
 import { checkinFailureAction, checkinGeoRetryCopy } from './lib/checkinGeoRetry';
-import type { CheckinGeoErrorCode } from './lib/checkinGeo';
+import type { CheckinRetryCode } from './lib/checkinGeoRetry';
 import Modal from './components/atoms/Modal';
 import type { MyBuyinRequest } from './api/ledger';
 
@@ -1563,11 +1563,11 @@ export default function App() {
   const qrLoginPending = useRef(false);
   /** CHECKIN-GEO 재시도 시트 — 위치를 못 얻은 출석(CheckinGeoError)만 여기로 온다. 서버 거부는 종전대로 토스트.
    *  venueId 를 시트가 들고 있는다(보류 의도는 이미 소비됐다). uid 는 **요청 시점** 계정 — 다른 계정이면 그리지 않는다. */
-  const [geoRetry, setGeoRetry] = useState<{ venueId: string; code: CheckinGeoErrorCode; uid: string | null; open: boolean } | null>(null);
+  const [geoRetry, setGeoRetry] = useState<{ venueId: string; code: CheckinRetryCode; uid: string | null; open: boolean } | null>(null);
   // uidRef 는 렌더 본문에서 동기로 채워진다(위 선언부) — 로그인 직후 첫 runCheckin 에서도 이미 지금 계정이다.
-  const runCheckin = useCallback((venueId: string) => {
+  const runCheckin = useCallback((venueId: string, opts?: { geoRequired?: boolean }) => {
     const forUid = uidRef.current; // 늦은 응답 가드 — 응답이 올 때 계정이 바뀌었으면 시트를 그리지 않는다(아래 렌더 조건)
-    checkIn(venueId)
+    checkIn(venueId, opts)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
         const streak = served ?? await getMyCheckinStreak().catch(() => 0);
@@ -4862,12 +4862,14 @@ export default function App() {
         const copy = checkinGeoRetryCopy(geoRetry.code, typeof navigator === 'undefined' ? '' : navigator.userAgent);
         return (
           <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요합니다" variant="sheet" maxWidth="sm">
-            <div data-testid="checkin-geo-retry" className="space-y-2">
+            <div data-testid="checkin-geo-retry" className="space-y-2 px-4 pb-5 pt-1">
               <p className="text-sm text-ink-primary">{copy.reason}</p>
               {copy.hint && <p className="text-xs text-ink-secondary">{copy.hint}</p>}
+              {/* 20261004d — 위치 확인 출석 매장에서만 이 시트가 뜬다. 동의·위치가 없어도 참가할 길(직원·참가 신청)을 함께 적는다(오너 결정 (다)-(a)). */}
+              <p data-testid="checkin-geo-retry-alt" className="text-xs text-ink-muted">{copy.alt}</p>
               <button type="button" data-testid="checkin-geo-retry-btn"
-                onClick={() => { const v = geoRetry.venueId; setGeoRetry((g) => g && { ...g, open: false }); runCheckin(v); }}
-                className="btn-primary mt-1 min-h-[44px] w-full text-sm">위치 확인 후 출석</button>
+                onClick={() => { const v = geoRetry.venueId; setGeoRetry((g) => g && { ...g, open: false }); runCheckin(v, { geoRequired: true }); }}
+                className="btn-primary mt-1 min-h-[44px] w-full text-sm">{copy.action}</button>
             </div>
           </Modal>
         );
