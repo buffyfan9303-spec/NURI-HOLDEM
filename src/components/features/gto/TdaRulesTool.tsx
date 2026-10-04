@@ -140,8 +140,8 @@ export default function TdaRulesTool() {
           {busy && <div className="mt-2 space-y-1.5" aria-busy="true"><Skeleton className="h-4" /><Skeleton className="h-4 w-4/5" /></div>}
 
           {answer && (
-            <div className="mt-2.5 rounded-input border border-cyan-400/30 bg-cyan-400/6 p-2.5">
-              <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-cyan-300">
+            <div className="mt-2.5 rounded-input border border-accent-300/30 bg-accent-300/6 p-2.5">
+              <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-accent-200">
                 <Icon name="sparkles" size={11} className="shrink-0" />AI 안내
               </p>
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-primary break-keep">{answer}</p>

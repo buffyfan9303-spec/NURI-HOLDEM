@@ -306,9 +306,9 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           return (
             <button key={p.id} type="button" data-pill-active={on || undefined} onClick={() => setTabPeriod(p.id)}
               className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-(--dur-fast) focus:outline-hidden',
-                on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
+                on ? 'font-bold text-white' : (p.ai ? 'text-accent-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
-              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-linear-to-r/srgb from-accent-400 to-accent-300 shadow-sm animate-fade-in" />}
+              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-accent-300 animate-fade-in" />}
               <span className="relative inline-flex items-center justify-center gap-1">{p.ai && <Icon name="sparkles" size={11} className="shrink-0" />}{p.label}</span>
             </button>
           );
@@ -942,7 +942,7 @@ function OpsReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onR
 body{padding:32px;color:#1a1a1a;max-width:720px;margin:0 auto}
 h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20px}
 .c{border:1px solid #e3e3e3;border-radius:10px;padding:14px 16px;margin-bottom:12px}
-.c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#6d28d9}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
+.c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#8C5E14}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
 @media print{body{padding:16px}}
 </style></head><body>
 <h1>NURI 운영 리포트</h1><div class="sub">최근 ${days}일 집계 · 개인정보 없는 집계 데이터 · nuriholdem.com</div>
@@ -960,16 +960,16 @@ ${rpt.actions.length
     w.document.close();
   };
   return (
-    <div className="rounded-card border border-violet-500/40 bg-linear-to-br/srgb from-violet-500/12 to-indigo-500/4 p-3 space-y-3">
+    <div className="rounded-card border border-accent-300/40 bg-accent-300/8 p-3 space-y-3">
       {/* 정렬 전수 S2(2026-10-02) — 제목과 설명을 한 칸에 쌓고 items-start 로 두면 버튼 가운데가 제목 글자 가운데보다 아래였다.
           제목 줄과 버튼을 한 행(items-center)으로, 설명은 그 아래 전폭으로. */}
       <div>
       <div className="flex items-center justify-between gap-2">
-          <h4 className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
+          <h4 className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-accent-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
         <div className="flex shrink-0 items-center gap-1.5">
           {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors"><Icon name="printer" size={12} className="shrink-0" />저장</button>}
           <button type="button" onClick={onRefresh}
-            className="inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
+            className="inline-flex items-center gap-1 text-2xs font-semibold text-accent-200 bg-accent-300/15 border border-accent-300/40 rounded-input px-2.5 py-1.5 hover:bg-accent-300/25 transition-colors">
             <Icon name="refresh" size={12} className="shrink-0" />새로고침
           </button>
         </div>

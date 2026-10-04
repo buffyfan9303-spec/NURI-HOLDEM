@@ -517,7 +517,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                   <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2" className="stroke-border-default" />
                   <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2" strokeLinecap="round" pathLength={100}
                     strokeDasharray={100} strokeDashoffset={100 - progress}
-                    className={g.running ? 'stroke-aura-300' : 'stroke-amber-400'} style={{ transition: 'stroke-dashoffset 1s linear' }} />
+                    className={g.running ? 'stroke-emerald-400' : 'stroke-amber-400'} style={{ transition: 'stroke-dashoffset 1s linear' }} />
                 </svg>
                 <span className={`text-2xs font-bold leading-none tabular-nums ${g.running ? 'text-accent-200' : 'text-amber-400'}`}>{mm}:{ss}</span>
               </span>

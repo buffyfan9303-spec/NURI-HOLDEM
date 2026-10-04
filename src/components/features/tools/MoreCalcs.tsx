@@ -46,7 +46,7 @@ export function PayoutCalc() {
         <Field label="참가 인원"><NumIn value={entries} max={PAYOUT_MAX_ENTRIES} onChange={(v) => { setEntries(v); setPresetId(null); }} suffix="명" /></Field>
       </div>
       {capped && (
-        <p role="status" className="text-2xs leading-relaxed text-aura-300">참가·시상 인원은 최대 {PAYOUT_MAX_ENTRIES.toLocaleString()}명까지 계산합니다.</p>
+        <p role="status" className="text-2xs leading-relaxed text-ink-secondary">참가·시상 인원은 최대 {PAYOUT_MAX_ENTRIES.toLocaleString()}명까지 계산합니다.</p>
       )}
       {/* 표준 프리셋 — 클릭 시 고정 %표 적용, 다른 입력을 만지면 곡선 모드로 복귀 */}
       <div className="flex gap-1.5">

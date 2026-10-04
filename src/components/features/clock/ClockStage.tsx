@@ -333,7 +333,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: adSize === 'lg' ? '9cqmin' : adSize === 'md' ? '7.2cqmin' : '5.5cqmin' }} />}
               {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
               <p className="clk-land-only shrink-0 text-[1.2cqmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
-                Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
+                Powered by <span style={{ color: 'var(--clk-accent, #D9B25A)' }}>NURI HOLDEM</span>
               </p>
             </div>
           </div>
@@ -638,7 +638,7 @@ function LevelLine({ g }: { g: ClockState }) {
   const isBreak = lvls[eff.index]?.kind === 'break';
   return (
     <p data-testid="clk-level" className="whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
-      style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)', ...(usePlate() ? PLATE : null) }}>
+      style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #D9B25A)', ...(usePlate() ? PLATE : null) }}>
       {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
     </p>
   );
@@ -762,7 +762,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
     <div className="relative flex w-full shrink-0 flex-col items-center pt-[3.5cqmin]">
       {/* 타이머 뒤 아주 약한 radial bloom **한 겹**. 글자 자체에 네온 외곽선을 두르지 않는다. */}
       <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[46cqmin] w-[min(76cqmin,100%)] -translate-x-1/2 -translate-y-1/2"
-        style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--clk-accent, #818CF8) 16%, transparent), transparent)' }} />
+        style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--clk-accent, #D9B25A) 16%, transparent), transparent)' }} />
 
       {/* #4(FULL-RECHECK-2/C) — 크기가 cqmin(짧은 변)에만 묶여 있어 16:9 보다 좁은 화면(1280×900 TV)에서 '05:22' 가 중앙 열(661px)을
           25px 넘어 우측 레일을 10px 덮었다. 중앙 열 폭 = 2·--clk-half + 2cqmin(index.css 의 1열·3열 식 그대로)을 글자 폭 3.3em 으로 나눈
@@ -780,7 +780,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
           <span key={i} className="h-[1.1cqmin] flex-1 rounded-[0.3cqmin]"
             style={{
               background: i < filled
-                ? (urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)')
+                ? (urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #D9B25A)')
                 : 'rgba(255,255,255,0.07)',
             }} />
         ))}
@@ -850,7 +850,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
             {/* data-testid: clock-blinds-fit.spec 앵커 — 예전엔 `.clk-cols .whitespace-nowrap` 의 0·1번째를 CURRENT·NEXT 로 잡았는데
                 2026-09-19 LevelLine(whitespace-nowrap)이 중앙 열에 들어오며 0번째가 LEVEL 이 되어 10건이 거짓 실패했다. */}
             <p data-testid="clk-cur-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums"
-              style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #818CF8)' }}>
+              style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #D9B25A)' }}>
               {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).

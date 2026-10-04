@@ -7,7 +7,7 @@
 //     절대 21px 이라 둘이 따로 놀던 결함(P0-B 후속 3건 중 3번)의 회귀 가드다.
 //     ⚠ 크기 단언만으로는 안 된다 — `21px` 을 적어도 100% 에서는 통과한다.
 //       **루트를 34px 로 키워 비례가 유지되는지**가 이 테스트의 핵심이다.
-//  ② 다크에서 액센트 '글자'는 채운 버튼 색(#6344CE)이 아니라 텍스트 단계로 승격된다.
+//  ② 다크에서 액센트 '글자'는 채운 버튼 색(#8C5E14 — 2026-10-04 황동, 종전 #6344CE)이 아니라 텍스트 단계로 승격된다.
 //     승격이 없으면 지면 대비 3.10 으로 본문 AA(4.5) 미달이다.
 //  ③ 라이트 달력 주말 표시(`text-sky-400/60`·`text-danger-light/70`)는 알파 변형이라
 //     라이트 보정 목록에서 **조용히 빠져 있었다**(실측 2.00 / 2.08).
@@ -153,7 +153,7 @@ test('② 다크에서 액센트 글자가 본문 AA 를 넘는다 (버튼 면 �
   await probe(page, '<span id="p-bg" class="bg-accent-300 text-white">채운 버튼</span>');
   const fill = await page.evaluate(() => getComputedStyle(document.querySelector('#p-bg')!).backgroundColor);
   console.log('ACCENT-FILL ' + fill);
-  expect(fill.replace(/\s/g, ''), '채운 면까지 텍스트 단계로 바뀌었다').toBe('rgb(99,68,206)');
+  expect(fill.replace(/\s/g, ''), '채운 면까지 텍스트 단계로 바뀌었다').toBe('rgb(140,94,20)'); // 2026-10-04 'E+황동' #8C5E14(종전 #6344CE)
 });
 
 test('③ 라이트 달력 주말 표시가 보인다 (알파 변형도 보정된다)', async ({ page, context }) => {

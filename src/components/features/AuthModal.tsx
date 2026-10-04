@@ -256,12 +256,10 @@ function AuraSpade({ size }: { size: number }) {
       style={{
         width: size, height: size,
         background: [
-          // ① 좌상단 광원
-          'radial-gradient(circle at 32% 26%, rgb(196 181 253 / 0.42) 0%, rgb(109 92 190 / 0.24) 24%, transparent 56%)',
-          // 아래에서 올라오는 시안 반사광 — 보라 일변도를 깨고 Aura 3색을 완성한다
-          'radial-gradient(circle at 50% 116%, rgb(34 211 238 / 0.34) 0%, transparent 52%)',
-          // 구 본체
-          'radial-gradient(120% 120% at 50% 4%, #2B2450 0%, #16192F 52%, #06080F 100%)',
+          // ① 좌상단 광원 — 2026-10-04 'E+황동': 보라 광원·시안 반사광을 걷고 무채색 광원 + 황동 기운 한 점
+          'radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.20) 0%, rgb(140 94 20 / 0.16) 24%, transparent 56%)',
+          // 구 본체(무채색)
+          'radial-gradient(120% 120% at 50% 4%, #2E3034 0%, #17181B 52%, #0A0A0A 100%)',
         ].join(', '),
         boxShadow: [
           'inset 0 1.5px 0 rgb(255 255 255 / 0.30)',      // ③ 상단 스펙큘러
@@ -361,7 +359,7 @@ function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => 
 //   두 선이 어긋나 이중 테두리로 보였다. 링을 끄고 바깥 글로우 한 겹으로 대신한다(대비는 유지).
 const FIELD_CLS = [
   'min-h-[50px] rounded-[14px] border-white/[0.07] bg-surface-base/60 text-[15px]',
-  'focus:border-accent-300 focus:ring-0! focus:shadow-[0_0_0_3px_rgb(88_80_236/0.20)]',
+  'focus:border-accent-300 focus:ring-0! focus:shadow-[0_0_0_3px_rgb(var(--accent-300)/0.25)]',
 ].join(' ');
 
 export default function AuthModal({ open, onClose, initialMode = 'login' }: AuthModalProps) {
@@ -572,7 +570,7 @@ function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onFor
       {/* 화면에서 가장 밝은 것 — btn-primary 의 보라 그라데이션 위에 블룸을 한 겹 더 얹는다 */}
       <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
         disabled={!email.trim() || !password} onAction={doLogin} onDone={onClose}
-        className="w-full min-h-[52px]! rounded-[14px]! shadow-[0_10px_30px_-8px_rgb(88_80_236/0.65)] disabled:shadow-none!" />
+        className="w-full min-h-[52px]! rounded-[14px]!" />
 
       <SocialLoginButtons onError={(m) => setError(m)} keepSignedIn={keepSignedIn} />
       <ModeSwitch question="계정이 없으신가요?" action="회원가입" onClick={onSignup} />
@@ -626,7 +624,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       <form onSubmit={sendCode} className="space-y-3">
         <Field label="이메일" type="email" required autoComplete="email" className={FIELD_CLS}
           value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-        <button type="submit" disabled={loading} className="btn-primary min-h-[52px]! rounded-[14px]! w-full shadow-[0_10px_30px_-8px_rgb(88_80_236/0.65)] disabled:shadow-none! disabled:opacity-60">
+        <button type="submit" disabled={loading} className="btn-primary min-h-[52px]! rounded-[14px]! w-full disabled:opacity-60">
           {loading ? '발송 중…' : '인증번호 받기'}
         </button>
         <button type="button" onClick={onBack} className="min-h-[44px] w-full text-xs text-ink-muted transition-colors hover:text-accent-200">

@@ -34,7 +34,7 @@ import { msgOf } from '../../../lib/dbError';
 /** led = [data-aura-variant](index.css) — 인라인 rgb 링은 라이트·고대비·강제색에서 못 껐다(2026-09-18). unsupported 는 LED 없음. */
 const COVERAGE_TONE: Record<CoverageKind, { led: 'violet' | 'cyan' | 'amber' | null; text: string; icon: 'microscope' | 'table' | 'scale' | 'sigma' | 'info' }> = {
   exact_solver:         { led: 'violet', text: 'text-accent-200', icon: 'microscope' },
-  chart_nash:           { led: 'cyan',   text: 'text-aura-300',   icon: 'table' },
+  chart_nash:           { led: 'cyan',   text: 'text-accent-300', icon: 'table' },
   normalized_reference: { led: 'amber',  text: 'text-amber-200',  icon: 'scale' },
   math_only:            { led: 'amber',  text: 'text-amber-200',  icon: 'sigma' },
   unsupported:          { led: null,     text: 'text-ink-muted',  icon: 'info' },

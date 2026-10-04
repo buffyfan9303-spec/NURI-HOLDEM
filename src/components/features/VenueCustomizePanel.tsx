@@ -471,7 +471,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
-        <section className="rounded-aura border border-violet-500/30 bg-violet-500/4 p-3 space-y-2">
+        <section className="rounded-aura border border-accent-300/30 bg-accent-300/4 p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">커스텀 보드 만들기 <span className="text-2xs font-normal text-ink-muted">(최대 {MAX_CUSTOM_BOARDS}개)</span></h3>
           <p className="text-2xs text-ink-muted">명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
           {customBoards.length > 0 && (

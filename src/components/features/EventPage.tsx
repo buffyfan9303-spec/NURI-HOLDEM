@@ -305,7 +305,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
       {/* 진행 막대 — 자기완결 소형 진행바는 §20.4 예외로 width 전환이 허용된다 */}
       <div className="relative mt-2 flex items-center gap-2">
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-high">
-          <div className="h-full rounded-full bg-linear-to-r/srgb from-accent-400 to-fuchsia-500 transition-[width] duration-(--dur-panel)"
+          <div className="h-full rounded-full bg-accent-300 transition-[width] duration-(--dur-panel)"
             style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
         <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{done}/{total} 개봉</span>
