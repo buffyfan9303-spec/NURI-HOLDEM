@@ -306,7 +306,7 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(REPORT).not.toMatch(/data-source-badge="solver"/);
   });
 
-  it('수학 참고 결과에 GTO 추천이 없다고 화면이 말한다', () => {
+  it('math_only(정답표 없음) 결과에 GTO 추천이 없다는 고지가 평가 notes 에 남는다', () => {
     expect(EVAL).toContain('GTO 추천 액션이 없습니다');
   });
 

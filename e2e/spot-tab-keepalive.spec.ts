@@ -57,6 +57,8 @@ test('🔴 작성↔내 스팟 3왕복 — 단계 유지 · 재조회 1회 · �
   await tap('내 스팟');
   const rows = dlg.getByRole('listitem');
   await expect(rows).toHaveCount(ROWS.length, { timeout: 10_000 });
+  // 오너 2026-10-04: 정답표 없는(math_only) 행에 '수학 참고' 배지를 그리지 않는다 — 행은 있고 그 말만 0.
+  await expect(dlg.getByText('수학 참고'), "math_only 행에 '수학 참고' 배지가 남아 있다").toHaveCount(0);
   await page.waitForTimeout(400);
   await page.evaluate(() => { document.querySelector<HTMLElement>('[role="dialog"] .overflow-y-auto')!.scrollTop = 240; });
   await page.waitForTimeout(100);
