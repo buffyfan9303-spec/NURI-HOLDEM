@@ -122,6 +122,37 @@ for (const c of [{ staff: false, hasPw: true }, { staff: true, hasPw: false }, {
   });
 }
 
+// ── ①-v2 같은 결제 수단으로만 자유(오너 2026-10-04, critical R2 B 두 단계 우회) ──────────────────────────────
+//   현금 미수 → 현금 완납은 자유(PATCH) · 현금 미수 → 티켓 완납은 비밀번호 시트(PATCH 0).
+for (const c of [{ to: '현금', free: true }, { to: '티켓', free: false }]) {
+  test(`①-v2 1440 직원 · 비밀번호 설정 — 현금 미수 → ${c.to} 완납은 ${c.free ? '비밀번호 없이' : '비밀번호 시트'}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    const w: World = {
+      sessions: [sess(MOCK_DAY)], buyins: [buy(MOCK_DAY, 0, '철수', { cash_amount: 100_000, is_unpaid: true })],
+      players: [player(MOCK_DAY, 0, '철수')], voucherUses: [],
+    };
+    const probe = await boot(page, w, { staff: true, hasPw: true });
+    await page.goto('/');
+    await openMyStore(page);
+    await openLedger(page);
+    const led = page.locator('[data-pane="ledger"]');
+    await led.locator('td button:visible').filter({ hasText: /^현·미/ }).first().click({ timeout: 20_000 });
+    const dlg = page.getByRole('dialog', { name: /철수/ });
+    await expect(dlg, '결제 창(전제)').toBeVisible();
+    await dlg.getByRole('button', { name: '완납', exact: true }).click();
+    await dlg.getByRole('button', { name: new RegExp(`^${c.to} 완납`) }).click();
+    if (c.free) {
+      await expect.poll(() => probe.patches.length, { message: '현금 미수 → 현금 완납 PATCH 가 나가지 않았다', timeout: 10_000 }).toBe(1);
+      expect(probe.patches[0]).toMatchObject({ payment_method: 'cash', is_unpaid: false });
+      await expect(page.getByTestId('ledger-reduce-pw')).toHaveCount(0);
+    } else {
+      await expect(page.getByTestId('ledger-reduce-pw'), '분류가 바뀌는데 비밀번호 시트가 없다').toBeVisible({ timeout: 10_000 });
+      expect(probe.patches.length, '비밀번호 없이 PATCH 가 나갔다').toBe(0);
+    }
+    expect(probe.reduceCalls).toBe(0);
+  });
+}
+
 // ── ② 정산 판 티켓 대조 ────────────────────────────────────────────────────────────────────────────
 // 오늘 열린 장부: 영희 티켓 완납(직접 기록) 10장 + 지훈 할인 티켓 5장 · 철수 현금. 들어온 이용권: 영희 4장 → 장부 15 · 들어옴 4 · 부족 11.
 const todayWorld = (): World => ({

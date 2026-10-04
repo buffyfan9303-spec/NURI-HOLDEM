@@ -431,18 +431,27 @@ export function buyinTiers(b: LedgerBuyin, s: { buyinAmount: number; cardAmount:
   return [paid, paid + t.ticket, paid + t.ticket + t.unpaid];
 }
 
-/** 이 수정이 매출을 줄이는가 — 세 겹 중 **하나라도** 줄면 true. 이때는 취소 비밀번호가 필요하다.
- *  통과(false): 증액 · 현금↔카드↔이체 같은 금액 교체 · 미수→완납 · 얼리만 변경 ·
- *               **완납→미수**(오너 2026-10-04 F4-02 — 받을 가치 [2] 그대로, 이용권 몫은 늘지 않고 줄어든 만큼이 미수로만 간다.
- *               "매장이용권 확인이 늦으면 미수로 두었다가 완납으로 바꾼다" — 미수로 돌리는 쪽은 비밀번호 없이).
- *  감액(true) : 금액 축소/0원 · 가게지원 전환 · 현금→이용권 · 할인 자리 추가 · 미수 탕감.
- *  서버 쌍둥이: _ledger_buyins_client_guard(20261004e) — 같은 식이다. 한쪽만 고치면 판정이 갈린다. */
+/** 비분납 행의 결제 수단 분류 — 현금·카드·이체 = 현금성. 분납은 null(여러 수단이 섞여 분류하지 않는다). 미수 상태도 수단을 지닌다. */
+function payClassOf(b: LedgerBuyin): 'cash' | 'ticket' | 'support' | null {
+  if (b.isSplit) return null;
+  return b.paymentMethod === 'ticket' ? 'ticket' : b.paymentMethod === 'support' ? 'support' : 'cash';
+}
+
+/** 이 수정에 취소 비밀번호가 필요한가(이름은 호출부 호환으로 그대로 — 2026-10-04 v2 부터는 '감액' 만이 아니다).
+ *  오너 2026-10-04(F4-02, critical 반증 뒤): "같은 결제 수단으로만 자유". true ⇔ 아래 하나라도
+ *   ① 감액(세 겹 중 하나라도 줄었다)이고, 줄어든 몫이 전부 미수로 간 것(받을 가치 그대로 · 이용권 몫 안 늚)이 아니다
+ *   ② 이용권 몫이 늘었고, 비분납 티켓 행 → 비분납 티켓 행(가불 → 회수)이 아니다 — 현금 완납 → 미수 → 티켓 완납 두 단계 우회를 막는다
+ *   ③ 비분납 → 비분납인데 결제 수단 분류(현금성·이용권·가게지원)가 바뀌었다(미수 상태 포함)
+ *  자유(false): 현금 완납 ↔ 현금 미수 · 현금↔카드↔이체 · 티켓 완납 ↔ 티켓 가불 · 분납 현금 몫 ↔ 미수 · 분납 미수 → 현금성 · 증액 · 얼리만.
+ *  서버 쌍둥이: _ledger_buyins_client_guard(20261004e) — 같은 세 조건이다. 한쪽만 고치면 판정이 갈린다. */
 export function isRevenueReduction(before: LedgerBuyin, after: LedgerBuyin,
   s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): boolean {
   const o = buyinTiers(before, s), n = buyinTiers(after, s);
   const reduced = n[0] < o[0] || n[1] < o[1] || n[2] < o[2];
   const toUnpaidOnly = n[2] === o[2] && n[1] - n[0] <= o[1] - o[0];
-  return reduced && !toUnpaidOnly;
+  const co = payClassOf(before), cn = payClassOf(after);
+  const ticketUp = n[1] - n[0] > o[1] - o[0];
+  return (reduced && !toUnpaidOnly) || (ticketUp && !(co === 'ticket' && cn === 'ticket')) || (co !== null && cn !== null && co !== cn);
 }
 
 /** 서버가 감액 수정을 비밀번호 없이 받지 않았다(또는 클라가 미리 감액으로 판정했다) — 호출측이 비밀번호를 묻는다.
