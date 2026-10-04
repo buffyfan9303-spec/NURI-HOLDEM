@@ -82,8 +82,10 @@ const PRELOAD: Partial<Record<ToolKey, () => void>> = {
 /** 지연 도구는 **모듈이 도착한 뒤** 연다. 도착 전에 열면 Modal 안에 새로 생긴 Suspense 경계가 폴백('불러오는 중…')을
  *  최소 ~300ms 붙잡는다(lazyWithReload 머리 주석 — startTransition 으로도 새 경계의 폴백은 못 막는다).
  *  보통은 위 유휴 미리 받기로 이미 와 있어 다음 마이크로태스크에 열린다. 느린 망에서 무반응이 길어지지 않게
- *  OPEN_WAIT_MS 뒤에는 그냥 연다 — 그때는 폴백이 '불러오는 중' 을 정직하게 보여 준다(실패도 lazy 경로가 복구한다). */
-const OPEN_WAIT_MS = 400;
+ *  OPEN_WAIT_MS 뒤에는 그냥 연다 — 그때는 폴백이 '불러오는 중' 을 정직하게 보여 준다(실패도 lazy 경로가 복구한다).
+ *  왜 1초인가: 일찍 끊으면 폴백이 최소 300ms 붙잡혀 오히려 늦게 그린다(도착 t ≤ 대기+300ms 면 기다리는 쪽이 항상 빠르다).
+ *  실측(2026-10-04 로컬 프리뷰, 판 보이자마자 누름): 청크 도착 15~280ms · 병렬 e2e 부하에서는 400ms 를 넘겨 폴백 13프레임. */
+const OPEN_WAIT_MS = 1000;
 function whenToolReady(k: ToolKey, run: () => void): void {
   const pre = LAZY_TOOL[k];
   if (!pre) { run(); return; }

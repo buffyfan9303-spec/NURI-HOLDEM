@@ -70,16 +70,29 @@ test('① lazy 도구 12개 — 첫 열기에 "불러오는 중…" 폴백 프�
   }
 });
 
-test('①-b 미리 받기 전에 눌러도 폴백 0 — 모듈이 온 뒤 연다(ToolsPanel whenToolReady)', async ({ page }) => {
-  test.setTimeout(60_000);
-  await bootOwner(page, { viewport: { width: 390, height: 844 } });
-  await page.goto('/?tab=tools');
-  await expect(page.locator('[data-testid="tool-pushfold"]')).toBeVisible({ timeout: 30_000 });
-  // 유휴 미리 받기(requestIdleCallback)를 기다리지 않고 바로 누른다 — 청크가 아직 없을 수 있는 순간이다.
-  const frames = await openAndRecord(page, 'tool-pushfold', 1500);
-  const fb = frames.filter((f) => f.fb);
-  expect(frames.some((f) => f.open && f.h > 150 && !f.fb), '푸시폴드 본문이 그려지지 않았다').toBe(true);
-  expect(fb.length, `폴백 ${fb.length}프레임(${fb[0]?.t}~${fb.at(-1)?.t}ms) — 모듈 도착 전에 판을 열었다`).toBe(0);
+test.describe('①-b 느린 망', () => {
+  // 서비스 워커가 청크를 받으면 page.route 가 못 가로챈다(실측 route 적중 0회) — 이 묶음만 SW 를 막는다.
+  test.use({ serviceWorkers: 'block' });
+  test('미리 받기 전에 눌러도 폴백 0 — 모듈이 온 뒤 연다(ToolsPanel whenToolReady)', async ({ page }) => {
+    test.setTimeout(60_000);
+    await bootOwner(page, { viewport: { width: 390, height: 844 } });
+    // 느린 망 재현 — 무거운 도구 묶음 청크를 **누른 뒤 600ms** 에 놓아 준다(대기 상한 1초 안).
+    //   고정 지연만 걸면 병렬 부하에서 클릭이 늦어 청크가 먼저 도착해 '모듈이 온 뒤 연다' 를 지워도 초록이었다(2026-10-04 음성 대조).
+    let hits = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    await page.route(/\/assets\/gtoHeavyTools-[^/]+\.js$/, async (r) => { hits++; await gate; await r.continue(); });
+    await page.goto('/?tab=tools');
+    await expect(page.locator('[data-testid="tool-pushfold"]')).toBeVisible({ timeout: 30_000 });
+    // 유휴 미리 받기(requestIdleCallback)를 기다리지 않고 바로 누른다 — 청크가 아직 없는 순간이다.
+    const recording = openAndRecord(page, 'tool-pushfold', 1800);
+    setTimeout(release, 600);
+    const frames = await recording;
+    const fb = frames.filter((f) => f.fb);
+    expect(hits, '느린 망 재현이 안 걸렸다 — 이 검사는 아무것도 안 본 것이다').toBeGreaterThan(0);
+    expect(frames.some((f) => f.open && f.h > 150 && !f.fb), '푸시폴드 본문이 그려지지 않았다').toBe(true);
+    expect(fb.length, `폴백 ${fb.length}프레임(${fb[0]?.t}~${fb.at(-1)?.t}ms) — 모듈 도착 전에 판을 열었다`).toBe(0);
+  });
 });
 
 test('② 페이지 모달 fade-in 이 합성 스레드에서 돈다(compositeFailed 0)', async ({ page, browserName }) => {
