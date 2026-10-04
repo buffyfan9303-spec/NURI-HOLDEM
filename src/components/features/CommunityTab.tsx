@@ -89,6 +89,8 @@ type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 let lastCommunitySection: Section = 'venues';
 // 글쓰기 FAB 가 달라붙은 자리에서 이만큼 올라가면 '떠났다' — '맨 위로'(높이·자리 포함 윗변 ≈ 탭바 위 9rem)보다 충분히 위.
 const FAB_RISEN_PX = 120;
+// 위 기준에 더하는 '앞서보기' — 방금 프레임 스크롤 거리 × 이 값. scroll 이벤트·렌더가 한두 프레임 늦는 것을 덮는다.
+const FAB_LEAD_FRAMES = 2;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
@@ -146,32 +148,50 @@ function CommunityTab({
   //
   // 피드 끝에서 FAB 가 '마지막 글 아래'로 올라가 자리를 떠나면(오너 2026-10-04) '맨 위로'는 혼자 비켜선 채 남지 않고 다른 화면과 같은
   // 오른쪽 기둥(x 330.5@390)으로 돌아간다(M5-03). 신호 = 게시판이 보이고 **FAB 가 떠 있는 동안**.
-  // 돌아가는 기준은 FAB 가 제자리에서 FAB_RISEN_PX 이상 올라간 때 — '맨 위로' 윗변 위로 완전히 벗어난 뒤라 두 버튼이 같은 기둥에서
-  // 겹치거나 누름을 가로채지 않는다(첫 판 P1 의 원인은 FAB 와 같은 기둥에서 비켜서기만 한 것).
+  //
+  // 규칙(PR #171 독립 검증 P3, 2026-10-05): **두 버튼이 세로로 겹칠 수 있는 동안 '맨 위로'는 가로로 움직이지 않는다.**
+  //   ① 판정은 scroll 이벤트 안에서 칸의 실제 위치로 **동기** 한다(예전엔 관찰자 콜백→React 상태→속성이라 8프레임 늦었다).
+  //   ② 오른쪽 기둥으로 보내는 기준 = FAB 가 FAB_RISEN_PX 이상 올라감 + 방금 프레임에 스크롤한 거리 × FAB_LEAD_FRAMES.
+  //      빨리 튕길수록 기준이 멀어져 '확실히 멀리 떠난 뒤'에만 돌아간다(feed 끝 여유는 ~142px 라 ≥15px/프레임에선 끝까지 왼쪽에 머문다 — 왼쪽은 어디서나 안전).
+  //   ③ 왼쪽으로 가는 것은 CSS 가 **전환 없이 즉시**(index.css 규칙) — 오른쪽 기둥에서 미끄러지는 동안 FAB 가 돌아와 겹치는 구간이 없다.
+  //   ④ 스크롤이 멈추면 120ms 뒤 속도 0 으로 다시 판정한다(멈춘 자리에서 돌아가야 하는 경우).
   const boardFab = active && section === 'board';
-  const [fabRisen, setFabRisen] = useState(false);
   useEffect(() => {
-    if (!boardFab || typeof IntersectionObserver === 'undefined') { setFabRisen(false); return; }
-    const slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
-    // 달라붙은 자리의 bottom(px) — env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC) 이면 NaN → 신호 유지.
-    const stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
-    if (!slot || !Number.isFinite(stuck)) { setFabRisen(false); return; }
-    // 칸 맨 아랫변이 (달라붙은 자리 + FAB_RISEN_PX) 위로 올라오면 '떠남'. 센티넬 요소를 따로 두지 않는다(space-y 여백이 끼어든다).
-    // 임계 0·1 — 칸이 뷰포트 위로 완전히 나가도(ratio 1→0) 아랫변 비교가 그대로라 상태가 뒤집히지 않는다.
-    // ponytail: 달라붙은 bottom 은 관찰 시작 때 한 번만 잰다(safe-area 가 도중에 바뀌는 회전은 다음 섹션 진입 때 갱신).
-    const ob = new IntersectionObserver((es) => {
-      const e = es[es.length - 1];
-      if (e.boundingClientRect.height === 0 || !e.rootBounds) { setFabRisen(false); return; }
-      setFabRisen(e.boundingClientRect.bottom <= e.rootBounds.bottom);
-    }, { rootMargin: `0px 0px -${Math.round(stuck + FAB_RISEN_PX)}px 0px`, threshold: [0, 1] });
-    ob.observe(slot);
-    return () => ob.disconnect();
+    const root = document.documentElement;
+    if (!boardFab) { root.removeAttribute('data-board-fab'); return; }
+    let lastY = window.scrollY;
+    let settle = 0;
+    const sync = (dy: number) => {
+      const slot = document.querySelector<HTMLElement>('[data-board-fab-slot]');
+      // 달라붙은 자리의 bottom(px) — env() 가 계산된 값이라 CSS 와 어긋나지 않는다. display:none(PC)·칸 없음 → 들림 0 → 신호 유지.
+      const stuck = slot ? parseFloat(getComputedStyle(slot).bottom) : NaN;
+      const r = slot?.getBoundingClientRect();
+      const lift = r && r.height > 0 && Number.isFinite(stuck) ? root.clientHeight - stuck - r.bottom : 0;
+      root.toggleAttribute('data-board-fab', !(lift > FAB_RISEN_PX + FAB_LEAD_FRAMES * dy));
+    };
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = Math.abs(y - lastY);
+      lastY = y;
+      sync(dy);
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => sync(0), 120);
+    };
+    const onLayout = () => { lastY = window.scrollY; sync(0); };
+    sync(0);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onLayout);
+    // 스크롤 없이 문서 높이만 바뀌는 경우(글 로드·접기)에도 칸 위치가 바뀐다.
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onLayout);
+    ro?.observe(root);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onLayout);
+      ro?.disconnect();
+      window.clearTimeout(settle);
+      root.removeAttribute('data-board-fab');
+    };
   }, [boardFab]);
-  const boardFabSignal = boardFab && !fabRisen;
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-board-fab', boardFabSignal);
-    return () => document.documentElement.removeAttribute('data-board-fab');
-  }, [boardFabSignal]);
   // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
   // 헤더 높이도 같이 저장한다: 인플로우 sticky 헤더가 축소/복원되면 그 차이만큼 스크롤 앵커링이 scrollY 를 되민다
   // (lib/headerShrink 주석·실측). 복원 목표값은 restoreScrollTop 이 그 되밀림을 고려해 정한다.

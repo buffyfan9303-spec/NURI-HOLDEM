@@ -54,13 +54,23 @@ describe('게시판 글쓰기 FAB 는 탭바 바로 위 오른쪽에 선다', ()
   });
 
   it("게시판에서 '맨 위로'가 FAB 왼쪽 같은 줄로 비켜선다 — 신호와 규칙이 짝으로 있다", () => {
-    expect(TAB).toMatch(/toggleAttribute\('data-board-fab', boardFabSignal\)/);
     expect(TAB).toMatch(/const boardFab = active && section === 'board'/);
     // M5-03: 신호는 '게시판이 보임' 만이 아니라 'FAB 가 떠 있음' — 피드 끝에서 FAB 가 올라가 자리를 떠나면 '맨 위로'가 원래 기둥으로 돌아온다
-    expect(TAB).toMatch(/const boardFabSignal = boardFab && !fabRisen/);
-    expect(TAB).toMatch(/new IntersectionObserver\([\s\S]*?rootMargin: `0px 0px -\$\{Math\.round\(stuck \+ FAB_RISEN_PX\)\}px 0px`/);
-    expect(TAB).toMatch(/e\.boundingClientRect\.bottom <= e\.rootBounds\.bottom/);
-    const rule = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transform: ([^;]+); \} \}/)?.[1] ?? '';
+    // PR #171 P3: 판정은 scroll 이벤트 안에서 칸의 실제 위치로 **동기** 한다(IO→React 상태 경로는 8프레임 늦어 빠른 플링에서 겹쳤다).
+    //   오른쪽 기둥 복귀 기준 = FAB_RISEN_PX + 방금 프레임 스크롤 거리 × FAB_LEAD_FRAMES (빨리 튕길수록 더 멀리 떠난 뒤에만)
+    const block = TAB.slice(TAB.indexOf('const boardFab = active'), TAB.indexOf('}, [boardFab]);'));
+    expect(block.length, '신호 effect 블록을 못 찾았다').toBeGreaterThan(200);
+    expect(block).not.toMatch(/IntersectionObserver/);
+    expect(TAB).not.toMatch(/setFabRisen/);
+    expect(TAB).toMatch(/window\.addEventListener\('scroll', onScroll, \{ passive: true \}\)/);
+    expect(TAB).toMatch(/const lift = r && r\.height > 0 && Number\.isFinite\(stuck\) \? root\.clientHeight - stuck - r\.bottom : 0/);
+    expect(TAB).toMatch(/root\.toggleAttribute\('data-board-fab', !\(lift > FAB_RISEN_PX \+ FAB_LEAD_FRAMES \* dy\)\)/);
+    expect(TAB).toMatch(/const FAB_LEAD_FRAMES = [2-9]/);
+    expect(TAB).toMatch(/settle = window\.setTimeout\(\(\) => sync\(0\), \d+\)/);   // 멈춘 자리에서 속도 0 으로 다시 판정
+    const m = CSS.match(/@media \(max-width: 1023\.98px\) \{ html\[data-board-fab\] \.scroll-top-fab \{ transition: ([^;]+); transform: ([^;]+); \} \}/);
+    // 왼쪽(FAB 옆)으로 가는 움직임은 즉시여야 한다 — transform 전환이 남으면 미끄러지는 동안 FAB 와 겹친다
+    expect(m?.[1] ?? '', "게시판 '맨 위로' 규칙의 transition 은 opacity 만이다").toMatch(/^opacity [^,]+$/);
+    const rule = m?.[2] ?? '';
     expect(rule, "게시판 '맨 위로' 규칙을 못 찾았다").not.toBe('');
     // 옆 칸: 가로로 FAB 지름(3rem)+간격만큼 왼쪽 — 세로로만 비키면 피드 끝에서 sticky FAB 가 쓸려 올라와 겹친다(PR #155 P1)
     expect(rule).toMatch(/^translate\(-3\.5rem, /);

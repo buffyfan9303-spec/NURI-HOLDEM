@@ -831,7 +831,9 @@ video {
      위로 비켜서기(PR #155 첫 판)는 피드 끝에서 sticky FAB 가 위로 쓸려 올라오며 겹쳐 FAB 중심 누름을 가로챘다(독립 검토 P1) — 옆 칸이면 세로로 어디를 지나도 안 겹친다.
      가로 = FAB 지름 3rem + 간격 0.5rem. 세로 = 두 버튼 세로 중심 맞춤: (5.75rem + max(safe,12px) + 1.25rem) − (4.75rem + min(safe,0.5rem) + 1.5rem).
      탭바 숨김 때도 내려가지 않는다(FAB 도 안 내려간다). 다른 화면·PC 는 위 규칙 그대로. */
-  @media (max-width: 1023.98px) { html[data-board-fab] .scroll-top-fab { transform: translate(-3.5rem, calc(0.75rem + max(env(safe-area-inset-bottom), 12px) - min(env(safe-area-inset-bottom), 0.5rem))); } }
+  @media (max-width: 1023.98px) { html[data-board-fab] .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); transform: translate(-3.5rem, calc(0.75rem + max(env(safe-area-inset-bottom), 12px) - min(env(safe-area-inset-bottom), 0.5rem))); } }
+  /* ↑ transition 에서 transform 을 뺀 것은 의도다(PR #171 P3): 왼쪽(FAB 옆)으로 가는 움직임은 **즉시** — 전환 중에 FAB 가 '맨 위로' 세로 범위로 들어와 겹치는 구간을 없앤다.
+     오른쪽 기둥으로 돌아갈 때는 이 규칙이 풀리며 위 기본 규칙의 0.32s 전환이 적용된다(FAB 는 멀어지는 중이라 겹치지 않는다). */
 
   /* ══ 아우라 테마 유틸 (모션 헌법 v2 §5·§6 · 오너 참조 'Aura Health AI' 2026-09-02) ═══════════════
      .glass-strong — 유리 크롬(맨 .glass 는 호출부 0 이라 2026-09-29 삭제). 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
