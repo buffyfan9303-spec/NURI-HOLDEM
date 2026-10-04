@@ -5,6 +5,12 @@
 //
 // 음성 대조: ledger.ts isRevenueReduction 의 비교를 `n[0] < o[0]` 하나로 줄이면 🔴 표시 5건이 실패한다
 //   (이용권 가불 전환 · 이용권 행 할인 · 분납 이용권 축소 · 미수 탕감 · 분납 통로) — 2026-09-24 실측 5 failed | 20 passed.
+// 2026-10-04(오너 F4-02) — 완납→미수(이용권→가불 포함)는 통과로 바뀌었다. toUnpaidOnly 를 지우면 '10-04 통과' 🔴 2건이,
+//   이용권 몫 조건(n[1]-n[0] <= o[1]-o[0])을 지우면 '현금 → 이용권 2T + 미수' 가, 받을 가치 조건을 지우면 '할인 자리' 가 빨개진다.
+// 2026-10-04 v2('같은 결제 수단으로만 자유') — ② 이용권 몫 증가 조건을 지우면 '분납 우회' 가(비분납 '두 단계 우회' 는 ③도 막는다 — 겹친 방어),
+//   ③ 분류 변경 조건을 지우면 '이용권 → 현금'·'티켓 가불 → 현금'·'가게지원 → 현금' 이 빨개진다.
+// 2026-10-04 v3(상태량: 받을 가치 v · 현금성 몫 c) — c 조건을 지우면 '현금 → 이용권 2T + 미수'·'분납 우회' 가(K2 는 분류 조건이 겹쳐 막는다), v 조건을 지우면 '이용권 행 할인' 이(나머지 감액은 c 가 겹쳐 막는다),
+//   애드온 분류 조건을 지우면 '애드온 티켓 → 현금' 이 빨개진다.
 // 실행: npx vitest run src/api/ledger.reduce.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { buyinTiers, isRevenueReduction, REDUCE_NEEDS_PW, type LedgerBuyin } from './ledger';
@@ -40,18 +46,42 @@ describe('isRevenueReduction — 감액이면 비밀번호', () => {
     ['현금 → 카드(같은 금액)', cash, b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000 }), false],
     ['현금 → 이체(같은 금액)', cash, b({ paymentMethod: 'transfer', cashAmount: 0, transferAmount: 100_000 }), false],
     ['증액 10만 → 11만', cash, b({ cashAmount: 110_000 }), false],
-    ['완납 → 미수', cash, b({ isUnpaid: true }), true],
+    // 오너 2026-10-04 F4-02 — 완납 → 미수는 비밀번호 없이(받을 가치 그대로 · 줄어든 몫이 미수로만 간다). 예전(09-24)엔 감액이었다.
+    ['🔴 완납 → 미수(10-04 통과)', cash, b({ isUnpaid: true }), false],
     ['미수 → 완납', b({ isUnpaid: true }), cash, false],
     ['현금 → 이용권', cash, ticket, true],
-    ['이용권 → 현금', ticket, cash, false],
-    ['🔴 이용권 → 가불 이용권', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    // 10-04 v2(오너 '같은 결제 수단으로만 자유') — 분류가 바뀌면 늘어도 비밀번호.
+    ['🔴 이용권 → 현금(분류 변경 — v2 비밀번호)', ticket, cash, true],
+    ['🔴 이용권 → 가불 이용권(티켓 확인 늦음 — 10-04 통과)', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), false],
     ['가불 이용권 → 이용권(회수)', b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), ticket, false],
     ['🔴 이용권 행에 할인 자리(10T → 5T)', ticket, b({ paymentMethod: 'ticket', cashAmount: 0, discountIndex: 1 }), true],
     ['현금 할인 적용(스냅샷 10만 → 5만)', cash, b({ cashAmount: 50_000, discountIndex: 1 }), true],
-    ['🔴 분납 이용권 5T → 3T + 미수 2만', split, b({ isSplit: true, cashAmount: 50_000, ticketCount: 3, unpaidAmount: 20_000 }), true],
+    ['분납 이용권 5T → 3T + 미수 2만(줄어든 몫이 미수로만 — 10-04 통과)', split, b({ isSplit: true, cashAmount: 50_000, ticketCount: 3, unpaidAmount: 20_000 }), false],
+    ['🔴 현금 → 이용권 2T + 미수 8만(이용권 몫이 늘었다 — 감액)', cash, b({ isSplit: true, cashAmount: 0, ticketCount: 2, unpaidAmount: 80_000 }), true],
+    ['🔴 완납 → 미수 + 할인 자리(받을 가치가 줄었다 — 감액)', cash, b({ cashAmount: 50_000, discountIndex: 1, isUnpaid: true }), true],
+    ['분납 현금 10만 → 현금 4만 + 미수 6만(10-04 통과)', b({ isSplit: true, cashAmount: 100_000 }), b({ isSplit: true, cashAmount: 40_000, unpaidAmount: 60_000 }), false],
     ['분납 현금 6만+미수 4만 → 현금 10만', b({ isSplit: true, cashAmount: 60_000, unpaidAmount: 40_000 }), b({ isSplit: true, cashAmount: 100_000 }), false],
     ['🔴 분납 미수 4만 탕감', b({ isSplit: true, cashAmount: 60_000, unpaidAmount: 40_000 }), b({ isSplit: true, cashAmount: 60_000 }), true],
     ['분납 → 비분납 현금 같은 금액', b({ isSplit: true, cashAmount: 100_000 }), cash, false],
+    // v2 — critical 반증(R2 B·C): 두 단계로 나눠도 현금 → 이용권은 비밀번호
+    ['🔴 현금 미수 → 티켓 완납(두 단계 우회 2단계 — v2 비밀번호)', b({ isUnpaid: true }), ticket, true],
+    ['🔴 분납 현금 0 + 미수 5만 + 5T → 10T(분납 우회 2단계 — v2 비밀번호)', b({ isSplit: true, cashAmount: 0, ticketCount: 5, unpaidAmount: 50_000 }), b({ isSplit: true, cashAmount: 0, ticketCount: 10 }), true],
+    ['🔴 티켓 가불 → 현금 완납(분류 변경 — v2 비밀번호)', b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), cash, true],
+    ['🔴 가게지원 → 현금(분류 변경 — v2 비밀번호)', b({ paymentMethod: 'support', cashAmount: 0 }), cash, true],
+    ['현금 미수 → 카드 완납(같은 현금성 — 자유)', b({ isUnpaid: true }), b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000 }), false],
+    ['분납 현금 4만 + 미수 6만 → 비분납 현금 10만(미수 회수 — 자유)', b({ isSplit: true, cashAmount: 40_000, unpaidAmount: 60_000 }), cash, false],
+    // v3 — critical 재반증 K(분납을 징검다리로 쓴 세 단계): 현금 완납 → 분납 미수 10만(자유) → 티켓 가불(비밀번호) → 티켓 완납(자유)
+    ['K1 현금 완납 → 분납 미수 10만(현금성 몫 그대로 — 자유)', cash, b({ isSplit: true, cashAmount: 0, unpaidAmount: 100_000 }), false],
+    ['🔴 K2 분납 미수 10만 → 비분납 티켓 가불(현금성 몫 10만 → 0 — v3 비밀번호)', b({ isSplit: true, cashAmount: 0, unpaidAmount: 100_000 }), b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    ['🔴 분납 이용권 5T + 현금 5만 → 비분납 티켓 10T(분납 → 티켓 — v3 비밀번호)', split, ticket, true],
+    ['🔴 현금 미수 → 카드 미수 → 티켓 가불 의 2단계(L2 — 비밀번호)', b({ paymentMethod: 'card', cashAmount: 0, cardAmount: 100_000, isUnpaid: true }), b({ paymentMethod: 'ticket', cashAmount: 0, isUnpaid: true }), true],
+    // v3 — 애드온도 같은 규칙(리드 결정 2)
+    ['🔴 애드온 현금 → 티켓(현금성 몫 감소 — 비밀번호)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'ticket', addonUnpaid: false, addonAmount: 50_000 }), true],
+    ['🔴 애드온 제거(받을 가치 감소 — 비밀번호)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: null, addonUnpaid: false, addonAmount: 0 }), true],
+    ['🔴 애드온 티켓 → 현금(분류 변경 — 비밀번호)', b({ addonMethod: 'ticket', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), true],
+    ['애드온 현금 완납 ↔ 미수(같은 수단 — 자유)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'cash', addonUnpaid: true, addonAmount: 50_000 }), false],
+    ['애드온 현금 → 카드(같은 현금성 — 자유)', b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), b({ addonMethod: 'card', addonUnpaid: false, addonAmount: 50_000 }), false],
+    ['새 애드온 추가(증액 — 자유)', cash, b({ addonMethod: 'cash', addonUnpaid: false, addonAmount: 50_000 }), false],
     ['얼리만 변경', cash, b({ earlyOverride: 'double' }), false],
     ['레거시(금액 미저장) 행에 할인', b({ cashAmount: 0, buyinAt: '2026-08-01T00:00:00Z' }), b({ cashAmount: 0, buyinAt: '2026-08-01T00:00:00Z', discountIndex: 1 }), true],
   ];
@@ -112,6 +142,13 @@ describe('upsertBuyin 수정 경로 — 감액은 직접 UPDATE 하지 않는다
     expect(m.calls.rpc).toEqual([]);
   });
 
+  it('🔴 완납 → 미수(오너 10-04)는 비밀번호 없이 직접 UPDATE — 비밀번호 시트로 가지 않는다', async () => {
+    const m = mock(); const { upsertBuyin } = await load(m);
+    await upsertBuyin({ ...base, paymentMethod: 'cash', isUnpaid: true, reduce: { before: cash, session: S } });
+    expect(m.calls.update).toBe(1);
+    expect(m.calls.rpc).toEqual([]);
+  });
+
   it('서버 가드가 hint 로 거절하면 같은 REDUCE_NEEDS_PW 로 바꾼다(클라 판정과 갈려도 비밀번호 시트로 간다)', async () => {
     const m = mock({ updateError: { message: '매출이 줄어드는 수정은 업주 취소 비밀번호가 필요합니다', code: '42501', hint: REDUCE_NEEDS_PW } });
     const { upsertBuyin } = await load(m);
@@ -119,10 +156,11 @@ describe('upsertBuyin 수정 경로 — 감액은 직접 UPDATE 하지 않는다
       .rejects.toThrow(REDUCE_NEEDS_PW);
   });
 
-  it('🔴 분납 이용권 축소도 같은 통로', async () => {
+  // 10-04: 예전 사례(이용권 5T → 3T + 미수 2만)는 '완납 → 미수' 라 이제 통과다 — 여전히 감액인 분납(할인 자리 추가)으로 통로를 본다.
+  it('🔴 분납 감액(할인 자리 추가)도 같은 통로', async () => {
     const m = mock(); const { upsertBuyinSplit } = await load(m);
     await expect(upsertBuyinSplit({ venueId: 'v', sessionDate: '2026-09-24', playerName: 'p', entryNo: 1, existingId: 't',
-      cashAmount: 50_000, cardAmount: 0, transferAmount: 0, ticketCount: 3, unpaidAmount: 20_000,
+      cashAmount: 0, cardAmount: 0, transferAmount: 0, ticketCount: 5, unpaidAmount: 0, discountIndex: 1,
       reduce: { before: split, session: S } })).rejects.toThrow(REDUCE_NEEDS_PW);
     expect(m.calls.update).toBe(0);
   });

@@ -2454,15 +2454,21 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           onSetAddon={async (addon) => {
             if (!selected.buyin) return;
             setPayBusy(true);
+            const amount = session.addonAmount ?? 0;
+            const buyinId = selected.buyin.id;
+            // 20261004e v3 — 애드온 제거·수단 분류 변경은 비밀번호(서버 hint → REDUCE_NEEDS_PW). 비밀번호를 받으면 같은 값을 비밀번호 RPC 로.
+            const save = (pw?: string) => setBuyinAddon(buyinId, addon ? { ...addon, amount } : null, pw);
             try {
-              const amount = session.addonAmount ?? 0;
-              await setBuyinAddon(selected.buyin.id, addon ? { ...addon, amount } : null);
+              await save();
               toast.show(addon ? '애드온을 기록했습니다' : '애드온을 지웠습니다', 'success');
               setSelected((cur) => cur && cur.buyin ? { ...cur, buyin: { ...cur.buyin,
                 addonMethod: addon?.method ?? null, addonUnpaid: !!addon?.unpaid, addonAmount: addon ? amount : 0 } } : cur);
               reload();
             }
-            catch (e) { toast.show(ledgerErrorText(e, '애드온 저장 실패'), 'error', { durationMs: 7000 }); }
+            catch (e) {
+              if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
+              else toast.show(ledgerErrorText(e, '애드온 저장 실패'), 'error', { durationMs: 7000 });
+            }
             finally { setPayBusy(false); }
           }}
           onSetEarly={async (override) => {
@@ -3787,11 +3793,11 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   return (
     <Modal open onClose={onClose} title={`${cell.entryNo}바인 · ${cell.playerName}`} variant="center" maxWidth="md">
         <div className="p-3 space-y-2">
-          {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·미수 전환처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다 */}
+          {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·결제 수단 분류 변경(현금 ↔ 이용권, 미수를 거쳐도)은 취소 비밀번호로만 저장된다. 같은 수단의 완납 ↔ 미수는 비밀번호 없이(오너 2026-10-04 F4-02 v2) */}
           {reduceAsk && onReduceConfirm && (
             <div role="alert" data-testid="ledger-reduce-pw" className="space-y-1.5 rounded-input border border-danger/40 bg-danger/10 px-2.5 py-2">
               <p className="text-2xs font-bold text-danger-light">
-                매출이 줄어드는 수정입니다. 업주 취소 비밀번호를 입력하세요.
+                매출이 줄거나 결제 수단 분류(현금·이용권·가게지원)가 바뀌는 수정입니다. 업주 취소 비밀번호를 입력하세요.
               </p>
               <PwConfirm hasPw={hasPw} label="수정 확정" busy={busy} onConfirm={onReduceConfirm} />
             </div>
