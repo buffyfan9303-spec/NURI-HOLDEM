@@ -87,7 +87,8 @@ const PRELOAD: Partial<Record<ToolKey, () => void>> = {
  *  실측(2026-10-04 로컬 프리뷰, 판 보이자마자 누름): 청크 도착 15~280ms · 병렬 e2e 부하에서는 400ms 를 넘겨 폴백 13프레임. */
 const OPEN_WAIT_MS = 1000;
 function whenToolReady(k: ToolKey, run: () => void): void {
-  const pre = LAZY_TOOL[k];
+  // k 는 URL 해시에서 올 수 있다 — 자기 키만 본다('constructor' 같은 원형 키로 엉뚱한 함수를 부르지 않게, CodeQL js/unvalidated-dynamic-method-call).
+  const pre = Object.hasOwn(LAZY_TOOL, k) ? LAZY_TOOL[k] : undefined;
   if (!pre) { run(); return; }
   let done = false;
   const go = () => { if (done) return; done = true; run(); };
