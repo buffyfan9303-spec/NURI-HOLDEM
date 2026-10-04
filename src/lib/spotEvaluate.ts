@@ -40,7 +40,9 @@ export const COVERAGE_LABEL: Record<CoverageKind, string> = {
   exact_solver: '솔버 기준',
   chart_nash: '차트/Nash 기준',
   normalized_reference: '유사 스팟 참고',
-  math_only: '수학 참고',
+  // 오너 2026-10-04: '수학 참고' 는 한국 사용자가 아무도 모르는 말이라 배지를 뺐다. 빈 문자열 = 화면에 배지를 그리지 않는다
+  // (판정 로직·저장 값 coverage_kind='math_only' 는 그대로). 표시하는 쪽은 라벨이 비면 건너뛴다.
+  math_only: '',
   unsupported: '정확한 분석 범위 밖',
 };
 
@@ -52,7 +54,7 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   mixed: '허용되는 혼합',
   improve: '개선 필요',
   reference: '유사 스팟 참고',
-  math: '수학 참고',
+  math: '',   // COVERAGE_LABEL.math_only 와 같은 이유 — 화면에 쓰지 않는다
   out_of_scope: '정확한 분석 범위 밖',
 };
 

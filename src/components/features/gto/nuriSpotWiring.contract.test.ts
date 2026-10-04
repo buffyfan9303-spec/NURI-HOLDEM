@@ -109,3 +109,17 @@ describe('빌런 B~E 배선', () => {
     expect(api).toMatch(/if \(!data\.reveal_villain\) \{ spot\.villain = \[\]; spot\.extra = spot\.extra\.map\(\(v\) => \(\{ \.\.\.v, cards: \[\] \}\)\); \}/);
   });
 });
+
+describe("🔴 '수학 참고' 배지는 화면에 나가지 않는다 (오너 2026-10-04)", () => {
+  // 판정(coverage_kind='math_only')은 그대로 돌고, 사용자에게 보이는 말만 없앴다.
+  it('라벨이 빈 coverage 는 내 스팟 행에 배지를 그리지 않는다', () => {
+    const list = readFileSync(join(__dirname, 'MySpotList.tsx'), 'utf-8');
+    expect(list, '라벨이 비어도 빈 배지 칸을 그린다').toMatch(/COVERAGE_LABEL\[r\.coverageKind\] && <span/);
+  });
+  it("math_only 라벨은 빈 문자열이고 spotEvaluate 에 '수학 참고' 화면 문구가 없다", () => {
+    const ev = readFileSync(join(__dirname, '../../../lib/spotEvaluate.ts'), 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(ev, "COVERAGE_LABEL 에 '수학 참고' 문구가 되살아났다").not.toContain('수학 참고');
+    expect(ev).toMatch(/math_only: '',/);
+  });
+});

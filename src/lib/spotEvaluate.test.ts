@@ -54,7 +54,8 @@ describe('솔버 데이터가 없다는 사실을 코드가 지킨다', () => {
     expect(COVERAGE_LABEL.exact_solver).toBe('솔버 기준');
     expect(COVERAGE_LABEL.chart_nash).toBe('차트/Nash 기준');
     expect(COVERAGE_LABEL.normalized_reference).toBe('유사 스팟 참고');
-    expect(COVERAGE_LABEL.math_only).toBe('수학 참고');
+    expect(COVERAGE_LABEL.math_only, '검증된 정답표가 없는 스팟은 배지를 그리지 않는다(빈 라벨)').toBe('');
+    expect(VERDICT_LABEL.math).toBe('');
     expect(COVERAGE_LABEL.unsupported).toBe('정확한 분석 범위 밖');
     expect(VERDICT_LABEL.good).toBe('좋은 선택');
     expect(VERDICT_LABEL.mixed).toBe('허용되는 혼합');
