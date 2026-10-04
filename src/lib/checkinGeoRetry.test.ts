@@ -52,11 +52,11 @@ describe('② 시트 문구', () => {
     expect(checkinGeoRetryCopy('denied', CHROME).hint).toMatch(/권한 → 위치/);
     expect(checkinGeoRetryCopy('timeout', CHROME).hint).toBeNull();
   });
-  it('모든 사유에 대체 경로(직원에게 출석 처리 요청)를 붙인다 — 이 시트는 위치 확인 출석 매장에서만 뜬다(오너 결정 (다)-(a) · critical L1)', () => {
+  it('모든 사유에 대체 경로(출석 요청 → 업주 승인)를 붙인다 — 이 시트는 위치 확인 출석 매장에서만 뜬다(오너 결정 (다)-(a) · critical L1)', () => {
     for (const c of [...CODES, 'consent' as const]) {
       const copy = checkinGeoRetryCopy(c, CHROME);
-      expect(copy.alt).toBe(`동의하기 어렵거나 위치를 켤 수 없으면 ${CHECKIN_ALT_PATH}`);
-      expect(copy.alt).toMatch(/매장 직원에게 출석 처리를 요청할 수 있습니다$/);
+      expect(copy.alt).toBe(`동의하기 어렵거나 위치를 켤 수 없어도 ${CHECKIN_ALT_PATH}`);
+      expect(copy.alt).toMatch(/매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다$/);
     }
     expect(checkinGeoRetryCopy('consent', CHROME)).toMatchObject({ reason: expect.stringMatching(/위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다/), action: '동의하고 출석' });
     expect(checkinGeoRetryCopy('denied', CHROME).action).toBe('위치 확인 후 출석');

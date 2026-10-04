@@ -178,7 +178,7 @@ export default function CheckinLocationSection({ venueId, canToggleGeo = false }
         <p className="text-2xs leading-relaxed text-ink-muted">
           켜면 손님이 이 매장 QR로 출석할 때 위치정보 이용 동의를 받고 현재 위치를 한 번 확인합니다(좌표는 저장하지 않습니다).
           {' '}<b className="text-ink-secondary">{LOCATION_TERMS_EFFECTIVE_KO}부터</b>는 동의하지 않거나 위치를 확인할 수 없는 손님은 <b className="text-ink-secondary">스스로 출석할 수 없습니다</b>(QR 스캔·매장 페이지 출석 버튼·앱 카메라){isGeoRequiredNow() ? '' : '(그 전에는 출석은 되고 위치만 확인합니다)'}.
-          {' '}그런 손님은 대시보드 「출석·QR 명단」에서 <b className="text-ink-secondary">직접 출석 처리</b>해 주세요(출석과 같은 활동 점수·연속 출석·방문 기록이 쌓입니다).
+          {' '}그런 손님은 앱에서 출석 요청을 보내니, 대시보드 「출석·QR 명단」에서 <b className="text-ink-secondary">출석 요청을 승인</b>해 주세요(출석과 같은 활동 점수·연속 출석·방문 기록이 쌓입니다).
         </p>
         {!canToggleGeo && <p data-testid="checkin-geo-required-owner-only" className="text-2xs text-ink-muted">위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다.</p>}
         {canToggleGeo && !has && spot != null && <p className="text-2xs text-ink-muted">출석 위치를 먼저 등록해야 켤 수 있습니다.</p>}

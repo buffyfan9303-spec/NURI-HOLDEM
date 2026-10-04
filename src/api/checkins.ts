@@ -102,13 +102,37 @@ export async function setVenueCheckinGeoRequired(venueId: string, on: boolean): 
   return data === true;
 }
 
-/** 매장 직원(대표·승인 공동 운영자·관리자 = can_manage_pos)이 손님을 지정해 출석 처리(staff_check_in, 20261004d critical L1).
+/** 업주(대표·승인 공동 운영자·관리자 = can_manage_pos)가 손님의 출석 요청을 승인(staff_check_in, 20261004d v3 · 오너 B 2026-10-05).
+ *  서버는 오늘 이 매장에 출석 요청(대기) 또는 참가 신청을 보낸 손님만 받는다 — 아무 회원이나 출석시킬 수 없다.
  *  손님 QR 출석과 같은 혜택(_apply_checkin)·같은 4시간 중복 가드. 위치를 쓰지 않는다. 오류는 원본 그대로 던진다(msgOf 분류용). */
 export async function staffCheckIn(venueId: string, userId: string): Promise<CheckInResult> {
   if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
   const { data, error } = await supabase.rpc('staff_check_in', { p_venue_id: venueId, p_user_id: userId });
   if (error) throw error;
   return normalizeCheckInResult(data);
+}
+
+/** 손님: 위치 확인 출석 매장에서 '출석 요청'(request_checkin, 20261004d v3). 1일 1매장 1회 — 이미 보냈으면 already=true 로 그 상태를 돌려준다.
+ *  오류(위치 확인 안 켠 매장·이미 출석·하루 5곳 초과·제재)는 원본 그대로 던진다. */
+export async function requestCheckin(venueId: string): Promise<{ status: 'pending' | 'approved'; already: boolean; name: string }> {
+  if (IS_MOCK) return { status: 'pending', already: false, name: '데모 매장' };
+  const { data, error } = await supabase.rpc('request_checkin', { p_venue_id: venueId });
+  if (error) throw error;
+  const o = (data ?? {}) as { status?: unknown; already?: unknown; name?: unknown };
+  return { status: o.status === 'approved' ? 'approved' : 'pending', already: o.already === true, name: typeof o.name === 'string' ? o.name : '' };
+}
+
+export interface CheckinRequest { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
+
+/** 업주: 오늘(KST) 이 매장에 들어온 대기 중 출석 요청. RLS(checkin_requests_select = 본인 또는 can_manage_pos)가 막는다.
+ *  조회 실패는 던진다 — '요청 없음'과 '못 읽음'을 화면이 구별한다(R1-3 과 같은 이유). */
+export async function listCheckinRequests(venueId: string): Promise<CheckinRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('checkin_requests').select('id, venue_id, user_id, display_name, created_at')
+    .eq('venue_id', venueId).eq('request_date', kstToday()).eq('status', 'pending').order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, displayName: r.display_name ?? null, createdAt: r.created_at }));
 }
 
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {
@@ -147,5 +171,9 @@ export function subscribeCheckins(venueId: string, cb: () => void): () => void {
   const ch = supabase.channel(`checkins:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `venue_id=eq.${venueId}` }, () => cb())
     .subscribe();
-  return () => { supabase.removeChannel(ch); };
+  // 출석 요청(20261004d v3)은 **다른 채널** — 표가 아직 없는 DB(마이그레이션 전)에서 요청 구독이 실패해도 출석 구독은 살아 있게.
+  const rq = supabase.channel(`checkin_requests:${venueId}:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkin_requests', filter: `venue_id=eq.${venueId}` }, () => cb())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); supabase.removeChannel(rq); };
 }

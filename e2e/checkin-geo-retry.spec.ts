@@ -63,7 +63,7 @@ test('🔴 G1 — 동의했는데 위치 권한 차단 → 재시도 시트 없�
 test('🔴 G3 — 시행일 뒤 켠 매장: 위치 권한 차단 + 서버 geo_position_required → 재시도 시트(사유·대체 경로) → 허용 후 재시도로 출석', async ({ page }) => {
   test.setTimeout(60_000);
   const calls = await setup(page,
-    { status: 200, body: { code: 'geo_position_required', error: '위치 확인 출석 매장이라 현재 위치를 확인해야 이 매장에서 출석할 수 있습니다. 위치를 켤 수 없으면 매장 직원에게 출석 처리를 요청할 수 있습니다' } },
+    { status: 200, body: { code: 'geo_position_required', error: '위치 확인 출석 매장이라 현재 위치를 확인해야 이 매장에서 출석할 수 있습니다. 위치를 켤 수 없어도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다' } },
     { status: 200, body: { name: '검증 홀덤', points: 3, streak: 1 } });
   await page.addInitScript(() => {
     const w = window as unknown as { __geoDeny: boolean };
@@ -83,7 +83,7 @@ test('🔴 G3 — 시행일 뒤 켠 매장: 위치 권한 차단 + 서버 geo_po
   const sheet = page.getByTestId('checkin-geo-retry');
   await expect(sheet, '서버가 위치 없이 거부했는데 재시도 시트가 안 떴다').toBeVisible({ timeout: 10_000 });
   await expect(sheet).toContainText('위치 권한을 허용해야 출석할 수 있습니다');
-  await expect(page.getByTestId('checkin-geo-retry-alt')).toContainText('매장 직원에게 출석 처리를 요청할 수 있습니다');
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toContainText('매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
   await expect(page.getByTestId('checkin-geo-retry-btn')).toHaveText('위치 확인 후 출석');
   await expect(page.getByText('출석 완료!', { exact: false }), '거부됐는데 출석 완료 토스트').toHaveCount(0);
   await page.evaluate(() => { (window as unknown as { __geoDeny: boolean }).__geoDeny = false; });
@@ -103,4 +103,32 @@ test('🔴 G2 — 위치는 얻었는데 서버가 거부 → 시트 없이 서�
   await expect(page.getByText('매장에서 너무 멀어요')).toBeVisible();
   await page.waitForTimeout(500);
   await expect(page.getByTestId('checkin-geo-retry'), '서버 거부인데 위치 시트가 떴다').toHaveCount(0);
+});
+
+// 오너 B(2026-10-05) — 재시도 시트의 '출석 요청 보내기' = request_checkin(매장 id 만) → 안내 토스트. 출석(check_in)은 더 나가지 않는다.
+// 음성 대조(2026-10-05): App.tsx 의 버튼 onClick 에서 requestCheckin(v) 호출을 빼면 G4 가 빨개진다(요청 0회).
+test('🔴 G4 — 동의 안 한 손님: 재시도 시트의 「출석 요청 보내기」 → request_checkin 1회(매장 id 만) · 승인 대기 안내 · 출석 재호출 없음', async ({ page }) => {
+  test.setTimeout(60_000);
+  const calls = await setup(page,
+    { status: 200, body: { code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다' } });
+  const req: unknown[] = [];
+  await page.route(/\/rest\/v1\/rpc\/request_checkin/, (r) => {
+    req.push(JSON.parse(r.request().postData() ?? '{}'));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'pending', already: false, name: '검증 홀덤' }) });
+  });
+  // '동의 안 함' 기록자 — 시행일 전에는 다시 묻지 않고 좌표 없이 보낸다 → 서버(가짜)가 geo_consent_required → 재시도 시트
+  await page.route(/\/rest\/v1\/rpc\/get_my_location_consent/, (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: 'denied', terms_version: 3 }) }));
+  await page.goto(`/?checkin=${VENUE}`);
+  await expect.poll(() => calls.length, { timeout: 20_000 }).toBe(1);
+  expect(calls[0]).toEqual({ p_venue_id: VENUE });
+  const sheet = page.getByTestId('checkin-geo-retry');
+  await expect(sheet).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toHaveText('동의하기 어렵거나 위치를 켤 수 없어도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
+  await page.getByTestId('checkin-geo-request-btn').click();
+  await expect.poll(() => req.length, { timeout: 10_000 }).toBe(1);
+  expect(req[0]).toEqual({ p_venue_id: VENUE });
+  await expect(page.getByText('출석 요청을 보냈습니다. 매장에서 승인하면 출석됩니다')).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  expect(calls, '출석 요청이 출석(check_in)을 또 보냈다').toHaveLength(1);
 });

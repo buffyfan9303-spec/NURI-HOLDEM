@@ -66,7 +66,7 @@ test('🔴 O1 업주 1440 — 좌표가 있으면 켜고 끈다(RPC 저장 → �
   await expect(page.getByTestId('checkin-geo-required-state')).toHaveText('꺼짐 — 손님에게 위치를 묻지 않습니다');
   await expect(sec).toContainText('2026년 11월 5일부터');
   await expect(sec).toContainText('스스로 출석할 수 없습니다(QR 스캔·매장 페이지 출석 버튼·앱 카메라)');
-  await expect(sec).toContainText('대시보드 「출석·QR 명단」에서 직접 출석 처리해 주세요');
+  await expect(sec).toContainText('대시보드 「출석·QR 명단」에서 출석 요청을 승인해 주세요');
   await expect(page.getByTestId('checkin-geo-required-owner-only'), '대표인데 대표 전용 안내가 떴다').toHaveCount(0);
   const box = await sw.boundingBox();
   expect(box!.height, '스위치 누름 높이 < 44px').toBeGreaterThanOrEqual(44);
@@ -104,15 +104,27 @@ test('🔴 O3 대표가 아닌 운영자(공동 운영자) — 스위치가 잠�
   expect(rpc, '잠긴 스위치가 RPC 를 불렀다').toEqual([]);
 });
 
-test('🔴 O4 업주 1440 — 「출석·QR 명단」에서 손님을 닉네임으로 찾아 출석 처리(staff_check_in) · 명단 재조회', async ({ page }) => {
+// 오너 B(2026-10-05) — 출석 처리 대상은 **손님이 보낸 출석 요청**에서만 고른다(전 회원 닉네임 검색 경로 없음).
+// 음성 대조(2026-10-05): CheckinModal 의 pendingCheckinRequests 호출을 `reqs` 그대로로 바꾸면 '이미 출석한 요청' 이 남아 O4 가 빨개진다.
+test('🔴 O4 업주 1440 — 「출석·QR 명단」의 출석 요청을 승인(staff_check_in) · 명단·요청 재조회 · 검색 경로 없음', async ({ page }) => {
   test.setTimeout(120_000);
-  const calls: { search: unknown[]; staff: unknown[]; listReads: number } = { search: [], staff: [], listReads: 0 };
+  const U1 = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const U2 = 'aaaaaaaa-0000-4000-8000-000000000002';
+  const reqAt = new Date(Date.now() - 10 * 60_000).toISOString();
+  const calls: { search: number; staff: unknown[]; listReads: number; reqReads: string[] } = { search: 0, staff: [], listReads: 0, reqReads: [] };
   let checkedIn = false;
   await bootOwner(page, {
     extra: async (p) => {
-      await p.route(/\/rest\/v1\/rpc\/search_voucher_recipients/, (r) => {
-        calls.search.push(r.request().postDataJSON());
-        return r.fulfill(json([{ user_id: 'aaaaaaaa-0000-4000-8000-000000000001', nickname: '위치거부손님', real_name: null, verified: false, matched: 'nickname', phone_masked: null }]));
+      await p.route(/\/rest\/v1\/rpc\/search_voucher_recipients/, (r) => { calls.search++; return r.fulfill(json([])); });
+      await p.route(/\/rest\/v1\/checkin_requests\?/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        calls.reqReads.push(r.request().url());
+        // U2 는 요청 뒤 이미 QR 로 출석했다 → 화면은 승인 대기에서 뺀다. U1 은 승인 전까지 대기, 승인 뒤 서버가 approved 로 바꾼다.
+        const rows = [
+          ...(checkedIn ? [] : [{ id: 'r1', venue_id: MOCK_VENUE, user_id: U1, display_name: '위치거부손님', created_at: reqAt }]),
+          { id: 'r2', venue_id: MOCK_VENUE, user_id: U2, display_name: '이미온손님', created_at: reqAt },
+        ];
+        return r.fulfill(json(rows));
       });
       await p.route(/\/rest\/v1\/rpc\/staff_check_in/, (r) => {
         calls.staff.push(r.request().postDataJSON());
@@ -122,7 +134,11 @@ test('🔴 O4 업주 1440 — 「출석·QR 명단」에서 손님을 닉네임�
       await p.route(/\/rest\/v1\/checkins\?/, (r) => {
         if (r.request().method() !== 'GET') return r.fallback();
         calls.listReads++;
-        return r.fulfill(json(checkedIn ? [{ id: 'c1', venue_id: MOCK_VENUE, user_id: 'aaaaaaaa-0000-4000-8000-000000000001', display_name: '위치거부손님', created_at: new Date().toISOString() }] : []));
+        const now = new Date().toISOString();
+        return r.fulfill(json([
+          { id: 'c2', venue_id: MOCK_VENUE, user_id: U2, display_name: '이미온손님', created_at: now },
+          ...(checkedIn ? [{ id: 'c1', venue_id: MOCK_VENUE, user_id: U1, display_name: '위치거부손님', created_at: now }] : []),
+        ]));
       });
     },
   });
@@ -130,17 +146,22 @@ test('🔴 O4 업주 1440 — 「출석·QR 명단」에서 손님을 닉네임�
   await expect(page.locator('[data-mystore-rail]').first(), '내 매장을 못 열었다').toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: '출석·QR 명단' }).click();
   const box = page.getByTestId('staff-checkin');
-  await expect(box, '손님 출석 처리 칸이 없다').toBeVisible({ timeout: 15_000 });
-  await page.getByTestId('staff-checkin-q').fill('위치거부');
-  await page.getByTestId('staff-checkin-search').click();
-  await expect(box).toContainText('위치거부손님');
-  expect(calls.search).toEqual([{ p_venue_id: MOCK_VENUE, p_q: '위치거부' }]);
+  await expect(box, '출석 요청 칸이 없다').toBeVisible({ timeout: 15_000 });
+  await expect(box.getByTestId('staff-checkin-req')).toHaveCount(1);
+  await expect(box.getByTestId('staff-checkin-req')).toContainText('위치거부손님');
+  await expect(box, '요청 뒤 이미 출석한 손님이 승인 대기에 남았다').not.toContainText('이미온손님');
+  await expect(box.getByRole('textbox'), '전 회원 검색 칸이 남았다').toHaveCount(0);
+  expect(calls.reqReads.some((u) => u.includes(`venue_id=eq.${MOCK_VENUE}`) && u.includes('status=eq.pending') && /request_date=eq\.\d{4}-\d{2}-\d{2}/.test(u)), '오늘·이 매장·대기 요청만 읽어야 한다').toBe(true);
   if (SHOT) await page.screenshot({ path: `${SHOT}/owner-staff-checkin.png` });
   const reads0 = calls.listReads;
-  await page.getByTestId('staff-checkin-do').click();
+  const req0 = calls.reqReads.length;
+  await box.getByRole('button', { name: '승인' }).click();
   await expect.poll(() => calls.staff.length).toBe(1);
-  expect(calls.staff[0]).toEqual({ p_venue_id: MOCK_VENUE, p_user_id: 'aaaaaaaa-0000-4000-8000-000000000001' });
+  expect(calls.staff[0]).toEqual({ p_venue_id: MOCK_VENUE, p_user_id: U1 });
   await expect(page.getByText('위치거부손님님 출석 처리 완료 · +3점')).toBeVisible();
-  await expect.poll(() => calls.listReads, { message: '출석 처리 뒤 오늘 명단을 다시 읽지 않았다' }).toBeGreaterThan(reads0);
-  await expect(page.getByText('오늘 방문 1명')).toBeVisible();
+  await expect.poll(() => calls.listReads, { message: '승인 뒤 오늘 명단을 다시 읽지 않았다' }).toBeGreaterThan(reads0);
+  await expect.poll(() => calls.reqReads.length, { message: '승인 뒤 요청 목록을 다시 읽지 않았다' }).toBeGreaterThan(req0);
+  await expect(page.getByText('오늘 방문 2명')).toBeVisible();
+  await expect(box.getByTestId('staff-checkin-empty')).toBeVisible();
+  expect(calls.search, '출석 처리에서 전 회원 검색 RPC 를 불렀다').toBe(0);
 });

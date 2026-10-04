@@ -50,7 +50,8 @@ describe('locationTerms — 서버·클라 단일 사실', () => {
     const codes = [...fnBody('check_in').matchAll(/'code', '([a-z_]+)'/g)].map((x) => x[1]).sort();
     expect(codes).toEqual(Object.keys(GEO_REQUIRED_CODES).sort());
     // 서버 문구에도 대체 경로가 들어 있다 — 옛 번들·다른 출석 경로(이용권 시트·매장 페이지)는 이 문구를 토스트로 보여 준다
-    expect(fnBody('check_in').match(/매장 직원에게 출석 처리를 요청할 수 있습니다/g)).toHaveLength(2);
+    expect(fnBody('check_in').match(/매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다/g)).toHaveLength(2);
+    expect(fnBody('check_in')).not.toMatch(/직원에게/);
     expect(fnBody('check_in')).not.toMatch(/참가를 요청/);
   });
 });
@@ -64,7 +65,7 @@ describe('개인정보처리방침 — 위치정보법 제21조의2 · 시행령
       expect(block, k).toContain(k);
     }
     expect(block).toMatch(/\$\{LOCATION_OFFICER\.name\} · 연락처 \$\{LOCATION_OFFICER\.contact\} · 전화 \$\{LOCATION_OFFICER\.phone\}/);
-    expect(block).toMatch(/\$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}\(직원이 처리한 출석도 같은/);
+    expect(block).toMatch(/\$\{LOCATION_TERMS_EFFECTIVE_KO\}부터 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}\(업주가 승인한 출석도 같은/);
     expect(block).toMatch(/보완 전\(\$\{LOCATION_TERMS_NOTICE\} 이전\) 처리방침 원문: https:\/\/nuriholdem\.com\$\{PRIVACY_PRE_LOCATION_ARCHIVE_URL\}/);
   });
   it('⑥ "현재 사용하지 않습니다" 옛 문구가 두 처리방침 어디에도 없다', () => {
@@ -115,7 +116,7 @@ describe('화면 문구 — 동의 시트·재시도 시트가 같은 사실을 
     expect(s).toMatch(/\{required \? '동의하지 않음' : '동의하지 않고 출석'\}/);
     expect(s).not.toMatch(/동의하지 않아도 출석할 수 있습니다/);
     // L1·L2·L3 표현 고정
-    expect(CHECKIN_ALT_PATH).toBe('매장 직원에게 출석 처리를 요청할 수 있습니다');
+    expect(CHECKIN_ALT_PATH).toBe('매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
     expect(CONSENT_NATURE).toBe('선택 동의 — 위치 확인 출석 매장의 출석에만 필요');
     expect(CHECKIN_SCOPE).toBe('그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)');
   });
@@ -136,16 +137,35 @@ describe('critical 반증 반영 — 권한·대체 경로·배너·보존본', 
     expect(st).toContain("public._audit('staff_check_in'");
     expect(st).toContain('public._apply_checkin(p_venue_id, p_user_id)');
     expect(st).toContain('p_user_id = auth.uid()');
-    expect(sql).toMatch(/revoke all on function public\.staff_check_in\(uuid, uuid\) from public, anon;\ngrant execute on function public\.staff_check_in\(uuid, uuid\) to authenticated, service_role;/);
+    // v3(오너 B 2026-10-05) — 오늘 이 매장의 출석 요청(대기)·참가 신청이 있는 손님만, 그리고 그 검사는 출석 기록보다 앞
+    expect(st).toMatch(/from public\.checkin_requests r\s+where r\.venue_id = p_venue_id and r\.user_id = p_user_id and r\.request_date = v_today and r\.status = 'pending'/);
+    expect(st).toMatch(/from public\.ledger_buyin_requests b\s+where b\.venue_id = p_venue_id and b\.user_id = p_user_id and b\.voucher_id is null/);
+    expect(st.indexOf('from public.checkin_requests r')).toBeLessThan(st.indexOf('v_res := public._apply_checkin'));
+    const rq = fnBody('request_checkin');
+    expect(rq).toContain("if v_geo is distinct from true then raise exception");
+    expect(rq).toContain("if v_cnt >= 5 then raise exception");
+    expect(rq).toContain("interval '4 hours'");
+    expect(sql).toContain('constraint checkin_requests_one_per_day unique (venue_id, user_id, request_date)');
+    expect(sql).toMatch(/revoke all on table public\.checkin_requests from public, anon, authenticated;\r?\ngrant select on table public\.checkin_requests to authenticated;/);
+    expect(sql).toMatch(/revoke all on function public\.request_checkin\(uuid\) from public, anon;\r?\ngrant execute on function public\.request_checkin\(uuid\) to authenticated, service_role;/);
+    expect(sql).toMatch(/revoke all on function public\.staff_check_in\(uuid, uuid\) from public, anon;\r?\ngrant execute on function public\.staff_check_in\(uuid, uuid\) to authenticated, service_role;/);
   });
-  it('⑬ 화면: 손님 출석 처리 — 검색(같은 권한) 뒤 staffCheckIn · 운영 권한(caps.manage)일 때만 그린다 · 늦은 응답 가드', () => {
+  it('⑬ 화면: 출석 요청 승인 — 요청 목록(같은 권한) 뒤 staffCheckIn · 운영 권한(caps.manage)일 때만 · 늦은 응답 가드 · 전 회원 검색 없음', () => {
     const m = read('src/components/features/CheckinModal.tsx');
     expect(read('src/components/features/StoreDashboard.tsx')).toContain('canStaffCheckin={caps.manage}');
     expect(m).toMatch(/\{canStaffCheckin && \(\s*<div data-testid="staff-checkin"/);
     const fn = m.slice(m.indexOf('const scCheckin'), m.indexOf('const copy = async'));
     expect(fn).toMatch(/await staffCheckIn\(venueId, r\.userId\);\s*if \(isStaleResponse\(gen, mountGenRef\.current\)\) return;/);
     expect(fn).toContain('reload();');
-    expect(read('src/api/checkins.ts')).toMatch(/supabase\.rpc\('staff_check_in', \{ p_venue_id: venueId, p_user_id: userId \}\)/);
+    // 오너 B — 출석 처리 대상은 손님이 보낸 요청에서만 고른다(v2 의 전 회원 닉네임 검색 경로 제거)
+    expect(m).not.toMatch(/searchVoucherRecipients/);
+    expect(m).toMatch(/if \(canStaffCheckin\) \{\s*listCheckinRequests\(venueId\)/);
+    expect(m).toMatch(/pendingCheckinRequests\(reqs\.filter\(\(r\) => r\.venueId === venueId\), list\)/);
+    const api = read('src/api/checkins.ts');
+    expect(api).toMatch(/supabase\.rpc\('staff_check_in', \{ p_venue_id: venueId, p_user_id: userId \}\)/);
+    expect(api).toMatch(/supabase\.rpc\('request_checkin', \{ p_venue_id: venueId \}\)/);
+    // 손님 쪽 '출석 요청' 버튼 — 재시도 시트(위치 거부·실패)에 있다 · 늦은 응답은 요청 시점 계정으로 묶는다
+    expect(read('src/App.tsx')).toMatch(/data-testid="checkin-geo-request-btn"[\s\S]{0,400}requestCheckin\(v\)\s*\.then\(\(r\) => \{ if \(uidRef\.current === forUid\)/);
   });
   it('⑭ 대체 경로 안내: 매장 페이지 출석 버튼·이용권 시트 카메라도 App 의 재시도 시트로(토스트만 X)', () => {
     expect(read('src/components/features/VenuePage.tsx')).toMatch(/if \(!requestCheckinRetrySheet\(venue!\.id, e\)\) toast\.show/);

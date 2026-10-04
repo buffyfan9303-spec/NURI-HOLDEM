@@ -176,7 +176,7 @@ describe('checkIn — 위치정보 이용 동의(LOCATION-READY)', () => {
 });
 
 describe('checkIn — 시행일 뒤 서버 거부(geo_consent_required · geo_position_required)', () => {
-  const MSG = '위치 확인 출석 매장이라 위치정보 이용에 동의해야 QR 출석이 됩니다. 동의하지 않으시면 매장 직원에게 참가를 요청하거나 오늘 대회의 참가 신청을 이용해 주세요';
+  const MSG = '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다';
   it('동의 없음 → CheckinGeoRequiredError(consent) · 서버 문구 그대로', async () => {
     consent.value = 'no'; noGeo();
     rpcReply.data = { code: 'geo_consent_required', error: MSG };

@@ -40,9 +40,15 @@ export const isKakaoInApp = (ua: string) => /KAKAOTALK/i.test(ua);
 
 const CONSENT_REASON = '이 매장은 위치 확인 출석 매장입니다. 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다';
 
+/** 시트 '출석 요청' 버튼 결과 문구(오너 B 2026-10-05) — request_checkin 반환 {status, already}. */
+export function checkinRequestToast(r: { status: string; already: boolean }): string {
+  if (r.status === 'approved') return '오늘 이 매장 출석 요청은 이미 승인됐습니다';
+  return r.already ? '이미 출석 요청을 보냈습니다. 매장에서 승인하면 출석됩니다' : '출석 요청을 보냈습니다. 매장에서 승인하면 출석됩니다';
+}
+
 /** 시트 본문 — 사유(store-team 문구 그대로) + 다음 행동 한 줄 + 대체 경로 + 버튼 문구. */
 export function checkinGeoRetryCopy(code: CheckinRetryCode, ua: string): { reason: string; hint: string | null; alt: string; action: string } {
-  const alt = `동의하기 어렵거나 위치를 켤 수 없으면 ${CHECKIN_ALT_PATH}`;
+  const alt = `동의하기 어렵거나 위치를 켤 수 없어도 ${CHECKIN_ALT_PATH}`;
   if (code === 'consent') return { reason: CONSENT_REASON, hint: null, alt, action: '동의하고 출석' };
   const reason = CHECKIN_GEO_MESSAGE[code];
   const action = '위치 확인 후 출석';

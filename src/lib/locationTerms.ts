@@ -34,9 +34,10 @@ export const BUSINESS_PHONE: string = BIZ_REQUIRED.find(([k]) => k === '전화�
  *  전화는 사업자 대표 전화(critical L6). */
 export const LOCATION_OFFICER = { name: '김윤혜(대표)', contact: 'ace@nuriholdem.com', phone: BUSINESS_PHONE } as const;
 
-/** 위치 확인 출석 매장에서 출석이 안 될 때의 대체 경로(오너 결정 (다)-(a) · critical L1). 직원이 staff_check_in 으로 처리하면 출석과 같은 혜택이다.
- *  동의 시트·재시도 시트·약관·처리방침·서버 문구가 같은 말을 한다. */
-export const CHECKIN_ALT_PATH = '매장 직원에게 출석 처리를 요청할 수 있습니다';
+/** 위치 확인 출석 매장에서 출석이 안 될 때의 대체 경로(오너 결정 (다)-(a) · B 2026-10-05).
+ *  손님이 재시도 시트에서 '출석 요청'(request_checkin)을 보내고 업주(can_manage_pos)가 「출석·QR 명단」에서 승인(staff_check_in)하면 출석과 같은 혜택이다.
+ *  동의 시트·재시도 시트·약관·처리방침·서버 문구·개정 공지가 같은 말을 한다. */
+export const CHECKIN_ALT_PATH = '매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다';
 /** 거부 대상 — QR 스캔뿐 아니라 그 매장의 모든 손님 출석 경로(셋 다 check_in 하나로 간다, critical L3). */
 export const CHECKIN_SCOPE = '그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)';
 /** 동의의 성격 한 줄(critical L2) — 화면·약관·처리방침이 같은 표현을 쓴다. */

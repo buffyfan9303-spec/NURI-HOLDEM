@@ -12,9 +12,9 @@ import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
 import { isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
-import { checkIn, getMyCheckinStreak } from './api/checkins';
+import { checkIn, getMyCheckinStreak, requestCheckin } from './api/checkins';
 import { flushSignupLocationConsent } from './lib/locationConsent';
-import { checkinFailureAction, checkinGeoRetryCopy, CHECKIN_RETRY_EVENT } from './lib/checkinGeoRetry';
+import { checkinFailureAction, checkinGeoRetryCopy, checkinRequestToast, CHECKIN_RETRY_EVENT } from './lib/checkinGeoRetry';
 import type { CheckinRetryCode } from './lib/checkinGeoRetry';
 import Modal from './components/atoms/Modal';
 import type { MyBuyinRequest } from './api/ledger';
@@ -4875,11 +4875,21 @@ export default function App() {
             <div data-testid="checkin-geo-retry" className="space-y-2 px-4 pb-5 pt-1">
               <p className="text-sm text-ink-primary">{copy.reason}</p>
               {copy.hint && <p className="text-xs text-ink-secondary">{copy.hint}</p>}
-              {/* 20261004d — 위치 확인 출석 매장에서만 이 시트가 뜬다. 동의·위치가 없어도 참가할 길(직원·참가 신청)을 함께 적는다(오너 결정 (다)-(a)). */}
+              {/* 20261004d — 위치 확인 출석 매장에서만 이 시트가 뜬다. 동의·위치가 없어도 출석할 길(출석 요청 → 업주 승인)을 함께 적는다(오너 결정 (다)-(a)·B). */}
               <p data-testid="checkin-geo-retry-alt" className="text-xs text-ink-muted">{copy.alt}</p>
               <button type="button" data-testid="checkin-geo-retry-btn"
                 onClick={() => { const v = geoRetry.venueId; setGeoRetry((g) => g && { ...g, open: false }); runCheckin(v, { geoRequired: true }); }}
                 className="btn-primary mt-1 min-h-[44px] w-full text-sm">{copy.action}</button>
+              {/* 오너 B 2026-10-05 — 위치 없이 출석 요청(request_checkin). 업주가 「출석·QR 명단」에서 승인하면 staff_check_in 으로 출석된다. */}
+              <button type="button" data-testid="checkin-geo-request-btn"
+                onClick={() => {
+                  const v = geoRetry.venueId; const forUid = uidRef.current;
+                  setGeoRetry((g) => g && { ...g, open: false });
+                  requestCheckin(v)
+                    .then((r) => { if (uidRef.current === forUid) toast.show(checkinRequestToast(r), 'success'); })
+                    .catch((e) => { if (uidRef.current === forUid) toast.show(msgOf(e, '출석 요청을 보내지 못했습니다'), 'error'); });
+                }}
+                className="btn-ghost min-h-[44px] w-full border border-border-default text-sm">출석 요청 보내기</button>
             </div>
           </Modal>
         );

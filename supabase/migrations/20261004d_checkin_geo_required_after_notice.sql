@@ -1,4 +1,8 @@
--- ⏳ 미적용 초안 (store-team 2026-10-04) — 적용은 리드가 critical-reviewer 반증 뒤에 MCP execute_sql 로 한 번에. 리허설: supabase/tests/20261004d_rehearsal.sql
+-- ⏳ 미적용 초안 v3 (store-team 2026-10-05) — 적용은 리드가 critical-reviewer 반증 뒤에 MCP execute_sql 로 한 번에. 리허설: supabase/tests/20261004d_rehearsal.sql
+-- v3(오너 결정 2026-10-05 B): 직원 출석 처리는 '손님 요청 후 승인'만 — §1-2 checkin_requests · §4-1 request_checkin · §5-1 staff_check_in 요청 게이트.
+--   대체 경로 문구 = src/lib/locationTerms.ts CHECKIN_ALT_PATH '매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다'.
+--   리허설(2026-10-05, 라이브 암묵 트랜잭션 롤백 · Management API): 38/38 PASS(기존 28 + Q1~Q10). 뒤이어 표·함수·칸 0, check_in md5 099a82e7… 그대로.
+--   음성 대조: 요청 게이트 제거 → 자가검사 거부 · 게이트+자가검사 제거 → Q1·Q2 FAIL · 정책 using(true) → Q8 FAIL · 5곳 상한 제거 → Q10 FAIL · 중복 접기 제거 → Q4 FAIL.
 -- 20261004d — 위치 확인을 켠 매장의 QR 출석은 위치정보 이용 동의 + 현재 위치가 있어야 된다(오너 결정 (다) 2026-10-04)
 --
 -- 원천: 오너 지시 2026-10-04 "출석 QR 위치정보 (다) — 법적으로 완벽하게 적용"
@@ -15,12 +19,18 @@
 --   2-1. CHECK venues_checkin_geo_needs_coords — 켜져 있으면 좌표가 있어야 한다(critical F2). 업주 직접 UPDATE 로 좌표 없이 켜거나,
 --      켜진 채 좌표를 지우는(공동 운영자는 lat·lng 를 고칠 수 있다) 길을 DB 가 막는다. 기존 행은 전부 false 라 위반 0.
 --      check_in 도 좌표 없는 매장에는 위치 확인을 적용하지 않는다(겹 방어).
---   2-2. staff_check_in(uuid, uuid) — 매장 직원이 손님을 지정해 '출석 처리'(critical L1·리드 결정): _apply_checkin 그대로(활동 점수·연속 출석·
+--   2-2. staff_check_in(uuid, uuid) — 업주가 **손님의 요청을 승인**해 출석 처리(critical L1 → 오너 B 2026-10-05): _apply_checkin 그대로(활동 점수·연속 출석·
 --      CRM 방문·이벤트 참여권 = checkins 행). 위치 동의를 하지 않은 손님이 잃는 것이 없게 하는 **동등한 대체 경로**다.
 --      권한 = can_manage_pos(대표·승인 공동 운영자·관리자, 정지·차단 제외) — 근거: 출석은 이벤트 참여권(→ 매장이용권)으로 이어지므로
---      매장이용권 발급(issue_voucher)·손님 검색(search_voucher_recipients)과 같은 선보다 낮추지 않는다. 장부 권한만 있는 직원은 장부로 참가를
---      받고 출석 처리는 운영자에게 요청한다. 남용 방지: 같은 손님·매장 4시간 중복 가드(check_in 과 같은 잠금·같은 문구) · 본인 출석 불가 ·
+--      매장이용권 발급(issue_voucher)과 같은 선보다 낮추지 않는다(venue_staff 는 실행 불가 → 문구도 '업주 승인'). 장부 권한만 있는 직원은 장부로 참가를 받는다.
+--      🔴 v3: 대상은 **오늘(KST) 이 매장에 출석 요청(checkin_requests pending) 또는 참가 신청(request_buyin 행, 이용권 행 제외)을 보낸 회원**뿐이다.
+--      v2 는 search_voucher_recipients 로 플랫폼 전 회원을 골라 손님 모르게 출석·점수·참여권·CRM 행을 만들 수 있었다(critical 재검토 2026-10-05).
+--      남용 방지: 같은 손님·매장 4시간 중복 가드(check_in 과 같은 잠금·같은 문구) · 본인 출석 불가 ·
 --      제재 계정 대상 불가 · audit_log(_audit 'staff_check_in', 매장, 손님) 기록. 위치를 쓰지 않으므로 확인자료 대상이 아니다.
+--   2-3. checkin_requests 표 + request_checkin(uuid) — 손님이 위치 확인 출석 매장에서 '출석 요청'을 보낸다(재시도 시트의 버튼).
+--      1일(KST) 1매장 1회(unique) · 하루 5매장 상한 · 이미 4시간 안에 출석했으면 거부 · 위치 확인 출석을 켠 승인 매장만 · 제재 계정 불가.
+--      쓰기는 RPC 만(표에 insert/update/delete 정책·권한 없음). 읽기 RLS = 본인 또는 can_manage_pos(staff_check_in 과 같은 선).
+--      30일 지난 요청은 request_checkin 이 지운다(목적 달성 뒤 보관 이유 없음). 업주 명단 실시간 갱신용으로 supabase_realtime 에 넣는다.
 --   3. _checkin_geo_required_from() — 거부 시작 시각 D = 2026-11-05 00:00 KST.
 --      근거: 이 변경은 동의하지 않는 이용자에게 불리할 수 있다 → 이용약관 제16조②("회원에게 불리한 변경의 경우에는 적용일 30일 전부터
 --      서비스 내에 공지") · 개인정보처리방침 제14조②(중대한 변경 30일 전). 공지일 2026-10-05 + 31일. 위치정보법 제12조①(변경 이유·내용 공개)는
@@ -38,10 +48,11 @@
 --      ⇒ 매장이 안 켰으면 D 뒤에도 지금과 같다(오너 결정 (다)-(g)).
 --   5. location_access_log.purpose 에 주석 — 법 제2조제5호 '이용·제공방법'을 겸한다는 사실(값 하나 = 방법 하나). 칸 추가는 하지 않는다(보고서 참고).
 --
--- 위치 거부 손님의 대체 경로(오너 결정 (다)-(a)): staff_check_in(위 2-2, 출석과 같은 혜택) · request_buyin(참가 신청 → 운영자 승인) ·
---   직원 장부 직접 입력. 뒤 둘은 출석 혜택을 주지 않는다(critical 2026-10-04) — 그래서 2-2 를 만들었다.
+-- 위치 거부 손님의 대체 경로(오너 결정 (다)-(a) · B): 출석 요청(2-3) → 업주 승인 staff_check_in(2-2, 출석과 같은 혜택) · request_buyin(참가 신청 → 운영자 승인) ·
+--   직원 장부 직접 입력. 뒤 둘은 출석 혜택을 주지 않는다(critical 2026-10-04) — 그래서 2-2 를 만들었다. 참가 신청을 보낸 손님은 2-2 로도 출석 처리할 수 있다.
 --
 -- 되돌리기(한 트랜잭션): check_in 을 20260930f §4 본문으로 create or replace(같은 시그니처 → ACL 보존) ·
+--   drop function public.request_checkin(uuid) · alter publication supabase_realtime drop table public.checkin_requests · drop table public.checkin_requests ·
 --   drop function public.set_venue_checkin_geo_required(uuid, boolean) · drop function public.staff_check_in(uuid, uuid) ·
 --   drop function public._checkin_geo_required_from() · alter table public.venues drop constraint venues_checkin_geo_needs_coords ·
 --   (칸은 남겨도 무해 — 지우려면 alter table public.venues drop column checkin_geo_required).
@@ -59,8 +70,9 @@ begin
   end if;
   if to_regprocedure('public.can_manage_pos(uuid)') is null or to_regprocedure('public.is_account_active()') is null
      or to_regprocedure('public._venue_owner_ok(uuid)') is null or to_regprocedure('public._apply_checkin(uuid,uuid)') is null
-     or to_regprocedure('public._audit(text,text,jsonb)') is null or to_regprocedure('public.my_role()') is null then
-    raise exception '20261004d: 선행 함수(can_manage_pos·is_account_active·_venue_owner_ok·_apply_checkin·_audit·my_role)가 없습니다';
+     or to_regprocedure('public._audit(text,text,jsonb)') is null or to_regprocedure('public.my_role()') is null
+     or to_regprocedure('public.ledger_business_date(uuid)') is null or to_regclass('public.ledger_buyin_requests') is null then
+    raise exception '20261004d: 선행 함수·표(can_manage_pos·is_account_active·_venue_owner_ok·_apply_checkin·_audit·my_role·ledger_business_date·ledger_buyin_requests)가 없습니다';
   end if;
   -- 공동 운영자 칸 가드(20261001m)가 살아 있고 허용 목록에 새 칸이 없어야 F1 의 '직접 UPDATE 불가'가 성립한다.
   if not exists (select 1 from pg_trigger where tgrelid = 'public.venues'::regclass and tgname = 'trg_guard_venue_coowner_columns' and tgenabled <> 'D')
@@ -85,6 +97,37 @@ comment on column public.venues.checkin_geo_required is
 -- §2 확인자료 칸 주석(스키마 변경 없음)
 comment on column public.location_access_log.purpose is
   '위치정보법 제2조제5호 이용·제공방법을 겸한다: checkin_radius = 서버에서 매장 반경 판정 후 좌표 즉시 파기(출석 위치 확인) · self_view = 본인 열람(고시 제6조①2호).';
+
+-- §2-1 출석 요청(2-3) — 쓰기는 request_checkin·staff_check_in(정의자) 만. 표에 쓰기 권한·정책을 주지 않는다.
+create table if not exists public.checkin_requests (
+  id uuid primary key default gen_random_uuid(),
+  venue_id uuid not null references public.venues(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  display_name text,
+  request_date date not null,
+  status text not null default 'pending' check (status in ('pending', 'approved')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references public.profiles(id) on delete set null,
+  constraint checkin_requests_one_per_day unique (venue_id, user_id, request_date)
+);
+create index if not exists checkin_requests_user_date on public.checkin_requests (user_id, request_date);
+alter table public.checkin_requests enable row level security;
+revoke all on table public.checkin_requests from public, anon, authenticated;
+grant select on table public.checkin_requests to authenticated;
+grant all on table public.checkin_requests to service_role;
+drop policy if exists checkin_requests_select on public.checkin_requests;
+create policy checkin_requests_select on public.checkin_requests for select to authenticated
+  using (user_id = (select auth.uid()) or coalesce(public.can_manage_pos(venue_id), false));
+comment on table public.checkin_requests is
+  '출석 요청(20261004d v3) — 위치 확인 출석 매장에서 손님이 보내고, 업주(can_manage_pos)가 staff_check_in 으로 승인한다. 1일(KST) 1매장 1회.';
+do $pub$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'checkin_requests') then
+    alter publication supabase_realtime add table public.checkin_requests;
+  end if;
+end $pub$;
 
 -- §3 거부 시작 시각 D — 내부 함수(리허설은 트랜잭션 안에서 이 함수만 과거 시각으로 바꿔 D 이후를 시험한다)
 create or replace function public._checkin_geo_required_from()
@@ -126,6 +169,47 @@ end $function$;
 revoke all on function public.set_venue_checkin_geo_required(uuid, boolean) from public, anon;
 grant execute on function public.set_venue_checkin_geo_required(uuid, boolean) to authenticated, service_role;
 
+-- §4-1 출석 요청 RPC(2-3) — 반환 {status: pending|approved, already: bool, name}
+create or replace function public.request_checkin(p_venue_id uuid)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path = public, pg_temp
+as $function$
+declare v_today date := (now() at time zone 'Asia/Seoul')::date;
+  v_name text; v_geo boolean; v_approved boolean; v_recent timestamptz; v_status text; v_cnt int; v_disp text;
+begin
+  if auth.uid() is null then raise exception '로그인 후 출석 요청을 보낼 수 있습니다'; end if;
+  if p_venue_id is null then raise exception '요청 값이 올바르지 않습니다'; end if;
+  if not public.is_account_active() then raise exception '제재 중이거나 비활성화된 계정은 이용할 수 없습니다'; end if;
+  select name, checkin_geo_required, approved into v_name, v_geo, v_approved from public.venues where id = p_venue_id;
+  if v_name is null or v_approved is distinct from true then raise exception '매장을 찾을 수 없습니다'; end if;
+  -- 요청은 위치 확인 출석 매장에서만 받는다 — 그 밖의 매장은 QR 출석에 위치가 필요 없다(요청 남발 표면을 줄인다).
+  if v_geo is distinct from true then raise exception '이 매장은 QR로 바로 출석할 수 있습니다'; end if;
+  -- check_in·staff_check_in 과 같은 잠금 키 — 동시에 온 출석·요청이 한 줄로 선다
+  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text || ':' || p_venue_id::text, 0));
+  select created_at into v_recent from public.checkins
+   where venue_id = p_venue_id and user_id = auth.uid() order by created_at desc limit 1;
+  if v_recent is not null and v_recent > now() - interval '4 hours' then
+    raise exception '이미 체크인했습니다 (4시간 내 중복 방지)';
+  end if;
+  -- 1일 1매장 1회 — 이미 보냈으면 새로 만들지 않고 그 상태를 돌려준다(버튼 연타·재시도도 행 1개)
+  select status into v_status from public.checkin_requests
+   where venue_id = p_venue_id and user_id = auth.uid() and request_date = v_today;
+  if v_status is not null then
+    return jsonb_build_object('status', v_status, 'already', true, 'name', v_name);
+  end if;
+  select count(*) into v_cnt from public.checkin_requests where user_id = auth.uid() and request_date = v_today;
+  if v_cnt >= 5 then raise exception '출석 요청은 하루 5곳까지 보낼 수 있습니다'; end if;
+  select coalesce(nullif(btrim(nickname), ''), nullif(btrim(name), ''), '회원') into v_disp from public.profiles where id = auth.uid();
+  insert into public.checkin_requests (venue_id, user_id, display_name, request_date)
+  values (p_venue_id, auth.uid(), v_disp, v_today);
+  delete from public.checkin_requests where request_date < v_today - 30; -- 목적이 끝난 요청은 보관하지 않는다
+  return jsonb_build_object('status', 'pending', 'already', false, 'name', v_name);
+end $function$;
+revoke all on function public.request_checkin(uuid) from public, anon;
+grant execute on function public.request_checkin(uuid) to authenticated, service_role;
+
 -- §5 check_in — 같은 시그니처(ACL 보존). 20260930f 본문에서 위치 판정 블록만 바뀐다.
 create or replace function public.check_in(p_venue_id uuid, p_lat double precision DEFAULT NULL::double precision, p_lng double precision DEFAULT NULL::double precision, p_accuracy double precision DEFAULT NULL::double precision)
  returns jsonb
@@ -160,15 +244,15 @@ begin
     and exists (select 1 from public.location_consents where user_id = auth.uid() and granted and terms_version >= 3);
 
   -- 20261004d: 시행일(D) 뒤 켠 매장은 동의·좌표 없는 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라 — 셋 다 이 함수)을 받지 않는다.
-  --   위치를 쓰지 않았으므로 확인자료도 없다. 대체 경로 = staff_check_in(같은 혜택) — 문구로 안내한다.
+  --   위치를 쓰지 않았으므로 확인자료도 없다. 대체 경로 = 출석 요청 → 업주 승인 staff_check_in(같은 혜택) — 문구로 안내한다.
   if v_venue_geo and now() >= public._checkin_geo_required_from() then
     if not v_consent then
       return jsonb_build_object('code', 'geo_consent_required', 'error',
-        '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않으시면 매장 직원에게 출석 처리를 요청할 수 있습니다');
+        '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
     end if;
     if p_lat is null and p_lng is null then
       return jsonb_build_object('code', 'geo_position_required', 'error',
-        '위치 확인 출석 매장이라 현재 위치를 확인해야 이 매장에서 출석할 수 있습니다. 위치를 켤 수 없으면 매장 직원에게 출석 처리를 요청할 수 있습니다');
+        '위치 확인 출석 매장이라 현재 위치를 확인해야 이 매장에서 출석할 수 있습니다. 위치를 켤 수 없어도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
     end if;
   end if;
 
@@ -213,14 +297,14 @@ end $function$;
 revoke all on function public.check_in(uuid, double precision, double precision, double precision) from public, anon;
 grant execute on function public.check_in(uuid, double precision, double precision, double precision) to authenticated, service_role;
 
--- §5-1 staff_check_in — 매장 직원이 손님을 지정해 출석 처리(2-2). 반환 모양은 check_in 과 같다({points, streak, name}).
+-- §5-1 staff_check_in — 업주가 손님의 요청을 승인해 출석 처리(2-2). 반환 모양은 check_in 과 같다({points, streak, name}).
 create or replace function public.staff_check_in(p_venue_id uuid, p_user_id uuid)
  returns jsonb
  language plpgsql
  security definer
  set search_path = public, pg_temp
 as $function$
-declare v_name text; v_recent timestamptz; v_res jsonb;
+declare v_name text; v_recent timestamptz; v_res jsonb; v_today date := (now() at time zone 'Asia/Seoul')::date;
 begin
   if auth.uid() is null then raise exception '로그인이 필요합니다'; end if;
   if p_venue_id is null or p_user_id is null then raise exception '요청 값이 올바르지 않습니다'; end if;
@@ -241,7 +325,18 @@ begin
   if v_recent is not null and v_recent > now() - interval '4 hours' then
     raise exception '이미 체크인했습니다 (4시간 내 중복 방지)';
   end if;
+  -- v3(오너 B 2026-10-05): 손님이 **오늘 이 매장에** 먼저 손을 든 경우만 — 출석 요청(대기) 또는 앱 참가 신청(request_buyin 행).
+  --   이용권 사용 행(voucher_id)은 손님 요청이 아닐 수 있어 넣지 않는다. 참가 신청 날짜는 영업일(자정 넘긴 토너)도 인정한다.
+  if not exists (select 1 from public.checkin_requests r
+                  where r.venue_id = p_venue_id and r.user_id = p_user_id and r.request_date = v_today and r.status = 'pending')
+     and not exists (select 1 from public.ledger_buyin_requests b
+                      where b.venue_id = p_venue_id and b.user_id = p_user_id and b.voucher_id is null
+                        and b.session_date in (v_today, public.ledger_business_date(p_venue_id))) then
+    raise exception '오늘 이 매장에 출석 요청이나 참가 신청을 보낸 손님만 출석 처리할 수 있습니다';
+  end if;
   v_res := public._apply_checkin(p_venue_id, p_user_id);
+  update public.checkin_requests set status = 'approved', decided_at = now(), decided_by = auth.uid()
+   where venue_id = p_venue_id and user_id = p_user_id and request_date = v_today and status = 'pending';
   perform public._audit('staff_check_in', p_venue_id::text, jsonb_build_object('user_id', p_user_id));
   return v_res || jsonb_build_object('name', v_name);
 end $function$;
@@ -290,6 +385,26 @@ begin
      or pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure) not like '%interval ''4 hours''%'
      or pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure) not like '%public._audit(''staff_check_in''%' then
     raise exception '20261004d 자가검사: staff_check_in 본문 이상(권한·중복 가드·감사)';
+  end if;
+  -- v3: 요청 게이트(출석 요청 대기 또는 참가 신청)가 _apply_checkin **앞에** 있어야 한다
+  if position('from public.checkin_requests r' in pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure)) = 0
+     or position('from public.ledger_buyin_requests b' in pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure)) = 0
+     or position('from public.checkin_requests r' in pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure))
+        > position('v_res := public._apply_checkin' in pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure)) then
+    raise exception '20261004d 자가검사: staff_check_in 요청 게이트가 없거나 출석 기록 뒤에 있습니다';
+  end if;
+  if has_function_privilege('anon', 'public.request_checkin(uuid)', 'execute')
+     or not has_function_privilege('authenticated', 'public.request_checkin(uuid)', 'execute') then
+    raise exception '20261004d 자가검사: request_checkin ACL 이상';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.checkin_requests'::regclass)
+     or has_table_privilege('anon', 'public.checkin_requests', 'select')
+     or has_table_privilege('authenticated', 'public.checkin_requests', 'insert')
+     or has_table_privilege('authenticated', 'public.checkin_requests', 'update')
+     or has_table_privilege('authenticated', 'public.checkin_requests', 'delete')
+     or not has_table_privilege('authenticated', 'public.checkin_requests', 'select')
+     or (select count(*) from pg_policies where schemaname = 'public' and tablename = 'checkin_requests') <> 1 then
+    raise exception '20261004d 자가검사: checkin_requests RLS·권한 이상(RLS 켜짐·anon 0·authenticated 읽기만·정책 1개)';
   end if;
   if not exists (select 1 from pg_constraint where conrelid = 'public.venues'::regclass and conname = 'venues_checkin_geo_needs_coords' and convalidated) then
     raise exception '20261004d 자가검사: CHECK venues_checkin_geo_needs_coords 가 없습니다';

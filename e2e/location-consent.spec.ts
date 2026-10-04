@@ -71,7 +71,7 @@ test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이
   // 제3판(20261004d): 동의는 선택이지만 시행일부터 위치 확인 출석 매장의 QR 출석은 동의가 필요 — 대체 경로와 함께 말한다.
   await expect(page.getByTestId('location-consent-nature')).toHaveText('선택 동의 — 위치 확인 출석 매장의 출석에만 필요');
   await expect(sheet).toContainText('2026년 11월 5일부터 위치 확인 출석 매장에서는 동의하지 않으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않으며');
-  await expect(sheet).toContainText('매장 직원에게 출석 처리를 요청할 수 있습니다');
+  await expect(sheet).toContainText('매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
   await expect(sheet).not.toContainText('동의하지 않아도 출석할 수 있습니다');
   await expect(page.getByTestId('location-consent-required'), '시행일 전인데 필수 매장 안내가 떴다').toHaveCount(0);
   await expect(page.getByTestId('location-consent-decline')).toHaveText('동의하지 않고 출석');
@@ -225,7 +225,7 @@ test('🔴 L9 시행일 뒤 켠 매장 — 거절하면 서버가 거부 → 대
   test.setTimeout(60_000);
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ latitude: 37.5, longitude: 127.0, accuracy: 20 });
-  const refused = { code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않으시면 매장 직원에게 출석 처리를 요청할 수 있습니다' };
+  const refused = { code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다' };
   const calls = await setup(page, { state: 'unset' }, true, { checkInReply: [refused, { name: '검증 홀덤', points: 3, streak: 1 }] });
   await openSheet(page);
   await page.getByTestId('location-consent-decline').click();
@@ -235,13 +235,13 @@ test('🔴 L9 시행일 뒤 켠 매장 — 거절하면 서버가 거부 → 대
   const retry = page.getByTestId('checkin-geo-retry');
   await expect(retry).toBeVisible({ timeout: 10_000 });
   await expect(retry).toContainText('위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다');
-  await expect(page.getByTestId('checkin-geo-retry-alt')).toHaveText('동의하기 어렵거나 위치를 켤 수 없으면 매장 직원에게 출석 처리를 요청할 수 있습니다');
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toHaveText('동의하기 어렵거나 위치를 켤 수 없어도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
   if (SHOT) await page.screenshot({ path: `${SHOT}/after-required-retry.png` });
   await page.getByTestId('checkin-geo-retry-btn').click();
   // '동의 안 함' 기록자에게도 required 모드로 다시 묻는다 — 거절 버튼은 '출석'을 약속하지 않는다
   const sheet = page.getByTestId('location-consent-sheet');
   await expect(sheet).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId('location-consent-required')).toHaveText('이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 이 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않습니다. 매장 직원에게 출석 처리를 요청할 수 있습니다.');
+  await expect(page.getByTestId('location-consent-required')).toHaveText('이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 이 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않습니다. 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다.');
   await expect(page.getByTestId('location-consent-decline')).toHaveText('동의하지 않음');
   if (SHOT) await page.screenshot({ path: `${SHOT}/after-required-consent.png` });
   await page.getByTestId('location-consent-agree').click();
