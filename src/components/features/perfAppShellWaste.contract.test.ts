@@ -123,7 +123,8 @@ describe('§5-B ① 쪽지 미읽음 90초 폴링은 숨은 탭에서 돌지 않
   });
 
   it('폴링은 계정 경계를 지킨다 — 늦게 온 A 의 카운트가 B 배지를 덮지 않는다', () => {
-    expect(pollBody).toMatch(/if \(alive\) setUnreadMsgs\(n\)/);
+    // R3-01(2026-10-04): 이펙트별 alive 대신 App 공용 계정 관문(forAccount)을 지난다 — src/appAccountGuard.contract.test.ts
+    expect(pollBody).toMatch(/myUnreadMessageCount\(\)\.then\(forAccount\(setUnreadMsgs\)\)/);
   });
 });
 
@@ -134,7 +135,7 @@ describe('§5-B ② 알림 realtime 구독은 계정이 바뀔 때만 재연결�
     expect(i, '알림 realtime 채널 생성부를 찾지 못했다').toBeGreaterThan(-1);
     const after = APP.slice(i, i + 600);
     expect(after, '[user] 이면 포인트 갱신마다 채널 teardown→재연결 + getMyNotifications() 재발사다')
-      .toMatch(/return \(\) => \{ alive = false; supabase\.removeChannel\(ch\); \};\s*\}, \[user\?\.id\]\);/);
+      .toMatch(/return \(\) => \{ supabase\.removeChannel\(ch\); \};\s*\}, \[user\?\.id\]\);/);
   });
 });
 
