@@ -106,8 +106,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
         <div className="rounded-aura border card-aura p-3 space-y-2">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="시즌 이름 (예: 2026 여름 시즌)" className="input w-full text-sm" />
           <div className="flex items-center gap-2 text-2xs text-ink-muted">
-            <label className="flex-1">시작 <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className="input mt-0.5 w-full text-xs" /></label>
-            <label className="flex-1">종료 <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className="input mt-0.5 w-full text-xs" /></label>
+            <label className="min-w-0 flex-1">시작 <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className="input mt-0.5 w-full min-w-0 text-xs" /></label>
+            <label className="min-w-0 flex-1">종료 <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className="input mt-0.5 w-full min-w-0 text-xs" /></label>
           </div>
           <p className="text-2xs text-ink-muted">종료일이 지나면 자동으로 마감되고 순위가 명예의 전당에 기록됩니다(포인트·보상 지급 없음).</p>
           <div className="flex gap-1.5">
