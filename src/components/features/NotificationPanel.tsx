@@ -373,7 +373,10 @@ export default function NotificationPanel({
           입력 차단 해제(즉시)는 다른 시점이어야 한다는 것이 이 부류의 핵심이다. */}
       <div
         ref={scrimRef}
-        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-fade-in', 'touch-none'].join(' ')}
+        // 🔴 M3-07(2026-10-04) — 열 때 딤은 dim-in(0→1 · 0.32s 양끝 감속 곡선 = 패널 slide-up 과 같은 길이)이다. Modal 딤과 같은 조리법.
+        //   예전 fade-in 은 키프레임이 불투명도 0.45 에서 시작해(판 깜빡임 방지용) 첫 프레임부터 딤이 반쯤 켜졌는데 패널은 투명 0 에서
+        //   올라와, 라이트에서 화면이 ~72ms 회색으로 꺼졌다 밝아졌다(평균 휘도 −24). 닫힘은 패널과 같은 fade-out 그대로.
+        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-dim-in', 'touch-none'].join(' ')}
         onClick={handleClose}
         aria-hidden
       />

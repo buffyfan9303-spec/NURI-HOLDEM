@@ -297,6 +297,11 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   await openBoard(page);
   await page.evaluate(() => window.scrollTo(0, 99999));
   await page.waitForTimeout(400);
+  // 게시판 정착 직후 앱의 프로그램 스크롤 창(markProgrammaticScroll 300ms) 안에 든 scrollTo 는 헤더가 무시한다(사용자 손짓만 반영).
+  //   창이 지난 뒤 1px 손짓으로 다시 알린다 — 전제(축소 상태)를 세우는 것이지 판정을 푸는 것이 아니다(2026-10-04 실측: y 143 인데 미축소 1/3).
+  if (!(await page.evaluate(() => document.documentElement.dataset.headerShrunk === '1'))) {
+    await page.waitForTimeout(300); await page.evaluate(() => window.scrollBy(0, -1)); await page.waitForTimeout(300);
+  }
   const before = await page.evaluate(() => Math.round(window.scrollY));
 
   // 🔴 잴 것이 실제로 있어야 한다 — 목록이 맨 위면 '위치 보존' 은 아무것도 단언하지 않는다.
@@ -315,13 +320,21 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   //   ⇒ CLS 는 **여러 원인이 한 숫자로 뭉개지는 지표**라 이 용도에 안 맞는다.
   //     기전을 직접 재라: keepViewport 는 문서를 접어 scrollY 를 0 으로 만들고, 그 스크롤 이벤트가
   //     **헤더 축소를 풀어(47.75 → 60.5)** 배경 전체를 12.75px 내린다. 그 둘은 이진값이라 안 뭉개진다.
-  const before2 = await page.evaluate(() => {
-    const bell = document.querySelector('button[aria-label^="알림"]')!;
-    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
+  // ⚠ M4-02(2026-10-04) — 헤더 축소는 상자 높이가 아니라 sticky 오프셋(축소 −12.75px)이다. 상자 높이로는 축소를 못 본다.
+  //   그렇다고 화면상 밑면(getBoundingClientRect)으로 재면 안 된다 — 잠금(overflow:hidden)이 body 를 스크롤 상자로 만들어
+  //   sticky 헤더가 문서 원위치(−scrollY)로 붙는다. 그건 전면 판 **아래**의 일이고 수정 전(5c1cd5e4)에도 똑같다
+  //   (실측: 열린 첫 프레임부터 헤더 top −130 · 판 불투명도 0.45→1, 2026-10-04 home-team).
+  //   이 검사가 보는 것은 '잠금이 scrollY 를 0 으로 만들어 헤더 축소를 풀었는가' 다 → **축소 상태 자체**를 잰다:
+  //   축소 표식(data-header-shrunk) · 헤더 sticky 오프셋(computed top) · 보이는 띠 높이(상자 높이 + 오프셋 = 47.75/60.5).
+  const headerState = () => page.evaluate(() => {
+    const h = document.querySelector('button[aria-label^="알림"]')!.closest('header')!;
+    const off = parseFloat(getComputedStyle(h).top) || 0;
+    return { shrunk: document.documentElement.dataset.headerShrunk ?? '', band: +(h.getBoundingClientRect().height + off).toFixed(2), y: Math.round(window.scrollY) };
   });
+  const before2 = await headerState();
   // 스크롤이 56 을 넘었으니 헤더는 **축소 상태**여야 한다. 아니면 이 검사의 전제가 무너진 것이다.
-  expect(before2.h, `열기 전 헤더가 축소 상태가 아니다(${before2.h}) — scrollY ${before2.y} 인데도 그렇다면`
-    + ' 헤더 축소 자체가 죽었다. 그 상태로는 아래 단언이 아무것도 재지 못한다.').toBeLessThan(55);
+  expect(before2.shrunk === '1' && before2.band < 55, `열기 전 헤더가 축소 상태가 아니다(${JSON.stringify(before2)}) — scrollY ${before2.y} 인데도 그렇다면`
+    + ' 헤더 축소 자체가 죽었다. 그 상태로는 아래 단언이 아무것도 재지 못한다.').toBe(true);
 
   await page.evaluate(() => {
     const el = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && n.textContent?.trim() === '둘째 글 제목');
@@ -329,14 +342,11 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   });
   await expect(dialog(page)).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(900);
-  const during = await page.evaluate(() => {
-    const bell = document.querySelector('button[aria-label^="알림"]')!;
-    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
-  });
-  expect(during.h, `글을 여는 동안 배경 헤더 높이가 ${before2.h} → ${during.h} 로 바뀌었다`
+  const during = await headerState();
+  expect({ shrunk: during.shrunk, band: during.band }, `글을 여는 동안 배경 헤더 축소 상태가 ${JSON.stringify(before2)} → ${JSON.stringify(during)} 로 바뀌었다`
     + ' — 잠금 방식이 문서를 접어 scrollY 를 0 으로 만들고 헤더 축소를 풀었다'
     + '(keepViewport 를 다시 켰거나 같은 성질의 것을 넣었나?). 배경이 그만큼 통째로 밀린다.')
-    .toBe(before2.h);
+    .toEqual({ shrunk: before2.shrunk, band: before2.band });
   expect(during.y, `글을 여는 동안 배경 scrollY 가 ${before2.y} → ${during.y} 로 바뀌었다`)
     .toBe(before2.y);
 

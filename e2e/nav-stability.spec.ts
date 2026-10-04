@@ -408,7 +408,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
 
       const before = await page.evaluate(() => ({
         y: Math.round(window.scrollY),
-        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
+        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().bottom.toFixed(2),
         shrunk: document.documentElement.dataset.headerShrunk ?? null,
         // M3-02(2026-10-04) — 축소값은 :root 가 아니라 소비처 표식(data-header-now)에만 걸린다(src/index.css).
         //   그 표식을 단 탐침 요소로 재야 '서브바가 보는 값' 이다. :root 를 재면 늘 3.5rem 이라 아래 대조가 무의미해진다.
@@ -418,6 +418,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
           return getComputedStyle(p).getPropertyValue('--header-now').trim();
         })(),
       }));
+      // ⚠ M4-02(2026-10-04) 부터 헤더 축소는 상자 높이가 아니라 sticky 오프셋이다 — 높이는 늘 60.5 라 `h` 는 **보이는 밑면(bottom)** 으로 잰다(펴짐 60.5 · 축소 47.75).
       // 전제 — 실제 결함 경로를 탔는지 못박는다. 안 접혔으면 이 검사는 아무것도 재지 않는다.
       expect(before.y, '헤더가 접힐 만큼 안 내려갔다 — 이 검사가 결함 경로를 못 탔다').toBeGreaterThan(56);
       expect(before.shrunk, '스크롤했는데 헤더가 축소 상태가 아니다 — 전제가 안 섰다').toBe('1');
@@ -432,7 +433,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
           out.push({
             i: n,
             y: Math.round(window.scrollY),
-            h: el ? +el.getBoundingClientRect().height.toFixed(2) : -1,
+            h: el ? +el.getBoundingClientRect().bottom.toFixed(2) : -1,
             shrunk: document.documentElement.dataset.headerShrunk ?? null,
             now: getComputedStyle(document.querySelector('[data-h1-probe]') as HTMLElement).getPropertyValue('--header-now').trim(),
           });
@@ -519,7 +520,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
       await page.waitForTimeout(600);
       const m = await page.evaluate(() => ({
         y: Math.round(window.scrollY),
-        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
+        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().bottom.toFixed(2),
         shrunk: document.documentElement.dataset.headerShrunk ?? null,
         tab: document.querySelector('[data-tab]')?.getAttribute('data-tab') ?? null,
       }));
@@ -539,7 +540,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
         const el = document.querySelector('[data-stack-header]') as HTMLElement | null;
         out.push({
           i: n, y: Math.round(window.scrollY),
-          h: el ? +el.getBoundingClientRect().height.toFixed(2) : -1,
+          h: el ? +el.getBoundingClientRect().bottom.toFixed(2) : -1,
           shrunk: document.documentElement.dataset.headerShrunk ?? null,
         });
         if (++n < 14) requestAnimationFrame(tick);

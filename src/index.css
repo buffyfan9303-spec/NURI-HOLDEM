@@ -2017,7 +2017,7 @@ main { max-width: 48rem; margin-inline: auto; }
 }
 /* 헤더 계정 메뉴가 탭 이동으로 걷힐 때(App AppHeader MENU-HANDOFF, 2026-09-27) — 퇴장 페이드를 **떠나는 판 퇴장이 시작될 때까지** 멈춘다.
    헤더의 data-swap-freeze 는 새 판 첫 프레임 다음에 풀리고 그때 떠나는 판 페이드가 시작된다(tabCover fadeAfterFirstFrame) — 둘이 같은
-   순간·같은 곡선으로 사라진다. 안 멈추면 CPU4 에서 메뉴가 판보다 1~2프레임 먼저 사라져 옛 판(메뉴 없는 홈)이 비쳤다(390 라이트 −8). */
+   순간·같은 곡선으로 사라진다(App menuHandoff — 단순 닫기만 알림 패널과 같은 0.18s, M4-04). 안 멈추면 CPU4 에서 메뉴가 판보다 1~2프레임 먼저 사라져 옛 판(메뉴 없는 홈)이 비쳤다(390 라이트 −8). */
 [data-swap-freeze] [data-menu-leave] {
   animation-play-state: paused;
 }
