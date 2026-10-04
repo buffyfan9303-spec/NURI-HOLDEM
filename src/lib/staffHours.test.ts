@@ -1,10 +1,10 @@
 // R3-03 (audit3-regress-connect-1004.md#R3-03) — 같은 근무를 급여 표 8.0h, 출근일지·딜러 스케줄 9.5h 로 말하던 재발.
 // 화면의 'Xh' 는 staffPay.shiftMinutes 한 함수, 급여 표는 laborSummary — 두 값이 같은 입력에서 같아야 한다.
-// 음성 대조: 이 파일은 수정 전 staffPay.ts(shiftMinutes·hoursText·shiftHoursNote 없음, 01:59 어제 근무 규칙 없음)에서 실패한다.
+// 음성 대조: 이 파일은 수정 전 staffPay.ts(shiftMinutes·hoursText·shiftHoursNote 없음)에서 실패한다.
 // 실행: npx vitest run src/lib/staffHours.test.ts
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_PAY_RULES, holidayMinutesByDate, hoursText, laborSummary, shiftFromHm, shiftHoursNote, shiftMinutes, type PayRules,
+  DEFAULT_PAY_RULES, hoursText, laborSummary, shiftHoursNote, shiftMinutes, type PayRules,
 } from './staffPay';
 
 const BREAK: PayRules = { ...DEFAULT_PAY_RULES, autoBreak: true };
@@ -55,24 +55,10 @@ describe('R3-03 — 한 교대의 화면 시간 = 급여 표 시간', () => {
   });
 });
 
-describe('어제 근무 규칙 — 계획 없는 행의 00:00~01:59 출근은 그 행의 다음 날 새벽(오너 2026-09-30)', () => {
-  // 10-02(금) 행 · 10-03 개천절. 01:59 출근은 10-03 새벽 → 공휴일 근무로 귀속돼야 한다.
-  const hol = new Set(['2026-10-03']);
-  it('01:59 출근 → 다음 날 01:59, 공휴일 분이 10-03 에 잡힌다', () => {
-    const s = shiftFromHm('2026-10-02', { checkIn: '01:59', checkOut: '05:00' });
-    expect(new Date(s.checkInAt!).toISOString()).toBe('2026-10-02T16:59:00.000Z'); // = 10-03 01:59 KST
-    expect([...holidayMinutesByDate(s, hol)]).toEqual([['2026-10-03', 181]]);
-  });
-  it('02:00 출근 → 그날 02:00 그대로(경계 바깥)', () => {
-    const s = shiftFromHm('2026-10-02', { checkIn: '02:00', checkOut: '05:00' });
-    expect(new Date(s.checkInAt!).toISOString()).toBe('2026-10-01T17:00:00.000Z'); // = 10-02 02:00 KST
-    expect([...holidayMinutesByDate(s, hol)]).toEqual([]);
-  });
-  it('근무 분은 규칙과 무관하게 같다(01:30~05:00 = 3.5h)', () => {
+describe('자정 넘긴 새벽 출근 — 근무 분은 하루 귀속과 무관하다', () => {
+  // 휴일 귀속(어느 날짜의 근무인가)은 미정·별도 과제다(staffPay.shiftFromHm 주석). 금액 고정은 staffPayParity.test.ts.
+  it('01:30~05:00 = 3.5h — 휴게 자동 공제를 켜도 같다(체류 210분 < 문턱 270분)', () => {
     expect(shiftMinutes('2026-10-02', { checkIn: '01:30', checkOut: '05:00' }, DEFAULT_PAY_RULES)!.net).toBe(210);
-  });
-  it('계획이 있으면 계획 ±12h 규칙이 이긴다(계획 18:00 · 출근 01:30 → 다음 날)', () => {
-    const s = shiftFromHm('2026-10-02', { startHm: '18:00', checkIn: '01:30', checkOut: '04:00' });
-    expect(new Date(s.checkInAt!).toISOString()).toBe('2026-10-02T16:30:00.000Z');
+    expect(shiftMinutes('2026-10-02', { checkIn: '01:30', checkOut: '05:00' }, BREAK)!.net).toBe(210);
   });
 });

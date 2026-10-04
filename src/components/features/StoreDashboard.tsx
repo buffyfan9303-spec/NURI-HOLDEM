@@ -32,7 +32,7 @@ import { isDenied, msgOf } from '../../lib/dbError';
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
-import { laborSummary, weekStartOf } from '../../lib/staffPay';
+import { hoursValue, laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
 import { countVenueVouchersSent } from '../../api/vouchers';
 import RegularsModal from './RegularsModal';
@@ -1740,7 +1740,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
                 <Stat label="총 인건비" value={laborErr ? '—' : wonToMan(laborTotal)} unit={laborErr ? '' : '만원'} gold />
-                <Stat label="총 근무" value={dealerErr ? '—' : `${Math.round(laborHours)}`} unit={dealerErr ? '' : '시간'} />
+                <Stat label="총 근무" value={dealerErr ? '—' : hoursValue(labor.netMin)} unit={dealerErr ? '' : '시간'} />
               </div>
               {wageErr && <p className="text-[11px] text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
               {dealerErr && <p className="text-[11px] text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}

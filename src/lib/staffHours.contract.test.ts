@@ -10,6 +10,8 @@
 //          src 밖(api/·e2e/)과 테스트 파일 안의 재구현. 값의 정오는 staffHours.test.ts 가 본다.
 // 음성 대조: StaffSchedule 에 옛 hoursBetween(+= 24 * 60) 을 되살리면 ①은 통과하고 ②(호출 0)·④(지문)가 빨개진다.
 //          DealerShiftsModal 의 minutesOf 를 workedMinutes(dealerWageShift(s)) 로 되돌리면 ②·④가 빨개진다.
+//          `shiftMinutes(s.date, s, { ...rules, autoBreak: false })`(설정 무시)·`hoursText(m.raw)`(출근~퇴근 표시)도 ②가 빨개진다
+//          (critical-reviewer NC2·NC3 맹점, 2026-10-04 보강).
 // 실행: npx vitest run src/lib/staffHours.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -55,7 +57,11 @@ describe('소비처 배선', () => {
       const c = code(file);
       expect(count(c, /^import \{[^}]*\bshiftMinutes\b[^}]*\} from '\.\.\/\.\.\/lib\/staffPay';$/m)).toBe(1);
       expect(count(c, /\bshiftMinutes\(/), '호출 수가 바뀌었다 — 새 표시면 숫자를, 재구현이면 정본을 써라').toBe(calls);
-      expect(count(c, /\bshiftMinutes\([^)]*\brules\b/)).toBe(calls);
+      // 세 번째 인자가 매장 설정 **그대로**(rules / pay.rules)여야 한다 — `{ ...rules, autoBreak: false }` 로 덮어쓰면 급여 표와 갈린다.
+      expect(count(c, /\bshiftMinutes\([^()]*?,\s*(?:pay\.)?rules\)/), '설정을 덮어쓰거나 다른 값을 넘겼다').toBe(calls);
+      // 화면은 급여 기준(net)만 그린다 — raw(출근~퇴근)·stay(휴게 전)를 그리면 R3-03 의 9.5h 로 되돌아간다.
+      expect(count(c, /\.(?:raw|stay)\b/), '출근~퇴근·휴게 전 시간을 그렸다 — .net 을 쓰라').toBe(0);
+      expect(count(c, /\.net\b/), '.net 소비가 사라졌다').toBeGreaterThanOrEqual(calls);
       expect(count(c, /^import \{ usePayRules \} from '\.\.\/\.\.\/api\/payrollRules';$/m)).toBe(1);
     });
   }
