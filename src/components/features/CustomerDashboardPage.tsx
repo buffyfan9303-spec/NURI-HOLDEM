@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useDelayedUnmount } from '../../lib/useDelayedUnmount';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
@@ -257,6 +258,16 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
     return () => { alive = false; };
   }, [open, user, badgeTick]);
 
+  // M4-01(2026-10-04) — 열린 동안 뒤 문서 스크롤을 잠근다(매장·그룹 페이지·Modal 과 같은 공용 잠금).
+  //   안 잠그면 안쪽 스크롤 끝에서 더 민 손가락이 뒤 홈으로 이어져(scroll chaining) 137→344px 로 내려갔고,
+  //   닫으면 읽던 자리를 잃고 헤더가 축소된 채 남았다. 로그인·비로그인(LoginLanding) 두 갈래가 같은 루트라 여기 한 곳에서 건다.
+  //   잠금은 `open` 만 본다 — 닫힘 페이드(220ms) 동안엔 이미 풀려 있어야 뒤 화면이 바로 스크롤된다.
+  useEffect(() => {
+    if (!open) return;
+    lockScroll();
+    return () => { unlockScroll(); };
+  }, [open]);
+
   // keep-alive(메인 탭과 같은 조리법) — 한 번 열린 뒤에는 언마운트하지 않고 display 토글만.
   // 재열림이 '풀 마운트 + 데이터 상태 재구축' 대신 display 복원이 되어, GTO 같은 무거운 탭 위에서
   // '내 정보'를 열 때의 마운트 커밋 프레임 드롭(확 버벅)이 사라진다. App 쪽은 VT 스냅샷 뒤 동기 커밋.
@@ -308,7 +319,8 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
 
   return (
     // 루트 전환 — 전면 판 공용 한 벌(atoms/pageMotion). 닫히는 220ms 는 입력을 받지 않는다.
-    <div className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
+    // data-scroll-lock: 잠금 소유자 표식 — 탭 전환 sweep 이 '보이는 소유자 없는 잠금'만 회수한다(lib/scrollLock).
+    <div data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
       inert={!open || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
         <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
@@ -752,7 +764,8 @@ function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, o
       {/* 🔴 fade-in 무효화 — 판이 keep-alive(hidden↔표시)라 브라우저가 display:none→block 복귀 때 안의 CSS 진입 애니메이션
           (빈 상태 카드)을 처음부터 다시 튼다(PROFILE-MENU-JANK 실측: 복귀마다 3개 재생). 메인 탭의 index.css `.tab-pane` 규칙과 같은 처방인데,
           그 규칙은 `:not(.fixed *)` 라 페이지 루트가 fixed 인 여기엔 안 닿는다 — 그래서 이 상자에 직접 건다. 떠 있는 오버레이(.fixed)는 제외. */}
-      <div data-profile-panel="" className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)] [&_.animate-fade-in:not(.fixed)]:animate-none">
+      {/* overscroll-contain(M4-01): 끝에서 더 민 손가락이 뒤 문서·당겨서 새로고침으로 이어지지 않게 — 잠금(위 lockScroll)과 한 쌍. */}
+      <div data-profile-panel="" className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] [&_.animate-fade-in:not(.fixed)]:animate-none">
         {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
             입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
         {/* 🔴 max-w-2xl — 대시보드 래퍼(아래)와 **같은 폭**이어야 한다(2026-09-17 오너 '지진').
@@ -803,7 +816,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
   };
 
   return (
-    <div className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
+    <div data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
       inert={closing || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
@@ -819,7 +832,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
       {/* 서피스 깊이·오로라 확장(2026-08-27): 비로그인 랜딩 상단 오로라 워시 — 정적 1회 페인트 */}
       {/* pb-[env(safe-area-inset-bottom)]: 로그인 판(위 :251)에는 있는데 이 비로그인 랜딩에만 빠져 있었다.
           같은 `fixed inset-0` 전면 화면인데 한쪽만 홈 인디케이터 띠를 비워 두면 그 자체가 버그다. */}
-      <div className="hero-aurora flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+      <div className="hero-aurora flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto w-full max-w-md space-y-4 px-page-x py-section">
           <div>
             <h1 className="text-xl font-extrabold text-ink-primary">반갑습니다</h1>

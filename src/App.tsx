@@ -91,7 +91,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
-import { notePaneLeaving, handOffPane, warmHiddenPane, LEAVE_FADE_MS, LEAVE_EASE } from './lib/tabCover';
+import { notePaneLeaving, handOffPane, warmHiddenPane } from './lib/tabCover';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -327,12 +327,12 @@ const AppHeader = memo(function AppHeader({
   //      파생값). 그래서 탭이 바뀌는/패널이 서는 그 커밋에서 같이 내린다 — 메뉴가 새 탭 위에 한 프레임도 남지 않는다.
   //      ⚠ 렌더 중 setUserMenu(false) 로 조정하면 안 된다 — 뒤에 트랜지션 갱신이 대기 중이면 같은 태스크의 다음 동기 렌더(App layout
   //        effect)가 큐를 되감으며 그 조정을 잃어 메뉴가 **다시 열렸다**(MutationObserver 실측: 닫힘 커밋 1ms 뒤 inert 제거). 그래서 파생값이다.
-  //   걷을 때는 한 프레임 컷 대신 **떠나는 판과 같은 퇴장**(LEAVE_FADE_MS·LEAVE_EASE) — 탭 이동에서 판(handOffPane)과 함께 사라져
+  //   걷을 때는 한 프레임 컷 대신 페이드(M4-04 부터 알림 패널과 같은 0.18s · --ease) — 탭 이동에서는 판(handOffPane) 퇴장이 시작될 때 함께 출발해
   //   '메뉴만 먼저 컷' 이 남지 않고, 전면 판 아래에서는 판 fade-in 에 덮여 보이지 않는다. 게이트: e2e/flicker-gate.spec.ts MENU-HANDOFF.
   const leaveMenuTo = (go: () => void) => { go(); startTransition(() => setUserMenu(false)); };
   const [menuTab, setMenuTab] = useState(activeTab);
   const menuLive = userMenuOpen && !notifOpen && menuTab === activeTab;
-  // 1000ms = 퇴장 페이드(240ms)가 스왑 정적화 동안 멈춰 있을 수 있는 몫까지 — 끝난 뒤엔 opacity 0(forwards)·inert 라 남아 있어도 안 보인다.
+  // 1000ms = 퇴장 페이드(180ms)가 스왑 정적화 동안 멈춰 있을 수 있는 몫까지 — 끝난 뒤엔 opacity 0(forwards)·inert 라 남아 있어도 안 보인다.
   const userMenuShown = useDelayedUnmount(menuLive, 1000);
 
   // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(useScrollY 공용 구독 — MO-9A)
@@ -394,6 +394,14 @@ const AppHeader = memo(function AppHeader({
         // ⚠ glass-strong(요소 자체에 필터)이 아니라 glass-chrome(::before 레이어): 헤더 안 알림 스크림이 fixed 라
         //   필터가 헤더를 컨테이닝 블록으로 만들면 스크림이 헤더 안에 갇힌다(index.css 주석·backstack.spec 실측).
         'sticky top-0 z-50 glass-chrome border-b border-border-default/60', /* v6.1: subtle(1.18:1)은 유리 크롬과 본문이 한 덩어리로 보였다 */
+        // 🔴 M4-02(2026-10-04) — 축소는 **레이아웃을 안 바꾸고** 한다. 예전엔 줄 높이를 h-header-h → h-11 로 바꿔
+        //   인플로우 sticky 헤더 아래 본문 전체가 12.75px 밀렸고(입력 없는 CLS 0.015/회, 내림·올림마다), 스크롤 앵커링이 그만큼 scrollY 를 되밀었다.
+        //   이제 상자 높이는 그대로 두고 sticky 기준을 위로 0.75rem(=60.5−47.75) 올려 윗부분을 화면 밖으로 보내고(아래 줄은 같은 만큼
+        //   translate 로 반만 내려 보이는 띠 가운데에 둔다). sticky 오프셋·transform 은 layout-shift 로 집계되지 않는다(실측).
+        //   보이는 헤더 밑면은 종전과 같은 47.75 — --header-now 소비처(섹션 바·알림 패널)는 그대로 맞는다.
+        //   ⚠ transform 은 헤더가 아니라 **안쪽 줄**에만 — 헤더에 걸면 안의 알림 스크림(fixed)이 헤더에 갇힌다(CLAUDE.md 참고 메모).
+        //   ⚠ 상자 높이가 안 변하므로 offsetHeight 는 늘 같다 — 탭·섹션 스크롤 복원(lib/headerShrink.restoreScrollTop)은 보정 없이 그대로 돌아간다(앵커링 되밀림도 없다).
+        shrunk ? 'max-md:-top-3' : '',
         // PWA(노치 기기): 상태바 영역까지 헤더 배경으로 덮음 — 스크롤 시 위로 컨텐츠 비침 방지
         'pt-[env(safe-area-inset-top)]',
         suppressed ? 'invisible pointer-events-none' : '',
@@ -403,8 +411,9 @@ const AppHeader = memo(function AppHeader({
       <div className={[
         // [DS] MO-3: height 트랜지션 금지 — 200ms 동안 매 프레임 문서 전체 리레이아웃(+RO 연쇄 재측정)이
         // 스크롤과 겹쳐 얀크의 주범이었다. 즉시 전환 = 리레이아웃 1회. (§20.5 #1 height 애니 금지)
-        'flex items-center justify-between px-page-x',
-        shrunk ? 'h-11 md:h-header-h' : 'h-header-h',
+        'flex h-header-h items-center justify-between px-page-x',
+        // M4-02 — 줄 높이는 고정, 축소 때 위 sticky 오프셋(−0.75rem)의 절반만 내려 보이는 띠(46.75) 가운데에 선다.
+        shrunk ? 'max-md:translate-y-1.5' : '',
       ].join(' ')}>
 
         {/* LEFT: PC=로고 / 모바일=현재 탭 큰 타이틀(Riot Mobile 스타일) */}
@@ -541,7 +550,9 @@ const AppHeader = memo(function AppHeader({
                   data-menu-leave={menuLive ? undefined : ''}
                   className={`absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog z-50 overflow-hidden ${
                     menuLive ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'}`}
-                  style={menuLive ? undefined : { animationDuration: `${LEAVE_FADE_MS}ms`, animationTimingFunction: LEAVE_EASE }}
+                  // M4-04(2026-10-04) — 닫힘은 이웃 드롭다운(알림 패널)과 같은 animate-fade-out 기본값(0.18s · --ease)이다.
+                  //   예전엔 떠나는 판 상수(240ms · (.4,0,.2,1))를 빌려 써 같은 자리의 두 드롭다운이 다르게 사라졌다.
+                  //   탭 이동으로 걷힐 때 판과 같은 순간에 출발하는 것은 index.css [data-swap-freeze] [data-menu-leave] 일시정지가 맡는다.
                 >
                   {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
                   <button
@@ -2547,9 +2558,13 @@ export default function App() {
     window.addEventListener('resize', schedule);
     let ro: ResizeObserver | undefined;
     if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(schedule); ro.observe(headerEl); }
+    // M4-02 — 헤더 축소는 이제 상자 크기를 안 바꾼다(sticky 오프셋) → RO 가 침묵한다. 축소 표식이 바뀔 때 다시 잰다.
+    const shrinkMo = new MutationObserver(schedule);
+    shrinkMo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-header-shrunk'] });
     const t = setTimeout(schedule, 300); // 폰트/레이아웃 안정화 후 재측정
     return () => {
       window.removeEventListener('resize', schedule);
+      shrinkMo.disconnect();
       ro?.disconnect();
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(t);

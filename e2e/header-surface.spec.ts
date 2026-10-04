@@ -59,7 +59,7 @@ const surfaces = (page: Page) => page.evaluate(() => {
   const root = getComputedStyle(document.documentElement);
   return {
     before: b.backgroundColor, beforeBackdrop: b.backdropFilter || (b as unknown as { webkitBackdropFilter: string }).webkitBackdropFilter,
-    host: { filter: cs.filter, backdrop: cs.backdropFilter, transform: cs.transform, willChange: cs.willChange, bg: cs.backgroundColor, position: cs.position, h: h.getBoundingClientRect().height, borderColor: cs.borderBottomColor },
+    host: { filter: cs.filter, backdrop: cs.backdropFilter, transform: cs.transform, willChange: cs.willChange, bg: cs.backgroundColor, position: cs.position, h: h.getBoundingClientRect().height, bottom: h.getBoundingClientRect().bottom, borderColor: cs.borderBottomColor },
     subbar: sub ? getComputedStyle(sub).backgroundColor : '',
     surfaceBase: root.getPropertyValue('--surface-base').trim(),
     logo: h.querySelector<HTMLElement>('button[aria-label="메인으로 이동"]')?.getBoundingClientRect().toJSON(),
@@ -96,9 +96,11 @@ for (const theme of ['dark', 'light'] as const) {
     await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(300);
     const s2 = await surfaces(page);
     expect(s2.before).toBe(s.before);
-    expect(s2.host.h, '축소 상태 h-11(46.75) + border 1 = 47.75 (N09 전과 동일 실측)').toBeCloseTo(47.75, 0);
+    // M4-02(2026-10-04) — 축소는 레이아웃을 안 바꾼다(sticky 오프셋 −0.75rem). 상자 높이는 그대로, **보이는 밑면**이 47.75 다.
+    expect(s2.host.bottom, '축소 상태 보이는 밑면 h-11(46.75) + border 1 = 47.75 (N09 전과 동일 실측)').toBeCloseTo(47.75, 0);
+    expect(s2.host.h, '축소가 상자 높이를 바꿨다 — 본문이 12.75px 밀리는 입력 없는 CLS 가 돌아온다(M4-02)').toBeCloseTo(60.5, 0);
     await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(300);
-    expect((await surfaces(page)).host.h).toBeCloseTo(60.5, 0);
+    expect((await surfaces(page)).host.bottom).toBeCloseTo(60.5, 0);
   });
 }
 

@@ -315,9 +315,10 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   //   ⇒ CLS 는 **여러 원인이 한 숫자로 뭉개지는 지표**라 이 용도에 안 맞는다.
   //     기전을 직접 재라: keepViewport 는 문서를 접어 scrollY 를 0 으로 만들고, 그 스크롤 이벤트가
   //     **헤더 축소를 풀어(47.75 → 60.5)** 배경 전체를 12.75px 내린다. 그 둘은 이진값이라 안 뭉개진다.
+  // ⚠ M4-02(2026-10-04) — 헤더 축소는 상자 높이가 아니라 sticky 오프셋이라 `h` 는 **보이는 밑면(bottom)** 이다(펴짐 60.5 · 축소 47.75).
   const before2 = await page.evaluate(() => {
     const bell = document.querySelector('button[aria-label^="알림"]')!;
-    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
+    return { h: +bell.closest('header')!.getBoundingClientRect().bottom.toFixed(2), y: Math.round(window.scrollY) };
   });
   // 스크롤이 56 을 넘었으니 헤더는 **축소 상태**여야 한다. 아니면 이 검사의 전제가 무너진 것이다.
   expect(before2.h, `열기 전 헤더가 축소 상태가 아니다(${before2.h}) — scrollY ${before2.y} 인데도 그렇다면`
@@ -331,7 +332,7 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   await page.waitForTimeout(900);
   const during = await page.evaluate(() => {
     const bell = document.querySelector('button[aria-label^="알림"]')!;
-    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
+    return { h: +bell.closest('header')!.getBoundingClientRect().bottom.toFixed(2), y: Math.round(window.scrollY) };
   });
   expect(during.h, `글을 여는 동안 배경 헤더 높이가 ${before2.h} → ${during.h} 로 바뀌었다`
     + ' — 잠금 방식이 문서를 접어 scrollY 를 0 으로 만들고 헤더 축소를 풀었다'
