@@ -12,7 +12,6 @@
 import { memo } from 'react';
 import Icon from '../../atoms/Icon';
 import Avatar from '../../atoms/Avatar';
-import MarqueeText from '../../atoms/MarqueeText';
 import { MiniCard } from '../../atoms/HandCards';
 import { tierCss } from '../../atoms/TierBadge';
 import { nickColorVar } from '../../../lib/cosmetics';
@@ -59,10 +58,6 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       className={[
         'cv-row-sm min-h-(--row-h-sm) flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-hidden focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
-        // 제목 전광판 양 끝 페이드(MarqueeText .marquee-fade)의 지면색 — 행 배경이 바뀌는 상태마다 같은 합성색을 준다(M-12).
-        //   행은 card-aura(surface-low) 목록 안에 있다.
-        selected ? '[--marquee-fade:color-mix(in_srgb,rgb(var(--accent-300))_10%,rgb(var(--surface-low)))]'
-          : 'hover:[--marquee-fade:color-mix(in_srgb,rgb(var(--surface-high))_60%,rgb(var(--surface-low)))] active:[--marquee-fade:rgb(var(--surface-high))]',
       ].join(' ')}
     >
       {/* 끌올(100점)은 카테고리 자리를 뺏지 않는다 — 앞에 한 칸을 더 쓴다.
@@ -81,10 +76,12 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       {hot
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
         : <span className={['shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>}
-      {/* 제목**만** 전광판으로 흘린다(오너 지시 2026-09-05). 배지는 고정이다 —
-          예전엔 이 칸 전체가 truncate 라 제목이 길면 뒤의 [댓글수]·사진수까지 같이 잘렸다.
-          그건 '훑어보는 정보'라 흘러가거나 잘리면 목록의 기능 자체가 사라진다.
-          MarqueeText 는 **넘칠 때만** 애니메이션을 붙이므로 짧은 제목은 지금과 똑같이 정적이다. */}
+      {/* 제목**만** 말줄임(…)한다. 배지·[댓글수]·사진수는 고정이다 —
+          예전엔 이 칸 전체가 truncate 라 제목이 길면 뒤의 [댓글수]·사진수까지 같이 잘렸다(훑어보는 정보라 잘리면 목록 기능이 사라진다).
+          🔴 2026-10-04 오너: "제목이 오른쪽으로 흘러가는 것 제거, 정적으로만 · 글씨를 줄여 조금 더 길게 · 넘치면 …".
+            2026-09-05 의 전광판(MarqueeText, 넘칠 때만 흐름)을 걷고 한 줄 정적 말줄임으로 되돌렸다.
+            글씨: 제목 14.875 → 13.6px(0.8rem), 작성자·댓글수 12.75 → 11.69px(text-2xs). 행 높이는 --row-h-sm(44px) 그대로(히트영역).
+            잘린 제목은 title(툴팁)로 전체를 준다 — 스크린리더는 잘리지 않은 DOM 글자를 그대로 읽는다. */}
       <span className="flex min-w-0 flex-1 items-center">
         {/* 🔴 2026-09-23 오너 "앞에 빨간 불이 왜 있는지 모르겠고" — 제목 앞 NEW 점(24시간 이내 글)을 뺐다.
             Phase 14 에서 pokergosu 목록 밀도를 따라 넣은 것인데, 정보가 0 인 표시였다:
@@ -94,8 +91,10 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
             ② 색이 danger(빨강) 토큰이었다 — 이 앱에서 빨강은 오류·HOT·비추천이라 '새 글'이 경고로 읽혔다.
             되살리려면 색을 danger 밖으로 빼고 **정렬이 말하지 못하는 것**을 먼저 정의해라(예: 마지막 방문 이후).
             ⚠ ScheduleDetailModal 의 대회 Q&A 안읽음 점은 생김새가 같지만 **다른 기능**이다 — 같이 지우지 마라. */}
-        <MarqueeText text={post.title || post.content.slice(0, 40)}
-          className="min-w-0 flex-1 text-sm font-bold leading-tight text-ink-primary" />
+        <span data-post-title="" title={post.title || post.content.slice(0, 40)}
+          className="block min-w-0 flex-1 truncate text-[0.8rem] font-bold leading-tight text-ink-primary">
+          {post.title || post.content.slice(0, 40)}
+        </span>
         {(replay || hand || isSpot) && (
           <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : isSpot && !hand ? 'NURI SPOT' : '핸드 첨부'}>
             <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
@@ -106,13 +105,13 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
             <Icon name="image" size={12} className="inline align-[-2px]" />{imgCount > 1 ? imgCount : ''}
           </span>
         )}
-        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
+        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-2xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
       </span>
       {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
           flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
-      <span className="shrink-0 max-w-28 truncate text-xs text-ink-muted">{mark}{post.userName}</span>
+      <span className="shrink-0 max-w-28 truncate text-2xs text-ink-muted">{mark}{post.userName}</span>
       {/* 칭호 칩 미노출(2026-09-18 오너) — 아래 PostCard 주석 참고. 한 줄 행은 폭이 더 빠듯하다. */}
-      <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
+      <span className="hidden shrink-0 text-2xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
     </li>
   );
 }, samePostProps);
@@ -165,9 +164,6 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
           : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
-        // 제목 전광판 양 끝 페이드의 지면색(M-12) — 상태 배경은 card-aura 의 surface-low 를 **대체**하고 페이지(surface-base) 위에 얹힌다.
-        selected ? '[--marquee-fade:color-mix(in_srgb,rgb(var(--accent-300))_7%,rgb(var(--surface-base)))]'
-          : 'hover:[--marquee-fade:color-mix(in_srgb,rgb(var(--surface-high))_50%,rgb(var(--surface-base)))] active:[--marquee-fade:rgb(var(--surface-high))]',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
@@ -213,10 +209,10 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
             {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}
             <span className={['mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>
           </div>
-          {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄.
-              PostRow 와 같은 전광판 규칙(fdc8550 ④, #24): 넘칠 때만 흐르고 짧은 제목은 정적 truncate 그대로 */}
+          {/* 제목 — 한 줄 목록(PostRow)과 같은 위계(13.6px). 카드에서 제일 먼저 읽히는 줄.
+              PostRow 와 같은 규칙(2026-10-04 오너): 흐르지 않고 한 줄 정적 말줄임 · 전체는 title 로 */}
           {post.title && (
-            <MarqueeText text={post.title} className="mt-1 text-sm font-bold leading-tight text-ink-primary" />
+            <span data-post-title="" title={post.title} className="mt-1 block truncate text-[0.8rem] font-bold leading-tight text-ink-primary">{post.title}</span>
           )}
           {spotV && <SpotTableFeed v={spotV} />}
           {/* 본문 발췌 — 2줄 클램프 */}

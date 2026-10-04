@@ -426,7 +426,10 @@ function CommunityTab({
           래퍼에 붙이는 이유: `CommunityShoutBar` 의 내용은 비동기로 도착하지만 래퍼는 첫 커밋부터 있고
           컴포넌트가 `min-h` 로 자리를 미리 잡아(위 주석) 도착 시 아래를 밀지 않는다 — 즉 cohort 에
           안정적으로 들어온다. sticky 서브바·fixed·모달의 조상이 아니라 순수 일반 흐름 블록이다. */}
-      <div data-main-enter className="mx-auto w-full max-w-3xl">
+      {/* 🔴 2026-10-04 오너 "외치기 칸 위아래 공백을 줄여라" — 위(하위 탭 바)·아래(본문) 간격 12.75 → 6.375.
+          부모 space-y-3 은 `> :not([hidden]) ~ :not([hidden])`(특이도 0,3,0)로 margin-top 12.75·margin-bottom 0 을 박으므로 ! 로 이긴다:
+          위 = 이 래퍼 margin-top 6.375 / 아래 = 이 래퍼 margin-bottom −6.375 가 본문 칸의 margin-top 12.75 와 상쇄돼 6.375. */}
+      <div data-main-enter className="mx-auto mt-1.5! -mb-1.5! w-full max-w-3xl">
         <CommunityShoutBar />
       </div>
 
