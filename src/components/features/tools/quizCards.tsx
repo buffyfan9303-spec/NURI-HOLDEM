@@ -75,7 +75,7 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
                 : 'border-border-subtle bg-surface-high text-ink-muted';
           return (
             <button key={a} type="button" onClick={() => onPick(a)} disabled={picked !== null}
-              className={['rounded-input border py-2.5 text-sm font-extrabold transition-colors', cls].join(' ')}>
+              className={['min-h-[44px] rounded-input border py-2.5 text-sm font-extrabold transition-colors', cls].join(' ')}>
               {a}
             </button>
           );
