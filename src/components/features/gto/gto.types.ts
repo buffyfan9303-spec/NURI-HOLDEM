@@ -12,6 +12,13 @@ export interface Card {
   suit: Suit;
 }
 
+/** 카드 식별자 — 예: 'As'. 여기(타입 파일)에 둔다: 무늬 글자만 쓰는 HandCards·CardGridPicker 가
+ *  useDeepGto 를 물면 레인지 표(ranges.data)·에퀴티 엔진이 커뮤니티 피드까지 딸려 왔다(2026-10-04 실측 16KB gz). */
+export type CardId = string;
+export function cardId(c: Card): CardId {
+  return `${c.rank}${c.suit}`;
+}
+
 /** 시작 핸드 분류 */
 export type ComboKind = 'pair' | 'suited' | 'offsuit';
 /** 무늬 조합(서로 다른 두 랭크일 때만 의미 있음) */

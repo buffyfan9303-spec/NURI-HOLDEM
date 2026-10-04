@@ -55,16 +55,31 @@ async function bootTools(page: Page) {
   await page.waitForTimeout(4_500);
 }
 
-test('① lazy 도구 4개 — 첫 열기에 "불러오는 중…" 폴백 프레임이 0 이다', async ({ page }) => {
-  test.setTimeout(90_000);
+// 2026-10-04 — 데이터가 무거운 GTO 도구 8개(레인지·푸시폴드·트레이너 2·오답·MDF·공격성·레인지 대결)도 지연 청크로 옮겼다.
+const LAZY_KEYS = ['gto', 'startrank', 'spot', 'replay', 'range', 'pushfold', 'trainer', 'postflop', 'wrongnote', 'mdf', 'aggro', 'rvr'];
+
+test('① lazy 도구 12개 — 첫 열기에 "불러오는 중…" 폴백 프레임이 0 이다', async ({ page }) => {
+  test.setTimeout(150_000);
   await bootTools(page);
-  for (const key of ['gto', 'startrank', 'spot', 'replay']) {
+  for (const key of LAZY_KEYS) {
     const frames = await openAndRecord(page, `tool-${key}`);
     const fb = frames.filter((f) => f.fb);
     expect(frames.some((f) => f.open && f.h > 150 && !f.fb), `${key}: 본문이 그려지지 않았다`).toBe(true);
     expect(fb.length, `${key}: 폴백 ${fb.length}프레임(${fb[0]?.t}~${fb.at(-1)?.t}ms) — 새 Suspense 경계의 300ms 스로틀이 다시 보인다`).toBe(0);
     await closeTool(page);
   }
+});
+
+test('①-b 미리 받기 전에 눌러도 폴백 0 — 모듈이 온 뒤 연다(ToolsPanel whenToolReady)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootOwner(page, { viewport: { width: 390, height: 844 } });
+  await page.goto('/?tab=tools');
+  await expect(page.locator('[data-testid="tool-pushfold"]')).toBeVisible({ timeout: 30_000 });
+  // 유휴 미리 받기(requestIdleCallback)를 기다리지 않고 바로 누른다 — 청크가 아직 없을 수 있는 순간이다.
+  const frames = await openAndRecord(page, 'tool-pushfold', 1500);
+  const fb = frames.filter((f) => f.fb);
+  expect(frames.some((f) => f.open && f.h > 150 && !f.fb), '푸시폴드 본문이 그려지지 않았다').toBe(true);
+  expect(fb.length, `폴백 ${fb.length}프레임(${fb[0]?.t}~${fb.at(-1)?.t}ms) — 모듈 도착 전에 판을 열었다`).toBe(0);
 });
 
 test('② 페이지 모달 fade-in 이 합성 스레드에서 돈다(compositeFailed 0)', async ({ page, browserName }) => {

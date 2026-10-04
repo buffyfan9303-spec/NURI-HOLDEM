@@ -21,8 +21,7 @@ import type { OutsResult, Standing } from './equityEngine';
 import { outsHeadline } from './outsHeadline';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard, type HandBoardInit } from './useHandBoard';
-import { cardId } from './useDeepGto';
-import type { Card } from './gto.types';
+import { cardId, type Card } from './gto.types';
 
 const SNAP = 'tool:outs';
 // 진입 즉시 결과 — 빈 폼 대신 대표 상황(A♠K♠ 넛 플러시 드로우 vs 셋). GTO 패널의 데모 프리필과 같은 문법.
