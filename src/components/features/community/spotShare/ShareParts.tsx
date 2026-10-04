@@ -8,7 +8,16 @@ import type { ReactNode } from 'react';
 import Icon from '../../../atoms/Icon';
 import type { ShareView, ViewStreet } from './shareView';
 
-const SUIT = { s: '♠', h: '♥', d: '♦', c: '♣' } as const;
+// 무늬는 글자(♠♥♦♣)가 아니라 Icon 글리프(SVG)다 — M3-03(2026-10-04). Pretendard 에 ♥ 만 있고 ♠♦♣ 는 없어서(e2e/font-coverage 주석),
+//   글자로 쓰면 SPOT 상세를 처음 열 때 글꼴 대체 탐색이 웹폰트 면을 15개 새로 만들었다(트레이스 FontDataManager::onMakeFromStreamArgs
+//   15회 363ms · 그 레이아웃 606ms → 무늬를 빼면 0회 · 130ms, CPU4). 그 비용이 첫 레이아웃 한 번에 몰려 열기가 0.3초 멈췄다.
+//   SVG 는 글꼴을 타지 않는다. iOS·일부 안드로이드의 ♥♦ 컬러 이모지 승격도 함께 사라진다(VenueThumb 의 [DS] IMG-2 와 같은 이유).
+const SUIT = { s: 'spade', h: 'heart-suit', d: 'diamond', c: 'club' } as const;
+// 무늬별 배율(transform — 레이아웃 불변). Icon 경로는 무늬마다 폭이 달라(♥ 24 중 20 · ♠ 12.6) 같은 상자면 ♥ 가 ♠ 의 1.8배 면적이 됐다
+//   (design-reviewer 10-04 잉크 실측). 예전 글자판의 잉크 크기·♥:♠ 면적비(1.15~1.21)에 맞춘 값이다. 공용 Icon 경로는 건드리지 않는다(VenueThumb 등).
+const SUIT_SCALE = { s: 1.27, h: 1.03, d: 0.975, c: 1.22 } as const;
+// 키운 ♠♣ 는 경로 중심이 상자 중심보다 위라 잉크가 0.6~1.6px 올라갔다 → 무늬 크기(z.suit)에 비례해 내린다(예전 글자판 세로 자리).
+const SUIT_DY = { s: 0.07, h: 0, d: 0, c: 0.035 } as const;
 const SUIT_NAME = { s: '스페이드', h: '하트', d: '다이아몬드', c: '클럽' } as const;
 const SUIT_HEX = { s: '#111827', h: '#C81E2B', d: '#0369A1', c: '#167247' } as const;
 type SuitKey = keyof typeof SUIT;
@@ -37,7 +46,8 @@ export function PlayingCard({ code, size = 'md' }: { code: string; size?: CardSi
       className="inline-flex shrink-0 flex-col items-center justify-center bg-white font-extrabold leading-none"
       style={{ width: z.w, height: z.h, borderRadius: z.r, color: SUIT_HEX[s], boxShadow: CARD_EDGE }}>
       <span style={{ fontSize: z.rank, letterSpacing: rank === '10' ? '-0.06em' : undefined }} className="tabular-nums">{rank}</span>
-      <span aria-hidden style={{ fontSize: z.suit, marginTop: 1 }}>{SUIT[s]}</span>
+      {/* 상자는 예전 글자 무늬와 같다(z.suit · 위 1px) — 랭크·카드 기하 불변. 잉크 크기는 무늬별 배율로 맞춘다(아래 SUIT_SCALE). */}
+      <Icon name={SUIT[s]} size={z.suit} style={{ marginTop: 1, transform: `translateY(${+(SUIT_DY[s] * z.suit).toFixed(2)}px) scale(${SUIT_SCALE[s]})` }} />
     </span>
   );
 }
