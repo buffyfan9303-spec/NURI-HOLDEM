@@ -123,7 +123,7 @@ describe('배선 계약', () => {
 
   it('🔴 이미 받은 코칭은 시트(차감 안내)를 열지 않고 "다시 보기 (무료)" — 서버도 같은 스냅샷은 무료(캐시)', () => {
     expect(REPORT).toContain('const prior = shown !== null;');
-    expect(REPORT).toMatch(/if \(prior\) \{[^}]*scrollIntoView[^}]*\}\);? return; \}\s*if \(ensureLogin\(user\)\) setAsking\(true\);/);
+    expect(REPORT).toMatch(/if \(prior\) \{[^}]*scrollIntoView[^}]*\}\);? return; \}\s*void openSheet\(\);/);
     expect(REPORT).toContain("prior ? 'AI 코칭 다시 보기 (무료)' : free ? `AI 아쉬운 포인트 보기 (${freeTag})` : 'AI 아쉬운 포인트 보기'");
     // 이전 판에 '내 스팟' 에서 연 스팟이 "30P 차감" 으로 보였다 — 저장된 같은 스팟의 끝난 코칭을 미리 읽는다.
     expect(REPORT).toMatch(/listSpotAiReviews\(\[id\]\)/);
@@ -161,6 +161,22 @@ describe('배선 계약', () => {
     // GTO 탭 NURI SPOT 카드 안내(오너 2026-10-04: 입구 안내 한 줄)
     const TOOLS = strip(read('src/components/features/ToolsPanel.tsx'));
     expect(TOOLS).toMatch(/data-testid="spot-hero-ai">AI 코칭 첫 \{SPOT_AI_FREE_COUNT\}회 무료 · 이후 회당 \{SPOT_AI_PRICE\}P · 하루 \{SPOT_AI_DAILY_LIMIT\}회</);
+  });
+
+  // critical P3(2026-10-04): 화면 첫 조회값으로 시트를 열면 다른 탭에서 무료를 다 쓴 뒤 '무료' 시트에서 30P 가 과금됐다.
+  it('🔴 시트는 서버의 지금 상태로 연다 · 무료로 보여 준 시트는 보내기 직전에 다시 확인 · 안내는 서버 응답(free) 기준', () => {
+    const open = REPORT.slice(REPORT.indexOf('const openSheet = async'), REPORT.indexOf('const run = async'));
+    expect(open.indexOf('await getSpotAiStatus()'), '시트를 열기 전에 상태를 다시 읽지 않는다').toBeGreaterThan(0);
+    expect(open.indexOf('await getSpotAiStatus()')).toBeLessThan(open.indexOf('setAsking(true)'));
+    expect(open).toContain('if (!blockedBy(fresh)) setAsking(true);');
+    const run = REPORT.slice(REPORT.indexOf('const run = async'), REPORT.indexOf('return (', REPORT.indexOf('const run = async')));
+    expect(run.indexOf('fresh.freeLeft <= 0'), '무료 시트에서 보내기 전 재확인이 없다').toBeGreaterThan(0);
+    expect(run.indexOf('fresh.freeLeft <= 0'), '재확인이 요청보다 뒤다').toBeLessThan(run.indexOf('requestSpotAi(id)'));
+    expect(run, '성공 뒤 서버 값으로 다시 맞추지 않는다').toMatch(/getSpotAiStatus\(\)\.then\(\(s\) => \{ if \(s\) setStatus\(s\); \}\)/);
+    expect(run, '화면이 짐작한 차감으로 상태를 고친다').not.toMatch(/available: s\.available - s\.price/);
+    // 엣지는 begin 이 정한 free·free_left 를 그대로 싣고, 클라이언트는 그 값을 읽는다
+    expect(FN).toContain('free: bd.free === true, free_left: bd.free_left');
+    expect(read('src/api/spotReview.ts')).toContain("free: typeof data?.free === 'boolean' ? data.free : undefined");
   });
 
   // 2026-10-04 오너: 계정마다 평생 첫 3회 무료 · 이후 회당 30P · 하루 3회(무료 회차도 센다) — 20261004g

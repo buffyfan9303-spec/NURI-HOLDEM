@@ -367,9 +367,36 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
   const prior = shown !== null;
   const disabled = prior ? busy : (!complete.ok || blocked || outOfDay || poor || busy);
 
+  /** 지금 서버 기준으로 새 요청이 막히는가(하루 한도 · 무료 소진 뒤 포인트 부족) — 버튼의 disabled 와 같은 규칙. */
+  const blockedBy = (s: SpotAiStatus) => s.usedToday >= s.limit || (s.freeLeft <= 0 && s.available < s.price);
+
+  // critical P3(2026-10-04): status 는 화면 처음에 한 번 받는다 — 다른 탭·기기에서 마지막 무료를 쓰면 화면은 아직 '무료' 다.
+  //   그대로 시트를 열면 '무료로 코칭 받기' 를 누른 사람에게 서버가 30P 를 쓴다(과금 표시 불일치).
+  //   → 시트를 **열 때** 서버의 지금 상태로 다시 맞추고(무료 소진이면 30P 시트), 막히면 열지 않는다.
+  const openSheet = async () => {
+    if (!ensureLogin(user)) return;
+    setBusy(true);
+    try {
+      const fresh = await getSpotAiStatus();
+      if (!fresh) { toast.show(spotAiMessage('UNKNOWN'), 'error'); return; }
+      setStatus(fresh);
+      if (!blockedBy(fresh)) setAsking(true);
+    } finally { setBusy(false); }
+  };
+
   const run = async () => {
     setBusy(true);
     try {
+      // 시트가 떠 있는 사이에 무료가 소진됐을 수 있다 — 무료로 보여 준 시트에서는 과금 가능한 요청을 보내지 않는다.
+      if (free) {
+        const fresh = await getSpotAiStatus();
+        if (fresh && fresh.freeLeft <= 0) {
+          setStatus(fresh);
+          if (blockedBy(fresh)) setAsking(false);
+          toast.show(`무료 ${fresh.freeLimit}회를 모두 사용했습니다 — 이제 회당 ${fresh.price}P입니다. 다시 확인해 주세요.`, 'info');
+          return;
+        }
+      }
       // AI 는 저장된 행에만 붙는다 — 없으면 같은 내용 행을 찾고, 그래도 없으면 지금 저장한다.
       let id = savedId ?? await findSavedSpotId(spot);
       if (!id) {
@@ -381,9 +408,11 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       const r = await requestSpotAi(id);
       setResult({ key, body: r.body });
       setAsking(false);
-      if (!r.cached) setStatus((s) => (s ? (free
-        ? { ...s, usedToday: s.usedToday + 1, freeLeft: Math.max(0, s.freeLeft - 1) }
-        : { ...s, usedToday: s.usedToday + 1, available: s.available - s.price }) : s));
+      // 무엇이 실제로 쓰였는지는 서버 응답(free·free_left)이 말한다 — 화면이 짐작한 값으로 안내하지 않는다.
+      if (!r.cached && r.free !== undefined) {
+        toast.show(r.free ? `무료 코칭을 받았습니다 (무료 ${r.freeLeft ?? 0}/${status.freeLimit} 남음)` : `활동 포인트 ${status.price}P를 사용했습니다`, 'success');
+      }
+      getSpotAiStatus().then((s) => { if (s) setStatus(s); });
     } catch (e) {
       toast.show(msgOf(e, spotAiMessage('UNKNOWN')), 'error');
       setAsking(false);
@@ -403,7 +432,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         onClick={() => {
           // 이미 받은 코칭은 아래에 펼쳐져 있다 — 시트(30P 차감 안내)를 열지 않고 그 자리로 데려간다.
           if (prior) { resultRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
-          if (ensureLogin(user)) setAsking(true);
+          void openSheet();
         }}
         data-testid="spot-ai-open"
         className="btn-ghost flex min-h-[44px] w-full items-center justify-center gap-1.5 whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">

@@ -1,6 +1,8 @@
 -- 20261004g — NURI SPOT AI 코칭: 회원 계정마다 평생 첫 3회 무료, 그 뒤 회당 30P (오너 결정 2026-10-04).
 --
--- ⏳ 미적용(작성만 · gto-team 2026-10-04). 적용은 리드 — nuri-migration §0 절차(MCP execute_sql → 자가검사 → 이 머리에 ✅ + 실측값).
+-- ✅ 적용 완료 2026-10-04 (리드 · critical PASS · 리허설 F0~F14) — project idsxiqspecrucvfvtgbw · MCP execute_sql
+--   적용 후 실측 md5: _spot_ai_begin 10c6dcb1… · spot_ai_status 5322f7a3… · _spot_ai_refund a1df4e47… · spot_ai_reviews.purchase_id is_nullable=YES
+--   (작성 gto-team 2026-10-04 · 아래 게이트 md5 는 적용 **전** 정의 값이다 — 다시 돌리면 게이트에서 멈추는 것이 정상)
 --   롤백 리허설: 운영 DB 위에서 dummy-1004/rehearse.mjs 로 s1(더미 손님) + 이 파일 + s2(무료·과금 T) 를 한 트랜잭션에 돌리고 RAISE 로 되돌림.
 --   결과는 아래 '리허설' 줄과 spot-ai-1004/README.md.
 --

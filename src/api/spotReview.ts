@@ -87,7 +87,7 @@ export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; pr
 const KNOWN: readonly SpotAiCode[] = ['INSUFFICIENT', 'DAILY_LIMIT', 'DISABLED', 'NOT_OWNER', 'SANCTIONED', 'PENDING', 'AI_FAILED', 'REFUND_PENDING', 'ATTEMPT_LIMIT'];
 
 /** 저장된 스팟 하나에 AI 코칭을 요청한다. 같은 스팟의 재요청은 서버가 무료로 돌려준다(cached). */
-export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean }> {
+export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean; free?: boolean; freeLeft?: number }> {
   if (IS_MOCK) throw new SpotAiError('DISABLED', spotAiMessage('DISABLED'));
   const { data, error } = await supabase.functions.invoke('spot-review', { body: { spotId: spotReviewId } });
   if (error) {
@@ -108,7 +108,12 @@ export async function requestSpotAi(spotReviewId: string): Promise<{ body: strin
   }
   const body = typeof data?.body === 'string' ? data.body.trim() : '';
   if (!body) throw new SpotAiError('UNKNOWN', spotAiMessage('UNKNOWN'));
-  return { body, cached: data?.cached === true };
+  // free·free_left 는 서버(_spot_ai_begin)가 실제로 쓴 것 — 옛 엣지(필드 없음)면 undefined.
+  return {
+    body, cached: data?.cached === true,
+    free: typeof data?.free === 'boolean' ? data.free : undefined,
+    freeLeft: typeof data?.free_left === 'number' ? data.free_left : undefined,
+  };
 }
 
 /**

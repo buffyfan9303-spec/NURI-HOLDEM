@@ -179,7 +179,8 @@ Deno.serve(async (req: Request) => {
       return await failRefunded();
     }
     pendingId = null;
-    return json({ ok: true, cached: false, body: passed.body, used: bd.used, available: bd.available });
+    // free·free_left: 이번 요청이 무료 회차였는지(20261004g) — 화면은 짐작하지 않고 이 값으로 안내한다(critical P3).
+    return json({ ok: true, cached: false, body: passed.body, used: bd.used, available: bd.available, free: bd.free === true, free_left: bd.free_left });
   } catch (e) {
     console.error('[spot-review]', e);
     if (pendingId !== null) return await failRefunded();

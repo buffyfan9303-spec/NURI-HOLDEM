@@ -22,11 +22,12 @@ const AI_BODY = '1. 프리플랍 오픈 크기를 포지션에 맞춰 줄여 볼
 type FnHandler = (route: Route) => Promise<void>;
 
 /** prior: 저장된 같은 스팟에 끝난 코칭이 이미 있다(내 스팟에서 다시 연 경우). */
-async function openSpot(page: Page, status: object, fn?: FnHandler, opts: { prior?: boolean } = {}) {
+/** status 가 함수면 매 호출마다 서버의 '지금' 상태를 돌려준다(다른 탭·성공 뒤 재조회를 흉내). */
+async function openSpot(page: Page, status: object | (() => object), fn?: FnHandler, opts: { prior?: boolean } = {}) {
   await stubLogin(page, { activity_points: 48 });
   await stabilizeBackstack(page);
   await page.route(/\/rest\/v1\/rpc\/spot_ai_status/, (r) =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) }));
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(typeof status === 'function' ? status() : status) }));
   // 같은 내용 행 조회(GET)는 빈 목록, 저장(POST)은 고정 id — 운영 spot_reviews 에 쓰지 않는다.
   await page.route(/\/rest\/v1\/spot_reviews/, (r) => r.request().method() === 'GET'
     ? r.fulfill({ status: 200, contentType: 'application/json', body: opts.prior ? JSON.stringify([{ id: SPOT_ID }]) : '[]' })
@@ -147,9 +148,11 @@ test.describe('AI 아쉬운 포인트', () => {
 
   test('🔴 완성 스팟 → 확인 시트 → spotId 하나만 보내고 결과를 보여 준다(공유 본문에는 없다)', async ({ page }) => {
     let sent: unknown = null;
-    const dlg = await openSpot(page, ON, async (r) => {
+    let srv = { ...ON };   // 서버의 지금 상태 — 성공하면 서버가 30P 를 쓴다
+    const dlg = await openSpot(page, () => srv, async (r) => {
       sent = r.request().postDataJSON();
-      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, cached: false, body: AI_BODY }) });
+      srv = { ...srv, used_today: 2, available: 18 };
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, cached: false, body: AI_BODY, free: false, free_left: 0 }) });
     });
     await fillComplete(dlg);
     const open = dlg.getByTestId('spot-ai-open');
@@ -181,7 +184,11 @@ test.describe('AI 아쉬운 포인트', () => {
   });
 
   test('🔴 무료 회차가 남으면 포인트가 0 이어도 열리고 "무료 n/3 남음" · 시트는 무료로 받기 · 성공하면 무료가 하나 준다', async ({ page }) => {
-    const dlg = await openSpot(page, { enabled: true, price: 30, used_today: 0, limit: 3, available: 0, free_limit: 3, free_left: 2 });
+    let srv = { enabled: true, price: 30, used_today: 0, limit: 3, available: 0, free_limit: 3, free_left: 2 };
+    const dlg = await openSpot(page, () => srv, async (r) => {
+      srv = { ...srv, used_today: 1, free_left: 1 };
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, cached: false, body: AI_BODY, free: true, free_left: 1 }) });
+    });
     await fillComplete(dlg);
     await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('무료 2/3 남음 · 오늘 0/3');
     const open = dlg.getByTestId('spot-ai-open');
@@ -195,6 +202,46 @@ test.describe('AI 아쉬운 포인트', () => {
     await sheet.getByTestId('spot-ai-confirm').click();
     await expect(dlg.getByTestId('spot-ai-result')).toContainText('드라이 보드');
     await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('무료 1/3 남음 · 오늘 1/3');
+  });
+
+  // critical P3(2026-10-04): status 를 화면 처음에만 받으면 다른 탭에서 마지막 무료를 쓴 뒤에도 '무료로 코칭 받기' 가 뜨고
+  //   서버는 30P 를 쓴다. 시트를 열 때 서버 상태로 다시 맞춘다 — 수정 전 빌드에서 FAIL, 수정 뒤 PASS 확인.
+  test('🔴 다른 탭에서 무료를 다 쓰면 시트가 30P 안내로 바뀐다(화면 첫 조회값을 믿지 않는다)', async ({ page }) => {
+    let srv = { enabled: true, price: 30, used_today: 0, limit: 3, available: 48, free_limit: 3, free_left: 1 };
+    let calls = 0;
+    const dlg = await openSpot(page, () => srv, async (r) => {
+      calls++;
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, cached: false, body: AI_BODY, free: false, free_left: 0 }) });
+    });
+    await fillComplete(dlg);
+    await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('무료 1/3 남음 · 오늘 0/3');
+    // 다른 탭(같은 계정)에서 마지막 무료를 썼다
+    srv = { ...srv, used_today: 1, free_left: 0 };
+    await dlg.getByTestId('spot-ai-open').click();
+    const sheet = page.locator('[data-spot-ai-confirm]');
+    await expect(sheet).toContainText('30P가 차감됩니다');
+    await expect(sheet).not.toContainText('포인트가 들지 않습니다');
+    await expect(sheet.getByTestId('spot-ai-confirm')).toHaveText('30P로 코칭 받기');
+    await expect(dlg.getByTestId('spot-ai-meta')).toHaveText('30P · 오늘 1/3 · 사용 가능 48P→18P');
+    expect(calls, '시트만 열었는데 서버를 불렀다').toBe(0);
+  });
+
+  test('🔴 시트를 띄운 사이 무료가 소진되면 무료로 받지 않고 멈춰 30P 시트로 다시 묻는다', async ({ page }) => {
+    let srv = { enabled: true, price: 30, used_today: 0, limit: 3, available: 48, free_limit: 3, free_left: 1 };
+    let calls = 0;
+    const dlg = await openSpot(page, () => srv, async (r) => {
+      calls++;
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, cached: false, body: AI_BODY, free: false, free_left: 0 }) });
+    });
+    await fillComplete(dlg);
+    await dlg.getByTestId('spot-ai-open').click();
+    const sheet = page.locator('[data-spot-ai-confirm]');
+    await expect(sheet.getByTestId('spot-ai-confirm')).toHaveText('무료로 코칭 받기');
+    srv = { ...srv, used_today: 1, free_left: 0 };   // 시트가 떠 있는 동안 다른 탭에서 마지막 무료 사용
+    await sheet.getByTestId('spot-ai-confirm').click();
+    await expect(sheet.getByTestId('spot-ai-confirm')).toHaveText('30P로 코칭 받기');
+    await expect(sheet).toContainText('30P가 차감됩니다');
+    expect(calls, '무료로 보여 준 시트에서 서버(과금 가능)를 불렀다').toBe(0);
   });
 
   test('🔴 포인트가 모자라면 버튼 아래에 이유(보유·필요)와 모으는 길을 말한다', async ({ page }) => {
