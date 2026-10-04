@@ -1573,7 +1573,7 @@ function SummaryCell({ label, value, badge, accent = false, sub, nowrap = false,
     <div data-testid={testId} className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className={`min-w-0 flex-1 ${nowrap ? 'whitespace-nowrap text-xs min-[360px]:text-sm' : 'break-keep wrap-anywhere text-sm'} font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+        <span className={`min-w-0 flex-1 ${nowrap ? 'whitespace-nowrap text-xs min-[360px]:text-sm' : 'break-keep wrap-anywhere text-sm'} font-bold leading-snug tabular-nums ${accent ? 'font-extrabold' : ''} text-ink-primary`}>
           {value}
         </span>
         {badge}

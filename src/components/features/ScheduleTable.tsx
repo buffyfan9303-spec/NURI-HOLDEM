@@ -92,9 +92,9 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                   title={s.buyIn?.amount ? `${s.buyIn.amount.toLocaleString()}원` : undefined}>
                   {buyInText(s.buyIn?.amount)}
                 </td>
-                {/* 상금은 골드 하나(스파인 컬러 예산: 상금·트로피=골드) — 카드·상세와 같은 색 역할.
+                {/* 상금은 본문 색(2026-10-04 오너 — 금색은 순위·성취 전용, 금액은 정보라 본문 색) — 카드·상세와 같은 색 역할.
                     '보장(GTD)'과 '예상'은 **다른 의미**라 같은 칸에서도 꼬리표로 구분한다. */}
-                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums text-gold-300 font-semibold">
+                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums text-ink-primary font-semibold">
                   {(s.prizePool || s.prizePercent) ? (
                     <>
                       {prizeMainText(s)}

@@ -568,7 +568,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                 ⚠ '참가비' 라벨은 금액 **바로 위**에 붙여 둔다. 맨 위로 올리면 그 라벨이 GTD 를
                   가리키는 것처럼 읽혀 '참가비 300만' 으로 오독된다(§28 이 막으려는 사고). */}
               {startTime && <p className="text-2xs leading-none tabular-nums text-ink-muted">시작 {startTime}</p>}
-              {prize && <p className="max-w-24 break-keep text-2xs font-bold leading-tight tabular-nums text-gold-400 dark:text-gold-300">{prize}</p>}
+              {prize && <p className="max-w-24 break-keep text-2xs font-bold leading-tight tabular-nums text-ink-primary">{prize}</p>}
               {buyIn > 0 && (
                 <>
                   <p className="text-2xs font-bold leading-none tracking-wide text-ink-muted">참가비</p>

@@ -590,7 +590,7 @@ function ListCard({
             ⚠ 라벨·금액 둘 다 정본 하나(prizeParts)에서 온다. 'GTD'(보장)와 '예상 상금'(엔트리 비례)은
               뜻이 달라 같은 말로 적으면 보장되지 않은 금액을 보장처럼 말하게 된다.
             ⚠ 상금이 없으면 라벨 '상금' + 값 '—'(오너 지시). 0 이나 확정값처럼 적지 않는다. */}
-        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-gold-300' : 'text-ink-muted'} />
+        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-ink-primary' : 'text-ink-muted'} /* 2026-10-04 오너: 금액은 본문 색(금색은 순위·성취 전용) */ />
         {/* 참가비 — §28 상품 가격 정보라 표시를 유지한다. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로. */}
         <Metric label="참가비" value={buyInText(schedule.buyIn?.amount)}
           title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined} />
@@ -806,7 +806,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
               {buyInText(schedule.buyIn?.amount)}
             </p>
           </div>
-          <p className={`shrink-0 text-right text-2xs font-bold tabular-nums leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+          <p className={`shrink-0 text-right text-2xs font-bold tabular-nums leading-none ${sub ? 'text-ink-primary' : 'text-ink-muted'}`}>
             {sub ?? '상금 정보 없음'}
           </p>
         </div>
@@ -966,7 +966,7 @@ function TimetableCard({
         className="flex w-20.5 min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right active:text-right">
         {gtd ? (
           <span data-testid="schedule-prize" className={`break-keep ${gtd.includes('억') ? 'text-[0.75rem]' : 'text-[0.8125rem]'} font-extrabold
- leading-tight tracking-tight tabular-nums text-gold-300`}>{gtd}</span>
+ leading-tight tracking-tight tabular-nums text-ink-primary`}>{gtd}</span>
         ) : (
           <span data-testid="schedule-daily" data-kind={kind.text} className={`text-[0.8125rem] font-extrabold leading-tight ${kind.cls}`}>{kind.text}</span>
         )}

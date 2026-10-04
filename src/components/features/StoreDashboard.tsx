@@ -1087,7 +1087,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               {caps.manage && (
               <span data-testid="dash-kpi-revenue" className="block min-w-0">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
-                {kv('text-gold-300', <>{wonToMan(day.paid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}
+                {kv('text-ink-primary', <>{wonToMan(day.paid)}<span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">만원</span></>)}
               </span>
               )}
               <span className="block min-w-0">
@@ -1627,11 +1627,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               </div>
               <div className="flex items-center justify-between border-t border-border-subtle pt-2 text-2xs">
                 <span className="text-ink-muted">7일 합계</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>회 · <b className="text-gold-300">{wonToMan(weekPaid)}</b>만</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>회 · <b className="text-ink-primary">{wonToMan(weekPaid)}</b>만</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-2xs">
                 <span className="text-ink-muted">평균 객단가</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 바인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{wonToMan(avgSpend)}</b>만 / 바인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
               </div>
             </>
           )}
@@ -1879,7 +1879,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                       <td className="py-2 px-2 text-right text-ink-secondary">{c.players}</td>
                       <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.firstBuyins}</td>
                       <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.rebuys}</td>
-                      {caps.manage && <td data-testid="dash-game-value" className="py-2 px-2 text-right font-bold text-gold-300">{wonToMan(value)}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">만</span></td>}
+                      {caps.manage && <td data-testid="dash-game-value" className="py-2 px-2 text-right font-bold text-ink-primary">{wonToMan(value)}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">만</span></td>}
                       <td className={['py-2 px-2 text-right', unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>{wonToMan(unpaid)}</td>
                       <td className="hidden py-2 px-2 lg:table-cell">
                         {ckLive
@@ -1989,11 +1989,12 @@ function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
   );
 }
 
-function Stat({ label, value, unit, gold, danger }: { label: string; value: string; unit?: string; gold?: boolean; danger?: boolean }) {
+// `gold` 는 금액 칸 표식으로 남는다 — 2026-10-04 오너 결정으로 금액은 본문 색(금색은 순위·성취 전용)이라 색을 바꾸지 않는다.
+function Stat({ label, value, unit, danger }: { label: string; value: string; unit?: string; gold?: boolean; danger?: boolean }) {
   return (
     <div>
       <p className="text-2xs text-ink-muted">{label}</p>
-      <p className={`font-extrabold tabular-nums leading-tight ${danger ? 'text-danger-light' : gold ? 'text-gold-300' : 'text-ink-primary'}`}>
+      <p className={`font-extrabold tabular-nums leading-tight ${danger ? 'text-danger-light' : 'text-ink-primary'}`}>
         <span className="text-lg">{/^[\d,]+$/.test(value) ? <CountUp value={Number(value.replace(/,/g, ''))} /> : value}</span>{unit && <span className="ml-0.5 text-2xs font-semibold text-ink-muted">{unit}</span>}
       </p>
     </div>

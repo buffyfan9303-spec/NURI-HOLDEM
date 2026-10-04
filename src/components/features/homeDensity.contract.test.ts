@@ -114,7 +114,8 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
   });
   it('금액 칸: 보장(guaranteed && prizePool)이면 금색 금액, 아니면 초록 "데일리" · 아래 참가비 · 라벨 글자 없음', () => {
     expect(TT).toMatch(/const gtd = schedule\.guaranteed && schedule\.prizePool \? formatPrize\(schedule\.prizePool\) : null;/);
-    expect(TT).toMatch(/data-testid="schedule-prize" className=\{`[^`]*text-gold-300`\}>\{gtd\}/);
+    // 2026-10-04 오너 결정: 금액(GTD)은 본문 색 — 금색은 순위·성취 전용(종전 단언: text-gold-300).
+    expect(TT).toMatch(/data-testid="schedule-prize" className=\{`[^`]*text-ink-primary`\}>\{gtd\}/);
     // 억 단위 금액은 한 단계 작게(대체 폰트에서도 한 줄) — 2026-09-25 CI 리눅스 실측
     expect(TT).toMatch(/gtd\.includes\('억'\) \? 'text-\[0\.75rem\]'/);
     expect(TT).toMatch(/data-testid="schedule-daily" data-kind=\{kind\.text\} className=\{`[^`]*\$\{kind\.cls\}`\}>\{kind\.text\}</);
