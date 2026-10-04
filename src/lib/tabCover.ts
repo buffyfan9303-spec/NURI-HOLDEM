@@ -632,8 +632,8 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   const nudge = (d: number) => { shift += d; clipBelow(lastRb); };
   clipBelow(rb);
   if (base === null) {
-    const ground = window.matchMedia('(prefers-reduced-transparency: reduce)').matches
-      ? ['var(--grad-surface)', 'var(--glow-layer)'] : ['var(--aura-layers)', 'var(--grad-surface)', 'var(--glow-layer)'];
+    // 지면 그림 = body::before 와 같은 한 장(2026-10-04 'E+황동' — 블룸 --aura-layers·--glow-layer 삭제. 없는 var() 를 남기면 선언 전체가 무효가 된다)
+    const ground = ['var(--grad-surface)'];
     el.style.backgroundColor = 'rgb(var(--surface-base))';
     el.style.backgroundImage = [...layers, ...ground].join(', ');
   } else {
