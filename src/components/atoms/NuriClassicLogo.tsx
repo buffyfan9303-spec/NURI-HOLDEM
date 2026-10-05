@@ -20,9 +20,10 @@ export default function NuriClassicLogo({ className = '', textClassName = '', pr
     <span role="img" aria-label="NURI HOLDEM" className={`relative inline-block aspect-[86.76/28] shrink-0 select-none ${className}`}>
       <BrandDiamond width={20} height={28} priority={priority} className="absolute left-0 top-0 h-full" />
       <svg viewBox={CLASSIC_VIEWBOX} aria-hidden="true" focusable="false"
-        className={`absolute inset-0 h-full w-full text-[#F1EADB] [html.light_&]:text-ink-primary ${textClassName}`}>
+        className={`absolute inset-0 h-full w-full text-[#F1EADB] [--holdem:#D9BA79] [html.light_&]:text-ink-primary [html.light_&]:[--holdem:rgb(var(--achieve))] ${textClassName}`}>
         <path fill="currentColor" transform={CLASSIC_NURI.transform} d={CLASSIC_NURI.d} />
-        <path fill={CLASSIC_HOLDEM.fill} transform={CLASSIC_HOLDEM.transform} d={CLASSIC_HOLDEM.d} />
+        {/* 'HOLDEM' — 다크는 원본 골드(#D9BA79), 라이트는 업적 금색 토큰(#7A591C, 흰 헤더 위 약 6.4:1). 원본 골드는 라이트에서 약 1.9:1 이었다(2026-10-06). */}
+        <path style={{ fill: `var(--holdem, ${CLASSIC_HOLDEM.fill})` }} transform={CLASSIC_HOLDEM.transform} d={CLASSIC_HOLDEM.d} />
       </svg>
     </span>
   );
