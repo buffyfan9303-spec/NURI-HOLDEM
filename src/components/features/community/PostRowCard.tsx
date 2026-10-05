@@ -92,7 +92,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
             되살리려면 색을 danger 밖으로 빼고 **정렬이 말하지 못하는 것**을 먼저 정의해라(예: 마지막 방문 이후).
             ⚠ ScheduleDetailModal 의 대회 Q&A 안읽음 점은 생김새가 같지만 **다른 기능**이다 — 같이 지우지 마라. */}
         <span data-post-title="" title={post.title || post.content.slice(0, 40)}
-          className="block min-w-0 flex-1 truncate text-sm font-bold leading-tight text-ink-primary">
+          className="block min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-ink-primary">
           {post.title || post.content.slice(0, 40)}
         </span>
         {(replay || hand || isSpot) && (
@@ -212,7 +212,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
           {/* 제목 — 한 줄 목록(PostRow)과 같은 위계(13.6px). 카드에서 제일 먼저 읽히는 줄.
               PostRow 와 같은 규칙(2026-10-04 오너): 흐르지 않고 한 줄 정적 말줄임 · 전체는 title 로 */}
           {post.title && (
-            <span data-post-title="" title={post.title} className="mt-1 block truncate text-sm font-bold leading-tight text-ink-primary">{post.title}</span>
+            <span data-post-title="" title={post.title} className="mt-1 block truncate text-sm font-semibold leading-tight text-ink-primary">{post.title}</span>
           )}
           {spotV && <SpotTableFeed v={spotV} />}
           {/* 본문 발췌 — 2줄 클램프 */}

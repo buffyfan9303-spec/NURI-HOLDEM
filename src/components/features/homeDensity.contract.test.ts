@@ -44,8 +44,13 @@ describe('배너 제어 — 별도 줄이 아니라 프레임 안', () => {
     // 이벤트 슬라이드만 글자가 흐름 안이다 — 200% 확대에서 프레임이 같이 자라야 한다(absolute 면 min-h 에 갇혀 잘린다)
     expect(PC).toMatch(/<span className="relative flex h-full min-h-\[inherit\] flex-col justify-end/);
   });
-  it('브랜드 아트는 원본 + 볼거리 쪽 초점(400 변형본 ~3.8배 확대 흐림 재발 방지)', () => {
-    expect(PC).toMatch(/src=\{b\.img\}\s*\n\s*alt=""\s*\n\s*className="absolute inset-0 h-full w-full object-cover object-\[72%_50%\]"/);
+  // 2026-10-05 4안: 전면 아트(cover) → 오른쪽 자개 장식(contain). 흐림 재발 방지 계약은 그대로 — 400 변형본을 쓰지 않고
+  //   960 폭 원본(AVIF→WebP)을 360/420 CSS 상자에 그린다(DPR 2.6 기준 ≈ 1:1). 치수 예약(width/height + 고정 상자)으로 CLS 0.
+  it('브랜드 장식은 960 원본(AVIF→WebP) + 고정 상자(400 변형본 ~3.8배 확대 흐림 재발 방지)', () => {
+    expect(PC).toMatch(/img: '\/banners\/mind-nacre-960'/);
+    expect(PC).toMatch(/<source type="image\/avif" srcSet=\{`\$\{b\.img\}\.avif`\} \/>/);
+    expect(PC).toMatch(/src=\{`\$\{b\.img\}\.webp`\}\s*\n\s*alt=""\s*\n\s*width=\{960\}\s*\n\s*height=\{640\}/);
+    expect(PC).toMatch(/h-\[240px\] w-\[360px\] object-contain/);
     expect(PC).not.toMatch(/thumbUrl\(b\.img, 400\)/);
   });
 });
@@ -289,7 +294,7 @@ describe('빠른 카드 두 개', () => {
 });
 
 describe('일정 제목', () => {
-  it('섹션 제목이 15/22 다(종전 18/26)', () => {
-    expect(HOME).toMatch(/const H3_CLS = 'font-display text-\[15px\] font-bold leading-\[22px\]/);
+  it('섹션 제목이 16/23 이다(종전 18/26 → 09-24 15/22 → 10-05 4안 가이드 §4)', () => {
+    expect(HOME).toMatch(/const H3_CLS = 'font-display text-\[16px\] font-bold leading-\[23px\]/);
   });
 });

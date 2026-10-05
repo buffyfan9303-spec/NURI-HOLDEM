@@ -122,7 +122,8 @@ function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | nul
  *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다).
  *  🔴 2026-09-24 HOME-DENSITY(오너: "'9월 24일 (목) 일정' 글씨 크기 줄여주고") — 18/26 → **15/22**(PC 20/28 → 18/26).
  *    두 섹션 제목('지금 등록 가능'·'N월 N일 일정')이 같은 급이라 한 벌을 같이 내렸다. 본문(13px)보다는 여전히 크다. */
-const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight text-ink-primary md:text-[18px] md:leading-[26px]';
+// 2026-10-05 4안 가이드 §4 '구역 제목 16~17/23~24' — 오너가 내린 18 을 되살리지 않고 범위 하단 16/23 으로 한 단만(+1px).
+const H3_CLS = 'font-display text-[16px] font-bold leading-[23px] tracking-tight text-ink-primary md:text-[18px] md:leading-[26px]';
 /** 🔴 2026-09-24 HOME-LAYOUT-STRETCH — PC(lg~) 일정 목록·'지금 등록 가능' 은 **2열**이다. 한 열이면 PC 카드가 1150px 인데
  *  글자는 왼쪽 ~480px 에만 있어 줄마다 오른쪽 ~670px 가 비었다(실측 1440). 카드 폭을 절반으로 묶어 늘어짐을 없앤다(블록 순서·섹션 구성은 그대로).
  *  ⚠ md(768~1023)로 내리지 않는 근거(리드 요청으로 실측, hl/fit-md.json): 두 칸이면 한 칸 359~475px 인데 지표 칸의 `sm:min-w-18`

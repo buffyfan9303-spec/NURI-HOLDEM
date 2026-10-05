@@ -1462,7 +1462,8 @@ export default function TierLeaderboard() {
               <div className="flex items-center gap-1.5 pt-2">
                 <Icon name="medal" size={13} className="shrink-0 text-emerald-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-emerald-300">활동으로 얻는 것</p>
-                <p className="shrink-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열립니다 · 구매 불가</p>
+                {/* min-w-0: 320 에서 shrink-0 이라 한 줄 그대로 7px 넘쳐 문서 가로 스크롤이 생겼다(2026-10-05 실측) — 좁으면 이 설명만 접힌다 */}
+                <p className="min-w-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열립니다 · 구매 불가</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
               <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">점수에 도달하면 영구 해금(차감 없음)</span></p>

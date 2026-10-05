@@ -762,12 +762,20 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
       data-aura data-aura-level="hero" data-aura-variant="violet"
       aria-label="NURI SPOT"
     >
+      {/* 2026-10-05 4안: 오른쪽 자개 장식(작게·옅게, 입력 화면 배경으로는 쓰지 않는다 — 가이드 §6). 박스는 카드 모서리로 자르고 클릭은 통과. */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-card">
+        <picture>
+          <source type="image/avif" srcSet="/banners/spot-nacre-720.avif" />
+          <img src="/banners/spot-nacre-720.webp" alt="" width={720} height={480} loading="lazy" decoding="async"
+            className="absolute -right-4 -top-3 h-[100px] w-[150px] object-contain opacity-[.35]" />
+        </picture>
+      </span>
       {/* ⚠ U/§7 P0-2(2026-09-12 실측): 200% 텍스트 확대 · 390px 에서 이 행의 텍스트 칸이
           clientWidth 19px / scrollWidth 119px 가 돼 **"NURI SPOT" 과 설명이 통째로 사라졌다.**
           원인은 글자 크기가 아니라 오른쪽 배지가 `shrink-0` 로 행을 다 먹는 것 —
           그래서 글자를 줄이는 대신 **배지를 아래 줄로 흘려보낸다**(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라).
           100% 에서는 폭이 남아 줄바꿈이 일어나지 않아 현재 화면은 그대로다. */}
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="relative flex flex-wrap items-center gap-2.5">
         {/* 🔴 2026-09-19 (2차) 오너 지시: **"누리스팟 최상단 배너 아이콘은 기존 아이콘으로 변경,
             gto 내에 있는 아이콘은 지금 그대로 유지."** → 이 배너만 앱 로고 심볼로 되돌린다.
             같은 날 1차에서 내가 `cards` 로 바꿨던 자리다(이유: 헤더에 같은 마크가 있어 '앱 이름'처럼
@@ -776,7 +784,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
         {/* h-9(36px): 2026-10-05 GTO 박스 축소 — 40 → 36(명세 G3). */}
         <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/12"
-          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2A2D31 0%, #18191C 58%, #0E0F11 100%)' /* 2026-10-04 네이비 → 무채색 */ }} aria-hidden>
+          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2B4166 0%, #1A2639 58%, #111A27 100%)' /* 2026-10-05 4안 — 푸른 먹색 */ }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
@@ -804,7 +812,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
       {/* 2026-10-05: 간격 10 → 8(G3) · 버튼 글자 xs → sm(오너 "글씨 작아") · 고스트 테두리 border-strong/60(mid 위 1.20 → 약 2, 명세 §2-4). */}
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
+      <div className="relative mt-2 grid grid-cols-2 gap-1.5">
         <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm">
           새 스팟 작성
         </button>
@@ -852,7 +860,7 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
             320 에서 제목 칸(58px)이 4rem(64px)보다 좁아 **제목이 아이콘 아래로 내려가** 타일이 88px 였다 — basis 를 줄여 같은 줄에 둔다.
             실측(가짜 env 빌드): 54/88 → 46(한 줄 제목)/50(두 줄 제목), 320 카탈로그 문서 길이 −472px 추정. */}
       <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
-        className="surface-brass-tile flex h-full w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-aura border border-border-strong/40 card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
+        className="surface-brass-tile flex h-full w-full min-h-[68px] flex-wrap items-center gap-x-1.5 gap-y-1 rounded-aura border border-border-strong/40 card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
@@ -902,7 +910,7 @@ function ToolRow({ name, desc, icon, onClick, onPointerDown, fav, onToggleFav, t
   return (
     <li className="relative border-t border-border-strong/25 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
       <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
-        className="flex w-full items-center gap-2 py-2.5 pl-3 pr-3 text-left transition-colors hover:bg-surface-high/50">
+        className="flex min-h-[50px] w-full items-center gap-2 py-2 pl-3 pr-3 text-left transition-colors hover:bg-surface-high/50">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center text-ink-secondary">
           <Icon name={icon} size={18} strokeWidth={1.8} aria-hidden />
         </span>
