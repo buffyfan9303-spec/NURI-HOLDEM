@@ -115,7 +115,7 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
       await mockAll(page);
       await open(page, w, 'tab=tools');
       await expect(page.locator('[data-tools-lanepanel]')).toBeVisible({ timeout: 15_000 });
-      const rows = await check(page, [{ kind: 'F3', title: /자주 쓰는 도구/ }], ['div.border-b:has(> h2.inline-flex)']);
+      const rows = await check(page, [{ kind: 'F3', title: /자주 쓰는 도구/ }], ['[data-lane-head]:has(> h2.inline-flex)']);
       expect(rows.filter((r) => r.kind === 'F3').length, '레인 머리줄이 3곳 이상 잡혀야 한다').toBeGreaterThanOrEqual(3);
     });
   }

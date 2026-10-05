@@ -974,6 +974,13 @@ video {
      ⚠ 강조 블록 전용(히어로·빠른 카드·빈 상태) — 목록 행·입력칸·칩·탭바·법정 고지에는 쓰지 않는다. 보라·청록·빛번짐·글자 그라데이션 금지(오너 2026-10-04). */
   .surface-brass { background-image: linear-gradient(135deg, rgb(140 94 20 / 0.14) 0%, transparent 55%); }
   html.light .surface-brass { background-image: linear-gradient(135deg, rgb(140 94 20 / 0.06) 0%, transparent 55%); }
+  /* GTO '자주 쓰는 도구' 타일 4칸(오너 시안 C2 '은은한 질감', 2026-10-05) — 오른쪽 위 모서리에만 옅은 황동. 사선 반짝임·빛번짐 없음. */
+  .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(140 94 20 / 0.12) 0%, transparent 62%); }
+  html.light .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(140 94 20 / 0.05) 0%, transparent 62%); }
+  /* 황동 주 버튼의 은은한 세로 면(시안 C2 — 주 버튼에만). 흰 글자 대비 위 4.81 · 아래 6.90(AA). 누르면 단색(.btn-primary active)으로. */
+  .btn-brass { background-image: linear-gradient(180deg, #9A6818 0%, #7A5212 100%); }
+  .btn-brass:hover { background-image: linear-gradient(180deg, #8C5E14 0%, #6E4A10 100%); }
+  .btn-brass:active { background-image: none; }
 
   /* ── Aura LED 백라이트 (2026-09-10, 오너 지시) ────────────────────────────────
      "중요한 상태 **뒤에서** LED 조명이 번지는" 백라이트. 카드 앞의 그림자가 아니다.
