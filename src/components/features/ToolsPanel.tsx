@@ -754,55 +754,60 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
     <section
       data-main-enter
       data-testid="spot-hero"
-      // surface-brass: 2026-10-05 오너 "밋밋한 곳 그라데이션 일부" — 왼쪽 위 모서리에서 번지는 옅은 황동 면(index.css). 글자 대비는 가장 밝은 모서리 기준 AA.
-      // 테두리 border-strong/40: 면 대비가 낮아(mid/base) 카드 윤곽이 바탕에 묻혔다(명세 §2-4).
-      className="surface-brass relative rounded-card border border-border-strong/40 bg-surface-mid p-3"
-      // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
-      // 2026-09-18: 인라인 rgb 글로우 → 토큰 LED([data-aura] hero). 라이트에서 약해지고 고대비·강제색에서 꺼진다.
+      // 🔴 2026-10-06 오너 시안 "이거 그대로 누리스팟쪽에 적용": 짙은 남색 면(은은한 사선 그라데이션) · 얇은 밝은 테두리 · 큰 반경.
+      //   면은 4안 배너 토큰(--hero-start → 카드 면 → --hero-end)이라 라이트에서는 같은 구성이 연한 하늘 면으로 바뀐다.
+      //   글자 대비(가장 밝은 왼쪽 위 모서리 기준): 다크 제목 10.5 · 안내 6.5 / 라이트 제목 10.2 · 안내 5.4(AA).
+      className="relative rounded-[0.875rem] border border-border-default bg-surface-low px-3 pb-3 pt-3.5"
+      style={{ backgroundImage: 'linear-gradient(125deg, rgb(var(--hero-start)) 0%, rgb(var(--surface-low)) 55%, rgb(var(--hero-end)) 100%)' }}
+      // 상태 표식(LED 는 2026-10-04 'E+황동' 으로 칠하지 않는다 — index.css [data-aura] 주석).
       data-aura data-aura-level="hero" data-aura-variant="violet"
       aria-label="NURI SPOT"
     >
-      {/* 2026-10-05 4안: 오른쪽 자개 장식(작게·옅게, 입력 화면 배경으로는 쓰지 않는다 — 가이드 §6). 박스는 카드 모서리로 자르고 클릭은 통과. */}
-      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-card">
-        <picture>
-          <source type="image/avif" srcSet="/banners/spot-nacre-720.avif" />
-          <img src="/banners/spot-nacre-720.webp" alt="" width={720} height={480} loading="lazy" decoding="async"
-            className="absolute -right-4 -top-3 h-[100px] w-[150px] object-contain opacity-[.35]" />
-        </picture>
+      {/* 오른쪽 위 비스듬한 빛줄기 — 정적 장식(반복 반짝임·애니메이션 없음, 가이드 §2·§6). 4안의 자개 이미지는 이 카드에서 이 빛줄기로 대체했다
+          (public/banners/spot-nacre-* 파일은 그대로 둔다). 둥근 모서리로 자르고 클릭은 통과. 색은 --hero-shine 이라 라이트에서 옅은 청회색. */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] text-[rgb(var(--hero-shine))]">
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+          <defs>
+            <linearGradient id="spot-hero-ray" gradientUnits="userSpaceOnUse" x1="66" y1="0" x2="101" y2="0">
+              <stop offset="0" stopColor="currentColor" stopOpacity="0" />
+              <stop offset="0.55" stopColor="currentColor" stopOpacity="0.45" />
+              <stop offset="0.85" stopColor="currentColor" stopOpacity="0.95" />
+              <stop offset="1" stopColor="currentColor" stopOpacity="0.5" />
+            </linearGradient>
+            <linearGradient id="spot-hero-haze" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="currentColor" stopOpacity="0" />
+              <stop offset="0.6" stopColor="currentColor" stopOpacity="0.09" />
+              <stop offset="1" stopColor="currentColor" stopOpacity="0.02" />
+            </linearGradient>
+            <filter id="spot-hero-glow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.6 1.8" /></filter>
+          </defs>
+          <path d="M 69 -1 C 80 8, 91 20, 101 42 L 101 -1 Z" fill="url(#spot-hero-haze)" />
+          <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-ray)" strokeWidth="6" opacity="0.5" filter="url(#spot-hero-glow)" vectorEffect="non-scaling-stroke" />
+          <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-ray)" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
+        </svg>
       </span>
-      {/* ⚠ U/§7 P0-2(2026-09-12 실측): 200% 텍스트 확대 · 390px 에서 이 행의 텍스트 칸이
-          clientWidth 19px / scrollWidth 119px 가 돼 **"NURI SPOT" 과 설명이 통째로 사라졌다.**
-          원인은 글자 크기가 아니라 오른쪽 배지가 `shrink-0` 로 행을 다 먹는 것 —
-          그래서 글자를 줄이는 대신 **배지를 아래 줄로 흘려보낸다**(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라).
-          100% 에서는 폭이 남아 줄바꿈이 일어나지 않아 현재 화면은 그대로다. */}
-      <div className="relative flex flex-wrap items-center gap-2.5">
+      {/* 2026-10-06 시안: 왼쪽 원형 배지가 제목·안내 두 줄을 함께 받친다(배지 2행 걸침).
+          ⚠ 360 미만(320)은 안내 줄이 배지 옆 칸(218px)에 한 줄로 안 들어간다(글자 폭 약 237px, 13px 기준 실측) —
+          글자를 줄이지 않고 **안내 줄만 카드 전체 폭으로 내린다**(배지는 제목 옆에 남는다). 오너 요구: 320 에서 안내 줄 줄바꿈 없음. */}
+      <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-0.5 max-[359px]:gap-y-2">
         {/* 🔴 2026-09-19 (2차) 오너 지시: **"누리스팟 최상단 배너 아이콘은 기존 아이콘으로 변경,
             gto 내에 있는 아이콘은 지금 그대로 유지."** → 이 배너만 앱 로고 심볼로 되돌린다.
             같은 날 1차에서 내가 `cards` 로 바꿨던 자리다(이유: 헤더에 같은 마크가 있어 '앱 이름'처럼
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
-        {/* h-9(36px): 2026-10-05 GTO 박스 축소 — 40 → 36(명세 G3). */}
-        <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/12"
-          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2B4166 0%, #1A2639 58%, #111A27 100%)' /* 2026-10-05 4안 — 푸른 먹색 */ }} aria-hidden>
+        {/* 시안: 카드보다 한 단 어두운 원 + 얇은 밝은 테두리. 로고(금색)를 받치는 브랜드 배지라 라이트에서도 남색을 유지한다 —
+            연한 원 위 금색 로고는 대비 약 2:1 로 흐려진다. 2026-10-06 36 → 40(시안 비율: 배지 ≈ 제목+안내 두 줄 높이). */}
+        <span className="relative row-span-2 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12 max-[359px]:row-span-1"
+          style={{ background: 'radial-gradient(120% 120% at 35% 0%, #24365A 0%, #131D2E 55%, #0B111C 100%)' }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
         </span>
-        <div className="min-w-0 flex-[1_1_3.5rem]">
-          <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
-          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
-              2026-10-05 오너 "글씨 작아": 2xs → xs. */}
-          {/* 두 토막은 각각 안 끊는다 — 320 에서 '… 30P ·' / '하루 3회' 로 꼬리만 떨어졌다(2026-10-05 실측). 접히면 '무료 ·' 뒤에서만 접힌다. */}
-          <p className="text-xs text-ink-muted" data-testid="spot-hero-ai"><span className="whitespace-nowrap">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 ·</span> <span className="whitespace-nowrap">이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</span></p>
-          {/* ⚠ §7(2026-09-12 실측): 360px 에서 `truncate` 로 잘려 87 < 142 였다.
-              이미 11.69px 라 **더 줄이면 안 되는 구간**이므로 글자를 키우지도 줄이지도 않고
-              줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).
-              ⚠ 2026-09-12 2차: `line-clamp-2` 로 상한을 뒀더니 **320px·100% 에서 이미 clientHeight 32 /
-              scrollHeight 48** — 셋 중 마지막 토막('토론')이 잘려 있었다. 세로 잘림도 정보 소실이라 상한을 뺀다. */}
-          {/* 🔴 2026-09-18 오너 지시로 설명줄을 뺐다("누리 스팟 아래 핸드 분석 리플레이 토론 이런 설명들 전체 삭제").
-              같은 커밋에서 `e2e/nuri-spot.spec.ts:56` 의 이 문구 단언도 `data-testid` 기준으로 바꿨다
-              (CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 셀렉터를 data-testid 로 교체). */}
-        </div>
-        {/* 🔴 2026-09-24 오너 G4: 이름 옆 부제 배지('프리플랍 차트 · 수학')를 뺐다 — SPOT 은 이제 판정이 아니라 작성·저장·공유 화면이다. */}
+        <p className="self-end text-lg leading-6 font-extrabold tracking-tight text-ink-primary max-[359px]:self-center">NURI SPOT</p>
+        {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
+            2026-10-06 시안: 연한 하늘색 안내(강조 글 토큰 accent-200 — 라이트는 #2F5E9C 로 교정된다).
+            두 토막은 각각 안 끊는다 — 접혀야 하는 폭(확대 등)에서는 '무료 ·' 뒤에서만 접힌다. 세로 상한(line-clamp)은 두지 않는다(2026-09-12 잘림 실측). */}
+        <p className="self-start text-xs text-accent-200 max-[359px]:col-span-2" data-testid="spot-hero-ai"><span className="whitespace-nowrap">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 ·</span> <span className="whitespace-nowrap">이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</span></p>
+        {/* 🔴 2026-09-18 오너: 설명줄('핸드 분석 · 리플레이 · 토론') 삭제 · 2026-09-24 오너 G4: 이름 옆 부제 배지 삭제 — 되살리지 않는다. */}
       </div>
       {/* 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼" ·
           "기존 작업에서도 200% 확대를 전제로 뭔가 둡다면 모든 기준은 100%".
@@ -811,12 +816,12 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           100% 에서는 한 줄에 들어가므로 `whitespace-normal`·`leading-tight` 를 걷어낸다.
           ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
-      {/* 2026-10-05: 간격 10 → 8(G3) · 버튼 글자 xs → sm(오너 "글씨 작아") · 고스트 테두리 border-strong/60(mid 위 1.20 → 약 2, 명세 §2-4). */}
-      <div className="relative mt-2 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm">
+      {/* 2026-10-06 시안: 같은 폭 두 버튼 — 채운 파랑(흰 글자) · 테두리만(본문 글자색). 버튼 글자 sm 굵게. 고스트 테두리 border-strong/60(면 위 약 2, 명세 §2-4). */}
+      <div className="relative mt-2.5 grid grid-cols-2 gap-1.5">
+        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm font-bold">
           새 스팟 작성
         </button>
-        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm font-bold text-ink-primary">
           내 스팟
         </button>
       </div>
