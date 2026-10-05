@@ -46,7 +46,7 @@ function Seg<T extends string | number>({ label, value, options, onPick, disable
         <button key={String(v)} type="button" disabled={disabled} aria-pressed={v === value} onClick={() => { if (v !== value) onPick(v); }}
           style={{ minWidth: 44 }}   // 리뷰 하-6 — '위' 버튼이 33px 였다
           className={['min-h-11 rounded-input border px-2.5 text-2xs font-semibold transition-colors disabled:opacity-50',
-            v === value ? 'border-accent-300 bg-accent-300/10 text-accent-300 dark:text-accent-200' : 'border-border-default text-ink-secondary hover:border-accent-400/40'].join(' ')}>
+            v === value ? 'chip-on' : 'border-border-default text-ink-secondary hover:border-accent-400/40'].join(' ')}>
           {t}
         </button>
       ))}

@@ -157,7 +157,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
           {(['feed', 'compact'] as const).map((v) => (
             <button key={v} type="button" onClick={() => setPreview(v)} aria-pressed={preview === v}
               className={['min-h-8 rounded-input border px-2 text-2xs font-bold transition-colors',
-                preview === v ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
+                preview === v ? 'chip-on' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
               {v === 'feed' ? '피드' : '한 줄'}
             </button>
           ))}
@@ -189,7 +189,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
                   <button type="button" aria-pressed={s.active} disabled={busySlot === s.slot || !s.postId}
                     onClick={() => save({ ...s, active: !s.active }, !s.active ? '광고 ' + s.slot + '번을 켰습니다' : '광고 ' + s.slot + '번을 껐습니다 (연결은 유지)')}
                     className={['min-h-8 rounded-input border px-2.5 text-xs font-bold transition-colors disabled:opacity-40',
-                      s.active ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
+                      s.active ? 'chip-on' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
                     노출 {s.active ? '켜짐' : '꺼짐'}
                   </button>
                   {/* 상태 배지가 '게시글 연결 필요' 라고 말하는데 버튼은 'AD 지정' 이라 오너가 둘을
@@ -465,7 +465,7 @@ function AdPostComposer({ slot, onClose, onSubmit }: {
               <button key={c.id} type="button" aria-pressed={category === c.id}
                 onClick={() => setCategory(c.id)}
                 className={['min-h-8 rounded-input border px-2.5 text-xs font-bold transition-colors',
-                  category === c.id ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
+                  category === c.id ? 'chip-on' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
                 {c.label}
               </button>
             ))}

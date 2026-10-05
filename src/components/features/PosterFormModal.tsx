@@ -618,7 +618,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             {([[null, '일반'], ['daily', '데일리'], ['satellite', '새틀라이트'], ['series', '시리즈']] as const).map(([v, l]) => (
               <button key={l} type="button" role="radio" aria-checked={form.grade === v} onClick={() => update('grade', v)}
                 className={['h-9 rounded-input border text-xs font-bold transition-colors',
-                  form.grade === v ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  form.grade === v ? 'chip-on' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l}
               </button>
             ))}
@@ -813,7 +813,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                       ? form.paymentMethods.filter((m) => m !== p)
                       : (form.paymentMethods.length >= MAX_PAYMENTS ? form.paymentMethods : [...form.paymentMethods, p]))}
                     className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
-                      checked ? 'bg-accent-300/15 border-accent-300 text-accent-300'
+                      checked ? 'chip-on'
                         : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                     {checked ? '✓ ' : ''}{p}
                   </button>

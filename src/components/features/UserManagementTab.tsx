@@ -317,7 +317,7 @@ function UserRow({ user, onUpdate, onReload }: {
               'text-2xs px-1.5 py-0.5 rounded-badge font-semibold',
               user.role === 'admin'       ? 'bg-danger/15 text-danger-light' :
               user.role === 'venue_owner' ? 'bg-accent-300/15 text-accent-300'  :
-                                            'bg-blue-500/15 text-blue-400',
+                                            'bg-fuchsia-500/15 text-fuchsia-300', // 일반 — 업주(코발트)와 blue 는 ΔE 8.4~10.2 였다(4안)
             ].join(' ')}>
               {ROLE_LABEL[user.role]}
             </span>

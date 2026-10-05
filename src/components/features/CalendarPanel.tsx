@@ -410,7 +410,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </div>
       </section>
       {/* 범례 + 이번 달 예약·찜 수(종전 요약 칸 두 개 — 첫 화면 무게를 목적 ①에 넘기고 여기 한 줄로 보존) */}
-      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-2xs leading-4 text-ink-muted">
+      {/* 보조 글(ink-secondary): 메타 글(#526681)은 라이트 지면 그라데이션 위 최저 4.32 였다(#179 P3) */}
+      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-2xs leading-4 text-ink-secondary">
         <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full dot-cash" />계획·예약·찜</span>
         <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-300" />SPOT</span>
         <span className="whitespace-nowrap">이번 달 예약 <b data-stat="sum-reserve" className="font-bold tabular-nums text-ink-secondary">{summary.reserveCount}건</b> · 찜 <b data-stat="sum-like" className="font-bold tabular-nums text-ink-secondary">{summary.likeCount}개</b></span>

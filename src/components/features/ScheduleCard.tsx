@@ -842,7 +842,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
  *  ⚠ 폭을 바꾸면 scratchpad schedrow/measure.cjs 로 360·390·412·1024·1280·1440 을 다시 재라(12자 제목 + 최장 금액). */
 /** 보장 금액이 없을 때 금액 자리에 쓰는 말(오너 2026-09-25): 새틀이면 '새틀', 시리즈·대회면 '대회', 나머지(엔트리 등)는 '데일리'. */
 function noGtdLabel(s: { grade?: string | null; isCompetition?: boolean }): { text: string; cls: string } {
-  if (s.grade === 'satellite') return { text: '새틀', cls: 'text-sky-300' };
+  if (s.grade === 'satellite') return { text: '새틀', cls: 'text-fuchsia-300' }; // 2026-10-05 4안: sky 는 '대회'(코발트)와 라이트 ΔE 6.6 → 자홍(29.8)
   if (s.grade === 'series' || s.isCompetition) return { text: '대회', cls: 'text-accent-200' };
   return { text: '데일리', cls: 'text-emerald-300' };
 }
@@ -984,7 +984,7 @@ function TimetableCard({
       <button type="button" data-testid="schedule-venue-link"
         aria-label={`${schedule.pubName} 매장 페이지`}
         onClick={() => onVenueClick(venueId)}
-        className="absolute left-3 top-1/2 h-[56px] w-[56px] -translate-y-1/2 rounded-[12px] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300" />
+        className="absolute left-3 top-1/2 h-[56px] w-[56px] -translate-y-1/2 rounded-[12px] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus" />
     )}
     </div>
   );

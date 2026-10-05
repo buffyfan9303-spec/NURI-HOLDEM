@@ -105,7 +105,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
           <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}
             className={[
               'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors',
-              kind === k ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+              kind === k ? 'chip-on'
                          : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
             ].join(' ')}>
             <Icon name={icon} size={13} className="shrink-0" />{label}
@@ -141,7 +141,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                 <button key={n} type="button" aria-pressed={count === n} onClick={() => setCount(n)}
                   className={[
                     'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold tabular-nums transition-colors',
-                    count === n ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                    count === n ? 'chip-on'
                                 : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                   ].join(' ')}>
                   {n}장

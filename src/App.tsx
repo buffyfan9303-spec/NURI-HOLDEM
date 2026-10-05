@@ -4318,7 +4318,7 @@ export default function App() {
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
                   className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-chip px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                    nearSort ? 'chip-on' : 'border border-transparent bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {hasActiveSearchFilter && (

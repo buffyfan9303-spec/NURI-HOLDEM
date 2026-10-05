@@ -148,7 +148,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             onClick={() => saveNamePref(k)}
             className={['min-h-[44px] rounded-input border px-2 py-2 text-2xs font-bold disabled:opacity-60',
               (k === 'real_name' ? realNamePublic : !realNamePublic)
-                ? 'border-accent-400/60 bg-accent-300/12 text-accent-200'
+                ? 'chip-on'
                 : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
             {label}
             <span className="block font-normal text-ink-secondary">{hint}</span>

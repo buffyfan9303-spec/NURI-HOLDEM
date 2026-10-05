@@ -70,7 +70,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
             {INQUIRY_CATEGORIES.map((c) => (
               <button key={c} type="button" onClick={() => setCat(c)}
                 className={['rounded-input border px-2.5 py-1 text-2xs font-bold transition-colors',
-                  cat === c ? 'border-accent-300 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  cat === c ? 'chip-on' : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {c}
               </button>
             ))}

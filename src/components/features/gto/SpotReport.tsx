@@ -179,7 +179,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
             (초기값 kstToday · onChange 클램프 → playedOn 상태에는 미래 날짜가 존재할 수 없고, 저장 호출부(SpotAiCoach 자동 저장 포함)는 그 상태만 읽는다). */}
         <input id="spot-played-on" type="date" value={playedOn} max={kstToday()}
           onChange={(e) => setPlayedOn(clampSpotDate(e.target.value))}
-          className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
+          className="h-[36px] min-w-0 flex-1 rounded-input border border-border-strong bg-surface-field px-2 text-xs text-ink-primary" />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         <button type="button" onClick={onSave} disabled={blocked || busy !== null}
@@ -266,7 +266,7 @@ function ShareConfirmSheet({
             rows={4}
             maxLength={1000}
             placeholder="비워 두면 '이 자리에서 어떻게 하시겠어요?'만 올라갑니다"
-            className="mt-1 w-full resize-y rounded-input border border-border-default bg-surface-high px-2.5 py-2 text-xs leading-relaxed text-ink-primary placeholder:text-ink-muted"
+            className="mt-1 w-full resize-y rounded-input border border-border-strong bg-surface-field px-2.5 py-2 text-xs leading-relaxed text-ink-primary placeholder:text-ink-muted"
           />
         </label>
         {note.trim() !== '' && (

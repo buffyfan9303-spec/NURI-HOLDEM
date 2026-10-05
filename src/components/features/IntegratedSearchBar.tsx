@@ -185,7 +185,7 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
         // 🔴 44px 고정(2026-10-04 루트 17→16px): 종전 2.6rem 은 17px 루트에서 44.2px 였고 16px 루트에선 41.6px 로 누름면이 깨진다.
         'relative flex h-[44px] w-[44px] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
-        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300',
+        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
         !selected && slot.isToday ? 'ring-1 ring-accent-300/55' : '',
@@ -516,7 +516,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
               type="button"
               aria-pressed={active}
               onClick={() => setTour(active ? 'all' : id)}
-              className={[CHIP_BASE, CHIP_HIT, 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
+              className={[CHIP_BASE, CHIP_HIT, 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus', active ? CHIP_ON : CHIP_OFF].join(' ')}
             >
               {label}
             </button>

@@ -292,7 +292,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
                     <span className="block truncate text-2xs tabular-nums text-ink-muted">우승 {r.wins} · TOP3 {r.top3} · 최고 {r.bestPosition}위 · 매장 {r.venues}곳</span>
                   </div>
                   <span className="shrink-0 text-right">
-                    <span className="block text-sm font-bold tabular-nums text-accent-300">입상 {r.moneyinCount}회</span>
+                    <span className="block text-sm font-bold tabular-nums text-achieve">입상 {r.moneyinCount}회</span>
                     {r.lastDate && <span className="block text-2xs tabular-nums text-ink-muted">{fmtDate(r.lastDate)}</span>}
                   </span>
                 </li>
@@ -885,7 +885,7 @@ export default function TierLeaderboard() {
               </div>
             </div>
           ) : myIsAce ? (
-            <p className="mt-3 text-2xs font-bold text-accent-300">AA 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
+            <p className="mt-3 text-2xs font-bold text-achieve">AA 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
           ) : (
             <p className="mt-3 text-2xs font-bold text-accent-300">KK 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 AA 등급</p>
           )}
@@ -981,9 +981,9 @@ export default function TierLeaderboard() {
                 const got = b.check(badgeStats);
                 return (
                   <div key={b.key} title={b.desc}
-                    className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/8' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                    className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-achieve/50 bg-achieve/8' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                     <Icon name={b.icon} size={22} className={['mx-auto', got ? b.tone : 'text-ink-muted'].join(' ')} />
-                    <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
+                    <p className={['mt-1 text-xs font-bold', got ? 'text-achieve' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                     <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{b.desc}</p>
                   </div>
                 );
@@ -1462,7 +1462,8 @@ export default function TierLeaderboard() {
               <div className="flex items-center gap-1.5 pt-2">
                 <Icon name="medal" size={13} className="shrink-0 text-emerald-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-emerald-300">활동으로 얻는 것</p>
-                <p className="shrink-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열립니다 · 구매 불가</p>
+                {/* min-w-0: 320 에서 shrink-0 이라 한 줄 그대로 7px 넘쳐 문서 가로 스크롤이 생겼다(2026-10-05 실측) — 좁으면 이 설명만 접힌다 */}
+                <p className="min-w-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열립니다 · 구매 불가</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
               <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">점수에 도달하면 영구 해금(차감 없음)</span></p>
@@ -1515,11 +1516,11 @@ export default function TierLeaderboard() {
           : (
             <div className="space-y-1.5">
               {hall.rows.map((r, i) => (
-                <div key={`${r.nickname}-${i}`} className={['card-sink flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/8' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                <div key={`${r.nickname}-${i}`} className={['card-sink flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-achieve/60 bg-achieve/8' : 'border-border-subtle bg-surface-high'].join(' ')}>
                   <Icon name={i === 0 ? 'crown' : 'medal'} size={26}
                     className={['shrink-0', HALL_TONE[i]].join(' ')} role="img" aria-hidden={false} aria-label={`${i + 1}위`} />
                   <div className="min-w-0 flex-1">
-                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-accent-300' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
+                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-achieve' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     {/* 운영자가 직접 등록한 행에는 한 줄 소개가 붙는다(#10) */}
                     {r.note
                       ? <p className="truncate text-2xs text-ink-secondary">{r.note}</p>
@@ -1578,7 +1579,7 @@ export default function TierLeaderboard() {
                         {r.nickname[0]}
                       </span>
                     </span>
-                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-accent-300' : 'text-xs text-ink-primary'].join(' ')} style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</p>
+                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-achieve' : 'text-xs text-ink-primary'].join(' ')} style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>
                   </div>
                 );

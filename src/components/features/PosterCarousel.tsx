@@ -59,19 +59,21 @@ const BRAND_SLIDES: {
   img: string;
   title: string; sub: string; titleColor: string; subColor: string;
 }[] = [
-  /* 배경 — 2026-10-04 오너 결정 'E+황동': 바이올렛 빔을 걷은 무채색 지면(아트워크가 못 뜰 때의 폴백 겸).
-     아트워크(public/banners/*.webp)도 같은 날 보라 블룸·별 반짝임을 걷고 무채색 + 황동 선으로 다시 그렸다. */
+  /* 🔴 2026-10-05 4안 미드나이트 블루(cobalt-guide-1005 §6): 배경 = linear-gradient(130deg, 배너 시작, 배너 끝)(테마 토큰 — 라이트는 푸른 백색),
+     오른쪽에 자개 장식 이미지(투명 PNG 원본 1536×1024 → WebP/AVIF 변형, 왼쪽이 비어 있어 contain 으로 오른쪽 주제를 살린다), 제목은 실제 HTML.
+     글자색은 테마 토큰(본문·보조 글) — 종전 인라인 hex(흑백·황동)는 라이트에서 읽히지 않았다. 종전 아트워크 mind.webp/nuri.webp 는
+     관리자 배너 예시(e2e)가 참조해 파일은 남긴다. */
   {
     key: 'mind', action: 'nurimind', alt: '오늘의 NURI MIND · 외부 사이트 nurimind.co.kr 에서 오늘의 운세 보기',
-    bg: '#121316',
-    img: '/banners/mind.webp',
-    title: BRAND_SLIDE_TITLES.mind, sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#F0F0F0', subColor: '#B4B7BA',
+    bg: 'linear-gradient(130deg, rgb(var(--hero-start)) 0%, rgb(var(--hero-end)) 100%)',
+    img: '/banners/mind-nacre-960',
+    title: BRAND_SLIDE_TITLES.mind, sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: 'rgb(var(--ink-primary))', subColor: 'rgb(var(--ink-secondary))',
   },
   {
     key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 전국 홀덤 일정 한곳에서 보기',
-    bg: '#121316',
-    img: '/banners/nuri.webp',
-    title: BRAND_SLIDE_TITLES.nuri, sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
+    bg: 'linear-gradient(130deg, rgb(var(--hero-start)) 0%, rgb(var(--hero-end)) 100%)',
+    img: '/banners/schedule-nacre-960',
+    title: BRAND_SLIDE_TITLES.nuri, sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: 'rgb(var(--ink-primary))', subColor: 'rgb(var(--ink-secondary))',
   },
 ];
 
@@ -259,8 +261,10 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
     const ev = s.event;
     // 목적지가 없으면 <div> 로 그린다 — 커서·hover·포커스가 '누를 수 있다'고 거짓말하지 않게.
     const Tag = (s.onClick ? 'button' : 'div') as 'button' | 'div';
-    // 이벤트 슬라이드 배경 — live 만 따뜻한 황동 기운 면, 그 밖은 무채색(참여 가능을 색으로 거짓말하지 않는다). 2026-10-04 보라 빔 삭제.
-    const evBg = ev ? (ev.live ? '#1B1812' : '#121316') : undefined;
+    // 이벤트 슬라이드 배경 — 브랜드 슬라이드와 같은 배너 그라데이션(4안), live 만 선택면 기운을 더한다(참여 가능을 색으로 거짓말하지 않는다).
+    const evBg = ev ? (ev.live
+      ? 'linear-gradient(130deg, rgb(var(--surface-select)) 0%, rgb(var(--hero-end)) 100%)'
+      : 'linear-gradient(130deg, rgb(var(--hero-start)) 0%, rgb(var(--hero-end)) 100%)') : undefined;
     return (
       <Tag
         key={`${s.key}:${dup ? 'd' : 'o'}`}
@@ -274,7 +278,8 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
            가장 큰 높이로 함께 늘어난다** — 슬라이드마다 높이가 달라지지 않으면서, 글자 확대에는
            프레임이 같이 커져 잘리지 않는다(고정 h- 였다면 200%에서 글자가 잘린다). */
         className={[
-          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px]',
+          // 포커스 링은 안쪽 ::after 로(z-10) — 바깥 2px 링은 스크롤 뷰포트(overflow-x-auto)가 잘랐고, 안쪽 외곽선은 위에 깔린 글자 덮개(absolute)가 가렸다(#179 포커스 실측: 대비 1.0 → 1.34). 위·아래는 뷰포트 mask 페더(8px) 안쪽으로 9px — 페더에 걸린 변이 흐려졌다(r2 P3).
+          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px] focus-visible:after:pointer-events-none focus-visible:after:absolute focus-visible:after:inset-x-[3px] focus-visible:after:inset-y-[9px] focus-visible:after:z-10 focus-visible:after:rounded-[inherit] focus-visible:after:ring-2 focus-visible:after:ring-focus focus-visible:after:content-[""]',
           s.onClick ? '' : 'cursor-default',
         ].join(' ')}
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
@@ -286,10 +291,10 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
           <span className="relative flex h-full min-h-[inherit] flex-col justify-end gap-1 px-4 pb-4 pr-[36%] pt-3 md:px-6 md:pb-5">
             <span className="flex flex-wrap items-center gap-1.5">
               {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
-              <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
-              <span className="font-display text-xl font-extrabold leading-[28px] text-[#F0F0F0] md:text-[22px] md:leading-[30px]">{ev.title}</span>
+              <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-surface-high text-ink-muted'].join(' ')}>EVENT</span>
+              <span className="font-display text-xl font-extrabold leading-[28px] text-ink-primary md:text-[22px] md:leading-[30px]">{ev.title}</span>
             </span>
-            <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B4B7BA]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
+            <span className="text-[13px] font-medium leading-[19px] tabular-nums text-ink-secondary" aria-busy={ev.pending || undefined}>{ev.sub}</span>
           </span>
         ) : b ? (
           <>
@@ -302,25 +307,31 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 초점 72% — 볼거리(MIND 구슬·NURI 핀)가 오른쪽에 있어 가운데 크롭이면 오른끝에서 잘렸다.
                 (종전 09-19: 원본 → -400 변형본으로 74.7% 줄였었다 — 그땐 배너가 110px 이었다.)
                 onError 폴백은 그대로 둔다(원본이 없을 일은 없지만 같은 조리법 유지). */}
-            <img
-              src={b.img}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover object-[72%_50%]"
-              /* 관리자 배너와 같은 규칙 — 마퀴 안에서 lazy 는 '빈 배너'가 된다(오너 실기기 리포트). */
-              loading={i < 2 ? 'eager' : 'lazy'}
-              decoding="async"
-              onError={(e) => {
-                const el = e.currentTarget;
-                if (el.dataset.fb) return;   // 한 번만 다시 시도한다(무한 루프 방지)
-                el.dataset.fb = '1';
-                el.src = b.img;
-              }}
-            />
+            {/* 자개 장식 — 오른쪽에 contain(제목 자리는 비운다). 치수는 고정 상자(360×240 · md 이상 420×280)라 로드 전후 레이아웃 이동 0.
+                첫 장만 fetchpriority=high, 나머지는 eager(마퀴 안 lazy 는 '빈 배너' — 오너 실기기 리포트)·저우선. AVIF → WebP 폴백. */}
+            <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+            <picture>
+              <source type="image/avif" srcSet={`${b.img}.avif`} />
+              <img
+                src={`${b.img}.webp`}
+                alt=""
+                width={960}
+                height={640}
+                className="pointer-events-none absolute right-0 -top-10 h-[240px] w-[360px] object-contain opacity-[.72] md:-top-14 md:h-[280px] md:w-[420px]"
+                loading={i < 2 ? 'eager' : 'lazy'}
+                fetchPriority={i === 0 && !dup ? 'high' : 'low'}
+                decoding="async"
+              />
+            </picture>
+            </span>
             {/* 2026-09-25 — 그림이 판 전체, 글자는 **왼쪽 아래**(레퍼런스 다수: 무신사·야놀자·번개장터). 스크림은 아래→위 + 왼쪽 옅게
                 한 레이어(배경 두 겹 = 한 요소). 오른쪽 36% 는 'n / N' 칩 자리라 글자를 두지 않는다. 관리자 배너와 동일. */}
+            {/* 배너 상단의 작은 경계빛(가이드 §3 '작은 경계빛') — 1px 선, 반짝임·애니메이션 없음 */}
+            <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgb(var(--hero-shine) / 0.55) 30%, transparent 75%)' }} />
             <span
               className="absolute inset-0 flex flex-col justify-end gap-0.5 px-4 pb-4 pr-[36%] md:px-6 md:pb-5"
-              style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.5) 48%, rgba(6,8,11,0.05) 100%), linear-gradient(to right, rgba(6,8,11,0.6) 0%, transparent 62%)' }}
+              /* 읽는 쪽(왼쪽)만 배너 시작색으로 살짝 덮는다 — 이미지가 제목 자리로 번진 픽셀 위에서도 글자 대비를 지킨다(어두운 덮개를 라이트에 재사용하지 않는다). */
+              style={{ background: 'linear-gradient(to right, rgb(var(--hero-start) / 0.85) 0%, rgb(var(--hero-start) / 0.35) 45%, transparent 70%)' }}
             >
               {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
               <span className="font-display text-xl font-extrabold leading-[28px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
@@ -419,7 +430,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 · 화살표는 z-10 으로 알약 위에 그린다(아이콘이 알약에 덮이지 않게), 칩은 pointer-events-none(누름은 화살표가 받는다). */}
             <div className="pointer-events-auto relative flex h-[44px] items-center">
               <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
-                className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white">
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-left" size={13} aria-hidden />
               </button>
               <span data-testid="home-banner-counter" role="img" aria-label={`배너 ${n}장 중 ${idx + 1}번째`}
@@ -432,7 +443,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                   className="hidden" />
               ))}
               <button type="button" onClick={() => go(1)} aria-label="다음 배너"
-                className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white">
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-right" size={13} aria-hidden />
               </button>
             </div>

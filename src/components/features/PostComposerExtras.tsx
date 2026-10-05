@@ -304,7 +304,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                           'h-8 rounded-[4px] text-2xs font-bold tabular-nums select-none touch-manipulation transition-colors',
                           'active:scale-[0.9] focus:outline-hidden',
                           active
-                            ? 'bg-accent-300/15 border border-accent-400 text-accent-200'
+                            ? 'chip-on'
                             : 'bg-surface-mid border border-border-default text-ink-primary',
                         ].join(' ')}
                       >
@@ -488,7 +488,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
                   className={[
                     'min-h-[32px] px-2.5 rounded-full border text-2xs font-semibold transition-colors focus:outline-hidden',
                     active
-                      ? 'bg-accent-300/15 border-accent-400 text-accent-200'
+                      ? 'chip-on'
                       : 'bg-surface-mid border-border-default text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >

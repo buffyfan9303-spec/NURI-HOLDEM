@@ -76,7 +76,7 @@ export default function Avatar({ name, src, color, size = 28, fit = 'contain', c
           //   이미지는 업로더가 고른 그림이라 테마를 따라 받침이 바뀌면 안 된다. 기본 테마(다크)에서 보이던 그대로를 양 테마에 준다.
           //   ponytail: 어두운 내용의 투명 이미지는 이 받침에서 안 보인다 — 다크 모드의 종전 동작과 같다(새 결함 아님).
           //   필요해지면 업로드 시 불투명 배경을 합성하거나 픽셀 휘도로 받침을 고른다.
-          'shrink-0 rounded-full bg-[#24272B]', // 2026-10-04 'E+황동' 다크 surface-high(무채색)로 — 종전 네이비 #1B243C
+          'shrink-0 rounded-full bg-[#253449]', // 2026-10-05 4안 다크 보조 면(surface-high)과 같은 값
           fit === 'cover' ? 'object-cover' : 'object-contain',
           className,
         ].join(' ')}

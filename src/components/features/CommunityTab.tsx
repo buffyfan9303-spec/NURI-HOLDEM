@@ -636,7 +636,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span
         data-pill-active={active || undefined}
-        className="relative inline-flex h-[32px] lg:h-[36px] w-full items-center justify-center px-1 rounded-[9px] group-focus-visible:ring-2 group-focus-visible:ring-accent-300"
+        className="relative inline-flex h-[32px] lg:h-[36px] w-full items-center justify-center px-1 rounded-[9px] group-focus-visible:ring-2 group-focus-visible:ring-focus"
       >
         {label}
       </span>
@@ -1594,7 +1594,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
                 className={['shrink-0 whitespace-nowrap rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
-                  kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'chip-aura'].join(' ')}>
+                  kind === k ? 'chip-on' : 'chip-aura'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>
             ))}
