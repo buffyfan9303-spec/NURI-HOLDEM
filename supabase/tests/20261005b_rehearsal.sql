@@ -4,7 +4,7 @@
 --   · 마지막 DO 블록은 **언제나 ZZ999 예외로 끝난다** → 마이그레이션 포함 전체가 되돌려진다. 메시지 첫머리 'REHEARSAL PASS|FAIL' 을 본다.
 --   · 시나리오마다 안쪽 블록을 ZZ001 로 스스로 되돌린다(앞 시나리오의 행이 뒤 시나리오를 가리지 않게).
 --   · 롤백 확인: 리허설 뒤 select to_regclass('public._probe_20261005b') 가 null 이어야 한다.
---   · 음성 대조: 마이그레이션 없이 이 파일만 보내면 N1·N1b·N2·N4·N5·R1 이 FAIL 해야 한다(지금 라이브의 구멍).
+--   · 음성 대조: 마이그레이션 없이 이 파일만 보내면 N1·N1b·N2·N4·N5·F1·C1·C2·N6·R1 이 FAIL 해야 한다(지금 라이브의 구멍).
 --
 -- 계정·매장은 이름으로 박지 않고 역할·소유·소속을 조회해서 고른다(nuri-migration §5):
 --   vv/o = 승인 매장(kind venue) 중 대표가 **순수 업주**(role venue_owner·승인·관리자 아님)인 곳과 그 대표
@@ -26,7 +26,8 @@ begin
    where v.approved and v.kind = 'venue' and p.role::text = 'venue_owner' and p.approved is true and p.status::text = 'active'
      and (p.suspended_until is null or p.suspended_until < now())
    order by v.id limit 1;
-  select v.id into ww_id from public.venues v where v.approved and v.id <> vv_id and v.owner_id <> o_id
+  -- kind='venue' — 공동 운영자 판정(_venue_coowner_ok)은 매장만 인정한다. 그룹(dealer_team)을 고르면 F1 이 0행으로 공허해진다(2026-10-05 실측)
+  select v.id into ww_id from public.venues v where v.approved and v.kind = 'venue' and v.id <> vv_id and v.owner_id <> o_id
      and not exists (select 1 from public.venue_owners vo where vo.venue_id = v.id and vo.user_id = o_id)
    order by v.id limit 1;
   select p.id into u_id from public.profiles p
@@ -164,13 +165,77 @@ begin
       if sqlstate = 'P0001' and sqlerrm = '이 매장에 출석·예약·참가 신청 기록이 있는 회원만 연결할 수 있습니다' then out := out || 'N5 PASS; ';
       else fails := fails + 1; out := out || 'N5 FAIL ' || sqlstate || ' ' || sqlerrm || '; '; end if;
   end;
-  -- N6 위 시도 뒤 x 가 vv 의 '내 고객'(_venue_customer_ids) 이 아니다 — 전화번호 마스킹 해제 기준
+  -- F1 (critical 반증 F) 두 매장 운영자(o 가 ww 공동 운영자)가 ww 의 실제 고객 행(user_id=x)을 venue_id=vv 로 옮기기 → 거부
   total := total + 1;
-  perform set_config('request.jwt.claims', '', true);
-  if exists (select 1 from public._venue_customer_ids(array[vv_id]) t where t.uid = x_id)
-     or exists (select 1 from public.customer_aliases where venue_id = vv_id and user_id = x_id) then
-    fails := fails + 1; out := out || 'N6 FAIL x 가 내 고객이 됐다; ';
-  else out := out || 'N6 PASS; '; end if;
+  begin
+    insert into public.venue_owners (venue_id, user_id, status) values (ww_id, o_id, 'approved');      -- 준비(롤백)
+    insert into public.customer_profiles (venue_id, name, user_id, visit_count) values (ww_id, 'ZZ리허설F1', x_id, 3);
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    execute 'set local role authenticated';
+    update public.customer_profiles set venue_id = vv_id where venue_id = ww_id and name = 'ZZ리허설F1';
+    get diagnostics n = row_count;
+    raise exception using errcode = 'ZZ001', message = 'rows=' || n;
+  exception
+    when sqlstate 'ZZ001' then fails := fails + 1; out := out || 'F1 FAIL 고객 행 매장 이동 ' || sqlerrm || '; ';
+    when sqlstate '42501' then
+      if sqlerrm = '고객 정보의 매장·회원 연결은 바꿀 수 없습니다' then out := out || 'F1 PASS; ';
+      else fails := fails + 1; out := out || 'F1 FAIL 다른 42501 ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'F1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+  -- C1 (critical 반증 C) customer_aliases 직접 INSERT(관계 확인 우회) → 거부
+  total := total + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    execute 'set local role authenticated';
+    insert into public.customer_aliases (venue_id, alias, user_id) values (vv_id, 'ZZ리허설C1', x_id);
+    raise exception using errcode = 'ZZ001', message = 'inserted';
+  exception
+    when sqlstate 'ZZ001' then fails := fails + 1; out := out || 'C1 FAIL 별칭 직접 INSERT 성공; ';
+    when sqlstate '42501' then out := out || 'C1 PASS; ';
+    when others then fails := fails + 1; out := out || 'C1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+  -- C2 기존 별칭 행의 user_id 를 관계 없는 회원으로 UPDATE → 거부
+  total := total + 1;
+  begin
+    insert into public.customer_aliases (venue_id, alias, user_id) values (vv_id, 'ZZ리허설C2', u_id);  -- 준비(정의자=postgres)
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    execute 'set local role authenticated';
+    update public.customer_aliases set user_id = x_id where venue_id = vv_id and alias = 'ZZ리허설C2';
+    get diagnostics n = row_count;
+    raise exception using errcode = 'ZZ001', message = 'rows=' || n;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'rows=0' then out := out || 'C2 PASS(0행); ';
+      else fails := fails + 1; out := out || 'C2 FAIL 별칭 UPDATE ' || sqlerrm || '; '; end if;
+    when sqlstate '42501' then out := out || 'C2 PASS; ';
+    when others then fails := fails + 1; out := out || 'C2 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+  -- N6 결과로 재기: 한 블록 안에서 업주가 위 공격을 **모두** 시도한 뒤(각각 실패해도 다음으로) 그 자리에서 x 가 vv 의 '내 고객'
+  --    (_venue_customer_ids — 전화번호 마스킹 해제 기준)인지 잰다. 블록 끝에 ZZ001 로 되돌린다.
+  --    (예전 N6 은 각 공격이 이미 되돌려진 뒤에 재서 구멍이 열려 있어도 PASS — 공허했다. 적용 전이면 이제 FAIL 이어야 한다.)
+  total := total + 1;
+  begin
+    insert into public.venue_owners (venue_id, user_id, status) values (ww_id, o_id, 'approved');
+    insert into public.customer_profiles (venue_id, name, user_id, visit_count) values (ww_id, 'ZZ리허설N6f', x_id, 1);
+    insert into public.customer_profiles (venue_id, name) values (vv_id, 'ZZ리허설N6u');
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    execute 'set local role authenticated';
+    begin insert into public.customer_profiles (venue_id, name, user_id) values (vv_id, 'ZZ리허설N6i', x_id); exception when others then null; end;
+    begin update public.customer_profiles set user_id = x_id where venue_id = vv_id and name = 'ZZ리허설N6u'; exception when others then null; end;
+    begin update public.customer_profiles set venue_id = vv_id where venue_id = ww_id and name = 'ZZ리허설N6f'; exception when others then null; end;
+    begin insert into public.customer_aliases (venue_id, alias, user_id) values (vv_id, 'ZZ리허설N6a', x_id); exception when others then null; end;
+    begin perform public.link_customer_alias(vv_id, 'ZZ리허설N6l', x_id); exception when others then null; end;
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into n from public._venue_customer_ids(array[vv_id]) t where t.uid = x_id;
+    n := n + (select count(*) from public.customer_aliases where venue_id = vv_id and user_id = x_id);
+    raise exception using errcode = 'ZZ001', message = 'hits=' || n;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'hits=0' then out := out || 'N6 PASS; ';
+      else fails := fails + 1; out := out || 'N6 FAIL x 가 내 고객이 됐다 ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'N6 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
 
   -- ── 양성 ─────────────────────────────────────────────────────
   -- P1 손님 메모 저장 = 클라 saveCustomerProfile 의 PostgREST upsert 모양(첫 저장 INSERT → 다시 저장 ON CONFLICT UPDATE) · 조회 · 삭제
@@ -249,6 +314,25 @@ begin
     when others then fails := fails + 1; out := out || 'P4 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
 
+  -- P5 정의자 경로는 트리거를 통과한다: 업주가 미리 만든 이름 행(= u 의 표시 이름)이 u 의 출석 승인 때 user_id=u 로 묶인다
+  --    (_apply_checkin 의 이름 묶기 UPDATE — current_user=postgres)
+  total := total + 1;
+  begin
+    perform set_config('request.jwt.claims', '', true);
+    insert into public.customer_profiles (venue_id, name)
+      select vv_id, coalesce(p.nickname, p.name) from public.profiles p where p.id = u_id;
+    insert into public.checkin_requests (venue_id, user_id, request_date, status) values (vv_id, u_id, v_today, 'pending');
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    perform public.staff_check_in(vv_id, u_id);
+    select count(*) into n from public.customer_profiles cp join public.profiles p on p.id = u_id
+     where cp.venue_id = vv_id and cp.user_id = u_id and cp.name = coalesce(p.nickname, p.name) and cp.visit_count = 1;
+    raise exception using errcode = 'ZZ001', message = 'bound=' || n;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'bound=1' then out := out || 'P5 PASS; '; else fails := fails + 1; out := out || 'P5 FAIL ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'P5 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+
   -- ── 권한 표 ──────────────────────────────────────────────────
   perform set_config('request.jwt.claims', '', true);
   total := total + 1;
@@ -259,7 +343,10 @@ begin
      or has_function_privilege('anon', 'public.link_customer_alias(uuid,text,uuid)', 'EXECUTE')
      or not has_column_privilege('authenticated', 'public.customer_profiles', 'memo', 'UPDATE')
      or not has_table_privilege('service_role', 'public.customer_profiles', 'INSERT')
-     or exists (select 1 from pg_policies where tablename = 'customer_profiles' and policyname = 'customer_profiles_pos_all') then
+     or exists (select 1 from pg_policies where tablename = 'customer_profiles' and policyname = 'customer_profiles_pos_all')
+     or has_table_privilege('authenticated', 'public.customer_aliases', 'INSERT')
+     or not has_table_privilege('authenticated', 'public.customer_aliases', 'SELECT')
+     or not exists (select 1 from pg_trigger where tgrelid = 'public.customer_profiles'::regclass and tgname = 'trg_guard_customer_profile_link') then
     fails := fails + 1; out := out || 'R1 FAIL 권한 표; ';
   else out := out || 'R1 PASS; '; end if;
 

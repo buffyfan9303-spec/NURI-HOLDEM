@@ -65,6 +65,33 @@ describe('20261005b — customer_profiles 관계 위조 차단', () => {
     expect(BASE_SQL.indexOf('_venue_customer_ids(array[p_venue_id])')).toBeLessThan(BASE_SQL.indexOf('insert into public.customer_aliases'));
   });
 
+  it('(critical 반증 F) 고객 행의 venue_id·user_id 변경은 호출 역할 판정 트리거가 막는다 — 정의자 함수면 판정이 깨진다', () => {
+    const fn = BASE_SQL.match(/create or replace function public\._guard_customer_profile_link\(\)([\s\S]*?)\$function\$;/);
+    expect(fn).not.toBeNull();
+    expect(fn![1]).not.toMatch(/security definer/i);
+    expect(fn![1]).toMatch(/current_user in \('authenticated', 'anon'\)/);
+    expect(fn![1]).toMatch(/new\.venue_id is distinct from old\.venue_id or new\.user_id is distinct from old\.user_id/);
+    expect(BASE_SQL).toMatch(/create or replace trigger trg_guard_customer_profile_link before update on public\.customer_profiles\s+for each row execute function public\._guard_customer_profile_link\(\);/);
+  });
+
+  it('(critical 반증 C) customer_aliases 클라 INSERT/UPDATE 를 거둔다', () => {
+    expect(BASE_SQL).toMatch(/revoke insert, update on public\.customer_aliases from public, anon, authenticated;/);
+  });
+
+  it('(critical 반증 B · 20261005c) 예약이 있거나 운영하지 않는 매장의 포스터는 매장을 옮길 수 없다 · 포스터 수정은 venue_id 를 싣지 않는다', () => {
+    const c = code(readFileSync(join(DIR, '20261005c_schedule_venue_move_guard.sql'), 'utf-8'));
+    const fn = c.match(/create or replace function public\._guard_schedule_venue_move\(\)([\s\S]*?)\$function\$;/);
+    expect(fn).not.toBeNull();
+    expect(fn![1]).not.toMatch(/security definer/i);
+    expect(fn![1]).toMatch(/not coalesce\(public\.can_manage_venue_schedules\(old\.venue_id\), false\)\s+or public\._schedule_has_reservations\(old\.id\)/);
+    expect(c).toMatch(/before update of venue_id on public\.schedules\s+for each row when \(old\.venue_id is distinct from new\.venue_id\)/);
+    // 예약 유무는 RLS 에 가려지지 않게 정의자로 센다(가려지면 '예약 없음' 으로 fail-open)
+    expect(c).toMatch(/function public\._schedule_has_reservations\(p_schedule_id uuid\)[\s\S]*?security definer/);
+    const sched = readFileSync(join(__dirname, 'schedules.ts'), 'utf-8');
+    const upd = sched.slice(sched.indexOf('export async function updateSchedule'));
+    expect(upd.slice(0, upd.indexOf('\n}'))).not.toMatch(/venue_id/);
+  });
+
   it('자가검사가 user_id 칸 닫힘과 메모 저장 칸 열림을 둘 다 본다', () => {
     expect(BASE_SQL).toContain("has_column_privilege('authenticated', 'public.customer_profiles', 'user_id', 'INSERT')");
     expect(BASE_SQL).toContain("has_column_privilege('authenticated', 'public.customer_profiles', 'memo', 'INSERT')");

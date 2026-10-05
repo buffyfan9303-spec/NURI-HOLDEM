@@ -28,10 +28,18 @@
 --      이 매장에 출석 요청(checkin_requests)·앱 참가 신청(ledger_buyin_requests 중 voucher_id 없는 행 = 손님이 보낸 것)을 보낸 회원.
 --      불변식: 연결이 _venue_customer_ids 를 '손님이 먼저 손을 든 적 없는 회원' 쪽으로 넓히지 않는다.
 --      (이용권 자동 생성 신청 행 voucher_id 는 업주가 아무에게나 보낸 이용권에서 나올 수 있어 넣지 않는다 — staff_check_in 과 같은 기준.)
+--   ④ (critical 반증 F) 두 매장을 운영하는 사람이 다른 매장의 실제 고객 행(user_id 있음)을 venue_id 만 바꿔 이 매장으로 옮길 수 있었다
+--      (venue_id 는 upsert 때문에 UPDATE 칸에 남는다). → BEFORE UPDATE 트리거(정의자 아님): 호출 역할이 authenticated/anon 이고
+--      venue_id·user_id 가 옛 값과 다르면 42501. upsert 의 같은 값 재기록·정의자 함수(_apply_checkin·link_customer_alias, current_user=postgres)는 통과.
+--   ⑤ (critical 반증 C) customer_aliases 는 표 단위 INSERT/UPDATE 가 열려 있어 link_customer_alias 의 관계 확인을 직접 INSERT 로 건너뛸 수 있었다.
+--      화면은 SELECT 만 하고 연결·해제는 정의자 RPC 라 클라 INSERT/UPDATE 를 거둔다(DELETE 는 pos 정책 그대로).
+--   (B 포스터 매장 옮기기는 표가 달라 20261005c 로 나눴다.)
 --
 -- 기존 데이터(2026-10-05 읽기 조회): customer_profiles 5행 전부 user_id null(관계 없는 user 행 0) · customer_aliases 0행. 삭제·변경 없음.
 -- 되돌리기: grant insert, update on public.customer_profiles to authenticated; 정책 넷을 지우고 pos_all 재생성;
---          link_customer_alias 를 아래 §0 md5 의 본문(20260623m)으로 create or replace(같은 시그니처 → ACL 보존).
+--          link_customer_alias 를 아래 §0 md5 의 본문(20260623m)으로 create or replace(같은 시그니처 → ACL 보존);
+--          drop trigger trg_guard_customer_profile_link · drop function _guard_customer_profile_link();
+--          grant insert, update on public.customer_aliases to authenticated.
 
 -- §0 적용 전 게이트 — 라이브 link_customer_alias 가 2026-10-05 실측 본문이거나 이 파일 본문(재적용)이어야 한다.
 do $pre$
@@ -101,8 +109,33 @@ begin
    where t.venue_id = p_venue_id and t.user_id = p_user_id;
   delete from public.customer_profiles where venue_id = p_venue_id and user_id is null and lower(btrim(name)) = lower(v_alias);
 end $function$;
+-- ⚠ 이 함수는 이미 라이브에 있고 create or replace 는 ACL 을 보존한다 → 아래 revoke/grant 두 줄을 지워도 자가검사(§9)는 통과한다.
+--   두 줄의 효과는 '함수가 새로 만들어지는 경우'(drop 후 재생성)에만 검증된다. 자가검사의 ACL 항목은 라이브 상태 확인일 뿐이다.
 revoke all on function public.link_customer_alias(uuid, text, uuid) from public, anon;
 grant execute on function public.link_customer_alias(uuid, text, uuid) to authenticated, service_role;
+
+-- ④ 고객 행의 매장·회원 연결은 클라가 바꿀 수 없다 (critical 반증 F)
+--   정의자 함수가 아니다 — current_user 가 호출 역할이어야 클라(authenticated/anon)와 정의자 함수 경로(postgres)를 가를 수 있다.
+--   트리거 함수 실행에는 EXECUTE 권한이 필요 없다(생성 시점에만 본다) → 클라 역할에서 모두 회수.
+create or replace function public._guard_customer_profile_link()
+ returns trigger
+ language plpgsql
+ set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  if current_user in ('authenticated', 'anon')
+     and (new.venue_id is distinct from old.venue_id or new.user_id is distinct from old.user_id) then
+    raise exception using errcode = '42501', message = '고객 정보의 매장·회원 연결은 바꿀 수 없습니다';
+  end if;
+  return new;
+end $function$;
+revoke all on function public._guard_customer_profile_link() from public, anon, authenticated;
+-- drop trigger 는 표 잠금이 커서(20261004f 교착 경험) create or replace trigger 로 쓴다(PG14+).
+create or replace trigger trg_guard_customer_profile_link before update on public.customer_profiles
+  for each row execute function public._guard_customer_profile_link();
+
+-- ⑤ customer_aliases — 클라 INSERT/UPDATE 회수 (critical 반증 C). 연결·해제는 link/unlink_customer_alias(정의자)만.
+revoke insert, update on public.customer_aliases from public, anon, authenticated;
 
 -- §9 자가검사 — 하나라도 어긋나면 적용 전체를 되돌린다
 do $check$
@@ -132,5 +165,16 @@ begin
      or not has_function_privilege('authenticated', 'public.link_customer_alias(uuid,text,uuid)', 'EXECUTE')
      or (select prosrc from pg_proc where oid = 'public.link_customer_alias(uuid,text,uuid)'::regprocedure) not like '%_venue_customer_ids(array[p_venue_id])%' then
     raise exception '20261005b 자가검사: link_customer_alias 관계 확인 또는 ACL 이 기대와 다르다';
+  end if;
+  if not exists (select 1 from pg_trigger where tgrelid = 'public.customer_profiles'::regclass
+                  and tgname = 'trg_guard_customer_profile_link' and tgenabled <> 'D')
+     or (select prosecdef from pg_proc where oid = 'public._guard_customer_profile_link()'::regprocedure) then
+    raise exception '20261005b 자가검사: 고객 행 매장·회원 변경 가드 트리거가 없거나 정의자 함수다(current_user 판정이 깨진다)';
+  end if;
+  if has_table_privilege('authenticated', 'public.customer_aliases', 'INSERT')
+     or has_table_privilege('authenticated', 'public.customer_aliases', 'UPDATE')
+     or has_table_privilege('anon', 'public.customer_aliases', 'INSERT')
+     or not has_table_privilege('authenticated', 'public.customer_aliases', 'SELECT') then
+    raise exception '20261005b 자가검사: customer_aliases 클라 쓰기가 열려 있거나 조회가 막혔다';
   end if;
 end $check$;
