@@ -1,4 +1,5 @@
--- 초안 (store-team 2026-10-06) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261006a_rehearsal.sql (+ 20261005b_rehearsal.sql 회귀)
+-- ✅ 적용 완료 2026-10-06 (critical 재반증 통과, 적용 후 리허설 6a 11/11·5b 18/18)
+-- (원래 머리) 초안 (store-team 2026-10-06) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261006a_rehearsal.sql (+ 20261005b_rehearsal.sql 회귀)
 -- 라이브 롤백 리허설 결과는 PR 본문(#182)에 있다 — critical 반증(X1·X8) 반영판.
 -- 20261006a — 장부명↔회원 연결이 '같은 이름의 미연결 고객 행'에서 23505 로 실패하던 것 (audit8-regress-connect.md#R8-01)
 --
