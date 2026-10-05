@@ -1589,7 +1589,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
           )}
         </div>
         {seededFromLedger && linkDate && (
-          <p className="text-[11px] text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
+          <p className="text-2xs text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
             <Icon name="notebook" size={13} className="inline-block align-[-2px] mr-1 shrink-0" /><b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
           </p>
         )}
@@ -1775,7 +1775,7 @@ function LivePagesModal({ state, onClose, onApply }: { state: ClockState; onClos
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="block">
-      <span className="block text-[11px] text-ink-secondary mb-1">{label}</span>
+      <span className="block text-2xs text-ink-secondary mb-1">{label}</span>
       {children}
     </div>
   );

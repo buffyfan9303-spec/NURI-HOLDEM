@@ -556,7 +556,10 @@ export default function ToolsPanel() {
       ))}
     </ul>
   );
-  const tileTools = favTools.length > 0 ? favTools.slice(0, 4) : FEATURED_KEYS.map((k) => TOOLS.find((t) => t.key === k)!);
+  // 타일 4칸 = 즐겨찾기 앞에서부터 + 모자라면 기본 4개로 채운다(중복 제외). 2026-10-05 독립 검토 P2-2: 별 하나만 눌러도 기본 4개가 사라지고
+  //   칸이 1개(반쪽 줄)만 남았다 — 즐겨찾기 0·1·4·6개 모두 4칸이다(e2e gto-catalog-tiles).
+  const tileTools = [...favTools, ...FEATURED_KEYS.map((k) => TOOLS.find((t) => t.key === k)!)]
+    .filter((t, i, a) => a.findIndex((x) => x.key === t.key) === i).slice(0, 4);
   const extraFavs = favTools.slice(4);
   const tileSet = new Set<string>(tileTools.map((t) => t.key));
   const showTiles = lane === 'all' || favTools.length > 0;
@@ -649,7 +652,7 @@ export default function ToolsPanel() {
               <Icon name={favTools.length > 0 ? 'star-fill' : 'trophy'} size={13} className="text-ink-muted" aria-hidden /> 자주 쓰는 도구
             </h2>
             <span className="text-2xs font-semibold tabular-nums text-ink-muted">{tileTools.length}개</span>
-            <span className="min-w-0 text-2xs text-ink-secondary">{favTools.length > 0 ? '즐겨찾기한 도구' : '스팟 · 차트 · GTO 분석 바로가기'}</span>
+            <span className="min-w-0 text-2xs text-ink-secondary">{favTools.length >= 4 ? '즐겨찾기한 도구' : favTools.length > 0 ? '즐겨찾기 + 기본 도구' : '스팟 · 차트 · GTO 분석 바로가기'}</span>
           </div>
           {grid(tileTools)}
         </section>
@@ -855,9 +858,12 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
         </span>
         {/* 320 에서 글자 칸이 60px 남짓이라 15px 제목이 세 줄(타일 82px)이 됐다(2026-10-05 실측) — 360 미만만 한 단 작게. */}
         <span className="flex min-w-0 flex-[1_1_3rem] flex-col justify-center text-sm leading-5 font-bold text-ink-primary max-[359px]:text-xs max-[359px]:leading-4">
-          {(lines ?? [name]).map((l) => (
-            <span key={l} className="block wrap-anywhere">{l}</span>
-          ))}
+          {/* 2026-10-05 독립 검토 P3: 줄바꿈표(TITLE_LINES)는 이제 **꺾을 수 있는 자리**만 정한다 — 두 토막을 각각 안 끊기게 묶고 사이는 공백이라
+              폭이 되면 한 줄('푸시 · 폴드 차트'), 안 되면 그 자리에서 꺾인다. 토막 하나가 칸보다 넓으면(320 의 '레인지 차트') inline-block max-w-full 이라
+              토막 안에서도 접힌다(nowrap 이면 잘렸다 — e2e typography-regression 320). 종전엔 block 두 개라 390 처럼 넓은 칸에서도 늘 두 줄이었다. */}
+          <span className="block wrap-anywhere">
+            {lines ? <><span className="inline-block max-w-full">{lines[0]}</span> <span className="inline-block max-w-full">{lines[1]}</span></> : name}
+          </span>
         </span>
       </button>
       {/* 별 — transform 유틸 금지: 전역 button:active 가 transform 을 scale 로 통째로 덮어 -translate-y-1/2 가 누르는 60ms 동안 사라져 별이 튀었다.

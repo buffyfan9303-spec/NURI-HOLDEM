@@ -82,9 +82,9 @@ export default function ClockAdsManager({ venueId, venueName, onClose }: { venue
           <input type="file" accept="image/webp,image/jpeg,image/png" aria-label="광고 이미지"
             onChange={(e) => { setFile(e.target.files?.[0] ?? null); }} className="block min-h-[44px] w-full text-xs text-ink-secondary" />
           <div className="grid grid-cols-2 gap-2">
-            <label className="block"><span className="mb-1 block text-[11px] text-ink-secondary">시작 날짜</span>
+            <label className="block"><span className="mb-1 block text-2xs text-ink-secondary">시작 날짜</span>
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input w-full text-sm" /></label>
-            <label className="block"><span className="mb-1 block text-[11px] text-ink-secondary">끝 날짜(그날 포함)</span>
+            <label className="block"><span className="mb-1 block text-2xs text-ink-secondary">끝 날짜(그날 포함)</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input w-full text-sm" /></label>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">

@@ -280,7 +280,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
             ? <p className="text-base font-extrabold text-danger-light">—</p>
             : <p data-testid="labor-total" className="whitespace-nowrap text-base font-extrabold text-accent-200 tabular-nums sm:text-lg">{totalPay.toLocaleString()}원</p>}
           {!payErr && dealerPay > 0 && (
-            <p className="text-[11px] text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
+            <p className="text-2xs text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
           )}
         </div>
         <div className="rounded-card border card-aura-sub p-2.5 text-center">
@@ -313,8 +313,8 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 출근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgIn}</p></div>
-        <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 퇴근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgOut}</p></div>
+        <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-2xs text-ink-muted">평균 출근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgIn}</p></div>
+        <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-2xs text-ink-muted">평균 퇴근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgOut}</p></div>
       </div>
       {shiftErr ? null : rows.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">{month} 출근 기록이 없습니다.</p> : (
         <div className="overflow-x-auto scrollbar-none">
@@ -323,7 +323,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
               컨테이너가 scrollbar-none 이라 잘렸다는 사실조차 보이지 않았다(실측 sw340/cw314).
               가장 중요한 숫자가 조용히 사라지는 것보다 '평균 출/퇴' 가 두 줄로 접히는 게 낫다. */}
           <table className="w-full border-separate border-spacing-0">
-            <thead><tr className="text-[11px] text-ink-muted"><th className="py-1 text-left pl-1 font-semibold">직원</th><th className="text-right font-semibold">출근</th><th className="text-right font-semibold">시간</th><th className="text-center font-semibold">평균 출/퇴</th><th className="text-right pr-1 font-semibold">급여</th></tr></thead>
+            <thead><tr className="text-2xs text-ink-muted"><th className="py-1 text-left pl-1 font-semibold">직원</th><th className="text-right font-semibold">출근</th><th className="text-right font-semibold">시간</th><th className="text-center font-semibold">평균 출/퇴</th><th className="text-right pr-1 font-semibold">급여</th></tr></thead>
             <tbody>
               {rows.map((r) => {
                 const list = avgBy.get(r.name) ?? [];
@@ -333,7 +333,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
                     <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
                     <td className="text-right text-ink-secondary tabular-nums">{hoursText(r.netMin)}</td>
                     {/* 좁은 폭에서 줄바꿈 지점을 준다 — 18:00/02:30 은 공백이 없어 그대로면 안 접힌다 */}
-                    <td className="text-center text-ink-muted tabular-nums text-[11px]">{avgHm(list.map((x) => x.checkIn))}/<wbr />{avgHm(list.map((x) => x.checkOut))}</td>
+                    <td className="text-center text-ink-muted tabular-nums text-2xs">{avgHm(list.map((x) => x.checkIn))}/<wbr />{avgHm(list.map((x) => x.checkOut))}</td>
                     <td className="text-right pr-1 text-accent-300 dark:text-accent-200 tabular-nums font-bold">{r.total.toLocaleString()}</td>
                   </tr>
                 );
@@ -344,7 +344,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
       )}
       {dealerRows.length > 0 && (
         <div className="space-y-1 rounded-input border border-border-subtle bg-surface-low p-2">
-          <p className="text-[11px] font-bold text-ink-secondary">딜러 로테이션 (시급은 시프트마다 입력)</p>
+          <p className="text-2xs font-bold text-ink-secondary">딜러 로테이션 (시급은 시프트마다 입력)</p>
           <table className="w-full border-separate border-spacing-0">
             <tbody>
               {dealerRows.map((r) => (
@@ -361,7 +361,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
       )}
       {extras.length > 0 && (
         <div data-testid="pay-extras" className="space-y-0.5 rounded-input border border-border-subtle bg-surface-low p-2">
-          <p className="text-[11px] font-bold text-ink-secondary">계산 내역 (급여에 포함)</p>
+          <p className="text-2xs font-bold text-ink-secondary">계산 내역 (급여에 포함)</p>
           {extras.map((r) => (
             <p key={r.name} className="text-2xs text-ink-muted tabular-nums break-keep">
               <b className="text-ink-secondary">{r.name}</b>

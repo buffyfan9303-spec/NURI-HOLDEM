@@ -225,12 +225,15 @@ function RuleCard({ rule, open, defaultOpen, onToggle }: {
 }) {
   const [self, setSelf] = useState(!!defaultOpen);
   const isOpen = onToggle ? !!open : self;
-  const head = rule.no !== null ? `규칙 ${rule.no}` : rule.section;
+  // 번호 없는 항목의 배지는 섹션 이름 — 괄호 속 영문 원어('권장 절차(Recommended Procedures)')는 배지에서 뺀다(2026-10-05 독립 검토 P2-1:
+  //   배지가 줄지 않아 제목 칸이 96 → 62px 로 눌렸다). 전체 이름은 title 툴팁과 펼친 본문 아래 출처 줄에 그대로 남는다.
+  const head = rule.no !== null ? `규칙 ${rule.no}` : rule.section.replace(/\s*\([^)]*\)\s*$/, '');
   return (
     <li className="overflow-hidden rounded-input border border-border-default bg-surface-high">
       <button type="button" onClick={onToggle ?? (() => setSelf((v) => !v))} aria-expanded={isOpen}
         className="flex w-full items-center gap-2 px-2.5 py-2 text-left">
-        <span className="shrink-0 rounded-chip bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">{head}</span>
+        {/* max-w-[45%] + truncate: 긴 섹션 이름('자리 지정, 테이블 브레이크 및 테이블 밸런싱')도 제목 칸을 절반 넘게 먹지 못한다. */}
+        <span title={rule.section} className="max-w-[45%] shrink-0 truncate rounded-chip bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">{head}</span>
         <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{rule.title}</span>
         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} className="shrink-0 text-ink-muted" />
       </button>

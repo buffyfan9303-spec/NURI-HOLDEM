@@ -61,7 +61,8 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
   //   판 안에 하단 고정 바가 있는 도구만 --overlay-bar 로 비운다(index.css, NURI SPOT 단계 이동 바).
   return (
     <footer data-testid="business-footer" className={['mt-6 border-t border-border-subtle px-page-x pt-5', props.overlay ? 'pb-[calc(1.5rem+var(--overlay-bar,0px))]' : 'pb-[max(calc(var(--tabbar-safe)+0.5rem),var(--footer-reserve,0px))] lg:pb-[max(2rem,var(--footer-reserve,0px))]'].join(' ')}>
-      <div className="mx-auto w-full max-w-5xl space-y-4">
+      {/* 블록 사이 16px 은 모바일만(정돈 지시 범위) — sm 이상은 종전 12px. PC 문서 길이가 달라지면 내 매장 판 전환 게이트의 스크롤 조건이 흔들린다. */}
+      <div className="mx-auto w-full max-w-5xl space-y-3 max-sm:space-y-4">
         {/* 약관·정책 링크 — §7 P0-C(2026-09-12 실측): 11.69px 로, 이미 t-desc(12.75px)로 올라간
             사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다.
             🔴 2026-10-05 오너 "하단 푸터가 주르륵 되어 있어 모바일 정렬 다시 해 정돈해": 모바일(sm 미만)은 **2열 격자**
@@ -137,9 +138,9 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
 
         {/* 사행성 배제 고지 — §7 P0-C: `/80` 반투명이 라이트 3.37:1·다크 3.72:1 로 AA 미달이었다.
             위 dt 와 같은 이유로 투명도를 걷어내고 불투명 `text-ink-muted` 로 (재측정: 라이트 4.99:1·다크 5.28:1). */}
-        {/* 2026-10-05 법정 고지(사행성 배제 · 만 19세 · 1336 · ©)를 **한 덩어리**(옅은 면 상자)로 — 앞 블록들과 구분된다.
+        {/* 2026-10-05 법정 고지(사행성 배제 · 만 19세 · 1336 · ©)를 모바일에서 **한 덩어리**(옅은 면 상자)로 — 앞 블록들과 구분된다(sm 이상은 종전 문단).
             상자 면은 surface-low 라 글자 대비는 지면 기준보다 오히려 높다. 문구·순서·상시 노출 그대로. */}
-        <p className="rounded-input border border-border-strong/25 bg-surface-low px-3 py-2.5 t-desc text-ink-muted">
+        <p className="t-desc text-ink-muted max-sm:rounded-input max-sm:border max-sm:border-border-strong/25 max-sm:bg-surface-low max-sm:px-3 max-sm:py-2.5">
           NURI HOLDEM은 마인드 스포츠로 불리는 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
           {/* ⚠ 두 번 부딪혀 가운데를 찾은 자리다.
               2026-09-16: '1336(24시간·무료)' 만 마지막 줄에 혼자 떨어져 nowrap 을 문장 전체에 걸었다.
@@ -150,7 +151,7 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
           {/* 2026-10-05: 두 고지를 각각 안 끊기는 묶음으로 — 접히면 '·' 뒤에서만 접힌다(종전 390 에서 '도박문제 / 상담 1336' 으로 갈라졌다). 굵기로 한 줄 위계를 준다. */}
           {/* block: 두 줄로 접혀도 고지 칸 전체가 하나의 상자다 — 인라인이면 두 줄 사이 행간 틈이 '고지 위 다른 것' 으로 잡혔다(e2e legal-overlay 360 의 elementFromPoint).
               앞뒤 <br/> 대신 block 이 줄을 나눈다(© 는 이어서 p 의 직속 글자 노드로 남는다 — 마지막 줄 판정이 그 노드를 잰다). */}
-          <span className="my-1 block font-semibold text-ink-secondary"><span className="whitespace-nowrap">{AGE_HELPLINE[0]}</span> · <span className="whitespace-nowrap">{AGE_HELPLINE[1]} {AGE_HELPLINE[2]}</span></span>
+          <span className="block font-semibold text-ink-secondary max-sm:my-1"><span className="whitespace-nowrap">{AGE_HELPLINE[0]}</span> · <span className="whitespace-nowrap">{AGE_HELPLINE[1]} {AGE_HELPLINE[2]}</span></span>
           © {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>
       </div>

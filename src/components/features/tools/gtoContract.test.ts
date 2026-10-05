@@ -85,7 +85,7 @@ describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
     expect(TOOLS_PANEL).toContain("export const FEATURED_KEYS = ['spot', 'range', 'pushfold', 'gto'] as const");
     for (const k of ['spot', 'range', 'pushfold', 'gto']) expect(entries.some((e) => e.key === k), `${k} 가 TOOLS 에 없다`).toBe(true);
     // 타일 원천: 즐겨찾기가 있으면 앞 4개, 없으면 기본 4개. 나머지 즐겨찾기는 버리지 않는다.
-    expect(TOOLS_PANEL).toContain('const tileTools = favTools.length > 0 ? favTools.slice(0, 4) : FEATURED_KEYS.map(');
+    expect(TOOLS_PANEL, '타일은 즐겨찾기 먼저 + 기본 4개로 채운다(중복 제외) — 별 하나로 칸이 반쪽이 되면 안 된다').toMatch(/const tileTools = \[\.\.\.favTools, \.\.\.FEATURED_KEYS\.map\([^\n]*\)\]\s*\.filter\(\(t, i, a\) => a\.findIndex\(\(x\) => x\.key === t\.key\) === i\)\.slice\(0, 4\);/);
     expect(TOOLS_PANEL).toContain('const extraFavs = favTools.slice(4);');
     expect(TOOLS_PANEL, '5번째 즐겨찾기부터 그릴 자리가 없다 — 별을 눌러 둔 도구가 사라진다').toMatch(/\{!hits && extraFavs\.length > 0 && \(/);
     // 타일은 '전체' 에서 서고, 즐겨찾기가 있으면 갈래를 골라도 남는다(예전 즐겨찾기 섹션의 '갈래와 무관' 동작)
