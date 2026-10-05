@@ -278,7 +278,7 @@ test('1440 — 관리자: A 사이드 클락 종료 응답이 B 로 바꾼 뒤�
 // ── ⑤ 모바일 KPI 큰 값 — 숫자·단위 끊김 없음, 칸 높이 불변(D1 디자인 재검토) ─────────────────────────────
 //   종전: 390 '1,025 만'/'원' · 소수 '2,779.'/'63' 분리, 360 바인 4자리 '회' 줄바꿈(+19px, 정착 뒤 아래가 밀림).
 for (const [W, H] of [[390, 844], [360, 780]] as const) {
-  test(`${W} — 큰 값(바인 1,080회·매출 2,779.63만)에서 KPI 숫자·단위가 줄바꿈 없이 칸 안에 들고 칸 높이가 확인 중과 같다`, async ({ page }) => {
+  test(`${W} — 큰 값(총 엔트리 1,111.9·매출 2,779.63만)에서 KPI 숫자·단위가 줄바꿈 없이 칸 안에 들고 칸 높이가 확인 중과 같다`, async ({ page }) => {
     test.setTimeout(90_000);
     await installSampler(page, 9);
     const session = {
@@ -333,8 +333,11 @@ for (const [W, H] of [[390, 844], [360, 780]] as const) {
     expect(checking.length, '확인 중 프레임을 못 봤다 — 빈 검사').toBeGreaterThan(5);
     expect(live.length, '진행중 프레임을 못 봤다 — 빈 검사').toBeGreaterThan(5);
     expect(cells.length, 'KPI 값 칸을 못 찾았다 — 빈 검사').toBe(4);
+    // 2026-10-06 — 모바일 '총 바인 N회' 칸이 '총 엔트리'(소수 가능)로 바뀌었다. 1,079×25,000 + 821,300 = 27,796,300원 ÷ 25,000원 = 1,111.852 → 1,111.9.
+    //   보이는 값은 data-testid=dash-kpi-entries(lg:hidden)로 직접 잰다 — 격자 textContent 에는 PC 전용 숨은 값('바인 1,080회')도 섞여 있어 거짓 통과한다.
+    await expect(page.getByTestId('dash-kpi-entries'), '모바일 총 엔트리 값이 안 보인다(이 검사의 전제)').toHaveText('1,111.9');
+    await expect(page.getByTestId('dash-kpi-buyins'), '라벨이 총 엔트리가 아니다').toHaveText('총 엔트리', { useInnerText: true });
     const all = cells.map((c) => c.text).join(' | ');
-    expect(all, '큰 값 목이 화면에 안 나왔다(이 검사의 전제)').toMatch(/1,?080/);
     expect(all).toMatch(/2,?779\.63/);
     for (const c of cells) {
       expect(c.lines, `'${c.text}' 숫자·단위가 줄바꿈됐다`).toBe(1);

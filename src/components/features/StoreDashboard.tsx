@@ -1091,11 +1091,14 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               </span>
               )}
               <span className="block min-w-0">
-                <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
+                {/* 오너 2026-10-06 — 모바일(<lg)은 큰 숫자 자리가 '총 엔트리'(금액 엔트리, 소수 가능)이고 아래 '엔트리' 줄은 없다.
+                    PC(lg)는 종전 그대로 '총 바인 N회' + 엔트리 보조줄. 바인 횟수 값을 '엔트리' 라벨로 보이면 틀린 숫자다(ledger-three-counts). */}
+                <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted"><span className="lg:hidden">총 엔트리</span><span className="hidden lg:inline">총 바인</span></span>
                 {kv('stat-indigo', <>
-                  <CountUp value={day.totalBuyins} /><span className="ml-1 text-2xs font-semibold text-ink-muted lg:text-sm">회</span>
+                  <span data-testid="dash-kpi-entries" className="lg:hidden">{day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                  <span className="hidden lg:inline"><CountUp value={day.totalBuyins} /></span><span className="ml-1 hidden text-2xs font-semibold text-ink-muted lg:inline lg:text-sm">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
-                  <span className="mt-1 block text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                  <span className="mt-1 hidden text-2xs font-semibold text-ink-muted lg:block">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                 </>)}
               </span>
               <span className="block min-w-0">
