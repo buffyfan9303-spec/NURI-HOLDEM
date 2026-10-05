@@ -84,9 +84,10 @@ describe('③ 준비 판정(tabPaneReady · waitSettled)', () => {
 });
 
 describe('⑤ 단일 준비 판정 isSettled — 판 안 스켈레톤·aria-busy 까지 본다(4차)', () => {
-  const el = (tag: string, r: { top: number; h: number }, shown = true) => ({
+  const el = (tag: string, r: { top: number; h: number }, shown = true, stable = false) => ({
     tagName: tag, getClientRects: () => ({ length: shown ? 1 : 0 }),
     getBoundingClientRect: () => ({ top: r.top, bottom: r.top + r.h, width: 300, height: r.h }),
+    closest: (s: string) => (stable && s === '[data-stable-skeleton]' ? {} : null),
   });
   let inner: unknown[] = [];
   const root = { style: { display: '' }, offsetHeight: 800, querySelectorAll: () => inner } as unknown as Element;
@@ -109,6 +110,12 @@ describe('⑤ 단일 준비 판정 isSettled — 판 안 스켈레톤·aria-busy
   it('동작 중 버튼·인라인 집계 글자의 aria-busy 는 판 모양을 안 바꾸므로 안 기다린다(상시 700ms 대기 방지)', () => {
     inner = [el('BUTTON', { top: 100, h: 44 }), el('SPAN', { top: 300, h: 19 })];
     expect(isSettled(root)).toBe(true);
+  });
+  it('M8-02 실제 내용과 같은 높이의 뼈대(data-stable-skeleton 안)는 준비된 모양이다 — 떠나는 판을 붙잡지 않는다. 표식 없는 스켈레톤은 그대로 기다린다', () => {
+    inner = [el('DIV', { top: 200, h: 700 }, true, true)];
+    expect(isSettled(root), '게시판 뼈대를 준비 전으로 봤다 — 홀덤펍 복제본이 뼈대 위에 300ms 겹친다').toBe(true);
+    inner = [el('DIV', { top: 200, h: 700 }, true, true), el('DIV', { top: 300, h: 100 })];
+    expect(isSettled(root), '표식 없는 스켈레톤까지 건너뛰었다 — 다른 판의 첫 방문 대기가 사라진다').toBe(false);
   });
 });
 

@@ -929,13 +929,15 @@ function FeedSection({
   const catRailRef = useRef<HTMLDivElement>(null);
   const [catFade, setCatFade] = useState('');
   const hasPosts = posts.length > 0;
-  // 상단 필터 줄(칩·🔍·⇅)을 그릴지 — 글이 있을 때 + **첫 조회가 끝나기 전**(M7-01 P2-1). 예전엔 글이 와야만 그려서(hasPosts)
-  //   searchPosts 응답이 getPosts 보다 먼저 오면 목록이 44px 밀렸다. 조회가 0건·실패로 끝나면 예전처럼 줄이 사라진다.
-  const showFilter = hasPosts || listSource.length > 0 || (!serverDone && serverErr == null && postsErr == null);
-  // 첫 로드 뼈대 행 수(M7-01, 리드 결정 2026-10-05) — 15행 고정이면 글이 3개뿐인 게시판에서 푸터가 12행만큼 끌려 올라온다.
-  //   App 조회가 끝났으면 그 개수(0 이면 뼈대 대신 빈 상태) → 아니면 이 기기에서 지난번 본 첫 페이지 행 수 → 둘 다 없으면 15.
+  // 첫 로드 뼈대 행 수(M7-01 리드 결정 2026-10-05 · M8-01 리드 결정 2026-10-06) — App 조회가 끝났으면 그 개수(0 이면 뼈대 대신 빈 상태)
+  //   → 아니면 이 기기에서 지난번 본 첫 페이지 행 수 → **둘 다 없으면 null(모름) = 뼈대 없이 짧은 '찾는 중…' 카드**.
+  //   예전 기본값 15 는 글 24개 첫 방문만 CLS 0 으로 만들고, 글이 적거나(운영 공개 글 4건) 0건·실패인 첫 방문에서
+  //   15행이 무너지며 사업자 푸터를 끌어올렸다(입력 없는 CLS 0.10~0.28 @390·360·320, audit8 M8-01). 모르는 개수를 지어내지 않는다.
   const [lastRows] = useState(readBoardRows);
-  const skRows = postsLoaded ? Math.min(posts.length, 15) : (lastRows ?? 15);
+  const skRows: number | null = postsLoaded ? Math.min(posts.length, 15) : lastRows;
+  // 상단 필터 줄(칩·🔍·⇅)을 그릴지 — 글이 있을 때 + **뼈대로 첫 조회를 기다리는 동안**(M7-01 P2-1 — 뼈대 위에 줄이 늦게 붙으면 44px 밀렸다).
+  //   개수를 모르는 첫 방문(짧은 카드)에는 미리 잡지 않는다 — 0건·실패로 끝나면 44px 자리가 사라지며 위로 끌려 올라온다(M8-01).
+  const showFilter = hasPosts || listSource.length > 0 || (!serverDone && serverErr == null && postsErr == null && !!skRows);
   const firstPage = q.trim() === '' && (!enableCategory || cat === 'all');
   useEffect(() => {
     // 첫 페이지 행 수가 확정되면(서버 끝 또는 15행 채움) 기억한다 — 다음 방문의 뼈대 높이.
@@ -1140,11 +1142,12 @@ function FeedSection({
               serverLoading 동안은 '결과 없음' 대신 조회 중임을 알린다. */}
           {postsErr != null && posts.length === 0 ? (
             <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
-          ) : serverLoading && !serverDone && firstPage && skRows > 0 ? (
-            // 첫 로드(검색·필터 없음)만 뼈대 — 행 수는 skRows(App 개수 → 지난 방문 → 15). App 이 0건을 확정했으면 아래 빈 상태로 간다.
+          ) : serverLoading && !serverDone && firstPage && !!skRows ? (
+            // 첫 로드(검색·필터 없음) + 행 수를 알 때만 뼈대 — skRows(App 개수 → 지난 방문). 모르면 아래 짧은 카드, App 이 0건을 확정했으면 빈 상태.
             <BoardListSkeleton rows={skRows} view={view} />
           ) : serverLoading && !serverDone && !(firstPage && skRows === 0) ? (
-            // 검색·카테고리 필터 중 — 결과 수를 모른다(대개 0~몇 건). 15행을 깔면 3건·0건일 때 푸터가 크게 끌려 올라온다(M7-01 P2-2) → 예전 짧은 카드.
+            // 검색·카테고리 필터 중, 또는 이 기기의 첫 방문(행 수 모름) — 결과 수를 모른다. 15행을 깔면 3건·0건·실패일 때 푸터가 크게
+            //   끌려 올라온다(M7-01 P2-2 · M8-01) → 예전 짧은 카드. 대가: 글이 15건 넘는 게시판의 첫 방문 한 번은 카드 → 목록으로 아래가 밀린다.
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
           ) : serverErr != null ? (
             <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
@@ -1250,7 +1253,7 @@ function FeedSection({
 /** 게시판 첫 로드 뼈대(점검 7회차 M7-01, 2026-10-05) — 아래 실제 목록(PostRow / PostCard)과 **같은 래퍼·같은 행 클래스**를 그리고
  *  글자만 숨긴다(visibility). 응답이 0.5초 넘게 늦으면 짧은 '찾는 중…' 카드가 24행 목록으로 바뀌며 아래 사업자 푸터를
  *  밀었다(CLS 0.26 @390). 높이를 px 로 적지 않으니 글꼴·루트 폰트(17px)·행 높이 토큰이 바뀌어도 실제 행과 같이 움직인다.
- *  rows = 한 번에 보이는 행 수(visible, 기본 15). 글이 그보다 적게 오면 줄어들 뿐 위로 끌어올리지 않는다.
+ *  rows = 한 번에 보이는 행 수(1~15 — App 개수 또는 이 기기의 지난 방문 값. 모르면 이 뼈대를 쓰지 않는다, M8-01).
  *  ⚠ PostRowCard.tsx 의 행·카드 클래스(min-h·패딩·테두리)를 바꾸면 여기도 같이 바꾼다 — e2e board-first-load-cls 가 어긋남을 잡는다.
  *  피드(카드) 모드는 가장 흔한 카드(본문 2줄·첨부 없음)의 줄 구조를 그대로 그린다 — 첨부·스팟 카드는 더 커서 그 글만 아래를 민다.
  *  첫 로드(검색·필터 없음)에서만 쓴다 — 검색·필터는 결과 수를 몰라 짧은 '찾는 중…' 카드(호출부 주석). */
@@ -1269,7 +1272,9 @@ function writeBoardRows(n: number) {
 
 function BoardListSkeleton({ rows, view }: { rows: number; view: 'compact' | 'feed' }) {
   return (
-    <div aria-busy="true" data-testid="board-list-loading" className="space-y-2">
+    // data-stable-skeleton: 실제 목록과 같은 높이의 자리표시다 — 판 교체(tabCover isSettled)가 '아직 준비 전'으로 보고 떠나는 판
+    //   복제본을 300ms 붙잡지 않게 한다(붙잡으면 홀덤펍 목록이 뼈대 위에 겹친 이중상이 557ms — audit8 M8-02).
+    <div aria-busy="true" data-stable-skeleton="" data-testid="board-list-loading" className="space-y-2">
       {view === 'compact' ? (
         <div aria-hidden className="rounded-aura border card-aura overflow-hidden">
           <ul>
