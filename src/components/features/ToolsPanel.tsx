@@ -32,6 +32,7 @@ import type { SpotReview } from '../../lib/spot';
 import { matchesToolQuery } from '../../lib/toolSearch';
 import { josa } from '../../lib/josa';
 import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT, SPOT_AI_PRICE } from '../../lib/spotAiLimits';
+import BrandDiamond from '../atoms/BrandDiamond';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
@@ -801,12 +802,9 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
-        {/* 시안: 카드보다 한 단 어두운 원 + 얇은 밝은 테두리. 로고(금색)를 받치는 브랜드 배지라 라이트에서도 남색을 유지한다 —
-            연한 원 위 금색 로고는 대비 약 2:1 로 흐려진다. 2026-10-06 36 → 40(시안 비율: 배지 ≈ 제목+안내 두 줄 높이). */}
-        <span className="relative row-span-2 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12 max-[359px]:row-span-1"
-          style={{ background: 'radial-gradient(120% 120% at 35% 0%, #24365A 0%, #131D2E 55%, #0B111C 100%)' }} aria-hidden>
-          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
-        </span>
+        {/* 2026-10-06 오너 C안 로고: 원형 남색 배지를 걷고 배경 없는 골드 다이아(알파 기준으로 잘린 이미지, 28×40).
+            높이 40 = 종전 배지 높이(제목+안내 두 줄을 받친다). */}
+        <BrandDiamond width={28} height={40} className="row-span-2 h-10 shrink-0 max-[359px]:row-span-1" />
         <p className="self-end text-base leading-6 font-extrabold tracking-tight text-ink-primary max-[359px]:self-center">NURI SPOT</p>
         {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
             2026-10-06 시안: 연한 하늘색 안내(강조 글 토큰 accent-200 — 라이트는 #2F5E9C 로 교정된다).
