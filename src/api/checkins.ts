@@ -124,12 +124,16 @@ export async function requestCheckin(venueId: string): Promise<{ status: 'pendin
 
 export interface CheckinRequest { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
-/** 업주: 오늘(KST) 이 매장에 들어온 대기 중 출석 요청. RLS(checkin_requests_select = 본인 또는 can_manage_pos)가 막는다.
+/** 업주: 이 매장에 들어온 대기 중 출석 요청. RLS(checkin_requests_select = 본인 또는 can_manage_pos)가 막는다.
+ *  20261005a P3-c — 요청 날짜는 영업일(자정 넘긴 토너는 어제)이라 KST 오늘·어제 날짜를 읽되, 12시간 안에 온 요청만 보인다
+ *  (영업일은 서버만 안다 — 승인 가능 여부는 staff_check_in 이 KST 오늘·영업일로 다시 판정한다).
  *  조회 실패는 던진다 — '요청 없음'과 '못 읽음'을 화면이 구별한다(R1-3 과 같은 이유). */
 export async function listCheckinRequests(venueId: string): Promise<CheckinRequest[]> {
   if (IS_MOCK) return [];
+  const now = Date.now();
   const { data, error } = await supabase.from('checkin_requests').select('id, venue_id, user_id, display_name, created_at')
-    .eq('venue_id', venueId).eq('request_date', kstToday()).eq('status', 'pending').order('created_at', { ascending: true });
+    .eq('venue_id', venueId).in('request_date', [kstToday(now - 86_400_000), kstToday(now)]).eq('status', 'pending')
+    .gte('created_at', new Date(now - 12 * 3_600_000).toISOString()).order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, displayName: r.display_name ?? null, createdAt: r.created_at }));

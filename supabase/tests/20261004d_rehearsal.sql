@@ -24,6 +24,10 @@ declare
   u_id uuid; o_id uuid; vv_id uuid; ww_id uuid; c_id uuid; x_id uuid;
   REJ constant text := '오늘 이 매장에 출석 요청이나 참가 신청을 보낸 손님만 출석 처리할 수 있습니다';
   n_a int; n_b int; n_c int;
+  -- 20261005a 가 함께 적용됐는가 — 같은 파일로 4d 단독·4d+5a 둘 다 리허설한다. 판별은 staff_check_in 의 영업일 변수(v_biz)로 한다
+  --   (check_in 의 code 로 판별하면 그 code 를 지운 변조가 '5a 미적용'으로 보여 음성 대조가 거짓 통과한다).
+  v5 boolean := pg_get_functiondef('public.staff_check_in(uuid,uuid)'::regprocedure) like '%v_biz := public.ledger_business_date%';
+  v_biz date;
   r jsonb; n_ck0 int; n_ck1 int; n_lg0 int; n_lg1 int; n_au0 int; n_au1 int; n_rows int;
   out text := ''; fails int := 0; total int := 0;
   st text;
@@ -122,7 +126,9 @@ begin
       ok := case
               when f[7] = 'ok' then (r->'r') ? 'name' and not ((r->'r') ? 'error')
               when f[7] like 'code:%' then r->'r'->>'code' = substr(f[7], 6) and coalesce(r->'r'->>'error', '') like '%매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다'
-              when f[7] like 'err:%' then r->'r'->>'error' = substr(f[7], 5) and not ((r->'r') ? 'code')
+              -- 20261005a P2: 반경 밖 거부에 code 'geo_out_of_range' 가 붙는다(문구는 그대로)
+              when f[7] like 'err:%' then r->'r'->>'error' = substr(f[7], 5)
+                and case when v5 and f[7] like 'err:매장 근처%' then r->'r'->>'code' = 'geo_out_of_range' else not ((r->'r') ? 'code') end
             end
             and (r->>'ck')::int = substr(f[8], 3)::int
             and (r->>'lg')::int = substr(f[9], 3)::int;
@@ -457,6 +463,90 @@ begin
     when others then
       if sqlerrm = '출석 요청은 하루 5곳까지 보낼 수 있습니다' then out := out || 'Q10 PASS; '; else fails := fails + 1; out := out || 'Q10 FAIL ' || sqlerrm || '; '; end if;
   end;
+
+  -- X1(critical 반례 2026-10-05) 승인된 출석 요청은 재사용되지 않는다 — 4시간 지난 뒤 같은 요청으로 다시 승인하면 거부
+  total := total + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', u_id, 'role', 'authenticated')::text, true);
+    perform public.request_checkin(vv_id);
+    perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+    perform public.staff_check_in(vv_id, u_id);
+    update public.checkins set created_at = created_at - interval '5 hours' where user_id = u_id and venue_id = vv_id and created_at >= now();
+    perform public.staff_check_in(vv_id, u_id);
+    raise exception using errcode = 'ZZ001', message = 'X1-passed';
+  exception
+    when sqlstate 'ZZ001' then fails := fails + 1; out := out || 'X1 FAIL 승인된 요청이 재사용됨; ';
+    when others then if sqlerrm = REJ then out := out || 'X1 PASS; '; else fails := fails + 1; out := out || 'X1 FAIL ' || sqlerrm || '; '; end if;
+  end;
+
+  -- ── 20261005a 전용(v5 일 때만 센다) ───────────────────────────
+  if not v5 then
+    out := out || 'G1·B1·D1 SKIP(20261005a 미적용); ';
+  else
+    -- G1 P2: 정확도 낮음(1.5km) → code geo_low_accuracy · 확인자료 1행(좌표를 썼다) · 출석 0
+    total := total + 1;
+    begin
+      execute $f$create or replace function public._checkin_geo_required_from() returns timestamptz language sql stable set search_path = public, pg_temp as $b$ select now() - interval '1 day' $b$$f$;
+      insert into public.location_consents (user_id, granted, terms_version, granted_at) values (u_id, true, 3, now());
+      perform set_config('request.jwt.claims', json_build_object('sub', u_id, 'role', 'authenticated')::text, true);
+      select count(*) into n_a from public.location_access_log where user_id = u_id;
+      select count(*) into n_ck0 from public.checkins where user_id = u_id and venue_id = vv_id;
+      r := public.check_in(vv_id, 37.5005, 127.0, 1500);
+      select count(*) into n_b from public.location_access_log where user_id = u_id;
+      select count(*) into n_ck1 from public.checkins where user_id = u_id and venue_id = vv_id;
+      raise exception using errcode = 'ZZ001', message = jsonb_build_object('r', r, 'lg', n_b - n_a, 'ck', n_ck1 - n_ck0)::text;
+    exception
+      when sqlstate 'ZZ001' then
+        if (sqlerrm::jsonb -> 'r' ->> 'code') = 'geo_low_accuracy' and (sqlerrm::jsonb -> 'r' ->> 'error') = '위치 정확도가 낮아요. 매장 안에서 다시 시도해 주세요'
+           and (sqlerrm::jsonb ->> 'lg')::int = 1 and (sqlerrm::jsonb ->> 'ck')::int = 0
+          then out := out || 'G1 PASS; '; else fails := fails + 1; out := out || 'G1 FAIL ' || sqlerrm || '; '; end if;
+      when others then fails := fails + 1; out := out || 'G1 FAIL ' || sqlerrm || '; ';
+    end;
+    -- B1 P3-c: 어제 영업일 장부가 열려 있으면(자정 넘긴 토너) 요청 날짜 = 어제 영업일 → 승인 성공 · 같은 날 재요청은 already
+    total := total + 1;
+    begin
+      insert into public.ledger_sessions (venue_id, session_date, game_seq, closed)
+      values (vv_id, (now() at time zone 'Asia/Seoul')::date - 1, 99, false);
+      v_biz := public.ledger_business_date(vv_id);
+      if v_biz is distinct from (now() at time zone 'Asia/Seoul')::date - 1 then
+        raise exception using errcode = 'ZZ002', message = '전제: 영업일이 어제가 아니다(오늘 열린 장부가 있다) ' || v_biz;
+      end if;
+      perform set_config('request.jwt.claims', json_build_object('sub', u_id, 'role', 'authenticated')::text, true);
+      perform public.request_checkin(vv_id);
+      r := public.request_checkin(vv_id);
+      if (r ->> 'already') is distinct from 'true' then raise exception using errcode = 'ZZ002', message = '재요청이 already 가 아니다 ' || r::text; end if;
+      if not exists (select 1 from public.checkin_requests where venue_id = vv_id and user_id = u_id and request_date = v_biz and status = 'pending') then
+        raise exception using errcode = 'ZZ002', message = '요청 날짜가 영업일이 아니다';
+      end if;
+      perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+      r := public.staff_check_in(vv_id, u_id);
+      if not exists (select 1 from public.checkin_requests where venue_id = vv_id and user_id = u_id and request_date = v_biz and status = 'approved') then
+        raise exception using errcode = 'ZZ002', message = '영업일 요청이 approved 로 바뀌지 않았다';
+      end if;
+      raise exception using errcode = 'ZZ001', message = 'ok';
+    exception
+      when sqlstate 'ZZ001' then out := out || 'B1 PASS; ';
+      when others then fails := fails + 1; out := out || 'B1 FAIL ' || sqlerrm || '; ';
+    end;
+    -- D1 P3-d: 대표(o)·공동 운영자(c)는 자기 매장에 출석 요청 불가(운영자끼리 승인해 위치 확인을 건너뛰는 길)
+    total := total + 1;
+    begin
+      perform set_config('request.jwt.claims', json_build_object('sub', o_id, 'role', 'authenticated')::text, true);
+      begin
+        perform public.request_checkin(vv_id);
+        raise exception using errcode = 'ZZ002', message = '대표 요청이 통과';
+      exception when sqlstate 'P0001' then
+        if sqlerrm <> '매장 운영자는 출석 요청 대신 매장 출석 QR로 출석해 주세요' then raise exception using errcode = 'ZZ002', message = 'o: ' || sqlerrm; end if;
+      end;
+      perform set_config('request.jwt.claims', json_build_object('sub', c_id, 'role', 'authenticated')::text, true);
+      perform public.request_checkin(vv_id);
+      raise exception using errcode = 'ZZ001', message = 'D1-passed';
+    exception
+      when sqlstate 'ZZ001' then fails := fails + 1; out := out || 'D1 FAIL 공동 운영자 요청이 통과; ';
+      when others then
+        if sqlerrm = '매장 운영자는 출석 요청 대신 매장 출석 QR로 출석해 주세요' then out := out || 'D1 PASS; '; else fails := fails + 1; out := out || 'D1 FAIL ' || sqlerrm || '; '; end if;
+    end;
+  end if;
 
   -- R5 ACL — anon 은 네 함수 모두 실행 불가, authenticated 는 check_in·스위치·직원 처리 실행 가능, 내부 함수는 불가
   total := total + 1;

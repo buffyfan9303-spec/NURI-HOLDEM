@@ -27,6 +27,15 @@ describe('① 분기 — 위치 실패는 시트, 나머지는 토스트', () =>
     expect(checkinFailureAction(new CheckinGeoRequiredError('consent', 'x'))).toEqual({ kind: 'sheet', code: 'consent' });
     expect(checkinFailureAction(new CheckinGeoRequiredError('position', 'x'))).toEqual({ kind: 'sheet', code: 'unavailable' });
   });
+  it('20261005a(critical P2) — 반경 밖·정확도 낮음 거부도 시트(출석 요청 버튼이 보인다) · 사유 문구 · 대체 경로', () => {
+    expect(checkinFailureAction(new CheckinGeoRequiredError('out_of_range', 'x'))).toEqual({ kind: 'sheet', code: 'out_of_range' });
+    expect(checkinFailureAction(new CheckinGeoRequiredError('low_accuracy', 'x'))).toEqual({ kind: 'sheet', code: 'low_accuracy' });
+    const a = checkinGeoRetryCopy('out_of_range', CHROME);
+    expect(a.reason).toMatch(/^매장 근처에서만 출석할 수 있습니다/);
+    expect(a.action).toBe('위치 확인 후 출석');
+    expect(a.alt).toBe(`동의하기 어렵거나 위치를 켤 수 없어도 ${CHECKIN_ALT_PATH}`);
+    expect(checkinGeoRetryCopy('low_accuracy', CHROME).reason).toMatch(/^위치 정확도가 낮아/);
+  });
   it('critical L3 — requestCheckinRetrySheet: 시트 대상이면 App 이벤트를 쏘고 true, 아니면 false(호출부 토스트)', () => {
     const w = new EventTarget();
     vi.stubGlobal('window', w);

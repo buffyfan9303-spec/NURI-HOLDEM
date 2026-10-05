@@ -105,6 +105,23 @@ test('🔴 G2 — 위치는 얻었는데 서버가 거부 → 시트 없이 서�
   await expect(page.getByTestId('checkin-geo-retry'), '서버 거부인데 위치 시트가 떴다').toHaveCount(0);
 });
 
+// critical P2(20261005a) — 좌표를 보냈는데 반경 밖으로 거부(code geo_out_of_range) → 토스트가 아니라 재시도 시트(출석 요청 버튼).
+// 음성 대조(2026-10-05): checkinGeoRetry 의 out_of_range 분기를 'unavailable' 고정으로 되돌리면 사유 단언에서 빨개진다.
+test('🔴 G5 — 반경 밖 거부(geo_out_of_range) → 재시도 시트 · 사유 · 「출석 요청 보내기」 보임 · 토스트 아님', async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await context.grantPermissions(['geolocation']);
+  await context.setGeolocation({ latitude: 37.55, longitude: 127.0, accuracy: 20 });
+  const calls = await setup(page, { status: 200, body: { code: 'geo_out_of_range', error: '매장 근처에서만 출석할 수 있어요' } });
+  await page.goto(`/?checkin=${VENUE}`);
+  await expect.poll(() => calls.length, { timeout: 20_000 }).toBe(1);
+  expect(calls[0]).toMatchObject({ p_venue_id: VENUE, p_lat: 37.55, p_lng: 127.0 });
+  const sheet = page.getByTestId('checkin-geo-retry');
+  await expect(sheet, '반경 밖 거부인데 재시도 시트가 안 떴다(토스트만 — 대체 경로가 안 보인다)').toBeVisible({ timeout: 10_000 });
+  await expect(sheet).toContainText('매장 근처에서만 출석할 수 있습니다. 매장 안이라면 휴대폰 위치(GPS)를 켜고 다시 시도해 주세요');
+  await expect(page.getByTestId('checkin-geo-request-btn')).toBeVisible();
+  await expect(page.getByTestId('checkin-geo-retry-btn')).toHaveText('위치 확인 후 출석');
+});
+
 // 오너 B(2026-10-05) — 재시도 시트의 '출석 요청 보내기' = request_checkin(매장 id 만) → 안내 토스트. 출석(check_in)은 더 나가지 않는다.
 // 음성 대조(2026-10-05): App.tsx 의 버튼 onClick 에서 requestCheckin(v) 호출을 빼면 G4 가 빨개진다(요청 0회).
 test('🔴 G4 — 동의 안 한 손님: 재시도 시트의 「출석 요청 보내기」 → request_checkin 1회(매장 id 만) · 승인 대기 안내 · 출석 재호출 없음', async ({ page }) => {

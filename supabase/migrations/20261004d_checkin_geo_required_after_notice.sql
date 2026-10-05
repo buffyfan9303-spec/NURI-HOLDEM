@@ -1,4 +1,7 @@
--- ⏳ 미적용 초안 v3 (store-team 2026-10-05) — 적용은 리드가 critical-reviewer 반증 뒤에 MCP execute_sql 로 한 번에. 리허설: supabase/tests/20261004d_rehearsal.sql
+-- ✅ 적용 완료 2026-10-05 (리드, 오너 승인 · MCP execute_sql) — 실측 md5(prosrc): check_in fb6a1a31 · staff_check_in 0bcef09e · request_checkin ffe52bbc ·
+--   set_venue_checkin_geo_required fedbd1a1 · _checkin_geo_required_from 1af50c8a(anon·authenticated 실행 불가) · checkin_requests RLS on·정책 1·authenticated insert 불가 ·
+--   venues.checkin_geo_required true 0곳 · app_settings.checkin_geo_enabled 행 없음. 후속 변경은 20261005a(이 파일을 고치지 않는다).
+-- (원래 머리) v3 초안 (store-team 2026-10-05) — 리허설: supabase/tests/20261004d_rehearsal.sql
 -- v3(오너 결정 2026-10-05 B): 직원 출석 처리는 '손님 요청 후 승인'만 — §1-2 checkin_requests · §4-1 request_checkin · §5-1 staff_check_in 요청 게이트.
 --   대체 경로 문구 = src/lib/locationTerms.ts CHECKIN_ALT_PATH '매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다'.
 --   리허설(2026-10-05, 라이브 암묵 트랜잭션 롤백 · Management API): 38/38 PASS(기존 28 + Q1~Q10). 뒤이어 표·함수·칸 0, check_in md5 099a82e7… 그대로.
