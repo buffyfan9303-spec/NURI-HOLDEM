@@ -111,9 +111,8 @@ for (const scheme of SCHEMES) {
 // ── ② 홈 배너 ─────────────────────────────────────────────────────────────────
 const banner = (id: string, title: string, sort: number) => ({ id, title, subtitle: null, image_url: '/nuri-logo.png', link_url: null, active: true, sort_order: sort, starts_at: null, ends_at: null });
 
-test('② 홈 배너 자동 넘김 — 사양에 없다(PosterCarousel 머리 주석 ③: 자동 넘김 없음, 수동 점·화살표만)', async () => {
-  test.skip(true, '자동 넘김은 사양이 아니다(§6-2 오너 결정). 아래 수동 조작 항목이 대신 살아 있음을 지킨다. 자동 넘김을 도입하면 이 skip 을 실측으로 바꿔라.');
-});
+// ② 홈 배너 자동 넘김 — 사양에 없다(PosterCarousel 머리 주석 ③: 자동 넘김 없음, 수동 점·화살표만).
+//   자동 넘김은 사양이 아니다(§6-2 오너 결정). 아래 수동 조작 항목이 대신 살아 있음을 지킨다. 자동 넘김을 도입하면 이 skip 을 실측으로 바꿔라.
 
 for (const scheme of SCHEMES) {
   test(`② ${scheme} 홈 배너(대체): '다음 배너'를 누르면 실제로 다음 장으로 스크롤되고 카운터가 따라온다`, async ({ page }) => {
