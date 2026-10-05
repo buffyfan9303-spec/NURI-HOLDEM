@@ -1,7 +1,7 @@
 // 오너 2026-10-04 15시 — 커뮤니티 목록 제목·외치기 정적화와 외치기 칸 공백.
 //
 // 이 파일이 보는 것(수정 전 빌드에서 실패한다 — 제목·안내 문구가 전광판(.marquee-loop)으로 흘렀고 외치기 위아래가 12.75px 였다)
-//   ① 390·360·320 모아보기: 게시판 행 제목은 흐르지 않는다(애니메이션 0) · 한 줄 말줄임(…) · title 로 전체 제목 · 글씨 13.6px 이하 ·
+//   ① 390·360·320 모아보기: 게시판 행 제목은 흐르지 않는다(애니메이션 0) · 한 줄 말줄임(…) · title 로 전체 제목 · 글씨 15px 이하(2026-10-05 G6: 12.8 → 15, 사다리 sm) ·
 //      행 높이 44px 이상(히트영역) · 행이 가로로 넘치지 않는다 · 배지·[댓글수]·작성자는 잘리지 않고 남는다.
 //   ② 펼쳐보기(카드)도 제목이 같은 규칙.
 //   ③ 외치기 칸: 하위 탭 바 ↔ 외치기 ↔ 본문 간격이 7px 이하, 칸 높이 50px 이하, 안내 문구가 흐르지 않고 말줄임 · title.
@@ -55,7 +55,7 @@ const titles = (page: Page) => page.evaluate(() => {
 });
 
 for (const w of [390, 360, 320]) {
-  test(`① ${w} 모아보기: 제목은 정적 한 줄 말줄임 · title 전체 · 13.6px 이하 · 행 44px`, async ({ page }) => {
+  test(`① ${w} 모아보기: 제목은 정적 한 줄 말줄임 · title 전체 · 15px 이하 · 행 44px`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: 844 });
     await openBoard(page);
     const rows = await titles(page);
@@ -67,7 +67,7 @@ for (const w of [390, 360, 320]) {
       expect(r.marquee + r.anim, `제목이 흐른다(애니메이션 ${r.anim}·전광판 ${r.marquee}): ${r.text}`).toBe(0);
       expect([r.overflow, r.ws, r.ov], `한 줄 말줄임이 아니다: ${r.text}`).toEqual(['ellipsis', 'nowrap', 'hidden']);
       expect(r.title, '잘린 제목의 전체가 title 에 없다').toBe(r.text);
-      expect(r.px, '제목 글씨').toBeLessThanOrEqual(13.6);
+      expect(r.px, '제목 글씨').toBeLessThanOrEqual(15);
       expect(r.px, '제목 글씨가 너무 작다').toBeGreaterThanOrEqual(12.75);
       expect(r.h, '행 높이(히트영역)').toBeGreaterThanOrEqual(44);
       expect(r.rowOver, `행이 가로로 넘친다: ${r.text}`).toBe(false);
@@ -91,7 +91,7 @@ test('② 펼쳐보기(카드) 제목도 정적 한 줄 말줄임 · title', asy
   for (const x of r) {
     expect([x.te, x.ws, x.anim]).toEqual(['ellipsis', 'nowrap', 'none']);
     expect(x.title).toBe(x.text);
-    expect(x.px).toBeLessThanOrEqual(13.6);
+    expect(x.px).toBeLessThanOrEqual(15);
   }
   await expect(page.locator('[data-sec="board"] .marquee-loop')).toHaveCount(0);
 });

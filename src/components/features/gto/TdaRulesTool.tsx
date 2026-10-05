@@ -147,7 +147,7 @@ export default function TdaRulesTool() {
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-primary break-keep">{answer}</p>
               {/* 이 한 줄은 지우지 말 것 — 모델 요약을 판정으로 읽으면 딜러가 손님 앞에서 틀린다.
                   아래 '근거 규칙' 원문이 언제나 함께 펼쳐지는 것과 짝이다. */}
-              <p className="mt-1.5 text-[10px] leading-relaxed text-ink-muted">
+              <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
                 AI 참고 요약입니다 — 아래 근거 규칙 원문을 함께 확인하세요. <b className="text-ink-secondary">최종 판정은 현장 플로어(토너먼트 디렉터)에게 있습니다.</b>
               </p>
             </div>
@@ -201,7 +201,7 @@ export default function TdaRulesTool() {
           같은 화면에 눈에 띄게** 두고 공식 사이트를 **실제 클릭 가능한 링크**로 걸 것을 요구한다.
           종전에는 자체 축약 문구와 평문 `PokerTDA.com` 뿐이었다 — 원문 문장을 그대로 싣고 링크를 건다.
           ⚠ 문구를 번역하거나 줄이지 않는다(허가 조건 자체가 그 문장이다). 한글 안내는 그 아래 별도 문단. */}
-      <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
+      <p className="px-1 text-2xs leading-relaxed text-ink-muted">
         TDA rules used by permission of the Poker TDA, Copyright 2026,{' '}
         <a href="http://www.pokertda.com" target="_blank" rel="noopener noreferrer"
           className="underline decoration-dotted underline-offset-2 hover:text-accent-200">
@@ -209,7 +209,7 @@ export default function TdaRulesTool() {
         </a>
         , All rights reserved.
       </p>
-      <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
+      <p className="px-1 text-2xs leading-relaxed text-ink-muted">
         출처: Poker TDA 2026 규칙 {data.version}<br />
         한글 해설은 누리홀덤이 작성했습니다. 최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.<br />
         {/* TDA Rule 5D — 테이블에서의 전략 도구 사용은 제한된다. 이 화면은 학습·복기용이라는 맥락을 분명히 한다. */}
@@ -230,14 +230,14 @@ function RuleCard({ rule, open, defaultOpen, onToggle }: {
     <li className="overflow-hidden rounded-input border border-border-default bg-surface-high">
       <button type="button" onClick={onToggle ?? (() => setSelf((v) => !v))} aria-expanded={isOpen}
         className="flex w-full items-center gap-2 px-2.5 py-2 text-left">
-        <span className="shrink-0 rounded-chip bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-accent-200">{head}</span>
+        <span className="shrink-0 rounded-chip bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">{head}</span>
         <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{rule.title}</span>
         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} className="shrink-0 text-ink-muted" />
       </button>
       <Fold open={isOpen}>
         <div className="border-t border-border-subtle px-2.5 py-2">
           <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-secondary break-keep">{rule.body}</p>
-          <p className="mt-1.5 text-[10px] text-ink-muted">{rule.section} · {rule.page}쪽</p>
+          <p className="mt-1.5 text-2xs text-ink-muted">{rule.section} · {rule.page}쪽</p>
         </div>
       </Fold>
     </li>

@@ -5,7 +5,7 @@
 //   (src/lib/tabCover.ts handOffSubPanel)의 떠나는 목록 복제본이 fixed 라 카드 밖으로 **425px(1440: 450px)** 늘어진 채 240ms 걷혔다.
 //   카드 높이가 같아도(두 목록 다 길 때) 행 높이가 다른 두 목록(쪽지 64.75px · 알림 80.63px)이 240ms 겹쳐 걷혀 행이 계단처럼 내려가 보였다.
 // 오너 결정(같은 날): "목록을 길게 남기지 말고 줄여라. 스크롤해서 내려 보게 하고 한 번에 10개 정도. 안 되면 알림 창은 항상 즉시 전환."
-//   → ① 본문 그릇 하나가 두 탭 높이를 정한다(두 목록 중 긴 쪽 · 바닥 160px · 상한 44rem ≈ 10행 · 화면이 낮으면 카드 max-h) — 안에서 스크롤.
+//   → ① 본문 그릇 하나가 두 탭 높이를 정한다(두 목록 중 긴 쪽 · 바닥 160px · 상한 46rem ≈ 10행 · 화면이 낮으면 카드 max-h) — 안에서 스크롤.
 //     ② 알림 창 하위 탭은 복제본 없이 한 프레임 교체(INSTANT_SUB_SCOPES). ③ 목록 스크롤 자리는 탭마다 기억 · overscroll-contain.
 // 재는 것(매 rAF · 누름 전 1표본 + 누른 뒤 800ms): 카드 높이가 모든 프레임·모든 이동에서 하나 · 복제본 프레임 0 · 카드 밖 늘어짐 0 ·
 //   정착 자리에서 움직인 행 0. 정착 뒤: 화면에 온전히 보이는 행 수 · 탭별 스크롤 자리 · overscroll-behavior.
@@ -145,7 +145,7 @@ for (const w of [390, 1440]) {
     const scrollTo = async (y: number) => { await list.evaluate((ul, v) => { ul.scrollTop = v; ul.dispatchEvent(new Event('scroll')); }, y); await page.waitForTimeout(200); };
 
     const n0 = await info();
-    // 1440×900 은 상한 44rem(748px)이 들어간다 — 알림 9행 · 쪽지 11행. 390×844 는 카드 가용 높이(본문 619px)가 먼저 자른다 — 알림 7행 · 쪽지 9행.
+    // 1440×900 은 상한 46rem(736px, 2026-10-05 글자 사다리 상향으로 44 → 46)이 들어간다 — 알림 9행 · 쪽지 12행. 390×844 는 카드 가용 높이(본문 619px)가 먼저 자른다 — 알림 7행 · 쪽지 9행.
     const want = w < 768 ? { notif: 7, thread: 9 } : { notif: 9, thread: 10 };
     expect(n0.full, `알림 목록이 한 번에 ${n0.full}행 보인다(기대 ≥ ${want.notif})`).toBeGreaterThanOrEqual(want.notif);
     expect(n0.full, '알림이 약 10행보다 훨씬 많이 보인다 — 목록이 줄지 않았다').toBeLessThanOrEqual(11);

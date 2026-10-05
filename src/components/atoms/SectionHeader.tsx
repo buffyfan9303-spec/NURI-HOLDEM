@@ -86,7 +86,9 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
               그래서 칸은 34px 로 두어 글자 중심을 첫 줄 가운데(17px)에 앉히되, 아래쪽 여백을 `1lh − 2rem` 만큼 음수로 돌려 **줄 상자가
               종전 높이(글자 줄 높이) 그대로**이게 한다 → 헤더 높이 = 종전, 정렬 이득(타일·제목·액션 첫 줄 중심)은 그대로.
               lg 부터는 왼쪽 묶음이 min-h-8 가운데 정렬이라 음수 여백을 쓰지 않는다(PC 47.75px 계약). */}
-          <h2 className="flex min-h-8 items-center text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary max-lg:mb-[calc(1lh_-_2rem)]">{title}</h2>
+          {/* leading-6(24px): 2026-10-05 제목이 18px 고정(text-fluid-lg)이 되며 leading-tight(22.5)면 32px 칸 안 줄 상자가 4.75px 소수 위치라
+              글자 중심이 타일 중심과 0.75px 어긋났다(e2e pc-store-regression '390'). 24 면 위아래 4px 정수로 앉는다. */}
+          <h2 className="flex min-h-8 items-center text-fluid-lg font-bold leading-6 tracking-tight text-ink-primary max-lg:mb-[calc(1lh_-_2rem)]">{title}</h2>
           {/* 설명문 행간은 §T1 t-desc(12.75/19.13 = 1.5배) 한 값으로.
               leading-snug(17.53px)는 한글 두 줄이 붙어 보였고, 같은 12.75px 설명문이
               화면마다 17 / 17.53 두 값으로 갈려 있었다(1440 실측). break-keep 은

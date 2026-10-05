@@ -1404,18 +1404,26 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           </span>
         );
         // 틀의 버튼 글자는 가장 넓은 CTA('대회 등록하기')로 — 좁은 글자로 재면 360 에서 그 갈래 설명이 한 줄 더 꺾여 틀을 넘었다(보조 줄이 있을 때 19px).
-        const ghost = (
+        // 2026-10-05 글자 사다리 상향(sm 14→15) 뒤 '지난 게임 그대로 열기 · 10/04 메인' 제목이 390 에서 두 줄이 돼 틀(제목 한 줄 + 설명 두 줄)보다
+        //   4px 커졌다(아래 격자 이동). 흔한 두 모양 — ① 제목 한 줄 + 긴 설명 ② 긴 제목 + 짧은 설명 — 을 **같은 칸에 겹쳐** 세워 큰 쪽이 칸 높이가 되게 한다.
+        const ghostOf = (title: string, desc: string) => (
           <span aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }} className="flex min-w-0 flex-col">
             <span className="flex min-w-0 flex-wrap items-center gap-x-3">
               <Icon name="refresh" size={22} className="shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold xl:truncate">지난 게임 그대로 열기 · 00/00</span>
-                <span className="mt-1 block t-desc break-keep xl:line-clamp-1">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
+                <span className="block text-sm font-bold xl:truncate">{title}</span>
+                <span className="mt-1 block t-desc break-keep xl:line-clamp-1">{desc}</span>
               </span>
               <span className="btn-primary shrink-0 px-4 py-2 text-xs xl:order-last">대회 등록하기</span>
               {caps.ledger && rankRow('순위 미입력 00건 · 최근 00/00')}
             </span>
           </span>
+        );
+        const ghost = (
+          <>
+            {ghostOf('지난 게임 그대로 열기 · 00/00', '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요')}
+            {ghostOf('지난 게임 그대로 열기 · 00/00 메인 게임', '단가·할인·딜러까지 한 번에 채워져요')}
+          </>
         );
         if (loading || !lastRoundReady) {
           if (!caps.ledger) return null;
@@ -1643,7 +1651,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
           stretch={trendFill}
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
-          {loading ? <Skeleton /> : rangeErr ? (
+          {/* h-16(64px) = 정착 두 줄(22·22 + 사이 16 + 위아래 4) — 2026-10-05 글자 사다리 상향으로 60 → 64 가 되며 기본 h-12(48)와 16px 차가 났다. */}
+          {loading ? <Skeleton className="h-16" /> : rangeErr ? (
             <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
           ) : (weekEntry === 0 && prevBuyins === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>

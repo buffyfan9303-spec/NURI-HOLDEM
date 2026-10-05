@@ -289,12 +289,12 @@ function Hero({ board, left, total, user, onLogin, av }: {
           <Icon name="gift" size={17} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
+          <p className="text-2xs font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
           <h2 className="line-clamp-2 break-keep text-base font-bold leading-tight text-ink-primary">{board.title}</h2>
         </div>
         <span className="shrink-0 text-right">
           <span className="block text-lg font-extrabold leading-none tabular-nums text-accent-200">{left}</span>
-          <span className="block text-[10px] text-ink-muted">장 남음</span>
+          <span className="block text-2xs text-ink-muted">장 남음</span>
         </span>
       </div>
 
@@ -308,7 +308,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
           <div className="h-full rounded-full bg-accent-300 transition-[width] duration-(--dur-panel)"
             style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
-        <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{done}/{total} 개봉</span>
+        <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{done}/{total} 개봉</span>
       </div>
 
       {/* 경품 — 색은 점과 숫자에만. 면은 공용 헤어라인으로(강한 색 테두리 금지 · v6). */}
@@ -319,14 +319,14 @@ function Hero({ board, left, total, user, onLogin, av }: {
           const v = board.voucherByTier?.[String(t)] ?? 0;
           return (
             <div key={t} className="rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5">
-              <p className={['flex items-center gap-1 text-[10px] font-bold', m.text].join(' ')}>
+              <p className={['flex items-center gap-1 text-2xs font-bold', m.text].join(' ')}>
                 <span aria-hidden className={['h-1.5 w-1.5 shrink-0 rounded-full', m.dot].join(' ')} />
                 {m.label}
               </p>
               <p className="mt-0.5 whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-ink-primary">
-                {l}<span className="ml-0.5 text-[10px] font-semibold text-ink-muted">장</span>
+                {l}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">장</span>
               </p>
-              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}장</p>
+              <p className="truncate text-2xs leading-tight text-ink-muted">이용권 {v}장</p>
             </div>
           );
         })}
@@ -612,7 +612,7 @@ function Odds({ board }: { board: EventBoard }) {
         </table>
       </div>
 
-      <ul className="mt-2.5 space-y-1 text-[10px] leading-relaxed text-ink-muted">
+      <ul className="mt-2.5 space-y-1 text-2xs leading-relaxed text-ink-muted">
         <li>· 확률은 전체 {board.cards.length}장 기준이며, 등급별 수량은 이벤트 시작 시 <b className="text-ink-secondary">고정</b>되어 이후 추가·변경되지 않습니다.</li>
         <li>· 각 카드의 등급은 시작 전에 무작위로 배치되어 서버에 저장됩니다. 카드를 여는 시점에 다시 뽑지 않습니다.</li>
         <li>· 참여권은 매장 출석 QR 1회당 1장 지급되며, 별도의 구매나 비용이 필요하지 않습니다.</li>

@@ -797,10 +797,9 @@ export default function HomeTab({
                         : 'border border-transparent text-ink-secondary hover:bg-surface-high',
                     ].join(' ')}>
                     {/* 안쪽 얼굴 — 휠 피커 효과(투명도·블러·크기)는 여기에만 건다(위 효과 주석). 첫 자식이어야 한다. */}
-                    {/* D6(2026-09-29): 글자 크기는 **rem** 으로 — `calc(Nrem/17)` 은 지금 루트(17px)에서 정확히 N px 이다(디자인 크기 불변).
-                        절대 px 는 루트 글자 크기를 따라가지 않는다. 루트가 사용자 설정을 따르게 되면 이 칸도 같이 커진다. */}
+                    {/* 글자 크기는 사다리 rem 토큰으로(2026-10-05 G5: 11·13px 고정 → 2xs 12 · md 13). 절대 px 는 루트 글자 크기를 따라가지 않는다. */}
                     <span data-pill-face className="flex flex-col items-center">
-                      <span className="text-[calc(11rem/17)] font-bold tabular-nums md:text-[calc(13rem/17)]">{mm}.{dd}</span>
+                      <span className="text-2xs font-bold tabular-nums md:text-xs">{mm}.{dd}</span>
                       <span className={`text-2xs leading-[1.1] ${isToday ? 'font-bold text-accent-200' : 'text-ink-secondary'}`}>{isToday ? '오늘' : `(${dow})`}</span>
                       {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
                       <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />

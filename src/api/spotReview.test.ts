@@ -160,7 +160,8 @@ describe('배선 계약', () => {
     expect(spotAiMessage('DAILY_LIMIT')).toContain(`${SPOT_AI_DAILY_LIMIT}회`);
     // GTO 탭 NURI SPOT 카드 안내(오너 2026-10-04: 입구 안내 한 줄)
     const TOOLS = strip(read('src/components/features/ToolsPanel.tsx'));
-    expect(TOOLS).toMatch(/data-testid="spot-hero-ai">AI 코칭 첫 \{SPOT_AI_FREE_COUNT\}회 무료 · 이후 회당 \{SPOT_AI_PRICE\}P · 하루 \{SPOT_AI_DAILY_LIMIT\}회</);
+    //   2026-10-05: 두 토막을 각각 안 끊는 span 으로 감쌌다(320 에서 '하루 3회' 꼬리만 떨어지던 것) — 숫자는 여전히 상수만.
+    expect(TOOLS).toMatch(/data-testid="spot-hero-ai">(?:<span[^>]*>)?AI 코칭 첫 \{SPOT_AI_FREE_COUNT\}회 무료 ·(?:<\/span> <span[^>]*>| )이후 회당 \{SPOT_AI_PRICE\}P · 하루 \{SPOT_AI_DAILY_LIMIT\}회</);
   });
 
   // critical P3(2026-10-04): 화면 첫 조회값으로 시트를 열면 다른 탭에서 무료를 다 쓴 뒤 '무료' 시트에서 30P 가 과금됐다.

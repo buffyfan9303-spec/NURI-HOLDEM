@@ -3266,15 +3266,15 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        // 행 높이는 1280 실측값(루트 16px, 2026-10-05: 구성원 108.39px · 초대 95.39px · 머리글 16px · 안내 15px) — rem 유틸로 추정하지 않는다
-        // (17px 때 115 · 101 · 17 · h-4 였다 — 루트를 바꾸면 여기 숫자도 다시 재야 한다. e2e store-0929-fixes D6-1 이 잠근다).
+        // 행 높이는 1280 실측값(루트 16px · 2026-10-05 글자 사다리 상향 뒤: 구성원 110.39px · 초대 96.39px · 머리글 18px · 안내 16px) — rem 유틸로 추정하지 않는다
+        // (17px 때 115 · 101 · 17 · h-4, 사다리 상향 전 108.39 · 95.39 · 16 · 15 — 루트·글자 사다리를 바꾸면 여기 숫자도 다시 재야 한다. e2e store-0929-fixes D6-1 이 잠근다).
         <div aria-busy="true" data-testid="staff-list-loading" className="space-y-4">
           {lastRows.i > 0 && (
-            <div className="space-y-1.5"><Skeleton className="h-[16px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[95.4px]" /></div>
+            <div className="space-y-1.5"><Skeleton className="h-[18px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[96.4px]" /></div>
           )}
-          <div className="space-y-1.5"><Skeleton className="h-[16px] w-24" /><Skeleton className="h-[15px]" />
+          <div className="space-y-1.5"><Skeleton className="h-[18px] w-24" /><Skeleton className="h-[16px]" />
             {/* 구성원 목록(ul)은 space-y-2 라 SkeletonList(space-y-1.5)를 쓰지 않는다 — 행마다 2px 씩 모자랐다(5명 +7.9px 실측). */}
-            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[108.4px]" />)}</div></div>
+            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[110.4px]" />)}</div></div>
         </div>
       ) : listError != null ? (
         <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />
