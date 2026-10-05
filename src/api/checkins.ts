@@ -4,8 +4,9 @@ import { currentUser } from './_session';
 // ⚠ './ledger' 에서 가져오면 안 된다 — checkins 는 App.tsx 가 정적 import 하므로 장부 API 전체(7.1KB gz)가
 //    비로그인 손님의 첫 화면 임계 경로에 실린다(2026-09-11 실측). 같은 함수의 원본을 직접 쓴다.
 import { kstToday } from '../lib/kst';
-import { getCheckinPosition, isCheckinGeoEnabled, CheckinGeoError } from '../lib/checkinGeo';
+import { getCheckinPosition, isCheckinGeoEnabled, CheckinGeoError, CheckinGeoRequiredError, GEO_REQUIRED_CODES } from '../lib/checkinGeo';
 import { ensureLocationConsent } from '../lib/locationConsent';
+import { isGeoRequiredNow } from '../lib/locationTerms';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
@@ -33,43 +34,105 @@ export function normalizeCheckInResult(data: unknown): CheckInResult {
   return { name: typeof data === 'string' ? data : '', points: 3, streak: null };
 }
 
+/** 이 매장이 '위치 확인 출석'을 켰는가(venues.checkin_geo_required, 20261004d). 손님 화면용 힌트다 —
+ *  조회 실패·컬럼 없음(마이그레이션 전) = **꺼짐**: 위치를 묻지 않고 매장 id 만 보낸다. 켠 매장이면 서버가 code 로 돌려준다. */
+export async function getVenueCheckinGeoRequired(venueId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.from('venues').select('checkin_geo_required').eq('id', venueId).maybeSingle();
+    return !error && data?.checkin_geo_required === true;
+  } catch { return false; }
+}
+
 /** 체크인 실행. 성공 시 매장명·부여 점수·연속일 반환.
  *  CHECKIN-GEO 2단계(2026-09-23): 위치를 **여기 한 곳에서만** 얻어 서버에 보낸다 — 호출부 3곳(App.tsx runCheckin ·
  *  MyVoucherSheet · VenuePage)은 시그니처 그대로라 경로별 결과가 갈리지 않는다(K-05 Q6).
- *  위치를 못 얻으면(권한 차단·측위 실패·미지원) **좌표 없이 출석**한다 — 오너 결정 2026-09-26(아래 catch).
- *  거리 판정은 서버(20260923b)만 한다. */
-export async function checkIn(venueId: string): Promise<CheckInResult> {
+ *  20261004d(오너 결정 (다) 2026-10-04): 위치는 **운영 스위치 + 매장이 켠 '위치 확인 출석'** 일 때만 묻는다(신고서 ② · 최소 수집).
+ *    켜지 않은 매장은 동의를 묻지도 않고 매장 id 만 보낸다 — 이 번들 이전과 같다.
+ *    켠 매장에서 시행일(LOCATION_TERMS_EFFECTIVE) 뒤 동의·위치가 없으면 **서버가** {error, code} 로 거부한다 → CheckinGeoRequiredError
+ *    (위치를 못 얻은 경우는 원래의 CheckinGeoError 를 던져 재시도 시트가 사유를 말하게 한다). 시행일 전에는 서버가 받아 준다.
+ *  opts.geoRequired — 재시도 시트에서 다시 누를 때: 스위치·매장 조회를 건너뛰고 '켠 매장'으로 보고 동의를 다시 묻는다.
+ *  거리·시행일 판정은 서버(check_in)만 한다. */
+export async function checkIn(venueId: string, opts: { geoRequired?: boolean } = {}): Promise<CheckInResult> {
   if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
-  // 운영 스위치(checkin_geo_enabled) 꺼짐·조회 실패 → 위치를 묻지 않고 예전과 똑같이 매장 id 만 보낸다.
   let args: Record<string, unknown> = { p_venue_id: venueId };
-  // LOCATION-READY(2026-09-26): 스위치가 켜져도 **위치정보 이용 동의**가 있어야 좌표를 보낸다(위치정보법 제15조①).
-  //   동의하지 않으면(또는 동의 창을 닫으면) 매장 id 만 보낸다 — 출석은 된다. 서버(20260926b)도 동의 없으면 좌표를 버린다.
-  if (await isCheckinGeoEnabled() && await ensureLocationConsent()) {
-    // 오너 결정(2026-09-26): 우리 동의는 했지만 브라우저 위치 권한이 막혔거나 측위에 실패하면 재시도 시트로 막지 않고
-    //   **좌표 없이 출석**으로 넘긴다(서버는 좌표 없는 출석을 받는다 — 20260923b 1단계). 위치를 못 얻은 이유 외의 오류는 그대로 던진다.
-    try {
-      const pos = await getCheckinPosition();
-      args = { p_venue_id: venueId, p_lat: pos.lat, p_lng: pos.lng, p_accuracy: pos.accuracy };
-    } catch (e) {
-      if (!(e instanceof CheckinGeoError)) throw e;
+  let geoErr: CheckinGeoError | null = null;
+  if (opts.geoRequired || (await isCheckinGeoEnabled() && await getVenueCheckinGeoRequired(venueId))) {
+    // 위치정보 이용 동의(위치정보법 제15조①)가 있어야 좌표를 보낸다. required 는 시트 문구·'동의 안 함' 기록자에게 다시 묻기 위한 힌트일 뿐.
+    if (await ensureLocationConsent(undefined, { required: !!opts.geoRequired || isGeoRequiredNow() })) {
+      try {
+        const pos = await getCheckinPosition();
+        args = { p_venue_id: venueId, p_lat: pos.lat, p_lng: pos.lng, p_accuracy: pos.accuracy };
+      } catch (e) {
+        // 위치를 못 얻은 이유 외의 오류는 그대로 던진다. 위치 실패는 좌표 없이 보내 **서버가** 받을지 정하게 한다(시행일 전·스위치 꺼짐이면 받는다).
+        if (!(e instanceof CheckinGeoError)) throw e;
+        geoErr = e;
+      }
     }
   }
   const { data, error } = await supabase.rpc('check_in', args);
   if (error) throw new Error(error.message);
   // 20260926b: 좌표를 쓴 출석의 거부는 예외가 아니라 {error} 로 온다 — 예외면 서버의 위치 이용 기록(확인자료)까지 롤백된다.
-  const refused = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined;
-  if (typeof refused === 'string' && refused) throw new Error(refused);
+  const o = data && typeof data === 'object' ? (data as { error?: unknown; code?: unknown }) : undefined;
+  const refused = o?.error;
+  if (typeof refused === 'string' && refused) {
+    const reason = typeof o?.code === 'string' ? GEO_REQUIRED_CODES[o.code] : undefined;
+    if (reason === 'position' && geoErr) throw geoErr; // 권한 차단·측위 실패 — 재시도 시트가 그 사유로 안내한다
+    if (reason) throw new CheckinGeoRequiredError(reason, refused);
+    throw new Error(refused);
+  }
   return normalizeCheckInResult(data);
 }
 
-/** 업주 '출석 위치' 칸 — 매장에 등록된 좌표와 주소. 좌표가 없으면 손님 출석이 서버에서 막힌다(20260923b).
+/** 업주 '출석 위치' 칸 — 매장에 등록된 좌표·주소와 '위치 확인 출석' 켬 여부. 좌표가 없으면 켤 수 없다(서버 20261004d).
  *  조회 실패는 던진다 — '등록 안 됨'과 '못 읽음'을 화면이 구별해야 한다. */
-export async function getVenueCheckinSpot(venueId: string): Promise<{ lat: number | null; lng: number | null; address: string }> {
-  if (IS_MOCK) return { lat: null, lng: null, address: '' };
-  const { data, error } = await supabase.from('venues').select('lat, lng, address').eq('id', venueId).maybeSingle();
+export async function getVenueCheckinSpot(venueId: string): Promise<{ lat: number | null; lng: number | null; address: string; geoRequired: boolean }> {
+  if (IS_MOCK) return { lat: null, lng: null, address: '', geoRequired: false };
+  const { data, error } = await supabase.from('venues').select('lat, lng, address, checkin_geo_required').eq('id', venueId).maybeSingle();
   if (error) throw new Error(error.message);
   const num = (v: unknown) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
-  return { lat: num(data?.lat), lng: num(data?.lng), address: data?.address ?? '' };
+  return { lat: num(data?.lat), lng: num(data?.lng), address: data?.address ?? '', geoRequired: data?.checkin_geo_required === true };
+}
+
+/** 업주: 이 매장의 '위치 확인 출석' 켜기/끄기(set_venue_checkin_geo_required — 서버가 can_manage_venue·좌표 등록을 검사).
+ *  서버가 저장한 값을 돌려준다. 화면은 이 값이 아니라 getVenueCheckinSpot 재조회로 확인한다(거짓 성공 금지 K-03). */
+export async function setVenueCheckinGeoRequired(venueId: string, on: boolean): Promise<boolean> {
+  if (IS_MOCK) return on;
+  const { data, error } = await supabase.rpc('set_venue_checkin_geo_required', { p_venue_id: venueId, p_on: on });
+  if (error) throw error;
+  return data === true;
+}
+
+/** 업주(대표·승인 공동 운영자·관리자 = can_manage_pos)가 손님의 출석 요청을 승인(staff_check_in, 20261004d v3 · 오너 B 2026-10-05).
+ *  서버는 오늘 이 매장에 출석 요청(대기) 또는 참가 신청을 보낸 손님만 받는다 — 아무 회원이나 출석시킬 수 없다.
+ *  손님 QR 출석과 같은 혜택(_apply_checkin)·같은 4시간 중복 가드. 위치를 쓰지 않는다. 오류는 원본 그대로 던진다(msgOf 분류용). */
+export async function staffCheckIn(venueId: string, userId: string): Promise<CheckInResult> {
+  if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
+  const { data, error } = await supabase.rpc('staff_check_in', { p_venue_id: venueId, p_user_id: userId });
+  if (error) throw error;
+  return normalizeCheckInResult(data);
+}
+
+/** 손님: 위치 확인 출석 매장에서 '출석 요청'(request_checkin, 20261004d v3). 1일 1매장 1회 — 이미 보냈으면 already=true 로 그 상태를 돌려준다.
+ *  오류(위치 확인 안 켠 매장·이미 출석·하루 5곳 초과·제재)는 원본 그대로 던진다. */
+export async function requestCheckin(venueId: string): Promise<{ status: 'pending' | 'approved'; already: boolean; name: string }> {
+  if (IS_MOCK) return { status: 'pending', already: false, name: '데모 매장' };
+  const { data, error } = await supabase.rpc('request_checkin', { p_venue_id: venueId });
+  if (error) throw error;
+  const o = (data ?? {}) as { status?: unknown; already?: unknown; name?: unknown };
+  return { status: o.status === 'approved' ? 'approved' : 'pending', already: o.already === true, name: typeof o.name === 'string' ? o.name : '' };
+}
+
+export interface CheckinRequest { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
+
+/** 업주: 오늘(KST) 이 매장에 들어온 대기 중 출석 요청. RLS(checkin_requests_select = 본인 또는 can_manage_pos)가 막는다.
+ *  조회 실패는 던진다 — '요청 없음'과 '못 읽음'을 화면이 구별한다(R1-3 과 같은 이유). */
+export async function listCheckinRequests(venueId: string): Promise<CheckinRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('checkin_requests').select('id, venue_id, user_id, display_name, created_at')
+    .eq('venue_id', venueId).eq('request_date', kstToday()).eq('status', 'pending').order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, displayName: r.display_name ?? null, createdAt: r.created_at }));
 }
 
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {
@@ -108,5 +171,9 @@ export function subscribeCheckins(venueId: string, cb: () => void): () => void {
   const ch = supabase.channel(`checkins:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `venue_id=eq.${venueId}` }, () => cb())
     .subscribe();
-  return () => { supabase.removeChannel(ch); };
+  // 출석 요청(20261004d v3)은 **다른 채널** — 표가 아직 없는 DB(마이그레이션 전)에서 요청 구독이 실패해도 출석 구독은 살아 있게.
+  const rq = supabase.channel(`checkin_requests:${venueId}:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkin_requests', filter: `venue_id=eq.${venueId}` }, () => cb())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); supabase.removeChannel(rq); };
 }

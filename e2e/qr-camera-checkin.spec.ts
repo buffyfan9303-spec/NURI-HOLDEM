@@ -40,3 +40,36 @@ test('🔴 Q1 — 카메라 프레임의 출석 QR → check_in(p_venue_id) 1회
   expect(await openedTracks(page)).toBeGreaterThan(0);
   expect(await liveTracks(page), '스캔이 끝났는데 카메라가 켜져 있다').toBe(0);
 });
+
+// critical L3(20261004d) — 이용권 시트 카메라로 위치 확인 출석 매장 QR 을 찍었는데 서버가 동의 없음으로 거부 →
+//   토스트가 아니라 App 의 재시도 시트(대체 경로 안내)가 **맨 위에** 뜬다(이용권 시트는 닫힌다).
+test('🔴 Q2 — 위치 확인 출석 매장 거부(geo_consent_required) → 이용권 시트가 닫히고 재시도 시트가 맨 위에(대체 경로)', async ({ page }) => {
+  test.setTimeout(60_000);
+  const calls: Record<string, unknown>[] = [];
+  await stabilizeBackstack(page);
+  await stubLogin(page);
+  await forceJsQr(page);
+  await page.route(/\/rest\/v1\/app_settings\?.*checkin_geo_enabled/, (r) => r.fulfill(json({ value: 'on' })));
+  await page.route(/\/rest\/v1\/venues\?.*select=checkin_geo_required/, (r) => r.fulfill(json({ checkin_geo_required: true })));
+  // 이미 '동의 안 함'(현재 판)을 고른 손님 — 시행일 전 힌트라 다시 묻지 않고 좌표 없이 보낸다 → 서버(시행일 뒤)가 거부
+  await page.route(/\/rest\/v1\/rpc\/get_my_location_consent/, (r) => r.fulfill(json({ state: 'denied', terms_version: 3 })));
+  await page.route(/\/rest\/v1\/rpc\/check_in/, (r) => {
+    calls.push(JSON.parse(r.request().postData() ?? '{}'));
+    return r.fulfill(json({ code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다' }));
+  });
+  await page.goto('/');
+  await page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true }).click();
+  await page.getByRole('button', { name: 'QR 스캔하기' }).click();
+  await expect.poll(() => calls.length, { timeout: 20_000, message: '카메라 QR 을 못 읽었다(check_in 0회)' }).toBe(1);
+  expect(calls[0]).toEqual({ p_venue_id: VENUE });
+  const retry = page.getByTestId('checkin-geo-retry');
+  await expect(retry, '거부됐는데 재시도 시트가 안 떴다(토스트만?)').toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('checkin-geo-retry-alt')).toHaveText('동의하기 어렵거나 위치를 켤 수 없어도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
+  await page.waitForTimeout(600); // 이용권 시트 퇴장 모션
+  const top = await page.getByTestId('checkin-geo-retry-btn').evaluate((b) => {
+    const r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && (hit === b || b.contains(hit));
+  });
+  expect(top, '재시도 시트 버튼이 다른 시트에 가려졌다').toBe(true);
+});

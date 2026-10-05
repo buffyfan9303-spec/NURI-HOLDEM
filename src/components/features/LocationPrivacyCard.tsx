@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { getMyLocationConsent, getMyLocationUseLog, type LocationConsentState, type LocationUseRow } from '../../api/locationPrivacy';
 import { saveLocationConsent, isConsentCurrent, consentSummary, LOCATION_CONSENT_EVENT, LOCATION_TERMS_VERSION } from '../../lib/locationConsent';
+import { CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, LOCATION_TERMS_EFFECTIVE_KO } from '../../lib/locationTerms';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { takeWarm } from '../../lib/warmFetch';
@@ -12,6 +13,8 @@ import type { LegalDoc } from './LegalDocsModal';
 
 const PURPOSE_LABEL: Record<string, string> = { checkin_radius: '출석 위치 확인', self_view: '이용 내역 열람' };
 const VIA_LABEL: Record<string, string> = { device_gps: '휴대폰 위치(GPS)', none: '위치 사용 없음' };
+// 위치정보법 제2조제5호 '이용·제공방법' — purpose 값 하나가 방법 하나에 대응한다(20261004d 컬럼 주석 · 약관 제5조제2항).
+const METHOD_LABEL: Record<string, string> = { checkin_radius: '서버에서 매장 반경 판정 후 좌표 즉시 파기', self_view: '본인 열람' };
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ko-KR') : '');
 
 export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (doc: LegalDoc) => void }) {
@@ -41,7 +44,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
       const next = await saveLocationConsent(granted);
       setS(next);
       if (!granted) setLog(null); // 서버가 이용 내역을 지웠다 — 화면의 옛 목록도 걷는다
-      setMsg(granted ? '동의했습니다. 출석할 때 위치로 매장 안인지 확인합니다' : '철회했습니다. 위치 이용 내역도 삭제했습니다');
+      setMsg(granted ? '동의했습니다. 위치 확인 출석 매장에서 출석할 때 위치로 매장 안인지 확인합니다' : '철회했습니다. 위치 이용 내역도 삭제했습니다');
     } catch {
       setMsg('저장하지 못했습니다. 잠시 후 다시 시도해 주세요');
     } finally { setBusy(false); }
@@ -55,8 +58,8 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
   const granted = s ? isConsentCurrent(s) : false;
   return (
     <div data-testid="location-privacy-card">
-      <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의(선택)</p>
-      <p className="mb-2 text-2xs leading-relaxed text-ink-muted">출석할 때 매장 안인지 위치로 확인하는 데만 씁니다. 좌표는 저장하지 않습니다.</p>
+      <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의 <span className="text-2xs font-normal text-ink-muted">({CONSENT_NATURE})</span></p>
+      <p className="mb-2 text-2xs leading-relaxed text-ink-muted">위치 확인 출석을 켠 매장에서 출석할 때 매장 안인지 위치로 확인하는 데만 씁니다. 좌표는 저장하지 않습니다.</p>
       {s === null && err == null ? (
         <p aria-busy="true" className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : err != null ? (
@@ -77,7 +80,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
               <button type="button" onClick={() => onOpenLegal('location')} className="btn-ghost btn-sm min-h-[44px]">약관 보기</button>
             )}
           </div>
-          {granted && <p className="text-2xs text-ink-muted">철회하면 위치 이용 내역이 바로 삭제되고, 출석은 위치 없이 계속할 수 있습니다.</p>}
+          {granted && <p className="text-2xs text-ink-muted">{`철회하면 위치 이용 내역이 바로 삭제됩니다. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE_KO}부터 동의 없이 ${CHECKIN_SCOPE}이 되지 않으며, ${CHECKIN_ALT_PATH}. 그 밖의 이용에는 제한이 없습니다.`}</p>}
           {msg && <p role="status" data-testid="location-consent-msg" className="text-2xs text-ink-secondary">{msg}</p>}
         </div>
       )}
@@ -93,7 +96,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
                 <span className="text-xs font-bold text-ink-primary">{PURPOSE_LABEL[r.purpose] ?? r.purpose}</span>
                 <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{fmt(r.usedAt)}</span>
               </div>
-              <p className="mt-0.5 text-2xs text-ink-muted">{VIA_LABEL[r.acquiredVia] ?? r.acquiredVia} · {r.recipient ? `제공받는 자 ${r.recipient}` : '제3자 제공 없음'}</p>
+              <p className="mt-0.5 text-2xs text-ink-muted">{VIA_LABEL[r.acquiredVia] ?? r.acquiredVia}{METHOD_LABEL[r.purpose] ? ` · ${METHOD_LABEL[r.purpose]}` : ''} · {r.recipient ? `제공받는 자 ${r.recipient}` : '제3자 제공 없음'}</p>
             </li>
           ))}
         </ul>

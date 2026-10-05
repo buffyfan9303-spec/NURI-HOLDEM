@@ -1493,7 +1493,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <LazyBox>
                   <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined}
-                    canEditKakao={isAdmin || manageOk || (isOwner && primaryOwner !== false)} />
+                    canEditKakao={isAdmin || manageOk || (isOwner && primaryOwner !== false)}
+                    canToggleCheckinGeo={isAdmin || (isOwner && primaryOwner === true)} />
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </LazyBox>)}
