@@ -4,7 +4,8 @@
 //   ① 390·360·320 모아보기: 게시판 행 제목은 흐르지 않는다(애니메이션 0) · 한 줄 말줄임(…) · title 로 전체 제목 · 글씨 13.6px 이하 ·
 //      행 높이 44px 이상(히트영역) · 행이 가로로 넘치지 않는다 · 배지·[댓글수]·작성자는 잘리지 않고 남는다.
 //   ② 펼쳐보기(카드)도 제목이 같은 규칙.
-//   ③ 외치기 칸: 하위 탭 바 ↔ 외치기 ↔ 본문 간격이 7px 이하, 칸 높이 50px 이하, 안내 문구가 흐르지 않고 말줄임 · title.
+//   ③ 외치기 칸: 하위 탭 바 ↔ 외치기 ↔ 본문 간격이 7px 이하, 칸 높이 50px 이하.
+//      (안내 문구 정적화는 2026-10-05 오너 "외치기가 옆으로 움직이질 않고 고정" 으로 되돌렸다 — 흐름은 shout-marquee-loop ③ 이 본다.)
 //      다른 하위 탭(실시간)에서도 같은 칸이다(한 컴포넌트를 공유).
 //   ④ 홈 → 커뮤니티 재방문: 레이아웃 이동(CLS) 0, 보기·제목 상태 그대로.
 // 게시글은 목킹(24건, 긴 제목 포함) — 운영 글 수·제목 길이에 따라 '넘치는 제목'이 없어 거짓 통과하지 않게.
@@ -97,7 +98,7 @@ test('② 펼쳐보기(카드) 제목도 정적 한 줄 말줄임 · title', asy
 });
 
 for (const w of [390, 320]) {
-  test(`③ ${w}: 외치기 칸 — 위아래 간격 7px 이하 · 높이 50px 이하 · 안내 문구 정적 말줄임 · 하위 탭 공통`, async ({ page }) => {
+  test(`③ ${w}: 외치기 칸 — 위아래 간격 7px 이하 · 높이 50px 이하 · 하위 탭 공통`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: 844 });
     await openBoard(page);
     const m = () => page.evaluate(() => {
@@ -106,11 +107,9 @@ for (const w of [390, 320]) {
       const bar = document.querySelector('[data-community-secbar]')!.getBoundingClientRect();
       const panel = document.querySelector('[data-community-secpanel]')!.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
-      const line = card.querySelector<HTMLElement>('[data-testid="shout-idle-line"]');
       return {
         live: card.dataset.testid === 'shout-live', above: wr.top - bar.bottom, below: panel.top - wr.bottom, h: card.getBoundingClientRect().height,
         marquee: card.querySelectorAll('.marquee-loop').length,
-        line: line ? { te: getComputedStyle(line).textOverflow, ws: getComputedStyle(line).whiteSpace, title: line.getAttribute('title'), text: line.textContent } : null,
       };
     });
     const a = await m();
@@ -120,10 +119,8 @@ for (const w of [390, 320]) {
     expect(a.below).toBeGreaterThanOrEqual(4);
     expect(a.h, '외치기 칸 높이').toBeLessThanOrEqual(50);
     expect(a.h, "외치기 칸이 '외치기' 버튼(34px)보다 얇다").toBeGreaterThanOrEqual(44);
-    test.skip(a.live, '운영에 방송 중인 외침이 있다 — 유료 방송 줄은 전광판 유지(오너 결정 대기), 안내 문구 검사는 건너뛴다');
-    expect(a.marquee, '안내 문구가 흐른다').toBe(0);
-    expect([a.line?.te, a.line?.ws]).toEqual(['ellipsis', 'nowrap']);
-    expect(a.line?.title?.replace(/\s/g, '')).toBe(a.line?.text?.replace(/\s/g, ''));
+    // 2026-10-05: 안내 문구도 유료 줄과 같은 전광판으로 흐른다(오너 "고정되어 있어") — 흐름·이음새 판정은 shout-marquee-loop ③.
+    expect(a.marquee, '외치기 줄이 흐르지 않는다').toBe(1);
     // 실시간 하위 탭에서도 같은 칸 · 같은 간격
     await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-live"]') as HTMLElement).click());
     await page.waitForTimeout(600);
