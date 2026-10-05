@@ -50,6 +50,8 @@ interface CommunityTabProps {
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
+  /** App 의 게시글 첫 조회가 끝났는가(스냅샷 포함). 게시판 뼈대 행 수를 정한다 — 끝났으면 그 개수, 0 이면 뼈대 대신 빈 상태. */
+  postsLoaded?: boolean;
   /** 게시글 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
   postsErr?: unknown;
   onRetryPosts?: () => void;
@@ -57,6 +59,9 @@ interface CommunityTabProps {
   notices?: MarketplaceNotice[];
   /** N07: 공지 조회 실패 — '없음' 과 갈라 그린다(App 이 내려준다) */
   noticesError?: unknown; onRetryNotices?: () => void;
+  /** 공지 첫 조회가 끝났는가(App 이 내려준다). false 인 동안은 공지 한 줄 자리를 비워 두었다가(아래 자리표시자)
+   *  응답이 와도 목록이 54px 밀리지 않게 한다 — 홈(browse)의 `!noticesLoaded` 와 같은 규칙. 기본 true = 예전 동작. */
+  noticesLoaded?: boolean;
   isAdmin?: boolean;
   onWriteNotice?: () => void;
   /** 공지 클릭 시 상세 모달 열기 */
@@ -117,7 +122,7 @@ const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -517,6 +522,14 @@ function CommunityTab({
                 canWrite={isAdmin} onWrite={onWriteNotice} error={noticesError} onRetry={onRetryNotices} />
             </div>
           )}
+          {/* 공지 첫 조회 전 자리표시자(M7-01 P2-1) — 공지가 응답 뒤에 끼어들어 목록·푸터를 54px(=46 카드 + mb-2) 밀던 자리.
+              크기는 실제 NoticeSection 한 줄과 같다(테두리 2px + 행 --row-h-sm). 조회가 0건·비관리자로 끝나면 그때 사라진다
+              (공지 board='all' 이 상시 있어 실사용에선 없다 — 홈 browse 블록과 같은 판단). */}
+          {!(notices.length > 0 || isAdmin || noticesError != null) && !noticesLoaded && (
+            <div aria-hidden data-notice-placeholder className="mb-2 rounded-input border border-border-subtle bg-surface-low/60">
+              <div className="min-h-(--row-h-sm)" />
+            </div>
+          )}
           <div className="lg:flex lg:items-start lg:gap-4">
           {/* 좌측: 목록(압축) — 19rem(304px)은 PostRow 고정 메타(작성자+칭호+시간+조회 ≈368px)보다
               좁아 제목이 0px로 뭉개지고 조회수가 행 밖으로 잘렸다(PC 1280·1536 점검 2026-08-28).
@@ -524,6 +537,7 @@ function CommunityTab({
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-120">
             <FeedSectionM
               posts={boardPosts}
+              postsLoaded={postsLoaded}
               postsErr={postsErr}
               onRetryPosts={onRetryPosts}
               onOpenWrite={openWriteFree}
@@ -647,12 +661,13 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
+  posts, postsLoaded = false, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
   selectedId,
   emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
+  postsLoaded?: boolean;
   /** 목록 조회 실패(있으면 빈 상태 대신 오류·재시도를 보인다 — 실패를 '글 없음'으로 위장하지 않는다) */
   postsErr?: unknown;
   onRetryPosts?: () => void;
@@ -914,6 +929,18 @@ function FeedSection({
   const catRailRef = useRef<HTMLDivElement>(null);
   const [catFade, setCatFade] = useState('');
   const hasPosts = posts.length > 0;
+  // 상단 필터 줄(칩·🔍·⇅)을 그릴지 — 글이 있을 때 + **첫 조회가 끝나기 전**(M7-01 P2-1). 예전엔 글이 와야만 그려서(hasPosts)
+  //   searchPosts 응답이 getPosts 보다 먼저 오면 목록이 44px 밀렸다. 조회가 0건·실패로 끝나면 예전처럼 줄이 사라진다.
+  const showFilter = hasPosts || listSource.length > 0 || (!serverDone && serverErr == null && postsErr == null);
+  // 첫 로드 뼈대 행 수(M7-01, 리드 결정 2026-10-05) — 15행 고정이면 글이 3개뿐인 게시판에서 푸터가 12행만큼 끌려 올라온다.
+  //   App 조회가 끝났으면 그 개수(0 이면 뼈대 대신 빈 상태) → 아니면 이 기기에서 지난번 본 첫 페이지 행 수 → 둘 다 없으면 15.
+  const [lastRows] = useState(readBoardRows);
+  const skRows = postsLoaded ? Math.min(posts.length, 15) : (lastRows ?? 15);
+  const firstPage = q.trim() === '' && (!enableCategory || cat === 'all');
+  useEffect(() => {
+    // 첫 페이지 행 수가 확정되면(서버 끝 또는 15행 채움) 기억한다 — 다음 방문의 뼈대 높이.
+    if (firstPage && listSource.length > 0 && (serverDone || listSource.length >= 15)) writeBoardRows(listSource.length);
+  }, [firstPage, listSource.length, serverDone]);
   useEffect(() => {
     const el = catRailRef.current;
     if (!el) return;
@@ -939,7 +966,7 @@ function FeedSection({
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(upd);
     ro?.observe(el);
     return () => { el.removeEventListener('scroll', upd); el.removeEventListener('wheel', wheel); ro?.disconnect(); };
-  }, [hasPosts]);
+  }, [showFilter]);
   // ⇅ 메뉴 화살표 키 — ↑↓ 로 항목 이동(끝에서 돌아감), Home/End. 페이지가 스크롤되지 않게 기본 동작을 막는다(검토 P3).
   const sortMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
@@ -969,9 +996,9 @@ function FeedSection({
       {/* 상단 한 줄 — 왼쪽 카테고리 칩(가로 스크롤) · 오른쪽 🔍 ⇅ 보기. 줄 높이는 언제나 44px 이다:
           검색을 열면 칩·아이콘은 invisible 로 **자리를 그대로 지킨 채** 숨고 입력칸이 그 위(absolute inset-0)에 선다 —
           그래서 열고 닫아도 아래 목록이 한 픽셀도 움직이지 않고, 닫으면 칩 레일의 가로 스크롤 위치도 그대로다.
-          글이 0건이면 예전처럼 필터 줄은 그리지 않는다(PC 의 글쓰기 버튼만 남는다). */}
+          조회가 끝났는데 글이 0건이면 예전처럼 필터 줄은 그리지 않는다(PC 의 글쓰기 버튼만 남는다) — 조회 중에는 자리를 먼저 지킨다(showFilter). */}
       <div data-board-topline className="flex items-center gap-1">
-        {hasPosts && (
+        {showFilter && (
           <div className="relative flex min-w-0 flex-1">
             <div className={['flex min-w-0 flex-1 items-center gap-1', searchOpen ? 'invisible' : ''].join(' ')}>
               {enableCategory ? (
@@ -1113,7 +1140,11 @@ function FeedSection({
               serverLoading 동안은 '결과 없음' 대신 조회 중임을 알린다. */}
           {postsErr != null && posts.length === 0 ? (
             <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
-          ) : serverLoading && !serverDone ? (
+          ) : serverLoading && !serverDone && firstPage && skRows > 0 ? (
+            // 첫 로드(검색·필터 없음)만 뼈대 — 행 수는 skRows(App 개수 → 지난 방문 → 15). App 이 0건을 확정했으면 아래 빈 상태로 간다.
+            <BoardListSkeleton rows={skRows} view={view} />
+          ) : serverLoading && !serverDone && !(firstPage && skRows === 0) ? (
+            // 검색·카테고리 필터 중 — 결과 수를 모른다(대개 0~몇 건). 15행을 깔면 3건·0건일 때 푸터가 크게 끌려 올라온다(M7-01 P2-2) → 예전 짧은 카드.
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
           ) : serverErr != null ? (
             <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
@@ -1212,6 +1243,82 @@ function FeedSection({
           {pencil}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** 게시판 첫 로드 뼈대(점검 7회차 M7-01, 2026-10-05) — 아래 실제 목록(PostRow / PostCard)과 **같은 래퍼·같은 행 클래스**를 그리고
+ *  글자만 숨긴다(visibility). 응답이 0.5초 넘게 늦으면 짧은 '찾는 중…' 카드가 24행 목록으로 바뀌며 아래 사업자 푸터를
+ *  밀었다(CLS 0.26 @390). 높이를 px 로 적지 않으니 글꼴·루트 폰트(17px)·행 높이 토큰이 바뀌어도 실제 행과 같이 움직인다.
+ *  rows = 한 번에 보이는 행 수(visible, 기본 15). 글이 그보다 적게 오면 줄어들 뿐 위로 끌어올리지 않는다.
+ *  ⚠ PostRowCard.tsx 의 행·카드 클래스(min-h·패딩·테두리)를 바꾸면 여기도 같이 바꾼다 — e2e board-first-load-cls 가 어긋남을 잡는다.
+ *  피드(카드) 모드는 가장 흔한 카드(본문 2줄·첨부 없음)의 줄 구조를 그대로 그린다 — 첨부·스팟 카드는 더 커서 그 글만 아래를 민다.
+ *  첫 로드(검색·필터 없음)에서만 쓴다 — 검색·필터는 결과 수를 몰라 짧은 '찾는 중…' 카드(호출부 주석). */
+// 게시판 첫 페이지 행 수 기억(M7-01) — 다음 방문의 뼈대 높이. 스토리지 차단 환경에선 조용히 없음(15행 경로).
+const BOARD_ROWS_KEY = 'nuri:board-rows:v1';
+function readBoardRows(): number | null {
+  try {
+    const v = localStorage.getItem(BOARD_ROWS_KEY);
+    const n = v == null ? NaN : Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(15, Math.max(1, n)) : null;
+  } catch { return null; }
+}
+function writeBoardRows(n: number) {
+  try { localStorage.setItem(BOARD_ROWS_KEY, String(Math.min(15, Math.max(1, Math.round(n))))); } catch { /* 차단 환경 */ }
+}
+
+function BoardListSkeleton({ rows, view }: { rows: number; view: 'compact' | 'feed' }) {
+  return (
+    <div aria-busy="true" data-testid="board-list-loading" className="space-y-2">
+      {view === 'compact' ? (
+        <div aria-hidden className="rounded-aura border card-aura overflow-hidden">
+          <ul>
+            {Array.from({ length: rows }, (_, k) => (
+              <li key={k} className="min-h-(--row-h-sm) flex items-center gap-2 px-3 py-2 border-b border-border-subtle last:border-b-0">
+                <span className="skeleton shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none"><span className="invisible">잡담</span></span>
+                <span className="flex min-w-0 flex-1 items-center">
+                  <span className="skeleton block min-w-0 flex-1 truncate text-sm font-semibold leading-tight rounded-input"><span className="invisible">제목</span></span>
+                </span>
+                <span className="skeleton shrink-0 max-w-28 truncate text-2xs rounded-input"><span className="invisible">닉네임</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <ul aria-hidden className="space-y-2">
+          {Array.from({ length: rows }, (_, k) => (
+            // PostCard 와 같은 껍데기(card-aura·패딩·테두리)와 같은 줄 구조 — 아바타 · 이름/시간 2줄 · 제목 · 본문 2줄 · 반응 줄.
+            //   높이는 px 가 아니라 실제 카드와 같은 클래스(leading-4 · text-sm leading-tight · t-desc 2줄 · mt-2 pt-1.5 border-t)가 만든다.
+            <li key={k} className="min-h-(--row-h-lg) card-aura py-2.5 px-3 rounded-aura border">
+              <div className="flex items-start gap-2">
+                <span className="skeleton mt-0.5 block h-6 w-6 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-1.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex h-4 items-center text-2xs"><span className="skeleton block h-3 w-16 rounded-input" /></p>
+                      <p className="flex h-4 items-center text-2xs"><span className="skeleton block h-3 w-10 rounded-input" /></p>
+                    </div>
+                    <span className="skeleton mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none"><span className="invisible">잡담</span></span>
+                  </div>
+                  <span className="skeleton mt-1 block w-3/4 truncate text-sm font-semibold leading-tight rounded-input"><span className="invisible">제목</span></span>
+                  <div className="t-desc mt-1">
+                    <div className="h-[1.125rem] py-[3px]"><div className="skeleton h-full w-full rounded-input" /></div>
+                    <div className="h-[1.125rem] py-[3px]"><div className="skeleton h-full w-2/3 rounded-input" /></div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-x-3.5 border-t border-border-subtle pt-1.5 text-2xs">
+                    <span className="skeleton block h-4 w-8 rounded-input" />
+                    <span className="skeleton block h-4 w-8 rounded-input" />
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* 실제 목록은 15행을 넘으면 아래에 '불러오는 중… (N개 남음)' 센티넬(InfiniteSentinel, min-h 44)이 붙는다 — 그 자리도 미리 잡는다.
+          행 수를 15 미만으로 안다면(App 개수·지난 방문) 센티넬도 없다 — 그 칸까지 잡으면 44px 만큼 끌려 올라온다. */}
+      {rows >= 15 && <div aria-hidden className="skeleton min-h-[44px] rounded-input" />}
+      <p role="status" className="sr-only">찾는 중…</p>
     </div>
   );
 }

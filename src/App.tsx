@@ -2098,6 +2098,7 @@ export default function App() {
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
+  const [postsLoaded,   setPostsLoaded]   = useState<boolean>(() => readSnap<CommunityPost[]>('posts') != null); // 게시판 뼈대 행 수 판단(M7-01) — 0건과 '아직 모름'을 가른다
   const [postsErr,      setPostsErr]      = useState<unknown>(null);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
@@ -2414,7 +2415,7 @@ export default function App() {
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); }).catch(() => toast.show('매장 목록을 불러오지 못했습니다', 'error')); }, [toast]);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
-  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
+  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsLoaded(true); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => toast.show('댓글을 불러오지 못했습니다', 'error')); }, [toast]); // handleDeleteComment 의 실패 복원이 이 재조회에 기댄다 — 삼키면 화면엔 지워진 댓글이 서버엔 남는다(reloadVenues 와 같은 형태)
   // N07(2026-09-13, 리드 승인): 공지 조회 실패를 삼키지 않고 noticesErr 로 내려 CommunityTab·MarketplaceTab 이 '없음' 과 가른다(DealerCommunity 와 같은 모양).
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); setNoticesErr(null); writeSnap('notices', v); setNoticesLoaded(true); }).catch((e: unknown) => setNoticesErr(e)); }, []);
@@ -2511,7 +2512,7 @@ export default function App() {
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
     Promise.allSettled([getPosts(), getComments({}), getListings(), reviewsMod().then((m) => m.getVenueRatings())])
       .then(([pr, cr, lr, rr]) => {
-        if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsErr(null); writeSnap('posts', pr.value); }
+        if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsLoaded(true); setPostsErr(null); writeSnap('posts', pr.value); }
         else setPostsErr(pr.reason);
         if (cr.status === 'fulfilled') setComments(cr.value);
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
@@ -4710,8 +4711,9 @@ export default function App() {
             venues={venues}
             comments={comments}
             posts={posts}
+            postsLoaded={postsLoaded}
             notices={communityNotices}
-            noticesError={noticesErr} onRetryNotices={reloadNotices}
+            noticesError={noticesErr} onRetryNotices={reloadNotices} noticesLoaded={noticesLoaded}
             isAdmin={isAdmin}
             onWriteNotice={handleWriteNotice}
             onSelectNotice={setOpenNotice}
