@@ -1,4 +1,5 @@
--- 초안 (store-team 2026-10-05) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261005b_rehearsal.sql
+-- ✅ 적용 완료 2026-10-05 (critical 재반증 통과, 적용 후 리허설 5b 18/18·5c 8/8)
+-- (원래 머리) 초안 (store-team 2026-10-05) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261005b_rehearsal.sql
 -- 20261005b — '내 고객' 관계를 업주가 만들어 낼 수 없게 한다 (critical 보고 2026-10-04/05 D)
 --
 -- 구멍: customer_profiles_pos_all(ALL · using/with check = can_manage_pos(venue_id))

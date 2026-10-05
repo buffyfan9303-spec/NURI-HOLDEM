@@ -1,4 +1,5 @@
--- 초안 (store-team 2026-10-05) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261005c_rehearsal.sql
+-- ✅ 적용 완료 2026-10-05 (critical 재반증 통과, 적용 후 리허설 5b 18/18·5c 8/8)
+-- (원래 머리) 초안 (store-team 2026-10-05) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261005c_rehearsal.sql
 -- 20261005c — 포스터(schedules)를 다른 매장으로 옮겨 그 예약자를 '내 고객'으로 만드는 길을 막는다 (critical 반증 B, 20261005b 후속)
 --
 -- 구멍: schedules_update 의 USING 은 작성자(owner_id = auth.uid())를 통과시키고, WITH CHECK 는 **새** 매장 운영 권한만 본다.
