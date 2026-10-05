@@ -1114,7 +1114,7 @@ function FeedSection({
           {postsErr != null && posts.length === 0 ? (
             <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
           ) : serverLoading && !serverDone ? (
-            <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
+            <BoardListSkeleton rows={visible} view={view} />
           ) : serverErr != null ? (
             <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
           ) : user && posts.length === 0 ? (
@@ -1212,6 +1212,44 @@ function FeedSection({
           {pencil}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** 게시판 첫 로드 뼈대(점검 7회차 M7-01, 2026-10-05) — 아래 실제 목록(PostRow / PostCard)과 **같은 래퍼·같은 행 클래스**를 그리고
+ *  글자만 숨긴다(visibility). 응답이 0.5초 넘게 늦으면 짧은 '찾는 중…' 카드가 24행 목록으로 바뀌며 아래 사업자 푸터를
+ *  밀었다(CLS 0.26 @390). 높이를 px 로 적지 않으니 글꼴·루트 폰트(17px)·행 높이 토큰이 바뀌어도 실제 행과 같이 움직인다.
+ *  rows = 한 번에 보이는 행 수(visible, 기본 15). 글이 그보다 적게 오면 줄어들 뿐 위로 끌어올리지 않는다.
+ *  ⚠ PostRowCard.tsx 의 행·카드 클래스(min-h·패딩·테두리)를 바꾸면 여기도 같이 바꾼다 — e2e board-first-load-cls 가 어긋남을 잡는다.
+ *  피드(카드) 모드는 실제 카드가 글마다 높이가 달라(--row-h-lg 는 최솟값) 최솟값으로만 자리를 잡는다. */
+function BoardListSkeleton({ rows, view }: { rows: number; view: 'compact' | 'feed' }) {
+  return (
+    <div aria-busy="true" data-testid="board-list-loading" className="space-y-2">
+      {view === 'compact' ? (
+        <div aria-hidden className="rounded-aura border card-aura overflow-hidden">
+          <ul>
+            {Array.from({ length: rows }, (_, k) => (
+              <li key={k} className="min-h-(--row-h-sm) flex items-center gap-2 px-3 py-2 border-b border-border-subtle last:border-b-0">
+                <span className="skeleton shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none"><span className="invisible">잡담</span></span>
+                <span className="flex min-w-0 flex-1 items-center">
+                  <span className="skeleton block min-w-0 flex-1 truncate text-sm font-semibold leading-tight rounded-input"><span className="invisible">제목</span></span>
+                </span>
+                <span className="skeleton shrink-0 max-w-28 truncate text-2xs rounded-input"><span className="invisible">닉네임</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <ul aria-hidden className="space-y-2">
+          {Array.from({ length: rows }, (_, k) => (
+            <li key={k} className="skeleton min-h-(--row-h-lg) py-2.5 px-3 rounded-aura border border-transparent" />
+          ))}
+        </ul>
+      )}
+      {/* 실제 목록은 15행을 넘으면 아래에 '불러오는 중… (N개 남음)' 센티넬(InfiniteSentinel, min-h 44)이 붙는다 — 그 자리도 미리 잡는다.
+          운영 게시판은 대개 15행을 넘는다. 적게 오면 이 칸이 사라지며 줄어들 뿐이다(위로 끌어올리지 않는다). */}
+      <div aria-hidden className="skeleton min-h-[44px] rounded-input" />
+      <p role="status" className="sr-only">찾는 중…</p>
     </div>
   );
 }
