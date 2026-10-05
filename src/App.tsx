@@ -4711,7 +4711,7 @@ export default function App() {
             comments={comments}
             posts={posts}
             notices={communityNotices}
-            noticesError={noticesErr} onRetryNotices={reloadNotices}
+            noticesError={noticesErr} onRetryNotices={reloadNotices} noticesLoaded={noticesLoaded}
             isAdmin={isAdmin}
             onWriteNotice={handleWriteNotice}
             onSelectNotice={setOpenNotice}

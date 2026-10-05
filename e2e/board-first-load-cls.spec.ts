@@ -34,9 +34,13 @@ for (const w of [390, 360, 320] as const) {
         }
       }).observe({ type: 'layout-shift', buffered: true });
     });
+    // 게이트 목 — 응답은 '게시판 탭을 누른 시각 + 2초' 에 연다. 페이지 로드부터 2초를 세면(예전) 탭을 누르기 전에 응답이 와서
+    // 뼈대 없이 곧바로 목록이 되거나(측정창 소실) 눌린 뒤에야 오는 순서가 실행마다 달랐다. gate.at 이 정해질 때까지 붙잡는다.
+    const gate: { at: number | null } = { at: null };
     await page.route(/\/rest\/v1\/community_posts\?/, async (r) => {
       if (r.request().method() !== 'GET') return r.fallback();
-      await new Promise((res) => setTimeout(res, 2000));
+      const giveUp = Date.now() + 40_000; // 탭이 안 열려 gate 가 안 정해져도 영구 대기하지 않는다(테스트 타임아웃보다 먼저 푼다)
+      while ((gate.at == null && Date.now() < giveUp) || (gate.at != null && Date.now() < gate.at)) await new Promise((res) => setTimeout(res, 20));
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(feed()) }).catch(() => {});
     });
     await page.goto('/?tab=community');
@@ -44,6 +48,7 @@ for (const w of [390, 360, 320] as const) {
     await dismissOverlays(page);
     await page.locator('[data-testid="sec-tab-board"]').first().waitFor({ timeout: 25_000 });
     // 게시판 하위 탭을 연다(기본 진입은 다른 칸이라 목록이 display:none 이다). locator.click 은 자동 스크롤로 측정을 흔든다 — DOM click.
+    gate.at = Date.now() + 2000;
     await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-board"]') as HTMLElement).click());
     await page.locator('[data-sec="board"] [data-board-loaded]').waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(150);
@@ -74,3 +79,39 @@ for (const w of [390, 360, 320] as const) {
     if (before.footerY < 844) expect(Math.abs(after.footerY - before.footerY), `푸터가 접힘선 안에서 ${before.footerY} → ${after.footerY} 로 밀렸다`).toBeLessThanOrEqual(1);
   });
 }
+
+// ③ P2-1·P2-2(PR #180 재검토) — 첫 로드 때는 상단 줄(검색 버튼)이 자리를 먼저 지키고, 검색 중에는 15행 뼈대가 아니라 짧은 '찾는 중…' 카드다.
+//   15행 뼈대는 '처음 한 번 + 검색·분류 없음' 일 때만 — 검색 0건/적은 결과는 반드시 줄어드는 자리라, 뼈대를 깔면 푸터가 15행만큼 아래서 올라온다(CLS 0.2).
+test('🔴 M7-01 ③ 첫 로드는 상단 줄 자리 예약 + 뼈대, 검색 중에는 뼈대 없이 짧은 카드 (390)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const gate: { at: number | null; search: boolean } = { at: null, search: false };
+  await page.route(/\/rest\/v1\/community_posts\?/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    const isSearch = /ilike/.test(decodeURIComponent(r.request().url()));
+    const giveUp = Date.now() + 40_000;
+    if (isSearch) { while (!gate.search && Date.now() < giveUp) await new Promise((res) => setTimeout(res, 20)); }
+    else { while ((gate.at == null && Date.now() < giveUp) || (gate.at != null && Date.now() < gate.at)) await new Promise((res) => setTimeout(res, 20)); }
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(isSearch ? [] : feed()) }).catch(() => {});
+  });
+  await page.goto('/?tab=community');
+  await dismissOverlays(page);
+  await page.locator('[data-testid="sec-tab-board"]').first().waitFor({ timeout: 25_000 });
+  gate.at = Date.now() + 2500;
+  await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-board"]') as HTMLElement).click());
+  const board = page.locator('[data-sec="board"]');
+  // 응답 전: 15행 뼈대가 보이고, 같은 순간 상단 줄(검색 버튼)도 이미 자리에 있다
+  await expect(board.getByTestId('board-list-loading')).toBeVisible({ timeout: 10_000 });
+  // 즉시 판정 — toBeVisible 은 5초 재시도라 응답(2.5초)이 와서 줄이 생기면 거짓 통과한다
+  expect(await board.getByTestId('board-search-open').isVisible(), '첫 로드 중 상단 줄이 비어 있다 — 응답이 오면 아래가 44px 밀린다').toBe(true);
+  await expect.poll(() => board.locator('li[role="button"]').count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(15);
+  await expect(board.getByTestId('board-list-loading')).toHaveCount(0);
+  // 검색: 서버 조회가 붙잡힌 동안 뼈대가 아니라 짧은 '찾는 중…' 카드
+  await page.evaluate(() => (document.querySelector('[data-testid="board-search-open"]') as HTMLElement).click());
+  await page.locator('input[role="searchbox"]').first().fill('없는검색어zq');
+  await expect(board.getByText('찾는 중…'), '검색 중 짧은 카드가 안 떴다').toBeVisible({ timeout: 10_000 });
+  await expect(board.getByTestId('board-list-loading'), '검색 중에 15행 뼈대가 떴다 — 결과가 적으면 푸터가 크게 올라온다').toHaveCount(0);
+  gate.search = true;
+  await expect(board.getByText('검색 결과가 없습니다')).toBeVisible({ timeout: 10_000 });
+});
