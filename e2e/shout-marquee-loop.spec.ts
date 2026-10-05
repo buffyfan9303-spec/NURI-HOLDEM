@@ -7,8 +7,10 @@
 //      재생 속도를 8배로 올려 4초 안에 경계를 여러 번 지나게 한다(위상 판정은 속도와 무관하다).
 //   ② 방송이 다음 차례로 바뀌면 새 문구는 처음(x≈0)부터 흐른다 — 수정 전 빌드는 여기서 실패한다.
 //   ③ (2026-10-05) 안내 문구·칸보다 짧은 문구도 흐르고 루프 경계에서 점프가 없다. ④ 동작 줄이기에서는 흐르지 않는다(정적 말줄임).
+//   ⑤ (2026-10-05 오너 결정) 양 끝 페이드가 글자 두 개 폭이다 — 끝 0~6px 열의 글자 잉크가 가운데의 32% 이하(14px 페이드는 ≈43%).
 // 외침 목록은 목킹(운영 community_shouts 는 2026-10-04 기준 0건이다).
 import type { Page } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
@@ -105,7 +107,8 @@ const flow = (page: Page, sel: string, ms: number, rate: number) => page.evaluat
         const kids = [...track.children] as HTMLElement[];
         const seen = kids.some((k) => { const r = document.createRange(); r.selectNodeContents(k); const b = r.getBoundingClientRect();
           return b.width > 0 && b.right > v.left + 1 && b.left < v.right - 1; });
-        out.push({ txt: (track.textContent ?? '').slice(0, 8), tx: new DOMMatrix(getComputedStyle(track).transform).m41,
+        // txt 는 전체 문구 — 안내 문구는 모두 '누리홀덤 안내 · ' 로 시작해 앞 몇 글자로는 20초 격자 교대(처음부터 재시작)를 못 가른다
+        out.push({ txt: track.textContent ?? '', tx: new DOMMatrix(getComputedStyle(track).transform).m41,
           x0: kids[0].getBoundingClientRect().left - v.left, w: kids[0].getBoundingClientRect().width, seen,
           // 트랙 오른쪽 끝이 칸 오른쪽을 늘 덮어야 −50% 경계에서 오른쪽에 글자가 '툭' 나타나지 않는다(복제본이 칸보다 짧으면 깨진다)
           cover: track.getBoundingClientRect().right >= v.right - 0.5,
@@ -171,3 +174,63 @@ test.describe('④ 동작 줄이기', () => {
     expect(r1, '동작 줄이기인데 움직였다').toBe(s.r0);
   });
 });
+
+// ⑤ 끝 글자 잔상 — 오너 2026-10-05 결정 "양 끝 흐림을 넓힌다"(14px → min(28px, 칸의 18%)).
+//   안내 문구 칸(단색 surface-low 면, 페이드 색 = 면 색)에서 애니메이션을 여러 위상에 멈추고 뷰포트를 찍어,
+//   열마다 '면 색과의 최대 차이(잉크)'를 잰다. 끝 0~6px 의 잉크 ÷ 가운데 잉크 ≤ 0.32. 14px 페이드는 6px 지점이 6/14≈0.43 이라 실패한다.
+//   거짓 통과 방지: 같은 위상에서 페이드를 끄고 찍었을 때 끝에 글자가 실제로 있어야 한다(raw ≥ 0.6).
+for (const w of [390, 320]) {
+  test(`⑤ ${w}: 양 끝 페이드가 글자 두 개 폭 — 끝 0~6px 잉크가 가운데의 32% 이하`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: 844 });
+    await page.route('**/rest/v1/community_shouts*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await stabilizeBackstack(page);
+    await page.goto('/?tab=community');
+    await dismissOverlays(page);
+    const vp = page.getByTestId('shout-idle-line');
+    await expect(vp.locator('.marquee-loop')).toHaveCount(1, { timeout: 25_000 });
+    await page.waitForTimeout(500);
+    const bg = await page.getByTestId('shout-idle').evaluate((el) => getComputedStyle(el).backgroundColor.match(/\d+/g)!.slice(0, 3).map(Number));
+    const ink = async () => {
+      const box = (await vp.boundingBox())!;
+      const png = PNG.sync.read(await page.screenshot({ clip: box }));
+      const k = png.width / box.width;
+      const col = (cssX: number) => {
+        const x = Math.min(png.width - 1, Math.floor(cssX * k));
+        let m = 0;
+        for (let y = 0; y < png.height; y++) {
+          const i = (y * png.width + x) * 4;
+          m = Math.max(m, Math.abs(png.data[i] - bg[0]) + Math.abs(png.data[i + 1] - bg[1]) + Math.abs(png.data[i + 2] - bg[2]));
+        }
+        return m;
+      };
+      const range = (a: number, b: number) => { let m = 0; for (let x = a; x <= b; x += 1 / k) m = Math.max(m, col(x)); return m; };
+      // 경계 0.5px 은 뺀다 — 소수 폭(225.25) 클립의 마지막 장치 픽셀이 칸 밖을 섞어 잉크 193 이 찍혔다(실측).
+      return { edge: Math.max(range(0.5, 6), range(box.width - 6, box.width - 0.5)), mid: range(box.width * 0.35, box.width * 0.65) };
+    };
+    const fadeOff = (off: boolean) => page.evaluate((off) => {
+      document.getElementById('probe-fade-off')?.remove();
+      if (!off) return;
+      const s = document.createElement('style'); s.id = 'probe-fade-off';
+      s.textContent = '.marquee-fade::before,.marquee-fade::after{display:none!important}';
+      document.head.appendChild(s);
+    }, off);
+    let edge = 0, raw = 0, mid = 0;
+    for (const ph of [0.05, 0.17, 0.29, 0.41, 0.53, 0.66, 0.78, 0.9]) {
+      // 20초 격자 교대(불투명도 전환) 중이면 찍지 않는다
+      await expect.poll(() => vp.evaluate((el) => getComputedStyle(el.parentElement!).opacity)).toBe('1');
+      await vp.locator('.marquee-loop').evaluate((el, ph) => {
+        const a = el.getAnimations()[0]; a.pause(); a.currentTime = Number(a.effect!.getTiming().duration) * ph;
+      }, ph);
+      await page.waitForTimeout(50);
+      const on = await ink();
+      await fadeOff(true);
+      await page.waitForTimeout(50);
+      const off = await ink();
+      await fadeOff(false);
+      edge = Math.max(edge, on.edge); mid = Math.max(mid, on.mid, off.mid); raw = Math.max(raw, off.edge);
+    }
+    expect(mid, '가운데에 글자가 없다(측정 대상 없음)').toBeGreaterThan(150);
+    expect(raw / mid, '페이드를 끄면 끝에 글자가 있어야 한다(측정 위상이 빈 간격만 찍었다)').toBeGreaterThanOrEqual(0.6);
+    expect(edge / mid, `끝 0~6px 잉크 비 ${(edge / mid).toFixed(2)} (raw ${(raw / mid).toFixed(2)})`).toBeLessThanOrEqual(0.32);
+  });
+}

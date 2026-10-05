@@ -1905,12 +1905,13 @@ body { overscroll-behavior-y: contain; }
    이음새 없이 순환(복제본 간격 pr-8 = 세트 경계 간격). reduced-motion 폴백은 아래 블록에 등록. */
 @keyframes marquee-loop { to { transform: translateX(-50%); } }
 .marquee-loop { animation: marquee-loop var(--marquee-dur, 12s) linear infinite; }
-/* 흐르는 줄 양 끝 14px 페이드(M-12, 2026-10-01) — mask-image 가 아니라 **지면색 오버레이**다.
+/* 흐르는 줄 양 끝 페이드(M-12, 2026-10-01 · 2026-10-05 오너 결정으로 14px → 글자 두 개 폭 min(28px, 칸의 18%) — 끝 글자 잔상 'ㅏ' 제거,
+   320 의 좁은 칸(155px)에서도 선명 구간을 남긴다) — mask-image 가 아니라 **지면색 오버레이**다.
    mask 는 줄마다 합성면을 만들어 하위 탭 전환 첫 프레임의 타일 래스터를 늦췄다(e2e tab-handoff-gate ④).
    지면색은 소비처가 --marquee-fade(오른쪽·기본) / --marquee-fade-l(왼쪽) 로 준다. 기본 = 카드 지면(surface-low).
    합성층을 만드는 속성(mask·filter·will-change·transform)은 여기 쓰지 않는다. 동작 줄이기에서는 없음(정적 말줄임). */
 @media (prefers-reduced-motion: no-preference) {
-  .marquee-fade::before, .marquee-fade::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 14px; pointer-events: none; }
+  .marquee-fade::before, .marquee-fade::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: min(28px, 18%); pointer-events: none; }
   .marquee-fade::before { left: 0; background: linear-gradient(90deg, var(--marquee-fade-l, var(--marquee-fade, rgb(var(--surface-low)))), transparent); }
   .marquee-fade::after { right: 0; background: linear-gradient(270deg, var(--marquee-fade, rgb(var(--surface-low))), transparent); }
 }

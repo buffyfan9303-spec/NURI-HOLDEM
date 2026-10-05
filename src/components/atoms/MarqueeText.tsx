@@ -38,10 +38,12 @@ export default function MarqueeText({ text, children, className = '', testId }: 
     const vp = viewportRef.current, ms = measureRef.current;
     if (!vp || !ms) return;
     const check = () => {
-      const w = vp.clientWidth;
+      // 소수 폭으로 잰다 — clientWidth/offsetWidth 는 정수로 깎여 복제본이 칸보다 0.47px 짧았다(경계에서 오른쪽 끝 빈칸, 검토 P3-a 2026-10-05).
+      //   (뷰포트는 테두리·패딩이 없는 span 이라 getBoundingClientRect 폭 = 내용 폭이다.)
+      const w = vp.getBoundingClientRect().width;
       if (!w) return; // 탭 keep-alive 로 display:none 인 동안(폭 0)은 옛 값을 유지 — 숨은 채 DOM 을 갈아 끼우지 않는다
       setVpW(w);
-      setLoopW(Math.max(ms.offsetWidth + GAP, w));
+      setLoopW(Math.max(ms.getBoundingClientRect().width + GAP, w));
     };
     check();
     const ro = new ResizeObserver(check); // 폰트 로드·회전·2-pane 리사이즈에도 재판정
@@ -49,7 +51,7 @@ export default function MarqueeText({ text, children, className = '', testId }: 
     return () => ro.disconnect();
   }, [text]);
   const body = children ?? text;
-  // 흐를 때만 좌우 14px 를 서서히 사라지게 한다(M-12, 2026-10-01) — 칸 경계에서 반쪽 글자가 잘려 보이던 것.
+  // 흐를 때만 좌우 끝을 서서히 사라지게 한다(M-12, 2026-10-01 · 10-05 오너 결정으로 14px → min(28px, 칸의 18%)) — 칸 경계에서 반쪽 글자가 잘려 보이던 것.
   //   index.css `.marquee-fade` 의 양 끝 오버레이(지면색 → 투명)다. motion-safe 한정(동작 줄이기에서는 정적 말줄임).
   //   🔴 mask-image 로 만들면 줄마다 마스크 합성면이 생겨 하위 탭 전환 첫 프레임에 새 판 타일이 비었다
   //   (e2e tab-handoff-gate ④ — base 통과·마스크판 실패, verifier 10-01). 지면색은 소비처가 --marquee-fade(-l) 로 맞춘다.
