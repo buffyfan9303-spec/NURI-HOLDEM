@@ -756,33 +756,38 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
       data-testid="spot-hero"
       // 🔴 2026-10-06 오너 시안 "이거 그대로 누리스팟쪽에 적용": 짙은 남색 면(은은한 사선 그라데이션) · 얇은 밝은 테두리 · 큰 반경.
       //   면은 4안 배너 토큰(--hero-start → 카드 면 → --hero-end)이라 라이트에서는 같은 구성이 연한 하늘 면으로 바뀐다.
-      //   글자 대비(가장 밝은 왼쪽 위 모서리 기준): 다크 제목 10.5 · 안내 6.5 / 라이트 제목 10.2 · 안내 5.4(AA).
-      className="relative rounded-[0.875rem] border border-border-default bg-surface-low px-3 pb-3 pt-3.5"
-      style={{ backgroundImage: 'linear-gradient(125deg, rgb(var(--hero-start)) 0%, rgb(var(--surface-low)) 55%, rgb(var(--hero-end)) 100%)' }}
+      //   검토 P3(2026-10-06 2차, 시안 같은 위치 픽셀 비교): 시안 면은 거의 평평(#132234·#101F33)하고 **빛줄기 쪽(오른쪽 위)만** 살짝 밝다 →
+      //   왼쪽 위가 밝던 배너 토큰 그라데이션을 걷고 이 카드 전용 값(--sh-*)을 쓴다. 라이트는 같은 원리(거의 평평한 흰 청 면 + 오른쪽 위 옅은 청회 번짐).
+      //   테두리도 시안처럼 푸른 선(#2F4A6C / 라이트 #B5C8E2). 대비 실측(글자 Range 사각형 안 배경 최악 픽셀)은 PR 본문.
+      className="relative rounded-[0.625rem] border border-[var(--sh-edge)] bg-[var(--sh-b)] px-3 pb-3 pt-3.5
+        [--sh-a:#132234] [--sh-b:#101F33] [--sh-c:#132032] [--sh-haze:rgb(183_214_238/0.10)] [--sh-edge:#2F4A6C] [--sh-ghost:#3A5579] [--sh-ray:#FEFDFF] [--sh-glow:#9CC7F0]
+        [html.light_&]:[--sh-a:#F3F7FC] [html.light_&]:[--sh-b:#F8FAFD] [html.light_&]:[--sh-c:#F3F6FB] [html.light_&]:[--sh-haze:rgb(139_170_202/0.16)] [html.light_&]:[--sh-edge:#B5C8E2] [html.light_&]:[--sh-ghost:#A6B6CC] [html.light_&]:[--sh-ray:#7C9CC2] [html.light_&]:[--sh-glow:#8BAACA]"
+      style={{ backgroundImage: 'radial-gradient(55% 85% at 96% 0%, var(--sh-haze) 0%, transparent 75%), linear-gradient(125deg, var(--sh-a) 0%, var(--sh-b) 55%, var(--sh-c) 100%)' }}
       // 상태 표식(LED 는 2026-10-04 'E+황동' 으로 칠하지 않는다 — index.css [data-aura] 주석).
       data-aura data-aura-level="hero" data-aura-variant="violet"
       aria-label="NURI SPOT"
     >
       {/* 오른쪽 위 비스듬한 빛줄기 — 정적 장식(반복 반짝임·애니메이션 없음, 가이드 §2·§6). 4안의 자개 이미지는 이 카드에서 이 빛줄기로 대체했다
           (public/banners/spot-nacre-* 파일은 그대로 둔다). 둥근 모서리로 자르고 클릭은 통과. 색은 --hero-shine 이라 라이트에서 옅은 청회색. */}
-      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] text-[rgb(var(--hero-shine))]">
+      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
           <defs>
+            {/* 심(--sh-ray): 다크는 거의 흰색(시안 최댓값 #FEFDFF) · 번짐(--sh-glow): 넓은 푸른 빛. 왼쪽 끝은 투명으로 사라진다. */}
             <linearGradient id="spot-hero-ray" gradientUnits="userSpaceOnUse" x1="66" y1="0" x2="101" y2="0">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-              <stop offset="0.55" stopColor="currentColor" stopOpacity="0.45" />
-              <stop offset="0.85" stopColor="currentColor" stopOpacity="0.95" />
-              <stop offset="1" stopColor="currentColor" stopOpacity="0.5" />
+              <stop offset="0" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0 }} />
+              <stop offset="0.5" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0.45 }} />
+              <stop offset="0.8" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 1 }} />
+              <stop offset="1" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0.6 }} />
             </linearGradient>
-            <linearGradient id="spot-hero-haze" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-              <stop offset="0.6" stopColor="currentColor" stopOpacity="0.09" />
-              <stop offset="1" stopColor="currentColor" stopOpacity="0.02" />
+            <linearGradient id="spot-hero-glowc" gradientUnits="userSpaceOnUse" x1="66" y1="0" x2="101" y2="0">
+              <stop offset="0" style={{ stopColor: 'var(--sh-glow)', stopOpacity: 0 }} />
+              <stop offset="0.75" style={{ stopColor: 'var(--sh-glow)', stopOpacity: 0.8 }} />
+              <stop offset="1" style={{ stopColor: 'var(--sh-glow)', stopOpacity: 0.5 }} />
             </linearGradient>
-            <filter id="spot-hero-glow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="0.6 1.8" /></filter>
+            <filter id="spot-hero-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1 3" /></filter>
           </defs>
-          <path d="M 69 -1 C 80 8, 91 20, 101 42 L 101 -1 Z" fill="url(#spot-hero-haze)" />
-          <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-ray)" strokeWidth="6" opacity="0.5" filter="url(#spot-hero-glow)" vectorEffect="non-scaling-stroke" />
+          <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-glowc)" strokeWidth="12" opacity="0.4" filter="url(#spot-hero-glow)" vectorEffect="non-scaling-stroke" />
+          <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-glowc)" strokeWidth="4" opacity="0.55" filter="url(#spot-hero-glow)" vectorEffect="non-scaling-stroke" />
           <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-ray)" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
         </svg>
       </span>
@@ -802,7 +807,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           style={{ background: 'radial-gradient(120% 120% at 35% 0%, #24365A 0%, #131D2E 55%, #0B111C 100%)' }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
         </span>
-        <p className="self-end text-lg leading-6 font-extrabold tracking-tight text-ink-primary max-[359px]:self-center">NURI SPOT</p>
+        <p className="self-end text-base leading-6 font-extrabold tracking-tight text-ink-primary max-[359px]:self-center">NURI SPOT</p>
         {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
             2026-10-06 시안: 연한 하늘색 안내(강조 글 토큰 accent-200 — 라이트는 #2F5E9C 로 교정된다).
             두 토막은 각각 안 끊는다 — 접혀야 하는 폭(확대 등)에서는 '무료 ·' 뒤에서만 접힌다. 세로 상한(line-clamp)은 두지 않는다(2026-09-12 잘림 실측). */}
@@ -821,7 +826,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
         <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm font-bold">
           새 스팟 작성
         </button>
-        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm font-bold text-ink-primary">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-[var(--sh-ghost)] px-2 text-sm font-bold text-ink-primary">
           내 스팟
         </button>
       </div>
