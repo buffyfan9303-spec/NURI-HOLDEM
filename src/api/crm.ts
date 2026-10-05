@@ -45,12 +45,12 @@ export async function getCustomerAliases(venueId: string): Promise<CustomerAlias
 export async function linkCustomerAlias(venueId: string, alias: string, userId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('link_customer_alias', { p_venue_id: venueId, p_alias: alias, p_user_id: userId });
-  if (error) throw new Error(error.message);
+  if (error) throw error;  // code 보존 — msgOf 가 23505·42501·P0001 을 이유로 보여 준다(new Error 로 감싸면 연결 실패만 남는다, R8-01 O-2)
 }
 export async function unlinkCustomerAlias(venueId: string, alias: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('unlink_customer_alias', { p_venue_id: venueId, p_alias: alias });
-  if (error) throw new Error(error.message);
+  if (error) throw error;  // code 보존 — msgOf 가 23505·42501·P0001 을 이유로 보여 준다(new Error 로 감싸면 연결 실패만 남는다, R8-01 O-2)
 }
 
 /** 매장 손님별 방문 집계(user_id→방문횟수) — '오늘 방문 손님' 보드의 단골/첫방문 배지용. can_manage_pos 만 조회. */
