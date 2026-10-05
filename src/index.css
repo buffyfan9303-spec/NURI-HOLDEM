@@ -1788,7 +1788,7 @@ video {
 }
 @media (min-width: 1280px) {
   .xl\:space-y-0 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0px * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0px * var(--tw-space-y-reverse)); }
-}
+}
 
 /* v3 는 일반 CSS 클래스(.ring-aura)에도 변형(max-lg:)을 붙여 줬다 — PostDetailModal 의 `max-lg:ring-aura`.
    v4 는 @utility 로 만든 것에만 변형이 붙는다. v3 가 찍던 규칙을 그대로 둔다(아래 .ring-aura 원본과 같은 값). */
@@ -2168,6 +2168,7 @@ html.light .text-sky-300 { color: #0369A1; }
 html.light .text-rose-300 { color: #BE123C; }
 html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
 html.light .text-purple-300 { color: #7E22CE; }
+html.light .text-fuchsia-300 { color: #A21CAF; } /* 2026-10-05 4안: 자홍 = 코발트와 갈라야 하는 두 번째 범주색(장부 가게지원·새틀·구직·일반 회원·이벤트 2등). 흰 면 자홍 틴트 위 5.6 */
 html.light .text-teal-300 { color: #0F766E; }
 html.light .text-blue-300 { color: #1D4ED8; }
 /* ⚠ -400 계열이 빠져 있었다. 보정 목록이 -200/-300 까지만 덮어서, 표준 경고색인 text-amber-400

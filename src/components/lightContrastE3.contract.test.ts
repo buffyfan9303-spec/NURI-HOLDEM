@@ -35,10 +35,19 @@ const GROUNDS: [string, RGB][] = [['base', light('surface-base')], ['low', light
 const AA = 4.5;
 
 describe('라이트 모드 글자 대비 4.5:1 (M-2 · L-7 · L-9)', () => {
-  it('ProfileModal — 순위표 표시 이름 선택 칸의 보조 줄: accent-300/12 틴트 위 ink-secondary', () => {
-    const t = src('components/features/ProfileModal.tsx').split('\n').find((l) => l.includes('{hint}')) ?? '';
+  // 2026-10-05 4안(#179 R7-03): 선택 칸은 이제 .chip-on 이다 — 옛 계약은 없어진 틴트(accent-300 12%)로 계산해 실제 면을 지키지 못했다.
+  //   실제 라이트 .chip-on 규칙의 배경 토큰을 index.css 에서 읽어 그 면 위 대비를 잰다. 선택 면이 지면과 같은 색이면(선택이 안 보임) 실패.
+  it('ProfileModal — 순위표 표시 이름 선택 칸의 보조 줄: 실제 .chip-on 면(라이트) 위 ink-secondary', () => {
+    const pm = src('components/features/ProfileModal.tsx');
+    const t = pm.split('\n').find((l) => l.includes('{hint}')) ?? '';
     expect(t).toContain('text-ink-secondary');
-    for (const [n, g] of GROUNDS) expect(ratio(light('ink-secondary'), over(light('accent-300'), g, 0.12)), n).toBeGreaterThanOrEqual(AA);
+    expect(pm, '선택 칸이 공용 선택 표현(.chip-on)을 쓰지 않는다').toMatch(/\? 'chip-on'\s*\n\s*: 'border-border-default bg-surface-float text-ink-secondary'/);
+    const rule = css.match(/html\.light \.chip-on \{ background-color: rgb\(var\(--([a-z-]+)\)\)/);
+    expect(rule, '라이트 .chip-on 배경 규칙을 못 읽었다').not.toBeNull();
+    const face = rule![1];
+    expect(['surface-base', 'surface-low', 'surface-mid'], `선택 면(${face})이 지면과 같다 — 선택이 면으로 안 보인다`).not.toContain(face);
+    expect(ratio(light('ink-secondary'), light(face)), `.chip-on(${face})`).toBeGreaterThanOrEqual(AA);
+    expect(ratio(light('ink-secondary'), light('surface-float')), '비선택 surface-float').toBeGreaterThanOrEqual(AA);
   });
 
   it('ScheduleDetailModal — 결제수단 칩: emerald-500/15 틴트 위 emerald-800', () => {

@@ -58,7 +58,8 @@ export interface OpenResult {
  *    라이트에서 범례 1.35 · 확률 공개 표 1.45 · 열린 카드 1.26 이었다(고지 표의 줄 이름이 안 읽혔다). */
 export const TIER_META: Record<number, { label: string; short: string; ring: string; text: string; glow: string; bg: string; dot: string }> = {
   1: { label: '1등', short: '1', ring: 'border-gold-300/70',    text: 'text-gold-200',    glow: '',  bg: 'bg-gold-300/10',    dot: 'bg-gold-300' },
-  2: { label: '2등', short: '2', ring: 'border-accent-300/70',  text: 'text-accent-200',  glow: '', bg: 'bg-accent-300/10',  dot: 'bg-accent-300' },
+  // 2등: 코발트(accent)는 3등 cyan 과 붙고 버튼·선택 색과도 겹쳤다(4안) → 자홍
+  2: { label: '2등', short: '2', ring: 'border-fuchsia-400/60', text: 'text-fuchsia-300', glow: '', bg: 'bg-fuchsia-400/10', dot: 'bg-fuchsia-400' },
   3: { label: '3등', short: '3', ring: 'border-cyan-400/60',    text: 'stat-cyan',        glow: '',                                            bg: 'bg-cyan-400/10',    dot: 'bg-cyan-400' },
   4: { label: '4등', short: '4', ring: 'border-emerald-400/55', text: 'text-emerald-300', glow: '',                                            bg: 'bg-emerald-400/10', dot: 'bg-emerald-400' },
 };

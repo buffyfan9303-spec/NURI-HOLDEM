@@ -31,7 +31,7 @@ const KIND_FILTER_ORDER = KIND_FILTERS.map(([k]) => k);
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
   hiring:  'bg-accent-300/15 text-accent-300 border-accent-400/40',
-  seeking: 'bg-sky-500/15 text-sky-300 border-sky-400/40',
+  seeking: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40', // 구직 — 구인(코발트)과 sky 가 붙었다(4안 ΔE)
   general: 'bg-surface-float text-ink-secondary border-border-default',
 };
 
