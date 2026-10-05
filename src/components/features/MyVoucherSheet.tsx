@@ -30,6 +30,7 @@ import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 import { useBackClose } from '../../lib/backstack';
 import { isStaleResponse } from '../../lib/staleResponse';
 import { msgOf } from '../../lib/dbError';
+import { checkinFailureAction, requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
 
 export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, onBuyin }: {
   open: boolean;
@@ -134,7 +135,9 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
       onClose();
       onVenue?.(venueId);
     } catch (e) {
-      toast.show(msgOf(e, '출석에 실패했어요'), 'error');
+      // critical L3(20261004d) — 위치 확인 출석 매장의 거부·위치 실패는 App 의 재시도 시트(대체 경로 안내)로. 이 시트(z-60)가 그 위를 덮지 않게 먼저 닫는다.
+      if (checkinFailureAction(e).kind === 'sheet') { onClose(); requestCheckinRetrySheet(venueId, e); }
+      else toast.show(msgOf(e, '출석에 실패했어요'), 'error');
     } finally { setBusy(false); }
   };
 
