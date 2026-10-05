@@ -66,6 +66,9 @@ export function isSettled(root: Element | null, whole = false): boolean {
   if (h.style?.display === 'none' || h.offsetHeight === 0) return false;
   for (const el of root.querySelectorAll(BUSY_SEL)) {
     if (el.tagName === 'BUTTON' || el.tagName === 'SPAN') continue;
+    // 실제 내용과 같은 높이로 그린 뼈대(게시판 BoardListSkeleton)는 이미 완성된 모양이다 — 기다리면 떠나는 판 복제본만
+    //   300ms 더 겹친다(audit8 M8-02: 557ms vs 242~287ms). 표식을 단 뼈대만 빠진다 — 다른 판의 스켈레톤 판정은 그대로다.
+    if (el.closest('[data-stable-skeleton]')) continue;
     if (el.getClientRects().length > 0 && (whole || inViewport(el))) return false;
   }
   return true;

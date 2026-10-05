@@ -42,6 +42,27 @@ test('① 글자마다 입력해도 마지막 검색어로 서버 조회가 나�
   await expect(page.locator('[data-sec="board"]').getByText('찾는 중…')).toHaveCount(0);
 });
 
+// ③ PR #183 CI(run 37359638574) — 첫 방문에 게시판 첫 페이지(서버 이어받기 limit=15)가 App 의 글 조회보다 먼저 오면, 필터 줄이
+//   그 15건(listSource) 때문에만 보였다. 한 글자 치는 순간 필터가 바뀌어 목록이 비고(App 글은 아직 0) 필터 줄째 검색칸이 사라져
+//   나머지 글자가 버려졌다('요청 1건'). 검색·분류 중이거나 검색칸이 열려 있으면 필터 줄은 남아야 한다. 순서를 목으로 고정한다(운영 읽기는 그대로).
+test('③ App 글 조회가 늦게 와도(게시판 첫 페이지가 먼저 와도) 검색칸이 사라지지 않고 마지막 검색어로 조회한다', async ({ page }) => {
+  const terms: string[] = [];
+  await page.addInitScript(() => { try { for (const k of Object.keys(localStorage)) if (/snap.*posts|board-rows/.test(k)) localStorage.removeItem(k); } catch { /* */ } });
+  await page.route(/\/rest\/v1\/community_posts\?/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    const url = decodeURIComponent(r.request().url());
+    if (/ilike/.test(url)) { terms.push(url); await new Promise((res) => setTimeout(res, 400)); return r.continue(); }
+    if (/limit=15\b/.test(url)) return r.continue();          // 게시판 첫 페이지 — 바로
+    await new Promise((res) => setTimeout(res, 6000));        // App 부팅 글 조회 — 늦게
+    return r.continue().catch(() => {});
+  });
+  const input = await openBoard(page);
+  const kw = 'zq없는검색어y';
+  await input.pressSequentially(kw, { delay: 30 });
+  await expect(input, '타이핑 중 검색칸이 사라졌다 — 나머지 글자가 버려진다').toHaveValue(kw);
+  await expect.poll(() => terms.some((u) => u.includes(kw)), { timeout: 10_000, message: `마지막 검색어(${kw})의 서버 조회가 나가지 않았다` }).toBe(true);
+});
+
 test('② 첫 응답이 늦게 와도(2.5s) 바꾼 검색어의 결과 상태로 정착한다', async ({ page }) => {
   let n = 0;
   await page.route(/\/rest\/v1\/community_posts\?.*ilike/, async (r) => {
