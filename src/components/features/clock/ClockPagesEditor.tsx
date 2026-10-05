@@ -99,7 +99,7 @@ export default function ClockPagesEditor({ prizes, extraPages, onChange }: {
             </div>
             {pg.kind === 'team' && (
               <label className="block">
-                <span className="block text-[11px] text-ink-secondary mb-1">등수별 점수 (1등부터 쉼표로, 최대 {TEAM_POINTS_MAX}개)</span>
+                <span className="block text-2xs text-ink-secondary mb-1">등수별 점수 (1등부터 쉼표로, 최대 {TEAM_POINTS_MAX}개)</span>
                 {/* 제어 입력으로 두면 '14, ' 의 쉼표가 즉시 지워져 다음 수를 칠 수 없다 — 칸을 떠날 때 읽는다. */}
                 <input key={(pg.points ?? []).join(',')} defaultValue={(pg.points ?? []).join(', ')} aria-label="등수별 점수"
                   onBlur={(e) => setPage(pi, { points: e.target.value.split(/[^0-9]+/).filter(Boolean).map(Number).slice(0, TEAM_POINTS_MAX) })}

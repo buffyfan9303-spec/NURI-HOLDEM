@@ -367,7 +367,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       <section data-main-enter className="rounded-aura border card-aura ring-aura px-1 pb-1 pt-1.5">
         <div className="grid grid-cols-7 pb-0.5">
           {DAYS_KO.map((d, i) => (
-            <span key={d} className={['text-center text-[11px] font-semibold leading-4', i === 0 ? 'text-danger-deep dark:text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
+            <span key={d} className={['text-center text-2xs font-semibold leading-4', i === 0 ? 'text-danger-deep dark:text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-px">
@@ -392,11 +392,11 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                 ].join(' ')}>
                 {/* 다른 달 칸 — 칸 전체 opacity 0.35 를 걷고 날짜 숫자만 보조색으로(M-03, 2026-10-01).
                     눌리는 버튼인데 라이트 2.27:1 로 읽히지 않았다(AA 미달 11/42 → 0/42). */}
-                <span className={['text-[13px] leading-4 tabular-nums md:text-[15px] md:leading-5', isToday ? 'font-extrabold text-accent-200' : outside ? 'font-semibold text-ink-muted' : 'font-semibold text-ink-primary'].join(' ')}>
+                <span className={['text-xs leading-4 tabular-nums md:text-sm md:leading-5', isToday ? 'font-extrabold text-accent-200' : outside ? 'font-semibold text-ink-muted' : 'font-semibold text-ink-primary'].join(' ')}>
                   {d.getDate()}
                 </span>
                 {/* 그날 +/− — 칸 폭(320: 39px)에 맞춘 짧은 금액. 없으면 같은 높이를 비워 둔다(칸 높이가 날마다 안 바뀐다). */}
-                <span data-cal-net className={['max-w-full whitespace-nowrap text-[10.5px] font-bold leading-[13px] tabular-nums tracking-tight md:text-[11px] md:leading-[14px]',
+                <span data-cal-net className={['max-w-full whitespace-nowrap text-2xs font-bold leading-4 tabular-nums tracking-tight',
                   !net ? 'text-transparent' : net > 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
                   {net ? compactWon(net) : '·'}
                 </span>
@@ -410,7 +410,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </div>
       </section>
       {/* 범례 + 이번 달 예약·찜 수(종전 요약 칸 두 개 — 첫 화면 무게를 목적 ①에 넘기고 여기 한 줄로 보존) */}
-      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px] leading-4 text-ink-muted">
+      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-2xs leading-4 text-ink-muted">
         <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full dot-cash" />계획·예약·찜</span>
         <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-300" />SPOT</span>
         <span className="whitespace-nowrap">이번 달 예약 <b data-stat="sum-reserve" className="font-bold tabular-nums text-ink-secondary">{summary.reserveCount}건</b> · 찜 <b data-stat="sum-like" className="font-bold tabular-nums text-ink-secondary">{summary.likeCount}개</b></span>
@@ -551,7 +551,7 @@ function SumCell({ label, value, tone, testId, full, hint }: {
     <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low px-1 py-1.5 text-center"
       title={hint ?? fullText} aria-label={`${label} ${fullText ?? value}${hint ? ` · ${hint}` : ''}`}>
       <p className={`whitespace-nowrap text-base font-extrabold leading-5 tabular-nums ${cls}`}>{value}</p>
-      <p className="mt-0.5 whitespace-nowrap text-[11px] leading-4 text-ink-muted">{label}</p>
+      <p className="mt-0.5 whitespace-nowrap text-2xs leading-4 text-ink-muted">{label}</p>
     </div>
   );
 }
@@ -806,7 +806,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
             <li key={r.id} className="flex min-h-(--row-h-sm) items-center gap-2 rounded-input px-2">
               {/* 금액 0 = 계획 — '+0' 을 그리면 돈 기록으로 오해된다 */}
               {isMemoEntry(r) ? (<>
-                <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-[11px] font-bold leading-4 text-ink-secondary">계획</span>
+                <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-2xs font-bold leading-4 text-ink-secondary">계획</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.memo}</span>
               </>) : (<>
                 <span className={['shrink-0 text-sm font-bold tabular-nums', r.amount > 0 ? 'stat-emerald' : r.amount < 0 ? 'text-danger-deep dark:text-danger-light' : 'text-ink-secondary'].join(' ')}>

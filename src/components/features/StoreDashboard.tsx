@@ -1065,7 +1065,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           onRetry={() => { setLoading(true); reload(); }} />
       ) : (
         <button type="button" onClick={gotoTodayLedger}
-          className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
+          className="section-alt surface-grad block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
@@ -1329,7 +1329,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           같은 특이도로 있어 겹친 그림자가 홑 inset 1줄로 덮인다(2026-09-04 GTO 탭 24장 실측).
           내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
-        <section className="rounded-aura border card-aura p-3">
+        <section className="surface-grad rounded-aura border card-aura p-3">
           {/* 감사 D-1(오너 지적) — items-baseline 이면 제목 h3 가 아이콘 든 flex 라 기준선이 아이콘 바닥이 되어 '통계 →' 가 3.1px 아래로 처졌다 */}
           <div className="flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
@@ -1404,18 +1404,26 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           </span>
         );
         // 틀의 버튼 글자는 가장 넓은 CTA('대회 등록하기')로 — 좁은 글자로 재면 360 에서 그 갈래 설명이 한 줄 더 꺾여 틀을 넘었다(보조 줄이 있을 때 19px).
-        const ghost = (
+        // 2026-10-05 글자 사다리 상향(sm 14→15) 뒤 '지난 게임 그대로 열기 · 10/04 메인' 제목이 390 에서 두 줄이 돼 틀(제목 한 줄 + 설명 두 줄)보다
+        //   4px 커졌다(아래 격자 이동). 흔한 두 모양 — ① 제목 한 줄 + 긴 설명 ② 긴 제목 + 짧은 설명 — 을 **같은 칸에 겹쳐** 세워 큰 쪽이 칸 높이가 되게 한다.
+        const ghostOf = (title: string, desc: string) => (
           <span aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }} className="flex min-w-0 flex-col">
             <span className="flex min-w-0 flex-wrap items-center gap-x-3">
               <Icon name="refresh" size={22} className="shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold xl:truncate">지난 게임 그대로 열기 · 00/00</span>
-                <span className="mt-1 block t-desc break-keep xl:line-clamp-1">포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요</span>
+                <span className="block text-sm font-bold xl:truncate">{title}</span>
+                <span className="mt-1 block t-desc break-keep xl:line-clamp-1">{desc}</span>
               </span>
               <span className="btn-primary shrink-0 px-4 py-2 text-xs xl:order-last">대회 등록하기</span>
               {caps.ledger && rankRow('순위 미입력 00건 · 최근 00/00')}
             </span>
           </span>
+        );
+        const ghost = (
+          <>
+            {ghostOf('지난 게임 그대로 열기 · 00/00', '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요')}
+            {ghostOf('지난 게임 그대로 열기 · 00/00 메인 게임', '단가·할인·딜러까지 한 번에 채워져요')}
+          </>
         );
         if (loading || !lastRoundReady) {
           if (!caps.ledger) return null;
@@ -1643,7 +1651,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
           stretch={trendFill}
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
-          {loading ? <Skeleton /> : rangeErr ? (
+          {/* h-16(64px) = 정착 두 줄(22·22 + 사이 16 + 위아래 4) — 2026-10-05 글자 사다리 상향으로 60 → 64 가 되며 기본 h-12(48)와 16px 차가 났다. */}
+          {loading ? <Skeleton className="h-16" /> : rangeErr ? (
             <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
           ) : (weekEntry === 0 && prevBuyins === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
@@ -1834,7 +1843,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {/* F14 — 조회가 죽으면 이 표는 통째로 사라졌다('오늘 게임이 없다'와 구분 불가).
           실패했으면 섹션을 남기고 이유·재시도를 보인다. 실패했는데 옛 행이 남아 있으면 개수는 '—'다. */}
       {caps.ledger && (todayGames.length > 0 || !!rangeErr) && (
-        <section className="rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
+        <section className="surface-grad rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
           {/* 제목은 안 쪼개지고(shrink-0), 안내문(274px)은 폭이 모자라면 아랫줄로 내린다(flex-wrap).
               종전엔 제목 p 가 안내문에 밀려 390px 에서 '오늘/게임/· 4개' 세 줄로 찢어졌다(2026-09-18 실측). */}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">

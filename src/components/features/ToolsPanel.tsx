@@ -249,9 +249,9 @@ const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill', 'deal']);
  *  '전체' 보기에서만 위 섹션으로 빼고 카탈로그에서는 뺀다(같은 카드를 두 번 그리지 않는다). 갈래를 고르거나 검색하면 이 섹션은
  *  사라지고 그 갈래·검색 결과에 제 자리로 돌아온다 — "필터를 걸었는데 관계없는 도구가 위에 떠 있는" 상태를 만들지 않기 위해서다.
  *  TOOLS/renderTool/딥링크는 그대로다(이관·드릴과 같은 조리법). */
+//  2026-10-05: 즐겨찾기가 있으면 타일 4칸은 즐겨찾기 앞 4개가 차지하고, 이 4개는 기본값으로만 쓴다(빠진 도구는 제 갈래 리스트로 간다).
 // eslint-disable-next-line react-refresh/only-export-components -- 계약 테스트가 진열 순서를 읽는다
 export const FEATURED_KEYS = ['spot', 'range', 'pushfold', 'gto'] as const satisfies readonly ToolKey[];
-const FEATURED_SET = new Set<ToolKey>(FEATURED_KEYS);
 /** 레인 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. 화면에 놓인 차례 그대로. */
 const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
@@ -536,14 +536,33 @@ export default function ToolsPanel() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // 행 높이는 행마다 정해진다(2026-10-05 오너 "GTO 박스가 너무 커"). 예전엔 모든 행을 가장 높은 타일에 맞춰서
+  //   320 에서 22개 타일이 전부 88px 이 됐다. 같은 행의 두 칸은 그리드 기본 stretch 로 여전히 같은 높이다.
+  // 타일은 '자주 쓰는 도구' 4칸만(2026-10-05 오너 시안) — PC 에서도 4칸이라 sm 부터 한 줄 4열.
   const grid = (items: typeof TOOLS) => (
-    <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {items.map((t) => (
         <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
       ))}
     </div>
   );
+  // 나머지는 리스트 — 한 장의 면 안에 행을 쌓고 행 사이에 얇은 선(PC 는 두 열로 나눠 줄 길이를 줄인다).
+  const list = (items: typeof TOOLS) => (
+    <ul className="overflow-hidden rounded-aura border border-border-strong/40 card-aura sm:grid sm:grid-cols-2 sm:gap-x-4 sm:px-1">
+      {items.map((t) => (
+        <ToolRow key={t.key} testId={`tool-${t.key}`} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
+          fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
+      ))}
+    </ul>
+  );
+  // 타일 4칸 = 즐겨찾기 앞에서부터 + 모자라면 기본 4개로 채운다(중복 제외). 2026-10-05 독립 검토 P2-2: 별 하나만 눌러도 기본 4개가 사라지고
+  //   칸이 1개(반쪽 줄)만 남았다 — 즐겨찾기 0·1·4·6개 모두 4칸이다(e2e gto-catalog-tiles).
+  const tileTools = [...favTools, ...FEATURED_KEYS.map((k) => TOOLS.find((t) => t.key === k)!)]
+    .filter((t, i, a) => a.findIndex((x) => x.key === t.key) === i).slice(0, 4);
+  const extraFavs = favTools.slice(4);
+  const tileSet = new Set<string>(tileTools.map((t) => t.key));
+  const showTiles = lane === 'all' || favTools.length > 0;
 
   // 닫힘 퇴장 애니(Modal PAGE_LEAVE) 동안 판이 비지 않게 마지막 도구를 유지한다 — 안 그러면 제목·본문이 즉시 사라져
   // 빈 검은 판이 한 프레임 퇴장한다(2026-09-29 실측 휘도 24.6→7.9). App.tsx lastListing 과 같은 조리법.
@@ -600,7 +619,7 @@ export default function ToolsPanel() {
             실효 터치 높이가 39px 로 줄었다. 2026-09-24: CHIP_HIT 확장 7+7 → gap-y-3.5(14.875px) 로 두 줄 모두 46px. */}
       {!hits && (
         <div data-main-enter data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
-          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3.5">
+          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3.5 max-[359px]:gap-x-1">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
@@ -609,7 +628,8 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={[CHIP_HIT, 'inline-flex h-[32px] min-w-[44px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
+                // max-[359px]:px-1 · gap-x-1 — 320 에서 다섯째 칩('핸드 리뷰')만 둘째 줄로 혼자 떨어졌다(명세 P3 #16, 실측 합 296.6 > 바 288). 좁은 폭만 칩 안쪽 8→4 · 사이 6→4 로 줄여 한 줄(280.6)에 둔다.
+                className={[CHIP_HIT, 'inline-flex h-[32px] min-w-[44px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors max-[359px]:px-1',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>
@@ -618,65 +638,60 @@ export default function ToolsPanel() {
         </div>
       )}
 
-      {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구
-          ⚠ 레인 머리줄 3곳은 items-center 다(2026-10-02 정렬 전수). 제목 h2 가 아이콘으로 시작하는 inline-flex 라
-            items-baseline 이면 h2 의 기준선이 글자가 아니라 **아이콘 바닥**으로 잡혀, 옆 'N개'·설명이 제목 글자보다
-            2.13px 아래 앉았다(390 실측). 기준선 정렬로 되돌리려면 제목에서 아이콘을 flex 밖으로 빼야 한다. */}
-      {!hits && favTools.length > 0 && (
-        <section data-main-enter className="space-y-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+      {/* 🔴 2026-10-05 오너 시안(GTO 카탈로그 C2) "자주 쓰는 도구만 4개 정도 타일로 두고 나머지는 리스트로".
+          · 타일 2×2 = 즐겨찾기 앞 4개. 즐겨찾기가 없으면 기본 4개(FEATURED_KEYS). '전체' 보기에서만 서고, 즐겨찾기가 있으면
+            갈래를 골라도 남는다(예전 '즐겨찾기' 섹션이 갈래와 무관하게 늘 보이던 동작을 그대로 잇는다).
+          · 즐겨찾기 5번째부터는 아래 '즐겨찾기 N개' 리스트로 — 별을 눌러 둔 도구가 화면에서 사라지지 않는다.
+          · '전체' 카탈로그에서는 타일로 선 도구를 뺀다(중복 0). 갈래를 고르면 그 도구는 제 갈래로 돌아온다.
+          ⚠ 레인 머리줄은 items-center 다(2026-10-02 정렬 전수) — 제목 h2 가 아이콘으로 시작하는 inline-flex 라
+            items-baseline 이면 기준선이 아이콘 바닥으로 잡혀 옆 'N개' 가 2px 아래 앉는다. */}
+      {!hits && showTiles && (
+        <section data-main-enter data-testid="tools-featured" className="space-y-2">
+          <div data-lane-head="" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
+            <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
+              <Icon name={favTools.length > 0 ? 'star-fill' : 'trophy'} size={13} className="text-ink-muted" aria-hidden /> 자주 쓰는 도구
+            </h2>
+            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{tileTools.length}개</span>
+            <span className="min-w-0 text-2xs text-ink-secondary">{favTools.length >= 4 ? '즐겨찾기한 도구' : favTools.length > 0 ? '즐겨찾기 + 기본 도구' : '스팟 · 차트 · GTO 분석 바로가기'}</span>
+          </div>
+          {grid(tileTools)}
+        </section>
+      )}
+      {!hits && extraFavs.length > 0 && (
+        <section data-main-enter data-testid="tools-fav-more" className="space-y-2">
+          <div data-lane-head="" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="star-fill" size={13} className="text-ink-muted" aria-hidden /> 즐겨찾기
             </h2>
-            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{favTools.length}개</span>
+            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{extraFavs.length}개 더</span>
           </div>
-          {grid(favTools)}
+          {list(extraFavs)}
         </section>
       )}
 
-      {/* 자주 쓰는 도구 — 즐겨찾기 아래, 카탈로그 위(오너 지시 2026-09-14). '전체' 보기에서만; 갈래·검색 중에는 제 자리로 돌아간다. */}
-      {!hits && lane === 'all' && (
-        <section data-main-enter data-testid="tools-featured" className="space-y-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
-            <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
-              <Icon name="trophy" size={13} className="text-ink-muted" aria-hidden /> 자주 쓰는 도구
-            </h2>
-            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{FEATURED_KEYS.length}개</span>
-            <span className="min-w-0 text-2xs text-ink-secondary">스팟 · 차트 · GTO 분석 바로가기</span>
-          </div>
-          {grid(FEATURED_KEYS.map((k) => TOOLS.find((t) => t.key === k)!))}
-        </section>
-      )}
-
-      {/* 도구 목록 — 레인 전환의 본문(방향성 푸시 대상).
-          레인 사이는 space-y-4(17px): 섹션 안(헤더→그리드) 8.5px 의 2배라 밑줄 헤더가 자기 그리드 쪽으로 붙어 레인이 묶음으로 읽힌다
-          (space-y-3 은 1.5배라 '계산기 N개' 헤더가 위 레인의 마지막 카드에 붙어 보였다). */}
+      {/* 도구 목록 — 레인 전환의 본문(방향성 푸시 대상). 2026-10-05 부터 **리스트 행**(아이콘·제목·별·›, 행 사이 얇은 선).
+          레인 사이는 space-y-4: 섹션 안(헤더→목록) 8px 의 2배라 헤더가 자기 목록 쪽으로 붙어 레인이 묶음으로 읽힌다. */}
       <div data-main-enter data-tools-lanepanel="" className="space-y-4">
       {hits ? (
         hits.length === 0
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}'에 맞는 도구가 없습니다</p>
-          : grid(hits)
+          : list(hits)
       ) : (
         // 4갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
         LANES.filter((l) => lane === 'all' || lane === l.id).map((l) => {
-          // '전체' 에서는 위 '자주 쓰는 도구' 4개를 여기서 뺀다(중복 카드 0). 갈래를 고르면 그 갈래에 제 자리로 돌아온다.
-          const items = TOOLS.filter((t) => t.cat === l.id && !HIDDEN_SET.has(t.key) && !(lane === 'all' && FEATURED_SET.has(t.key)));
+          // '전체' 에서는 위 타일로 선 도구를 여기서 뺀다(중복 0). 갈래를 고르면 그 갈래에 제 자리로 돌아온다.
+          const items = TOOLS.filter((t) => t.cat === l.id && !HIDDEN_SET.has(t.key) && !(lane === 'all' && tileSet.has(t.key)));
           return (
             <section key={l.id} className="space-y-2">
-              {/* §7 P0-A: 레인 설명이 `truncate` 라 320px·100% 에서도 172/178,
-                  200% 에서는 170/357 로 잘렸다("지난 판 되짚기 — 에퀴티·아웃…").
-                  소제목 줄을 wrap 시켜 설명이 필요하면 아랫줄로 흐르게 한다. */}
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+              {/* 🔴 2026-09-18: 레인 소제목(l.desc)은 화면에서 뺐다(아래 목록이 같은 이름을 다시 보여준다).
+                  ⚠ LANES[].desc 데이터는 그대로 둔다 — 지우면 gtoContract 의 LANES 포맷 검사가 흔들린다. */}
+              <div data-lane-head="" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
                 <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
                   <Icon name={l.icon} size={13} className="text-ink-muted" aria-hidden /> {l.label}
                 </h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
-                {/* 🔴 2026-09-18: 레인 소제목(l.desc)을 화면에서 뺐다 — 바로 아래 카드 그리드가
-                    같은 도구 이름을 그대로 다시 보여준다(화면에 이미 보이는 것의 반복).
-                    이 줄은 320px·200% 에서 170/357 로 잘리던 자리이기도 하다(위 주석) — 중복을 없애니 잘림도 같이 사라진다.
-                    ⚠ LANES[].desc 데이터는 그대로 둔다 — 지우면 gtoContract 의 LANES 포맷 검사가 흔들린다. */}
               </div>
-              {grid(items)}
+              {list(items)}
             </section>
           );
         })
@@ -739,7 +754,9 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
     <section
       data-main-enter
       data-testid="spot-hero"
-      className="relative rounded-card border border-border-default bg-surface-mid p-3"
+      // surface-brass: 2026-10-05 오너 "밋밋한 곳 그라데이션 일부" — 왼쪽 위 모서리에서 번지는 옅은 황동 면(index.css). 글자 대비는 가장 밝은 모서리 기준 AA.
+      // 테두리 border-strong/40: 면 대비가 낮아(mid/base) 카드 윤곽이 바탕에 묻혔다(명세 §2-4).
+      className="surface-brass relative rounded-card border border-border-strong/40 bg-surface-mid p-3"
       // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
       // 2026-09-18: 인라인 rgb 글로우 → 토큰 LED([data-aura] hero). 라이트에서 약해지고 고대비·강제색에서 꺼진다.
       data-aura data-aura-level="hero" data-aura-variant="violet"
@@ -757,14 +774,17 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
+        {/* h-9(36px): 2026-10-05 GTO 박스 축소 — 40 → 36(명세 G3). */}
+        <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/12"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2A2D31 0%, #18191C 58%, #0E0F11 100%)' /* 2026-10-04 네이비 → 무채색 */ }} aria-hidden>
-          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={18} height={18} draggable={false} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
-          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버. */}
-          <p className="text-2xs text-ink-muted" data-testid="spot-hero-ai">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 · 이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</p>
+          {/* 2026-10-04 오너: AI 코칭 입구 안내 한 줄(계정마다 첫 3회 무료 · 이후 회당 30P · 하루 3회). 숫자는 spotAiLimits 한 곳 — 실제 강제는 서버.
+              2026-10-05 오너 "글씨 작아": 2xs → xs. */}
+          {/* 두 토막은 각각 안 끊는다 — 320 에서 '… 30P ·' / '하루 3회' 로 꼬리만 떨어졌다(2026-10-05 실측). 접히면 '무료 ·' 뒤에서만 접힌다. */}
+          <p className="text-xs text-ink-muted" data-testid="spot-hero-ai"><span className="whitespace-nowrap">AI 코칭 첫 {SPOT_AI_FREE_COUNT}회 무료 ·</span> <span className="whitespace-nowrap">이후 회당 {SPOT_AI_PRICE}P · 하루 {SPOT_AI_DAILY_LIMIT}회</span></p>
           {/* ⚠ §7(2026-09-12 실측): 360px 에서 `truncate` 로 잘려 87 < 142 였다.
               이미 11.69px 라 **더 줄이면 안 되는 구간**이므로 글자를 키우지도 줄이지도 않고
               줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).
@@ -783,11 +803,12 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           100% 에서는 한 줄에 들어가므로 `whitespace-normal`·`leading-tight` 를 걷어낸다.
           ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
-      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-xs">
+      {/* 2026-10-05: 간격 10 → 8(G3) · 버튼 글자 xs → sm(오너 "글씨 작아") · 고스트 테두리 border-strong/60(mid 위 1.20 → 약 2, 명세 §2-4). */}
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm">
           새 스팟 작성
         </button>
-        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] px-2 text-xs">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm">
           내 스팟
         </button>
       </div>
@@ -810,33 +831,39 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
   return (
     <div className="relative h-full">
       {/* 세로 타일(2026-09-03 오너: "설명이 너무 길고 불완전") — 아이콘을 위로 올려 텍스트 폭을 106px → 155px(390px 2열)로 넓히고,
-          설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 auto-rows-fr + h-full 이 맞춘다.
+          설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 행 stretch + h-full 이 맞춘다.
           아이콘 행 오른쪽 자리는 즐겨찾기 별(형제 버튼, 우상단). 레퍼런스 aura-ui 피처 카드 문법(아이콘 타일 위 · 제목 · 한 줄 설명). */}
       {/* 🔴 2026-09-18 오너 지시로 **가로 배치**가 됐다 — 아이콘 왼쪽, 제목 오른쪽, 설명줄 없음.
           예전 주석(세로 타일·설명 ≤13자)은 그 지시로 폐기됐다. 남은 계약은 이것뿐이다:
-            · 제목 칸은 **늘 2줄 자리를 예약**한다(min-h-[2.5em] + leading-tight) — 그래야 한 줄짜리 제목이
-              섞여도 같은 행의 카드들이 **같은 높이**가 된다(오너: "열을 맞춰서 정렬").
-              2026-09-18 2차(한 줄 제목 허용) 뒤로는 예약 칸 안에서 **세로 가운데**(flex-col justify-center) —
-              한 줄 제목이 예약 칸 위에 붙으면 아이콘보다 7px 높이 떠 보였고 아래가 빈 줄로 남았다(360 실측 스크린샷).
-              두 줄 제목은 2.5em 을 꽉 채우므로 가운데 정렬로 위치가 바뀌지 않는다.
+            · 같은 행의 카드들은 **같은 높이**다(오너: "열을 맞춰서 정렬") — 그리드 행 stretch + h-full 이 맞춘다.
+              2026-10-05 부터 2줄 자리 예약은 없다(한 줄 제목만 있는 행이 쓸데없이 높았다). 한 줄 제목은 칸 안에서
+              **세로 가운데**(flex-col justify-center + 버튼 items-center)라 아이콘과 같은 중심선에 앉는다.
             · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이) — 단 **70px 에 한 줄로
               들어가는 이름은 표에 없다**(TITLE_LINES 주석의 실측표). 그 이름들은 한 줄이다.
-            · 오른쪽 `pr-7` 은 우상단 즐겨찾기 별(h-8 w-8 · right-1)을 피하는 자리다.
+            · 오른쪽 `pr-7` 은 오른쪽 즐겨찾기 별(h-8 w-8 · right-1, 별 글리프 14px 이 오른쪽 13~27px 에 그려진다)을 피하는 자리다.
           ⚠ `flex-wrap` + 제목 칸 `flex‑[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
             확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
             그때 제목 칸이 **스스로 아이콘 아래로 내려가** 카드 전폭을 쓴다(예전 세로 배치로 자동 복귀).
             실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.
           ⚠ `aria-label={name}` — 두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히게 한다.
           ⚠ `title={desc}` — 화면에서 뺀 설명을 **버리지는 않는다**(PC 호버 툴팁). 검색은 계속 t.desc 를 읽는다. */}
+      {/* 🔴 2026-10-05 오너 "GTO 쪽은 박스가 너무 커 — 위아래 여백 재판단"(명세 typo-spacing-1005 §2-2 v2):
+            세로 10→8 · 아이콘 32→28 · 별 자리 32→28 · 제목 칸 basis 4rem→3rem · 2줄 자리 예약 제거 · 제목 행간 16px 고정.
+            320 에서 제목 칸(58px)이 4rem(64px)보다 좁아 **제목이 아이콘 아래로 내려가** 타일이 88px 였다 — basis 를 줄여 같은 줄에 둔다.
+            실측(가짜 env 빌드): 54/88 → 46(한 줄 제목)/50(두 줄 제목), 320 카탈로그 문서 길이 −472px 추정. */}
       <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
-        className="flex h-full w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-aura border card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
+        className="surface-brass-tile flex h-full w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-aura border border-border-strong/40 card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
-        <span className="flex min-h-[2.5em] min-w-0 flex-[1_1_4rem] flex-col justify-center text-xs font-bold leading-tight text-ink-primary">
-          {(lines ?? [name]).map((l) => (
-            <span key={l} className="block wrap-anywhere">{l}</span>
-          ))}
+        {/* 320 에서 글자 칸이 60px 남짓이라 15px 제목이 세 줄(타일 82px)이 됐다(2026-10-05 실측) — 360 미만만 한 단 작게. */}
+        <span className="flex min-w-0 flex-[1_1_3rem] flex-col justify-center text-sm leading-5 font-bold text-ink-primary max-[359px]:text-xs max-[359px]:leading-4">
+          {/* 2026-10-05 독립 검토 P3: 줄바꿈표(TITLE_LINES)는 이제 **꺾을 수 있는 자리**만 정한다 — 두 토막을 각각 안 끊기게 묶고 사이는 공백이라
+              폭이 되면 한 줄('푸시 · 폴드 차트'), 안 되면 그 자리에서 꺾인다. 토막 하나가 칸보다 넓으면(320 의 '레인지 차트') inline-block max-w-full 이라
+              토막 안에서도 접힌다(nowrap 이면 잘렸다 — e2e typography-regression 320). 종전엔 block 두 개라 390 처럼 넓은 칸에서도 늘 두 줄이었다. */}
+          <span className="block wrap-anywhere">
+            {lines ? <><span className="inline-block max-w-full">{lines[0]}</span> <span className="inline-block max-w-full">{lines[1]}</span></> : name}
+          </span>
         </span>
       </button>
       {/* 별 — transform 유틸 금지: 전역 button:active 가 transform 을 scale 로 통째로 덮어 -translate-y-1/2 가 누르는 60ms 동안 사라져 별이 튀었다.
@@ -852,11 +879,46 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
           //   inline style 로 position 을 최우선 순위로 못박아 `.hit` 의 확장(::after)은 그대로 살리고
           //   자기 배치만 되찾는다 — index.css 를 고치지 않는 최소 수정.
           style={{ position: 'absolute' }}
-          className={['hit right-1 top-1 flex h-8 w-8 items-center justify-center',
+          // inset-y-0 + my-auto: 높이가 고정(h-8)이라 transform 없이 세로 가운데 — 타일이 46/50 으로 낮아져 top-1 이면 별이 아이콘보다 3~5px 위에 떴다.
+          className={['hit inset-y-0 right-1 my-auto flex h-8 w-8 items-center justify-center',
             fav ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
           <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * 도구 리스트 행 — 2026-10-05 오너 시안(GTO 카탈로그 C2) "자주 쓰는 도구만 타일, 나머지는 리스트로".
+ * 아이콘 · 제목 · 별(즐겨찾기) · › . 타일과 같은 data-testid(`tool-<key>`)·aria-label·title(설명 툴팁)·별 동작을 그대로 쓴다.
+ * 별은 본문 버튼의 **형제**다(중첩 인터랙티브 금지) — 본문 버튼 안에 별 자리(w-8)를 비워 두고 그 위에 절대 배치한다.
+ * ⚠ 별에 `.hit` + absolute 가 부딪히는 함정(ToolCard 주석)은 같은 처방 — style 로 position 을 못박는다.
+ */
+function ToolRow({ name, desc, icon, onClick, onPointerDown, fav, onToggleFav, testId }: {
+  name: string; desc: string; icon: IconName; onClick: () => void; testId?: string;
+  onPointerDown?: () => void; fav?: boolean; onToggleFav?: () => void;
+}) {
+  return (
+    <li className="relative border-t border-border-strong/25 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
+      <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
+        className="flex w-full items-center gap-2 py-2.5 pl-3 pr-3 text-left transition-colors hover:bg-surface-high/50">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center text-ink-secondary">
+          <Icon name={icon} size={18} strokeWidth={1.8} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 break-keep text-sm leading-5 font-semibold text-ink-primary">{name}</span>
+        {onToggleFav && <span aria-hidden className="w-8 shrink-0" />}
+        <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" aria-hidden />
+      </button>
+      {onToggleFav && (
+        <button type="button" onClick={onToggleFav} aria-label={fav ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`} aria-pressed={fav}
+          style={{ position: 'absolute' }}
+          // right-9 = 행 오른쪽 여백 12 + › 16 + 간격 8 → 본문 버튼 안에 비워 둔 w-8 자리와 정확히 겹친다.
+          className={['hit inset-y-0 right-9 my-auto flex h-8 w-8 items-center justify-center',
+            fav ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+          <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
+        </button>
+      )}
+    </li>
   );
 }

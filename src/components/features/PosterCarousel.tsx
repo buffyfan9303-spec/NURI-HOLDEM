@@ -287,7 +287,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
             <span className="flex flex-wrap items-center gap-1.5">
               {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
               <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
-              <span className="font-display text-[21px] font-extrabold leading-[28px] text-[#F0F0F0] md:text-[22px] md:leading-[30px]">{ev.title}</span>
+              <span className="font-display text-xl font-extrabold leading-[28px] text-[#F0F0F0] md:text-[22px] md:leading-[30px]">{ev.title}</span>
             </span>
             <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B4B7BA]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
           </span>
@@ -323,7 +323,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
               style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.5) 48%, rgba(6,8,11,0.05) 100%), linear-gradient(to right, rgba(6,8,11,0.6) 0%, transparent 62%)' }}
             >
               {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
-              <span className="font-display text-[21px] font-extrabold leading-[28px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
+              <span className="font-display text-xl font-extrabold leading-[28px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
               <span className="text-[13px] font-medium leading-[19px]" style={{ color: b.subColor }}>{b.sub}</span>
             </span>
           </>
@@ -343,7 +343,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 className="absolute inset-0 flex flex-col justify-end gap-0.5 px-4 pb-4 pr-[36%] md:px-6 md:pb-5"
                 style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.5) 48%, rgba(6,8,11,0.05) 100%), linear-gradient(to right, rgba(6,8,11,0.6) 0%, transparent 62%)' }}
               >
-                {s.title && <span className="font-display text-[21px] font-extrabold leading-[28px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
+                {s.title && <span className="font-display text-xl font-extrabold leading-[28px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
                 {s.sub && <span className="text-[13px] font-medium leading-[19px] text-white/80">{s.sub}</span>}
               </span>
             )}

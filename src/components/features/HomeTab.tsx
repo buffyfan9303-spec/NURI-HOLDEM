@@ -619,7 +619,7 @@ export default function HomeTab({
           <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))] lg:grid-cols-2' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)] lg:grid-cols-1'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
+              className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               {/* 배경 — 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. (우상단 블러 원은 2026-10-04 'E+황동'으로 삭제) */}
               <span aria-hidden className="quick-art quick-art-checkin" />
               {/* 🔴 2026-09-24 HOME-LAYOUT-STRETCH — 제목·배지와 아래 '매장 QR 스캔 ›' 을 **양끝 정렬에서 앞 정렬**로.
@@ -651,7 +651,7 @@ export default function HomeTab({
             {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
+              className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
@@ -797,10 +797,9 @@ export default function HomeTab({
                         : 'border border-transparent text-ink-secondary hover:bg-surface-high',
                     ].join(' ')}>
                     {/* 안쪽 얼굴 — 휠 피커 효과(투명도·블러·크기)는 여기에만 건다(위 효과 주석). 첫 자식이어야 한다. */}
-                    {/* D6(2026-09-29): 글자 크기는 **rem** 으로 — `calc(Nrem/17)` 은 지금 루트(17px)에서 정확히 N px 이다(디자인 크기 불변).
-                        절대 px 는 루트 글자 크기를 따라가지 않는다. 루트가 사용자 설정을 따르게 되면 이 칸도 같이 커진다. */}
+                    {/* 글자 크기는 사다리 rem 토큰으로(2026-10-05 G5: 11·13px 고정 → 2xs 12 · md 13). 절대 px 는 루트 글자 크기를 따라가지 않는다. */}
                     <span data-pill-face className="flex flex-col items-center">
-                      <span className="text-[calc(11rem/17)] font-bold tabular-nums md:text-[calc(13rem/17)]">{mm}.{dd}</span>
+                      <span className="text-2xs font-bold tabular-nums md:text-xs">{mm}.{dd}</span>
                       <span className={`text-2xs leading-[1.1] ${isToday ? 'font-bold text-accent-200' : 'text-ink-secondary'}`}>{isToday ? '오늘' : `(${dow})`}</span>
                       {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
                       <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />

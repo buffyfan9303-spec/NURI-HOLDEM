@@ -22,7 +22,6 @@ import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
 import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
-import { Skeleton, SkeletonList } from '../atoms/Skeleton';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import { type StoreStepMap,resolveDest, type StoreDest, type StoreGoto } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
@@ -3267,16 +3266,10 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        // 행 높이는 1280 실측값(루트 16px, 2026-10-05: 구성원 108.39px · 초대 95.39px · 머리글 16px · 안내 15px) — rem 유틸로 추정하지 않는다
-        // (17px 때 115 · 101 · 17 · h-4 였다 — 루트를 바꾸면 여기 숫자도 다시 재야 한다. e2e store-0929-fixes D6-1 이 잠근다).
-        <div aria-busy="true" data-testid="staff-list-loading" className="space-y-4">
-          {lastRows.i > 0 && (
-            <div className="space-y-1.5"><Skeleton className="h-[16px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[95.4px]" /></div>
-          )}
-          <div className="space-y-1.5"><Skeleton className="h-[16px] w-24" /><Skeleton className="h-[15px]" />
-            {/* 구성원 목록(ul)은 space-y-2 라 SkeletonList(space-y-1.5)를 쓰지 않는다 — 행마다 2px 씩 모자랐다(5명 +7.9px 실측). */}
-            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[108.4px]" />)}</div></div>
-        </div>
+        // 🔴 2026-10-05: px 고정 높이(110.4·96.4·18·16 — Windows 1280 실측)가 CI(리눅스 글꼴)에서 실제 행과 33.7px 어긋났다(#173 run 37255947269).
+        //   그래서 숫자를 다시 재지 않고 **실제 행과 같은 구조·같은 클래스**(글자는 invisible)로 자리를 잡는다 — 글꼴·포인터(coarse 입력 44px)·사다리가
+        //   바뀌어도 뼈대가 실제 행과 같이 변한다. e2e store-0929-fixes D6-1 이 잠근다.
+        <StaffListSkeleton invites={Math.min(lastRows.i, 5)} members={Math.min(Math.max(lastRows.s, 1), 8)} />
       ) : listError != null ? (
         <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />
       ) : (
@@ -3434,6 +3427,58 @@ function StaffManager({ venueId }: { venueId: string }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** 직원 관리 로딩 뼈대 — 아래 실제 목록(대기중 초대 · 구성원)과 **같은 구조·같은 클래스**를 그리고 글자만 숨긴다(visibility).
+ *  높이를 px 로 적지 않으니 글꼴(리눅스 CI vs Windows)·터치 입력 높이·글자 사다리가 바뀌어도 실제 행과 같이 움직인다.
+ *  ⚠ 실제 행의 클래스(패딩·글자 크기·입력칸)를 바꾸면 여기도 같이 바꾼다 — e2e store-0929-fixes D6-1 이 어긋남을 잡는다. */
+function StaffListSkeleton({ invites, members }: { invites: number; members: number }) {
+  const ctl = 'hit shrink-0 text-2xs font-bold py-1.5 rounded-badge border';
+  return (
+    <div aria-busy="true" aria-hidden data-testid="staff-list-loading" className="space-y-4">
+      {invites > 0 && (
+        <div className="space-y-1.5">
+          <p className="skeleton w-28 rounded-input text-xs font-semibold"><span className="invisible">대기중 초대</span></p>
+          <ul className="space-y-1.5">
+            {Array.from({ length: invites }, (_, k) => (
+              <li key={k} className="skeleton flex flex-col gap-2 rounded-input border border-transparent p-2.5">
+                <div className="invisible flex items-center gap-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-1"><span className="truncate text-sm">초대</span></span>
+                  <span className="rounded-input px-2.5 py-1.5 text-2xs">취소</span>
+                </div>
+                <div className="invisible flex flex-wrap items-center gap-1.5">
+                  <input readOnly tabIndex={-1} className="input min-w-0 flex-1 py-1 text-2xs max-sm:basis-full" />
+                  {['장부·순위', '이용권내역', '스케줄 편성'].map((t) => <span key={t} className={`${ctl} px-2`}>{t}</span>)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <p className="skeleton w-24 rounded-input text-xs font-semibold"><span className="invisible">구성원</span></p>
+        <p className="skeleton rounded-input text-2xs"><span className="invisible">직책은 표시용</span></p>
+        <ul className="space-y-2">
+          {Array.from({ length: members }, (_, k) => (
+            <li key={k} className="skeleton space-y-2 rounded-aura border border-transparent p-3">
+              <div className="invisible flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold">가</div>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">이름</span>
+                  <p className="truncate text-2xs">@닉네임</p>
+                </div>
+                <span className="rounded-input px-2.5 py-1.5 text-2xs">제거</span>
+              </div>
+              <div className="invisible flex flex-wrap items-center gap-2">
+                <input readOnly tabIndex={-1} className="input min-w-0 flex-1 py-1.5 text-xs max-sm:basis-full" />
+                {['장부·순위', '이용권 내역', '스케줄 편성'].map((t) => <span key={t} className={`${ctl} px-2.5`}>{t}</span>)}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

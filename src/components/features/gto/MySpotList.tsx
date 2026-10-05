@@ -101,7 +101,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
   const list = useMemo(() => (!rows || rows.length === 0 ? null : (
     <ul className="space-y-2">
       {rows.map((r) => (
-        <li key={r.id} className="rounded-aura border card-aura p-2.5">
+        <li key={r.id} className="rounded-aura border border-border-strong/50! card-aura p-2.5">
           <div className="flex items-start gap-2">
             <div className="flex shrink-0 gap-0.5" aria-label="내 카드">
               {r.spot.hero.length > 0
@@ -109,8 +109,8 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
                 : <span className="text-2xs text-ink-muted">카드 없음</span>}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-ink-primary">{spotSummary(r.spot)}</p>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
+              <p className="truncate text-sm font-bold text-ink-primary">{spotSummary(r.spot)}</p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-ink-muted">
                 {r.spot.heroAction && <span>내 선택 {actionLabel(r.spot.heroAction)}</span>}
                 {r.spot.board.length > 0 && <span>{streetLabel(r.spot.street)} {r.spot.board.length}장</span>}
                 {ai.has(r.id) && <span className="inline-flex items-center gap-0.5 text-accent-200"><Icon name="sparkles" size={10} aria-hidden />AI 코칭</span>}
@@ -124,20 +124,20 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
           <div className="mt-2 flex gap-1.5">
             <button type="button" onClick={() => setExpandedId((id) => (id === r.id ? null : r.id))}
               aria-expanded={expandedId === r.id} aria-controls={`spot-detail-${r.id}`}
-              className="btn-ghost min-h-[44px] flex-1 text-xs">
+              className="btn-ghost min-h-[44px] flex-1 border-border-strong/60 text-sm">
               {expandedId === r.id ? '접기' : '상세 보기'}
             </button>
-            <button type="button" onClick={() => cb.current.onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-xs">
+            <button type="button" onClick={() => cb.current.onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-sm">
               게시판에 공유
             </button>
             {confirmId === r.id ? (
               <>
                 <button type="button" onClick={() => remove(r.id)}
-                  className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3 text-xs font-bold text-danger">
+                  className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3 text-sm font-bold text-danger">
                   정말 삭제
                 </button>
                 <button type="button" onClick={() => setConfirmId(null)}
-                  className="min-h-[44px] rounded-input px-3 text-xs text-ink-muted">취소</button>
+                  className="min-h-[44px] rounded-input px-3 text-sm text-ink-muted">취소</button>
               </>
             ) : (
               <button type="button" onClick={() => setConfirmId(r.id)} aria-label="스팟 삭제"
@@ -153,8 +153,8 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
               <SpotDetails spot={r.spot} mode="owner" />
               {/* SPOT-DATE(2026-09-25) — 저장 뒤에도 날짜를 바꿀 수 있게. defaultValue + onChange 라 새로
                   고르기 전까지는 지금 값(playedOn 또는 저장일의 KST 날짜)을 그대로 보여준다. */}
-              <div className="mt-2 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
-                <label htmlFor={`spot-date-${r.id}`} className="shrink-0 text-2xs text-ink-muted">이 스팟 날짜</label>
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-border-strong/35 pt-2">
+                <label htmlFor={`spot-date-${r.id}`} className="shrink-0 text-xs text-ink-muted">이 스팟 날짜</label>
                 {/* 🔴 2026-09-25 스윕: 여기엔 max 가 없어 미래 날짜가 그대로 PATCH 됐다 — max=오늘 + 저장 전 clampSpotDate(접힌 값을 칸에도 되돌려 쓴다). */}
                 <input id={`spot-date-${r.id}`} type="date" defaultValue={r.playedOn ?? kstDateOf(r.createdAt)} max={kstToday()}
                   onChange={(e) => { if (!e.target.value) return; const d = clampSpotDate(e.target.value); if (d !== e.target.value) e.target.value = d; cb.current.setDate(r.id, d); }}
@@ -162,16 +162,16 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
               </div>
               {ai.has(r.id) && (
                 // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
-                <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">
+                <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-strong/35 pt-2">
                   <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 볼 수 있습니다)</span></h4>
                   <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{ai.get(r.id)}</p>
                 </section>
               )}
-              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
-                <button type="button" onClick={() => cb.current.onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
+              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-strong/35 pt-2">
+                <button type="button" onClick={() => cb.current.onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 border-border-strong/60 text-sm">
                   수정하기
                 </button>
-                <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost min-h-[44px] px-3 text-xs">
+                <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost min-h-[44px] border-border-strong/60 px-3 text-sm">
                   목록으로
                 </button>
               </div>
@@ -192,7 +192,8 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
   if (rows === null) {
     return (
       <div className="space-y-2" aria-busy="true">
-        {[0, 1].map((i) => <div key={i} className="h-[76px] animate-pulse rounded-card bg-surface-high" />)}
+        {/* 112px = 실제 행 높이(2026-10-05 실측, 390/360/320 동일 — 제목 sm·메타 xs 로 키운 뒤). 종전 76 은 실제 107 과도 달랐다. */}
+        {[0, 1].map((i) => <div key={i} className="h-[112px] animate-pulse rounded-card bg-surface-high" />)}
       </div>
     );
   }
@@ -223,7 +224,7 @@ function Empty({ icon, title, desc, action }: {
   icon: 'lock' | 'bookmark' | 'alert'; title: string; desc: string; action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-aura border card-aura px-4 py-6 text-center">
+    <div className="surface-empty rounded-aura border border-border-strong/50! card-aura px-4 py-6 text-center">
       <Icon name={icon} size={22} className="mx-auto mb-2 text-ink-muted" aria-hidden />
       <p className="text-sm font-bold text-ink-primary">{title}</p>
       <p className="mx-auto mt-1 max-w-88 text-2xs leading-relaxed text-ink-muted break-keep">{desc}</p>

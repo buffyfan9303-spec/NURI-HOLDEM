@@ -61,10 +61,13 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
   //   판 안에 하단 고정 바가 있는 도구만 --overlay-bar 로 비운다(index.css, NURI SPOT 단계 이동 바).
   return (
     <footer data-testid="business-footer" className={['mt-6 border-t border-border-subtle px-page-x pt-5', props.overlay ? 'pb-[calc(1.5rem+var(--overlay-bar,0px))]' : 'pb-[max(calc(var(--tabbar-safe)+0.5rem),var(--footer-reserve,0px))] lg:pb-[max(2rem,var(--footer-reserve,0px))]'].join(' ')}>
-      <div className="mx-auto w-full max-w-5xl space-y-3">
+      {/* 블록 사이 16px 은 모바일만(정돈 지시 범위) — sm 이상은 종전 12px. PC 문서 길이가 달라지면 내 매장 판 전환 게이트의 스크롤 조건이 흔들린다. */}
+      <div className="mx-auto w-full max-w-5xl space-y-3 max-sm:space-y-4">
         {/* 약관·정책 링크 — §7 P0-C(2026-09-12 실측): 11.69px 로, 이미 t-desc(12.75px)로 올라간
-            사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다. */}
-        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 t-desc">
+            사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다.
+            🔴 2026-10-05 오너 "하단 푸터가 주르륵 되어 있어 모바일 정렬 다시 해 정돈해": 모바일(sm 미만)은 **2열 격자**
+            (구분점 숨김 — 칸이 곧 구분이다). 종전 flex-wrap 은 390 에서 '· 고객센터 문의' 만 다음 줄에 혼자 떨어졌다. sm 이상은 종전 한 줄 + 구분점. */}
+        <nav className="grid grid-cols-2 justify-items-start gap-x-4 gap-y-2 t-desc sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1.5 [&>span]:max-sm:hidden">
           {/* PG 심사 요건: '어떤 서비스를 운영하는지' 확인 가능한 소개 페이지(정적 URL) */}
           <a href="/about.html" target="_blank" rel="noopener" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
           <span className="text-ink-muted" aria-hidden>·</span>
@@ -93,9 +96,11 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
             걷어내고 불투명 `text-ink-muted` 그대로 둔다(재측정: 라이트 4.99:1·다크 5.28:1, AA 통과).
             `whitespace-nowrap` 은 320px 에서 "사업장 주소" 라벨이 "사업장 / 주소" 로 줄바꿈되던 것 — 값(dd)은
             그대로 여러 줄로 흘러도 되지만 라벨 자체가 쪼개지면 안 된다. */}
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 t-desc text-ink-muted">
+        {/* 2026-10-05 모바일은 **라벨 : 값 2열**(grid max-content | 1fr — 라벨 칸 폭이 가장 긴 라벨에 맞춰 값이 한 세로줄에 선다).
+            div 는 모바일에서 display:contents 라 dt·dd 가 곧 격자 칸이다(dl > div 묶음 구조·e2e 판정은 그대로). sm 이상은 종전 한 줄 흐름. */}
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 t-desc text-ink-muted sm:flex sm:flex-wrap sm:gap-x-3 sm:gap-y-0.5">
           {[...BIZ_REQUIRED, ...BIZ_EXTRA].map(([k, v]) => (
-            <div key={k} className="flex items-start gap-1">
+            <div key={k} className="contents sm:flex sm:items-start sm:gap-1">
               <dt className="shrink-0 whitespace-nowrap">{k}</dt>
               {/* 하이픈이 든 덩어리(166-46, · 207-본244호 · 전화번호)는 하이픈에서 줄바꿈되지 않게 묶는다 —
                   2026-09-29 실측: 320px 에서 '166-' / '46', 390px 에서 '207-' / '본244호' 로 끊겼다. 글자는 바꾸지 않는다. */}
@@ -116,7 +121,7 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
           <summary onClick={onSummaryClick} className="inline-flex cursor-pointer list-none items-center gap-0.5 py-1.5 -my-1.5 text-ink-muted underline decoration-border-default underline-offset-2">
             더보기<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="mt-2.5 grid grid-cols-2 justify-items-start gap-x-4 gap-y-2 sm:mt-1 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1.5 [&>span]:max-sm:hidden">
             <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
             <span aria-hidden>·</span>
             <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
@@ -133,7 +138,9 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
 
         {/* 사행성 배제 고지 — §7 P0-C: `/80` 반투명이 라이트 3.37:1·다크 3.72:1 로 AA 미달이었다.
             위 dt 와 같은 이유로 투명도를 걷어내고 불투명 `text-ink-muted` 로 (재측정: 라이트 4.99:1·다크 5.28:1). */}
-        <p className="t-desc text-ink-muted">
+        {/* 2026-10-05 법정 고지(사행성 배제 · 만 19세 · 1336 · ©)를 모바일에서 **한 덩어리**(옅은 면 상자)로 — 앞 블록들과 구분된다(sm 이상은 종전 문단).
+            상자 면은 surface-low 라 글자 대비는 지면 기준보다 오히려 높다. 문구·순서·상시 노출 그대로. */}
+        <p className="t-desc text-ink-muted max-sm:rounded-input max-sm:border max-sm:border-border-strong/25 max-sm:bg-surface-low max-sm:px-3 max-sm:py-2.5">
           NURI HOLDEM은 마인드 스포츠로 불리는 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
           {/* ⚠ 두 번 부딪혀 가운데를 찾은 자리다.
               2026-09-16: '1336(24시간·무료)' 만 마지막 줄에 혼자 떨어져 nowrap 을 문장 전체에 걸었다.
@@ -141,8 +148,11 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
                 안폭 322 를 23.84px 넘쳤다 — 문서 폭은 안 늘어 오른쪽 끝에 ')' 가 닿은 채 도달이 안 된다.
               → 문장은 끊기게 두고 **전화번호+괄호만** 묶는다. 둘을 동시에 푸는 유일한 지점이다
                 (마지막 줄에 번호만 남는 것도 막고, 전체 넘침도 막는다). 법정 고지라 도달이 우선이다. */}
-          <br />{AGE_HELPLINE[0]} · {AGE_HELPLINE[1]} <span className="whitespace-nowrap">{AGE_HELPLINE[2]}</span>
-          <br />© {`2026`} 엔에이치홀딩스. All rights reserved.
+          {/* 2026-10-05: 두 고지를 각각 안 끊기는 묶음으로 — 접히면 '·' 뒤에서만 접힌다(종전 390 에서 '도박문제 / 상담 1336' 으로 갈라졌다). 굵기로 한 줄 위계를 준다. */}
+          {/* block: 두 줄로 접혀도 고지 칸 전체가 하나의 상자다 — 인라인이면 두 줄 사이 행간 틈이 '고지 위 다른 것' 으로 잡혔다(e2e legal-overlay 360 의 elementFromPoint).
+              앞뒤 <br/> 대신 block 이 줄을 나눈다(© 는 이어서 p 의 직속 글자 노드로 남는다 — 마지막 줄 판정이 그 노드를 잰다). */}
+          <span className="block font-semibold text-ink-secondary max-sm:my-1"><span className="whitespace-nowrap">{AGE_HELPLINE[0]}</span> · <span className="whitespace-nowrap">{AGE_HELPLINE[1]} {AGE_HELPLINE[2]}</span></span>
+          © {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>
       </div>
     </footer>

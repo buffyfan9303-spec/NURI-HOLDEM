@@ -193,7 +193,8 @@ test('④ 버튼 크기 사다리 3단 — 그리고 .btn 기본값은 그대로
   // .btn 기본값 고정 — 다른 팀의 호출부 241곳이 이 값 위에 서 있다. 바뀌면 그 자체가 회귀다.
   //   2026-10-04 루트 17→16px: min-h 2.4rem·font 0.875rem 그대로라 40.8 → 38.4 · 14.875 → 14(rem 값은 안 바꿨다).
   expect(m.md.h, '.btn 기본 높이가 2.4rem(38.4px) 에서 움직였다').toBeCloseTo(2.4 * 16, 1);
-  expect(m.md.fs, '.btn 기본 글자 크기가 0.875rem(14px) 에서 움직였다').toBeCloseTo(0.875 * 16, 2);
+  //   2026-10-05 G4: 글자 사다리 한 단 상향으로 .btn 글자 0.875 → 0.9375rem(15px, text-sm 과 같은 단). 높이(min-h 2.4rem)는 그대로.
+  expect(m.md.fs, '.btn 기본 글자 크기가 0.9375rem(15px) 에서 움직였다').toBeCloseTo(0.9375 * 16, 2);
 
   // 세 단은 '위계'로 읽혀야 한다 — 1.7px 차는 위계가 아니라 '대충 만든 것'이다.
   expect(m.sm.h, `btn-sm(${m.sm.h})과 btn(${m.md.h}) 차이가 6px 미만이다`).toBeLessThanOrEqual(m.md.h - 6);

@@ -230,10 +230,13 @@ for (const w of [390, 360, 320]) {
 //    그때 탭 바가 이겨야 한다 — 391c5a78(FAB z-40)에서는 '딜러'·'장터' 중심을 FAB 가 가로챘다. 푸터 '더보기' 를 펼친 상태는 높이 760 에서 본다
 //    (640 에서 펼치면 탭 바째 화면 위로 밀려 나가 잴 것이 없다 — 391c5a78 실측: 360·320×760 에서 '딜러' 를 FAB 가 가로챘다).
 //    판정은 '화면 안에 들어온 탭 중심의 elementFromPoint 가 FAB 안이 아니다'.
+//    🔴 2026-10-05 푸터 모바일 정돈(링크 2열 · 사업자 정보 라벨:값 2열 · 법정 고지 상자)으로 푸터가 449 → 563px(+114) 길어졌다.
+//       같은 기하(맨 끝에서 FAB 칸이 탭 바까지 올라오는 조건)를 재현하려고 높이를 같은 만큼 올린다: 640 → 760, 펼침 760 → 880.
+//       높이를 그대로 두면 탭 바째 화면 위로 밀려 '잴 탭 0' 이 된다(검사 조건 소실).
 for (const w of [390, 360, 320]) {
   for (const more of [false, true]) {
-    test(`⑨ ${w}×${more ? 760 : 640}${more ? ' · 푸터 더보기 펼침' : ''}: 맨 끝 스크롤에서 하위 탭 바 누름을 FAB 가 가로채지 않는다`, async ({ page }) => {
-      await page.setViewportSize({ width: w, height: more ? 760 : 640 });
+    test(`⑨ ${w}×${more ? 880 : 760}${more ? ' · 푸터 더보기 펼침' : ''}: 맨 끝 스크롤에서 하위 탭 바 누름을 FAB 가 가로채지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: more ? 880 : 760 });
       await openBoard(page);
       if (more) {
         const more = page.getByTestId('footer-more');

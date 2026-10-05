@@ -1522,7 +1522,7 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
                 return (
                   <tr key={i} className={`border-t border-border-subtle ${isRegClose ? 'bg-amber-500/8' : ''}`}>
                     <td className="py-1.5 px-2 text-left font-bold text-ink-secondary">
-                      {levelNo}{isRegClose && <span className="ml-1 text-[9px] font-bold text-amber-400">레지마감</span>}
+                      {levelNo}{isRegClose && <span className="ml-1 text-2xs font-bold text-amber-400">레지마감</span>}
                     </td>
                     <td className="py-1.5 px-2 text-right font-semibold text-ink-primary">{l.sb.toLocaleString()} / {l.bb.toLocaleString()}</td>
                     <td className="py-1.5 px-2 text-right text-ink-muted">{l.ante ? l.ante.toLocaleString() : '-'}</td>

@@ -119,7 +119,7 @@ export function ContactRows({ contacts, label = '연락처' }: { contacts: { lab
             }}
             className="hit inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary"
           >
-            {c.label && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-300">{c.label}</span>}
+            {c.label && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{c.label}</span>}
             <span className="tabular-nums">{c.phone}</span>
           </a>
         ))}

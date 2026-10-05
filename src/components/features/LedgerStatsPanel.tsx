@@ -1140,9 +1140,9 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
             <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-default bg-surface-base px-2.5 py-1.5">
               {/* 잘린 이름만 남으면 동명이인 구분이 안 된다 — 다른 목록과 같이 title 로 전체를 남긴다. */}
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={o.name ? `${o.name}(${o.nickname})` : o.nickname}>{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
-              {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">승인 대기</span>}
+              {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-2xs font-bold text-amber-400">승인 대기</span>}
               {o.isPrimary
-                ? <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-300">대표</span>
+                ? <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">대표</span>
                 : (
                   <>
                     {o.status === 'approved' && <button type="button" onClick={() => makePrimary(o)} className="shrink-0 text-2xs font-semibold text-accent-300 hover:text-accent-200">대표로</button>}

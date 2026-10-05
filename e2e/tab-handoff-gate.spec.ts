@@ -316,10 +316,14 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         const idx = i < K ? (i + 1) % K : i === K ? 1 : 0;
         // 판 위쪽(커뮤니티 홀덤펍의 필터 칩 줄)이 화면 위로 나가야 복제본에 위 껍데기가 생긴다(자리 판정 A·B 의 대상). 운영 데이터가 짧은 날엔
         //   끝까지 스크롤해도 그 줄이 화면 안에 남아 결함이 가려졌다(2026-10-03 오후 실측: 문서 1244px · scrollY 255 · 칩 줄 y=49) — 문서 끝에 300px 여유를 준다.
+        //   2026-10-05: 모바일 푸터 정돈으로 푸터가 449 → 571px 로 길어졌다. 이 식은 '문서 끝 − 150' 이라 푸터가 길어진 만큼 판 본문을 더 지나쳐
+        //   레일이 하단바 밑으로 가거나 판 밖으로 나갔다(누름이 하단바에 닿아 메인 탭이 바뀜 — '누를 하위 탭 0'). 푸터가 늘어난 만큼 빼서
+        //   **판 본문 기준 위치는 2026-10-04 와 같게** 둔다(푸터 높이와 무관한 같은 기하).
         await page.evaluate((lim) => {
           const html = document.documentElement;
           html.style.minHeight = ''; html.style.minHeight = `${html.scrollHeight + 300}px`;
-          scrollTo({ top: Math.max(0, Math.min(lim, html.scrollHeight - innerHeight - 150)), behavior: 'instant' as ScrollBehavior });
+          const foot = document.querySelector('[data-testid="business-footer"]')?.getBoundingClientRect().height ?? 449;
+          scrollTo({ top: Math.max(0, Math.min(lim, html.scrollHeight - innerHeight - 150 - Math.max(0, foot - 449))), behavior: 'instant' as ScrollBehavior });
         }, sc.lim);
         await page.waitForTimeout(700);
         const b = await page.evaluate(([rail, panel, k]) => {

@@ -80,22 +80,33 @@ describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
     expect(entries.some((e) => e.key === 'drill'), '#tool=drill 딥링크가 죽었다').toBe(true);
   });
 
-  it("'자주 쓰는 도구' 4개가 즐겨찾기 아래·카탈로그 위에 있고, '전체' 카탈로그에서는 빠진다(2026-09-14 오너 지시)", () => {
+  // 2026-10-05 오너 시안 "자주 쓰는 도구만 4개 타일, 나머지는 리스트로" — 즐겨찾기 섹션(그리드)이 타일 4칸 + '즐겨찾기 N개 더' 리스트로 합쳐졌다.
+  it("'자주 쓰는 도구' 타일 4칸 = 즐겨찾기 앞 4개(없으면 기본 4개) · '전체' 카탈로그에서는 빠지고 · 5번째 즐겨찾기부터는 리스트로 남는다", () => {
     expect(TOOLS_PANEL).toContain("export const FEATURED_KEYS = ['spot', 'range', 'pushfold', 'gto'] as const");
     for (const k of ['spot', 'range', 'pushfold', 'gto']) expect(entries.some((e) => e.key === k), `${k} 가 TOOLS 에 없다`).toBe(true);
-    // 전체 보기에서만 위로 빼고 카탈로그에서 뺀다 — 갈래·검색 중에는 제 자리로
-    expect(TOOLS_PANEL).toContain("!(lane === 'all' && FEATURED_SET.has(t.key))");
-    expect(TOOLS_PANEL).toContain("{!hits && lane === 'all' && (");
+    // 타일 원천: 즐겨찾기가 있으면 앞 4개, 없으면 기본 4개. 나머지 즐겨찾기는 버리지 않는다.
+    expect(TOOLS_PANEL, '타일은 즐겨찾기 먼저 + 기본 4개로 채운다(중복 제외) — 별 하나로 칸이 반쪽이 되면 안 된다').toMatch(/const tileTools = \[\.\.\.favTools, \.\.\.FEATURED_KEYS\.map\([^\n]*\)\]\s*\.filter\(\(t, i, a\) => a\.findIndex\(\(x\) => x\.key === t\.key\) === i\)\.slice\(0, 4\);/);
+    expect(TOOLS_PANEL).toContain('const extraFavs = favTools.slice(4);');
+    expect(TOOLS_PANEL, '5번째 즐겨찾기부터 그릴 자리가 없다 — 별을 눌러 둔 도구가 사라진다').toMatch(/\{!hits && extraFavs\.length > 0 && \(/);
+    // 타일은 '전체' 에서 서고, 즐겨찾기가 있으면 갈래를 골라도 남는다(예전 즐겨찾기 섹션의 '갈래와 무관' 동작)
+    expect(TOOLS_PANEL).toContain("const showTiles = lane === 'all' || favTools.length > 0;");
+    expect(TOOLS_PANEL).toContain('{!hits && showTiles && (');
+    // 전체 보기에서는 타일로 선 도구를 카탈로그에서 뺀다 — 갈래·검색 중에는 제 자리로
+    expect(TOOLS_PANEL).toContain("!(lane === 'all' && tileSet.has(t.key))");
     expect(TOOLS_PANEL).toContain('data-testid="tools-featured"');
     // 레인지 차트 대표 카드는 2026-09-14 오너 결정으로 뺐다 — 자주 쓰는 도구의 range 가 대신한다(되살리면 두 번 보인다)
     expect(TOOLS_PANEL).not.toContain("open('range')");
-    // 순서: 즐겨찾기 → 자주 쓰는 도구 → 카탈로그(lanepanel)
-    const fav = TOOLS_PANEL.indexOf('즐겨찾기 — 레인과 무관하게');
+    // 순서: 자주 쓰는 도구(타일) → 즐겨찾기 더(리스트) → 카탈로그(lanepanel, 리스트)
     const feat = TOOLS_PANEL.indexOf('data-testid="tools-featured"');
+    const more = TOOLS_PANEL.indexOf('data-testid="tools-fav-more"');
     const panel = TOOLS_PANEL.indexOf('data-tools-lanepanel=""');
-    expect(fav).toBeGreaterThan(0);
-    expect(feat).toBeGreaterThan(fav);
-    expect(panel).toBeGreaterThan(feat);
+    expect(feat).toBeGreaterThan(0);
+    expect(more).toBeGreaterThan(feat);
+    expect(panel).toBeGreaterThan(more);
+    // 카탈로그·검색 결과는 리스트 행, 타일은 '자주 쓰는 도구' 한 곳에서만
+    expect(TOOLS_PANEL.match(/\{grid\(/g)?.length, '타일 그리드는 자주 쓰는 도구 한 곳뿐이어야 한다').toBe(1);
+    expect(TOOLS_PANEL).toContain(': list(hits)');
+    expect(TOOLS_PANEL).toContain('{list(items)}');
   });
 
   it('매장 운영 5종은 그대로 내 매장 쪽이다', () => {
@@ -386,10 +397,16 @@ describe('NURI SPOT — GTO 홈 통합', () => {
       expect(PANEL, "'딜' 검색이 ICM 계산기에 닿아야 한다").toMatch(/key: 'icm'[^\n]*keywords: '[^']*딜 계산기/);
     });
 
-    it('제목 칸이 2줄 자리를 늘 예약한다 — 한 줄짜리가 섞여도 열이 맞는다', () => {
-      const card = [PANEL.slice(PANEL.indexOf('function ToolCard'), PANEL.indexOf('function ToolCard') + 3000)];
-      expect(card![0], '2줄 예약(min-h)이 없으면 카드마다 높이가 달라 열이 안 맞는다')
-        .toMatch(/min-h-\[2\.5em\]/);
+    // 2026-10-05 오너 "GTO 박스가 너무 커" — 2줄 자리 예약(모든 타일을 두 줄 높이로)을 걷었다(명세 typo-spacing-1005 §2-2).
+    //   남는 계약은 '같은 **행**의 두 칸은 같은 높이' 하나다: 그리드 행 stretch 가 칸(div)을 늘리고, 칸·버튼의 h-full 이
+    //   그 높이를 버튼까지 전달한다. 둘 중 하나라도 빠지면 한 줄 제목 칸만 낮아져 열이 안 맞는다.
+    //   제목 행간은 고정이라 타일 높이가 폭과 무관하게 정해진다(2026-10-05 타일 4칸 시안 뒤 text-sm/leading-5).
+    it('같은 행의 타일은 같은 높이다 — 칸과 버튼이 행 높이를 끝까지 받는다', () => {
+      const at = PANEL.indexOf('function ToolCard');
+      const card = PANEL.slice(at, at + 9000);
+      expect(card, '칸(div)이 h-full 이 아니면 버튼이 행 높이를 못 받는다').toMatch(/<div className="relative h-full">/);
+      expect(card, '버튼이 h-full 이 아니면 한 줄 제목 타일만 낮아진다').toMatch(/data-testid=\{testId\}[^>]*\n\s*className="[^"]*\bflex h-full w-full/);
+      expect(card, '제목 행간이 고정이어야 타일 높이가 폭마다 흔들리지 않는다').toMatch(/flex-col justify-center text-sm leading-5/);
     });
   });
 

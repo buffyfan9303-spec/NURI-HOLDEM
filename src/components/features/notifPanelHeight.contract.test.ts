@@ -36,7 +36,8 @@ describe('알림 패널 본문 — 두 탭 같은 높이 · 약 10행 상한 · 
     expect(body).toMatch(/max\(160px, \$\{Math\.max\(threads\.length \* NOTIF_ROW_REM\.thread, notifications\.length \* NOTIF_ROW_REM\.notif\)\}rem\)/);
     expect(body).toMatch(/maxHeight: NOTIF_BODY_MAX/);
     expect(body, '안 읽음 필터 목록(visible)으로 높이를 재면 전체⇄안 읽음에서 튄다').not.toMatch(/visible\.length/);
-    expect(SRC).toMatch(/const NOTIF_BODY_MAX = '44rem';/);
+    // 2026-10-05 글자 사다리 상향으로 알림 행 75 → 79px — 9행을 지키려 44 → 46rem.
+    expect(SRC).toMatch(/const NOTIF_BODY_MAX = '46rem';/);
   });
 
   it('두 목록이 모두 그릇 안에 있다(그릇이 알림 목록 뒤에서 닫힌다)', () => {

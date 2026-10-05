@@ -245,7 +245,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-ink-primary">{ev.title}</span>
-                        <span className={['shrink-0 rounded-chip border px-1.5 py-0.5 text-[10px] font-bold', b.cls].join(' ')}>{b.label}</span>
+                        <span className={['shrink-0 rounded-chip border px-1.5 py-0.5 text-2xs font-bold', b.cls].join(' ')}>{b.label}</span>
                       </div>
                       {/* 부제는 값이 있을 때만 — 빈 설명줄을 만들지 않는다(오너 지시). */}
                       {ev.subtitle && <p className="mt-0.5 truncate text-2xs text-ink-secondary">{ev.subtitle}</p>}

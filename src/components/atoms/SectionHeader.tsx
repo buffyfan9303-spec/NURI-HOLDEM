@@ -57,7 +57,7 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
     //   가운데에 섰다 → 390 실측 제목 글자 중심보다 액션(ⓘ·새로고침)이 5.44px 아래. 타일 mt-0.5(2.125px)는
     //   원래 34px 줄 안의 가운데 값이라 그대로 두고, 제목(min-h-8 flex)·액션(min-h-8)이 같은 34px 줄을 쓴다.
     //   lg 이상은 종전과 같다(행 lg:min-h-8 가운데 정렬 · 헤더 47.75px).
-    <header className="flex items-start justify-between gap-3 border-b border-border-subtle pb-3 lg:items-center">
+    <header className="line-fade flex items-start justify-between gap-3 border-b border-border-subtle pb-3 lg:items-center">
       {/* 2026-09-18 PC 실측(1280·1440·1920 동일): 예전 items-start + 타일 mt-0.5 는 타일 중심이 제목 글자 중심보다
           4.5px 아래였고, 행 높이를 글자(26.6)가 아니라 타일(31.9)이 잡아 제목 아래 5px 가 비었다. 액션이 있는
           포스터만 items-end 로 제목이 6.4px 내려가 헤더가 52 vs 45.6 으로 갈렸다. lg 부터 행을 액션 높이(h-8)로
@@ -86,7 +86,9 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
               그래서 칸은 34px 로 두어 글자 중심을 첫 줄 가운데(17px)에 앉히되, 아래쪽 여백을 `1lh − 2rem` 만큼 음수로 돌려 **줄 상자가
               종전 높이(글자 줄 높이) 그대로**이게 한다 → 헤더 높이 = 종전, 정렬 이득(타일·제목·액션 첫 줄 중심)은 그대로.
               lg 부터는 왼쪽 묶음이 min-h-8 가운데 정렬이라 음수 여백을 쓰지 않는다(PC 47.75px 계약). */}
-          <h2 className="flex min-h-8 items-center text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary max-lg:mb-[calc(1lh_-_2rem)]">{title}</h2>
+          {/* leading-6(24px): 2026-10-05 제목이 18px 고정(text-fluid-lg)이 되며 leading-tight(22.5)면 32px 칸 안 줄 상자가 4.75px 소수 위치라
+              글자 중심이 타일 중심과 0.75px 어긋났다(e2e pc-store-regression '390'). 24 면 위아래 4px 정수로 앉는다. */}
+          <h2 className="flex min-h-8 items-center text-fluid-lg font-bold leading-6 tracking-tight text-ink-primary max-lg:mb-[calc(1lh_-_2rem)]">{title}</h2>
           {/* 설명문 행간은 §T1 t-desc(12.75/19.13 = 1.5배) 한 값으로.
               leading-snug(17.53px)는 한글 두 줄이 붙어 보였고, 같은 12.75px 설명문이
               화면마다 17 / 17.53 두 값으로 갈려 있었다(1440 실측). break-keep 은

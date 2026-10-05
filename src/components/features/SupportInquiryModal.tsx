@@ -88,8 +88,8 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
             : <ul className="space-y-2">{list.map((q) => (
                 <li key={q.id} className="rounded-aura border card-aura p-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{q.category}</span>
-                    <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>
+                    <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{q.category}</span>
+                    <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>
                       {q.status === 'answered' ? '답변 완료' : '답변 대기'}
                     </span>
                     <span className="ml-auto text-2xs text-ink-muted">{q.createdAt.slice(0, 10)}</span>

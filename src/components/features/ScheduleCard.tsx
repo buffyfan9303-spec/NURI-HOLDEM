@@ -396,9 +396,9 @@ function Metric({ label, value, tone, title }: { label: string; value: string; t
   title?: string }) {
   return (
     <div className="min-w-0 sm:min-w-18" title={title}>
-      {/* D6(2026-09-29): px → rem(`calc(Nrem/17)` = 루트 17px 에서 정확히 N px — 디자인 크기 불변, 루트 글자 크기를 따른다). */}
-      <div className="text-[calc(8.5rem/17)] font-bold uppercase leading-tight text-ink-muted wrap-anywhere min-[360px]:text-[calc(9rem/17)]">{label}</div>
-      <div className={`text-[calc(11rem/17)] font-extrabold leading-tight tracking-tight tabular-nums wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4 ${tone ?? 'text-ink-primary'}`}>{value}</div>
+      {/* 2026-10-05 G5(명세 typo-spacing-1005): 8.5·11px 고정값을 사다리(2xs=12 · 360 이상 값 13)로 — 11px 미만 금지. */}
+      <div className="text-2xs font-bold uppercase leading-tight text-ink-muted wrap-anywhere">{label}</div>
+      <div className={`text-2xs font-extrabold leading-tight tracking-tight tabular-nums wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4 ${tone ?? 'text-ink-primary'}`}>{value}</div>
     </div>
   );
 }
@@ -513,17 +513,17 @@ function ListCard({
           pubName={schedule.pubName}
           region={schedule.region}
           wrap
-          sizeCls="text-[0.75rem] min-[360px]:text-[0.6875rem]"
+          sizeCls="text-2xs"
           onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
         />
-        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
         {rating && rating.count > 0 && (
-          <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>
+          <span className="text-2xs tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>
             ★{rating.avg.toFixed(1)}
           </span>
         )}
-        {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
-        {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
+        {distanceKm != null && <span className="text-2xs tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
+        {(reserveCount ?? 0) > 0 && <span className="text-2xs tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
       </div>
 
       {/* ② 2행 — 대회명(굵고 밝게). 등급 배지는 여기 없다 — 오른쪽 칸으로 옮겼다(아래 ④).
@@ -560,7 +560,7 @@ function ListCard({
           ⚠ 종전 주석의 "1줄로 강제하지 마라"(2026-09-12)는 **입력 상한이 없던 시절**의 판단이다.
             지금은 12자 상한이 생겨 '한 줄에 다 보인다' 가 기본이고, ellipsis 는 legacy 전용 안전망이다.
           ⚠ grade 배지는 여기서 뺐다 — 아래 우측 덩어리(하트가 있던 자리)로 옮겼다. */}
-      <h3 className="min-w-0 line-clamp-1 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4"
+      <h3 className="min-w-0 line-clamp-1 break-keep text-sm font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere"
         title={schedule.title}>
         {titleWithoutGtd(schedule.title, !!prize)}
       </h3>
@@ -640,7 +640,7 @@ function ListCard({
             · `grade` 가 없으면 빈 자리도 만들지 않는다(gap 이 남지 않게 조건부 렌더). */}
         {grade && (
           <span data-testid="schedule-grade-badge"
-            className="col-start-1 row-start-1 mb-0.5 justify-self-end rounded-badge bg-surface-high px-1 text-[10px] font-extrabold leading-none text-ink-secondary">
+            className="col-start-1 row-start-1 mb-0.5 justify-self-end rounded-badge bg-surface-high px-1 text-2xs font-extrabold leading-none text-ink-secondary">
             {grade}
           </span>
         )}
@@ -659,7 +659,7 @@ function ListCard({
               · 접근성: 숫자만 보면 무슨 비율인지 모른다 — 보조기술에는 말로 읽어 준다. */}
           {regInfo?.hasField && (
             <span data-testid="schedule-field-count"
-              className="text-[9px] font-bold leading-tight tabular-nums text-ink-muted min-[360px]:text-[10px]">
+              className="text-2xs font-bold leading-tight tabular-nums text-ink-muted">
               <span className="sr-only">생존 </span>{regInfo.alive}
               <span aria-hidden>/</span><span className="sr-only">명, 엔트리 </span>{regInfo.entries}
               <span className="sr-only">명</span>
@@ -914,7 +914,7 @@ function TimetableCard({
                (exp2 실측: 제목 y=0.8 → 매장 페이지). 그래서 제목·③줄·금액칸·로고에 **값이 안 바뀌는 `active:` 클래스**를 하나씩 둔다.
                `hover:` 는 tailwind future.hoverOnlyWhenSupported 라 터치 기기엔 규칙이 없다. 장식이 아니라 **터치 보정 후보 표시**다 — 지우면 재발한다.
                게이트: e2e/schedule-card-touch.spec.ts(터치, 수정 전 FAIL) · e2e/schedule-card-fit.spec.ts(마우스 · AA 24). */}
-        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere active:text-ink-primary"
+        <h3 className="min-w-0 break-keep text-sm font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere active:text-ink-primary"
           title={schedule.title}>
           {titleWithoutGtd(schedule.title, !!gtd)}
         </h3>
@@ -924,14 +924,14 @@ function TimetableCard({
             pubName={schedule.pubName}
             region={schedule.region}
             wrap
-            sizeCls="text-[0.6875rem]"
+            sizeCls="text-2xs"
           />
-          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
           {rating && rating.count > 0 && (
-            <span className="text-[10px] tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
+            <span className="text-2xs tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}
-          {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
-          {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
+          {distanceKm != null && <span className="text-2xs tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
+          {(reserveCount ?? 0) > 0 && <span className="text-2xs tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
         </div>
         {/* ③ 시작 · 레지마감(저장값 그대로 — regCloseRaw, 오너 2026-09-20 "계산하지 마라") · 라이브 상태.
             🔴 2026-09-26 오너 캡처 지적: "'레지 레벨 7'은 '레지마감 레벨 7'이어야 한다, 칸이 부족하면 '마감 레벨 7'로 해도 된다".
@@ -940,7 +940,7 @@ function TimetableCard({
               폰트 렌더링 편차 안전폭(+12px)을 두고 min-[450px] 를 기준으로 한다 — 그 아래(휴대폰 전체)는 항상 '마감',
               그 위(태블릿·PC, md: 17rem 상한)는 '레지마감'. 스크린리더는 폭과 무관하게 항상 '레지마감'을 듣는다(부모 aria-label, 자식은 aria-hidden — schedule-money 와 같은 정본). */}
         <p data-testid="schedule-start-group"
-          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary wrap-anywhere active:text-ink-secondary">
+          className="min-w-0 break-keep text-2xs leading-tight text-ink-secondary wrap-anywhere active:text-ink-secondary">
           <span data-testid="schedule-start-time" className="font-extrabold tabular-nums text-ink-primary">{schedule.startTime || '—'}</span>
           {' 시작'}
           {reg && <>{dot}<span data-testid="schedule-reg-close" aria-label={`레지마감 ${reg}`}><span aria-hidden><span className="hidden min-[450px]:inline">레지</span>마감 {reg}</span></span></>}
