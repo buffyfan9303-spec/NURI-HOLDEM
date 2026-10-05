@@ -2095,14 +2095,14 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
                     className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
-                      newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
+                      newType === t.code ? 'chip-on' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
                   className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
-                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
+                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'chip-on' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
                 <span className="flex-1" />
@@ -2787,7 +2787,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button type="button" onClick={onClick}
       className={['tap-y-44 min-h-[32px] text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
-        active ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
+        active ? 'chip-on' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
       {children}
     </button>
   );
@@ -2838,7 +2838,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
   const md = date.slice(5).replace('-', '/').replace(/^0/, '').replace('/0', '/');
   const live = games.filter((g) => !g.closed).length;
   const chip = (on: boolean) => ['inline-flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
-    on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ');
+    on ? 'chip-on' : 'border border-transparent bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ');
   return (
     <div data-ledger-games="" className="flex min-w-0 items-center gap-2">
       {/* 이름표는 스크롤 밖 — 고른 칩을 가운데로 끌어와도 '어느 날의 게임인가' 가 화면에 남는다 */}
@@ -3551,7 +3551,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {([['gtd', 'GTD (보장)'], ['entry', '엔트리 게임']] as const).map(([k, lbl]) => (
             <button key={k} type="button" onClick={() => setGameType(k)}
               className={['py-2 rounded-input border text-sm font-bold transition-colors',
-                gameType === k ? 'bg-accent-300/15 text-accent-300 border-accent-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{lbl}</button>
+                gameType === k ? 'chip-on' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{lbl}</button>
           ))}
         </div>
       </Field>
@@ -3576,7 +3576,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setIsAddon((v) => !v)}
             className={['px-3 py-2 rounded-input border text-sm font-bold transition-colors shrink-0',
-              isAddon ? 'bg-accent-300/15 text-accent-300 border-accent-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+              isAddon ? 'chip-on' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
             {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
           </button>
           {isAddon ? (
@@ -3872,7 +3872,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                     {discs.map((d, i) => (d.amount <= 0 || !discOk(i) ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
-                          discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                          discIdx === i + 1 ? 'chip-on' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
                         {d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만{d.level ? ` · ${d.level}LV` : ''}
                       </button>
                     )))}
@@ -3991,13 +3991,13 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                   <div className="flex flex-wrap gap-1">
                     <button type="button" onClick={() => setDiscIdx(0)}
                       className={['tap-y-44 min-h-[32px] rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
-                        discIdx === 0 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
+                        discIdx === 0 ? 'chip-on' : 'border-border-default text-ink-muted'].join(' ')}>
                       없음
                     </button>
                     {discs.map((d, i) => (d.amount <= 0 || !discOk(i) ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['tap-y-44 min-h-[32px] rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
-                          discIdx === i + 1 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
+                          discIdx === i + 1 ? 'chip-on' : 'border-border-default text-ink-muted'].join(' ')}>
                         {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                       </button>
                     )))}

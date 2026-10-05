@@ -1830,7 +1830,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             return (
               <button key={g.gameSeq} type="button" aria-pressed={on} onClick={() => onPick(g.gameSeq, g.title)}
                 className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
-                  on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                  on ? 'chip-on' : 'border border-transparent bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                 <span>{label(g.gameSeq)}</span>
                 {/* ⚠ 2026-09-14 실측(1440·1280, 게임 4개): 칩 하나가 192~236px 라 레일이 1012 / 948 로 넘쳐
                     '+ 새 게임' 버튼이 컨테이너 밖으로 나갔다(오버레이 스크롤바 환경에선 더 있다는 단서가 없다).
@@ -3330,7 +3330,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                           <button key={k} type="button" onClick={() => void toggleInviteGrant(iv, k)}
                             aria-pressed={on}
                             className={['hit shrink-0 text-2xs font-bold px-2 py-1.5 rounded-badge border transition-colors',
-                              on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300 dark:text-accent-200'
+                              on ? 'chip-on'
                                  : 'border-border-subtle text-ink-muted'].join(' ')}>
                             {on ? `${label} ✓` : label}
                           </button>
@@ -3367,7 +3367,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                   const vouchBusy = vouchView === 'checking' || vouchView === 'changing';
                   const toneOf = (view: AccessView, on: boolean) =>
                     view === 'failed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40'
-                      : on ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40'
+                      : on ? 'chip-on'
                         // 미부여 글자: ink-muted 는 라이트 surface-float 위 4.39:1 (AA 미달, 2026-09-26 전체 디버깅 #5) → ink-secondary.
                         : 'bg-surface-float text-ink-secondary border-border-default';
                   return (

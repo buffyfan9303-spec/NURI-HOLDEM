@@ -114,7 +114,7 @@ export default function PostflopTrainer() {
         {(['all', ...ALL_CATS] as const).map((f) => (
           <button key={f} type="button" onClick={() => changeFilter(f)}
             className={[CHIP_HIT, 'h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors',
-              filter === f ? 'border-accent-400/60 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted hover:border-accent-400/40'].join(' ')}>
+              filter === f ? 'chip-on' : 'border-border-default bg-surface-high text-ink-muted hover:border-accent-400/40'].join(' ')}>
             {f === 'all' ? '전체' : CAT_LABEL[f]}
           </button>
         ))}

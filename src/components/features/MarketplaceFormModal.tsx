@@ -155,7 +155,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
                 className={[
                   'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-hidden',
                   category === o.id
-                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
+                    ? 'chip-on'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
@@ -204,12 +204,12 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
             </select>
             <button type="button" onClick={() => setShipping((v) => !v)}
               className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
-                shipping ? 'bg-accent-300/20 border-accent-300 text-accent-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
+                shipping ? 'chip-on' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
               비대면(택배)
             </button>
             <button type="button" onClick={() => setPickup((v) => !v)}
               className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
-                pickup ? 'bg-accent-300/20 border-accent-300 text-accent-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
+                pickup ? 'chip-on' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
               직거래
             </button>
           </div>

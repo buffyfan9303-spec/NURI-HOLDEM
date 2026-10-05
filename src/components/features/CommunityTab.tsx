@@ -1594,7 +1594,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
                 className={['shrink-0 whitespace-nowrap rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
-                  kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'chip-aura'].join(' ')}>
+                  kind === k ? 'chip-on' : 'chip-aura'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>
             ))}

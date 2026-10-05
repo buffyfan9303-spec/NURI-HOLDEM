@@ -108,14 +108,14 @@ export default function UnpaidCollectList({ items, hasPw, canManage, showGame = 
               <div role="radiogroup" aria-label="받을 항목" className="flex gap-1.5">
                 {([['all', '모두'], ['buyin', '바인만'], ['addon', '애드온만']] as const).map(([v, l]) => (
                   <button key={v} type="button" role="radio" aria-checked={part === v} onClick={() => setPart(v)}
-                    className={['btn-sm tap-y-44 flex-1 rounded-input border text-xs font-bold', part === v ? 'border-accent-400 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-secondary'].join(' ')}>{l}</button>
+                    className={['btn-sm tap-y-44 flex-1 rounded-input border text-xs font-bold', part === v ? 'chip-on' : 'border-border-default text-ink-secondary'].join(' ')}>{l}</button>
                 ))}
               </div>
             )}
             <div role="radiogroup" aria-label="받은 방법" className="flex gap-1.5">
               {METHODS.map((m) => (
                 <button key={m.v} type="button" role="radio" aria-checked={method === m.v} onClick={() => setMethod(m.v)}
-                  className={['btn-sm tap-y-44 flex-1 rounded-input border text-xs font-bold', method === m.v ? 'border-accent-400 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-secondary'].join(' ')}>{m.label}</button>
+                  className={['btn-sm tap-y-44 flex-1 rounded-input border text-xs font-bold', method === m.v ? 'chip-on' : 'border-border-default text-ink-secondary'].join(' ')}>{m.label}</button>
               ))}
             </div>
             {blocked ? (

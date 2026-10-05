@@ -453,11 +453,11 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
           <div className="flex gap-1.5">
             {[1, 2, 3].filter((n) => n <= max).map((n) => (
               <button key={n} type="button" onClick={() => setCountSafe(n)}
-                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === n ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>{n}T</button>
+                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === n ? 'chip-on' : 'border-border-default text-ink-secondary'}`}>{n}T</button>
             ))}
             {max > 3 && (
               <button type="button" onClick={() => setCountSafe(max)}
-                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === max ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>전량 {max}T</button>
+                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === max ? 'chip-on' : 'border-border-default text-ink-secondary'}`}>전량 {max}T</button>
             )}
           </div>
           <button type="button" onClick={() => setStep(plan.via === 'phone' ? 'phone' : 'confirm')}

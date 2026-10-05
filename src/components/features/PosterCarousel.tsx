@@ -278,8 +278,8 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
            가장 큰 높이로 함께 늘어난다** — 슬라이드마다 높이가 달라지지 않으면서, 글자 확대에는
            프레임이 같이 커져 잘리지 않는다(고정 h- 였다면 200%에서 글자가 잘린다). */
         className={[
-          // 포커스 링은 안쪽 ::after 로(z-10) — 바깥 2px 링은 스크롤 뷰포트(overflow-x-auto)가 잘랐고, 안쪽 outline 은 위에 깔린 글자 덮개(absolute)가 가렸다(#179 포커스 실측: 대비 1.0 → 1.34).
-          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px] focus-visible:after:pointer-events-none focus-visible:after:absolute focus-visible:after:inset-[3px] focus-visible:after:z-10 focus-visible:after:rounded-[inherit] focus-visible:after:ring-2 focus-visible:after:ring-focus focus-visible:after:content-[""]',
+          // 포커스 링은 안쪽 ::after 로(z-10) — 바깥 2px 링은 스크롤 뷰포트(overflow-x-auto)가 잘랐고, 안쪽 외곽선은 위에 깔린 글자 덮개(absolute)가 가렸다(#179 포커스 실측: 대비 1.0 → 1.34). 위·아래는 뷰포트 mask 페더(8px) 안쪽으로 9px — 페더에 걸린 변이 흐려졌다(r2 P3).
+          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px] focus-visible:after:pointer-events-none focus-visible:after:absolute focus-visible:after:inset-x-[3px] focus-visible:after:inset-y-[9px] focus-visible:after:z-10 focus-visible:after:rounded-[inherit] focus-visible:after:ring-2 focus-visible:after:ring-focus focus-visible:after:content-[""]',
           s.onClick ? '' : 'cursor-default',
         ].join(' ')}
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}

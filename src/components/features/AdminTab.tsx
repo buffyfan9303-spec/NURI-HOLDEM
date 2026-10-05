@@ -785,7 +785,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
         {BOARD_FILTER_CATEGORIES.map((c) => (
           <button key={c.id} type="button" onClick={() => setCat(c.id)} aria-pressed={cat === c.id}
             className={['shrink-0 whitespace-nowrap rounded-badge border px-2.5 py-1.5 text-xs font-semibold transition-colors',
-              cat === c.id ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              cat === c.id ? 'chip-on' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
             {c.label}
           </button>
         ))}

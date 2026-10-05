@@ -826,7 +826,7 @@ ${cards}
                     return (
                       <button key={q.id} type="button" onClick={() => togglePrint(q.id)}
                         className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
-                          on ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
+                          on ? 'chip-on' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
                         {on && <Icon name="check" size={11} className="shrink-0" />} {q.title}
                       </button>
                     );
