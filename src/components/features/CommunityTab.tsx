@@ -50,6 +50,8 @@ interface CommunityTabProps {
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
+  /** App 의 게시글 첫 조회가 끝났는가(스냅샷 포함). 게시판 뼈대 행 수를 정한다 — 끝났으면 그 개수, 0 이면 뼈대 대신 빈 상태. */
+  postsLoaded?: boolean;
   /** 게시글 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
   postsErr?: unknown;
   onRetryPosts?: () => void;
@@ -120,7 +122,7 @@ const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -535,6 +537,7 @@ function CommunityTab({
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-120">
             <FeedSectionM
               posts={boardPosts}
+              postsLoaded={postsLoaded}
               postsErr={postsErr}
               onRetryPosts={onRetryPosts}
               onOpenWrite={openWriteFree}
@@ -658,12 +661,13 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
+  posts, postsLoaded = false, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
   selectedId,
   emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
+  postsLoaded?: boolean;
   /** 목록 조회 실패(있으면 빈 상태 대신 오류·재시도를 보인다 — 실패를 '글 없음'으로 위장하지 않는다) */
   postsErr?: unknown;
   onRetryPosts?: () => void;
@@ -928,6 +932,15 @@ function FeedSection({
   // 상단 필터 줄(칩·🔍·⇅)을 그릴지 — 글이 있을 때 + **첫 조회가 끝나기 전**(M7-01 P2-1). 예전엔 글이 와야만 그려서(hasPosts)
   //   searchPosts 응답이 getPosts 보다 먼저 오면 목록이 44px 밀렸다. 조회가 0건·실패로 끝나면 예전처럼 줄이 사라진다.
   const showFilter = hasPosts || listSource.length > 0 || (!serverDone && serverErr == null && postsErr == null);
+  // 첫 로드 뼈대 행 수(M7-01, 리드 결정 2026-10-05) — 15행 고정이면 글이 3개뿐인 게시판에서 푸터가 12행만큼 끌려 올라온다.
+  //   App 조회가 끝났으면 그 개수(0 이면 뼈대 대신 빈 상태) → 아니면 이 기기에서 지난번 본 첫 페이지 행 수 → 둘 다 없으면 15.
+  const [lastRows] = useState(readBoardRows);
+  const skRows = postsLoaded ? Math.min(posts.length, 15) : (lastRows ?? 15);
+  const firstPage = q.trim() === '' && (!enableCategory || cat === 'all');
+  useEffect(() => {
+    // 첫 페이지 행 수가 확정되면(서버 끝 또는 15행 채움) 기억한다 — 다음 방문의 뼈대 높이.
+    if (firstPage && listSource.length > 0 && (serverDone || listSource.length >= 15)) writeBoardRows(listSource.length);
+  }, [firstPage, listSource.length, serverDone]);
   useEffect(() => {
     const el = catRailRef.current;
     if (!el) return;
@@ -1127,10 +1140,10 @@ function FeedSection({
               serverLoading 동안은 '결과 없음' 대신 조회 중임을 알린다. */}
           {postsErr != null && posts.length === 0 ? (
             <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
-          ) : serverLoading && !serverDone && q.trim() === '' && (!enableCategory || cat === 'all') ? (
-            // 첫 로드(검색·필터 없음)만 15행 뼈대 — 운영에선 15행 이상이 오는 경우가 대부분이라 자리를 미리 잡는다.
-            <BoardListSkeleton rows={visible} view={view} />
-          ) : serverLoading && !serverDone ? (
+          ) : serverLoading && !serverDone && firstPage && skRows > 0 ? (
+            // 첫 로드(검색·필터 없음)만 뼈대 — 행 수는 skRows(App 개수 → 지난 방문 → 15). App 이 0건을 확정했으면 아래 빈 상태로 간다.
+            <BoardListSkeleton rows={skRows} view={view} />
+          ) : serverLoading && !serverDone && !(firstPage && skRows === 0) ? (
             // 검색·카테고리 필터 중 — 결과 수를 모른다(대개 0~몇 건). 15행을 깔면 3건·0건일 때 푸터가 크게 끌려 올라온다(M7-01 P2-2) → 예전 짧은 카드.
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
           ) : serverErr != null ? (
@@ -1241,6 +1254,19 @@ function FeedSection({
  *  ⚠ PostRowCard.tsx 의 행·카드 클래스(min-h·패딩·테두리)를 바꾸면 여기도 같이 바꾼다 — e2e board-first-load-cls 가 어긋남을 잡는다.
  *  피드(카드) 모드는 가장 흔한 카드(본문 2줄·첨부 없음)의 줄 구조를 그대로 그린다 — 첨부·스팟 카드는 더 커서 그 글만 아래를 민다.
  *  첫 로드(검색·필터 없음)에서만 쓴다 — 검색·필터는 결과 수를 몰라 짧은 '찾는 중…' 카드(호출부 주석). */
+// 게시판 첫 페이지 행 수 기억(M7-01) — 다음 방문의 뼈대 높이. 스토리지 차단 환경에선 조용히 없음(15행 경로).
+const BOARD_ROWS_KEY = 'nuri:board-rows:v1';
+function readBoardRows(): number | null {
+  try {
+    const v = localStorage.getItem(BOARD_ROWS_KEY);
+    const n = v == null ? NaN : Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(15, Math.max(1, n)) : null;
+  } catch { return null; }
+}
+function writeBoardRows(n: number) {
+  try { localStorage.setItem(BOARD_ROWS_KEY, String(Math.min(15, Math.max(1, Math.round(n))))); } catch { /* 차단 환경 */ }
+}
+
 function BoardListSkeleton({ rows, view }: { rows: number; view: 'compact' | 'feed' }) {
   return (
     <div aria-busy="true" data-testid="board-list-loading" className="space-y-2">
@@ -1290,8 +1316,8 @@ function BoardListSkeleton({ rows, view }: { rows: number; view: 'compact' | 'fe
         </ul>
       )}
       {/* 실제 목록은 15행을 넘으면 아래에 '불러오는 중… (N개 남음)' 센티넬(InfiniteSentinel, min-h 44)이 붙는다 — 그 자리도 미리 잡는다.
-          운영 게시판은 대개 15행을 넘는다. 적게 오면 이 칸이 사라지며 줄어들 뿐이다(위로 끌어올리지 않는다). */}
-      <div aria-hidden className="skeleton min-h-[44px] rounded-input" />
+          행 수를 15 미만으로 안다면(App 개수·지난 방문) 센티넬도 없다 — 그 칸까지 잡으면 44px 만큼 끌려 올라온다. */}
+      {rows >= 15 && <div aria-hidden className="skeleton min-h-[44px] rounded-input" />}
       <p role="status" className="sr-only">찾는 중…</p>
     </div>
   );

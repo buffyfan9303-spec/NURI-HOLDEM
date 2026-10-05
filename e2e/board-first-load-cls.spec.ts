@@ -12,7 +12,7 @@
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
-const feed = () => Array.from({ length: 24 }, (_, i) => ({
+const feed = (n = 24) => Array.from({ length: n }, (_, i) => ({
   id: `m7-${i}`, user_id: `u-m7-${i}`, user_name: `작성자${i}`, user_role: 'user', user_color: '#888', user_avatar: null,
   content: `본문 ${i}`, created_at: new Date(Date.UTC(2026, 9, 4, 12) - i * 3600_000).toISOString(),
   like_count: 0, comment_count: 0, view_count: 0, category: 'free', title: `첫 로드 CLS 용 글 ${i}`, images: [],
@@ -114,4 +114,63 @@ test('🔴 M7-01 ③ 첫 로드는 상단 줄 자리 예약 + 뼈대, 검색 중
   await expect(board.getByTestId('board-list-loading'), '검색 중에 15행 뼈대가 떴다 — 결과가 적으면 푸터가 크게 올라온다').toHaveCount(0);
   gate.search = true;
   await expect(board.getByText('검색 결과가 없습니다')).toBeVisible({ timeout: 10_000 });
+});
+
+// ④ 리드 결정(2026-10-05) — 뼈대 행 수는 App 개수 → 이 기기의 지난 첫 페이지 행 수 → 15. 글 3개 게시판의 2회차 방문은 3행 뼈대라 푸터가 안 끌려 올라온다.
+test('🔴 M7-01 ④ 2회차 방문은 지난번 행 수(3)만큼 뼈대를 깔고 응답 때 밀리지 않는다 (390)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    try { localStorage.setItem('nuri:board-rows:v1', '3'); } catch { /* */ }
+    const w = window as unknown as { __shifts: { v: number; t: number }[] };
+    w.__shifts = [];
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean; startTime: number }[]) if (!e.hadRecentInput) w.__shifts.push({ v: e.value, t: e.startTime });
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
+  const gate: { at: number | null } = { at: null };
+  await page.route(/\/rest\/v1\/community_posts\?/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    const giveUp = Date.now() + 40_000;
+    while ((gate.at == null && Date.now() < giveUp) || (gate.at != null && Date.now() < gate.at)) await new Promise((res) => setTimeout(res, 20));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(feed(3)) }).catch(() => {});
+  });
+  await page.goto('/?tab=community');
+  await dismissOverlays(page);
+  await page.locator('[data-testid="sec-tab-board"]').first().waitFor({ timeout: 25_000 });
+  gate.at = Date.now() + 2000;
+  await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-board"]') as HTMLElement).click());
+  const board = page.locator('[data-sec="board"]');
+  await expect(board.getByTestId('board-list-loading')).toBeVisible({ timeout: 10_000 });
+  expect(await board.locator('[data-testid="board-list-loading"] li').count(), '지난번 3행인데 뼈대가 3행이 아니다 — 응답 때 푸터가 끌려 올라온다').toBe(3);
+  await page.waitForTimeout(150);
+  await page.evaluate(() => { (window as unknown as { __t0: number }).__t0 = performance.now(); });
+  await expect.poll(() => board.locator('[data-board-loaded] li[role="button"]').count(), { timeout: 15_000 }).toBe(3);
+  await page.waitForTimeout(1000);
+  const cls = await page.evaluate(() => { const w = window as unknown as { __t0: number; __shifts: { v: number; t: number }[] }; return w.__shifts.filter((s) => s.t >= w.__t0).reduce((a, s) => a + s.v, 0); });
+  expect(cls, `응답 도착 때 레이아웃 이동 ${cls.toFixed(4)}`).toBeLessThan(0.01);
+});
+
+// ⑤ App 조회가 0건을 확정했으면 뼈대 대신 바로 빈 상태 — 서버 이어받기 조회가 붙잡혀 있어도.
+test('🔴 M7-01 ⑤ 글 0개(App 조회 완료)면 뼈대 없이 빈 상태 카드 (390)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route(/\/rest\/v1\/community_posts\?/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    // App 의 getPosts(limit=50·끌올·고정)는 바로 0건, 게시판의 서버 이어받기(limit=15)는 붙잡는다
+    if (!/limit=15/.test(r.request().url())) return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    await new Promise((res) => setTimeout(res, 30_000));
+    return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }).catch(() => {});
+  });
+  await page.goto('/?tab=community');
+  await dismissOverlays(page);
+  await page.locator('[data-testid="sec-tab-board"]').first().waitFor({ timeout: 25_000 });
+  await page.waitForTimeout(1500); // App 의 게시글 조회(0건)가 끝날 시간
+  await page.evaluate(() => (document.querySelector('[data-testid="sec-tab-board"]') as HTMLElement).click());
+  const board = page.locator('[data-sec="board"]');
+  await expect(board.locator('[data-board-loaded="loading"]')).toBeVisible({ timeout: 10_000 });
+  await expect(board.getByText('첫 게시글을 남겨보세요')).toBeVisible({ timeout: 5_000 });
+  expect(await board.getByTestId('board-list-loading').count(), '글 0개가 확정됐는데 뼈대가 떴다').toBe(0);
 });
