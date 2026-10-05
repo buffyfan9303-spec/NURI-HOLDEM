@@ -615,7 +615,7 @@ ${cards}
                       <button key={d} type="button" aria-pressed={on} onClick={() => setExpiry(val)}
                         className={[
                           'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:rounded-chip max-md:px-0', CHIP_HIT,
-                          on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                          on ? 'chip-on'
                              : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                         ].join(' ')}>
                         {d === 0 ? '무기한' : `${d}일`}
@@ -897,7 +897,7 @@ ${cards}
                         <button key={k} type="button" aria-pressed={on} onClick={() => { setRangeErr(null); setStatRange(k); }}
                           className={[
                             'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:rounded-chip max-md:px-0', CHIP_HIT,
-                            on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                            on ? 'chip-on'
                                : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                           ].join(' ')}>
                           {label}
@@ -1113,7 +1113,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
                 <button key={n} type="button" aria-pressed={amount === n} onClick={() => setAmount(n)}
                   className={[
                     'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold tabular-nums transition-colors',
-                    amount === n ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                    amount === n ? 'chip-on'
                                  : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                   ].join(' ')}>
                   {n.toLocaleString()}장

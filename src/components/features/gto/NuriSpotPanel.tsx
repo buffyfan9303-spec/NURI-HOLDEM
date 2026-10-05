@@ -433,13 +433,14 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
             key={s.key} type="button" aria-current={on ? 'step' : undefined}
             onClick={() => onStep(s.key)}
             className={['flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-input border px-1 py-1 text-xs font-bold transition-colors',
-              on ? 'border-accent-300 bg-accent-300 text-white'
+              // 2026-10-05 4안(#179 P2-4): 선택 = 선택면 + 강조 글·경계(.chip-on) — 채운 파랑은 아래 [다음] 주 버튼 몫이라 겹치지 않게.
+              on ? 'chip-on'
                 : 'border-border-strong/60 bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
           >
             {/* 체크는 번호 옆 — 라벨 줄에 두면 320px 좁은 칸에서 라벨이 밀려 넘친다. */}
-            <span className={['flex items-center gap-0.5 tabular-nums', on ? 'text-white/80' : 'text-ink-muted'].join(' ')}>
+            <span className={['flex items-center gap-0.5 tabular-nums', on ? '' : 'text-ink-muted'].join(' ')}>
               {i + 1}
-              {confirmed.has(s.key) && <Icon name="check" size={10} className={['shrink-0', on ? 'text-white' : 'text-emerald-400'].join(' ')} aria-label="완료" />}
+              {confirmed.has(s.key) && <Icon name="check" size={10} className={['shrink-0', on ? '' : 'text-emerald-400'].join(' ')} aria-label="완료" />}
             </span>
             {/* '·' 뒤에서만 접힌다 — 좁은 칸에서 '게임·' / '자리' 두 줄 */}
             <span className="max-w-full break-keep text-center leading-tight">
@@ -498,7 +499,7 @@ function Pick<T extends string | number>({ value, options, onChange, fmt, end = 
           // 보이는 32px · 누르는 44px(CHIP_HIT) — 2026-09-24 전: 36px · 실효 46px
           // 2026-09-25 스윕: 사이징 칩 '2'·'3'·'4' 가 가로 26~29px 라 min-w-[44px] — 가로도 44. 이웃과 gap-x-1 이라 가로 확장은 겹쳐서 못 쓴다.
           className={[CHIP_HIT, 'min-h-[32px] min-w-[44px] rounded-input border px-2 text-xs font-bold transition-colors',
-            o === value ? 'border-accent-300 bg-accent-300 text-white'
+            o === value ? 'chip-on' // 선택면 + 강조 글·경계(#179 P2-4)
               : 'border-border-strong/60 bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
           {fmt ? fmt(o) : String(o)}
         </button>

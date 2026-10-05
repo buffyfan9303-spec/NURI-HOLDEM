@@ -55,6 +55,8 @@
   --color-surface-high: rgb(var(--surface-high));   /* 보조 면 — 비선택 칩·호버 */
   --color-surface-field: rgb(var(--surface-field)); /* 입력 지면(2026-10-05 4안) */
   --color-surface-select: rgb(var(--surface-select)); /* 선택면(2026-10-05 4안) */
+  --color-achieve: rgb(var(--achieve)); /* 업적 금색(가이드 §3 — 로고 금색·가격 강조와 구분) */
+  --color-focus: rgb(var(--focus)); /* 키보드 포커스 링 */
   --color-surface-float: rgb(var(--surface-float)); /* 드롭다운, 툴팁 */
   /* Accent: 진한 황동 한 가지(2026-10-04 오너 결정 'E+황동') — 주요 액션·활성·링크·포커스. 값·대비는 아래 :root/html.light 토큰 주석. */
   --color-accent-50: rgb(var(--accent-50));
@@ -1046,6 +1048,8 @@ video {
     --surface-float: 45 62 86;   /* #2D3E56 드롭다운/툴팁 */
     --surface-field: 19 30 46;   /* #131E2E 입력 지면 — 입력·검색·textarea(카드보다 한 단 들어간 면) */
     --surface-select: 36 59 98;  /* #243B62 선택면 — 날짜·자리·선택 상태 */
+    --achieve: 221 195 123;      /* #DDC37B 업적 금색 — 1위·입상·획득 업적만(high 7.3) */
+    --focus: 159 195 250;        /* #9FC3FA 포커스 링 — 채운 버튼 파랑(#355FA7)은 남색 지면 대비가 낮아 강조 글 단계를 쓴다(base 9.9 · mid 7.7) */
 
     --ink-primary:   237 243 250; /* #EDF3FA 본문 — base 15.9 */
     --ink-secondary: 183 199 220; /* #B7C7DC 보조 글 — base 10.6 · low 9.3 · high 7.8 */
@@ -1161,6 +1165,8 @@ video {
     --surface-float: 220 229 242; /* #DCE5F2 */
     --surface-field: 246 248 252; /* #F6F8FC 입력 지면 */
     --surface-select: 224 234 250; /* #E0EAFA 선택면 */
+    --achieve: 122 89 28;          /* #7A591C 업적 금색 — 가이드 #886321 에서 한 단 진하게: 1위 카드(high + 금색 8% 틴트) 위 4.44 → 4.88 · 흰 카드 6.2 */
+    --focus: 53 95 167;            /* #355FA7 포커스 링 — 지면 5.7 */
 
     --ink-primary:   34 53 78;    /* #22354E 본문 — base 11.6 · 흰 카드 12.6 */
     --ink-secondary: 70 92 120;   /* #465C78 보조 글(가이드 #4C6380 에서 한 단 진하게 — 선택 틴트 위 4.45 → 4.5↑) — base 6.5 · 흰 카드 7.0 · high 5.9 */
@@ -1170,7 +1176,7 @@ video {
 
     --border-subtle:  223 230 240; /* #DFE6F0 옅은 구분선 */
     --border-default: 200 211 228; /* #C8D3E4 장식 경계 — 카드 외곽·구분선(지면 대비 1.38 — e2e design-tokens 하한 1.35; 가이드 #CFDAEA 는 1.29) */
-    --border-strong:  124 142 168; /* #7C8EA8 입력 경계 — field 3.3 · 흰 카드 3.4 (≥3) */
+    --border-strong:  111 129 155; /* #6F819B 입력 경계 — 보조 면 #E6EDF7 3.37 · field 3.73 · 흰 카드 3.97 (≥3, #179 검토 P2-3: #7C8EA8 은 보조 면 위 2.9) */
 
     /* 강조(라이트) — 버튼 면 #355FA7(흰 글자 6.3), 글자 #355FA7(base 5.9 · 흰 카드 6.3). 200 은 라이트에선 비텍스트 틴트,
        글자로 쓰인 text-accent-200/100 은 아래 unlayered 오버라이드가 #2F5E9C(강조 글, base 6.1)로 교정한다. */
@@ -1323,7 +1329,7 @@ video {
   :focus-visible {
     /* v3 outline-none 과 같은 값(v4 의 outline-hidden 은 outline-style:none 이라 다르다) */
     outline: 2px solid transparent; outline-offset: 2px;
-    @apply ring-2 ring-accent-300 ring-offset-2 ring-offset-surface-base;
+    @apply ring-2 ring-focus ring-offset-2 ring-offset-surface-base;
   }
 
   /* 🔴 브라우저 기본 표면도 디자인이다 (2026-09-18).
@@ -1373,7 +1379,7 @@ video {
               그것만 명시한다 — transform 은 어떤 파생도 쓰지 않는다(전수 확인). */
            transition-[background-color,border-color,color,opacity]
            duration-[var(--dur-fast)] [transition-timing-function:var(--ease)] active:opacity-80
-           focus-visible:ring-2 focus-visible:ring-accent-300;
+           focus-visible:ring-2 focus-visible:ring-focus;
     font-size: 0.9375rem; line-height: 1; /* 2026-10-05 G4: 14 → 15(text-sm 과 같은 단) · leading-none */
     &:focus-visible { outline: 2px solid transparent; outline-offset: 2px; } /* v3 focus-visible:outline-none */
   }
@@ -1543,7 +1549,8 @@ video {
      (한 단계 밝은 면 + 경계선 + 보조 글자). 선택된 칩만 아래 .chip-on 이 황동 틴트 + 밝은 황동 테두리로 강조한다
      (다크 accent-200 테두리 vs 카드 9.02 · 라이트 accent-300 5.64 — 비텍스트 3:1). */
   .chip-aura { background-color: rgb(var(--surface-high)); border: 1px solid rgb(var(--border-default)); color: rgb(var(--ink-secondary)); }
-  .chip-on { background-color: rgb(var(--accent-300) / 0.14); border: 1px solid rgb(var(--accent-200)); color: rgb(var(--accent-200)); }
+  /* 2026-10-05 4안(#179 P2-4): 선택 = 선택면(#243B62) + 강조 글·경계(#9FC3FA) — 비선택(high #253449)과 면·경계·글자 세 가지로 갈린다. 채운 파랑은 주 버튼 몫. */
+  .chip-on { background-color: rgb(var(--surface-select)); border: 1px solid rgb(var(--accent-200)); color: rgb(var(--accent-200)); }
   /* 🔴 홈 퀴액션 카드 배경 (2026-09-18 오너 지시: "출석체크, 제휴혜택 뒤에는 이미지 넣어줘")
      두 격이다 — 오너 레퍼런스(code.html 152행)의 **우상단 블러 원** + 직접 제작한 **SVG 모티프**.
      · 블러 원은 시안 그대로: `-right-6 -top-6 w-16 h-16 blur-xl`.
@@ -1603,7 +1610,7 @@ video {
      헤더 안은 스크롤 넘침 게이트와 무관하고 56px 안에서 위아래 8px 씩 들어간다(아이콘 36px 은 4px 씩). */
   [data-stack-header] .tap-44::before { inset: min(0px, calc((100% - 44px) / 2)) 0; }
   html.light .chip-on { background-color: rgb(var(--surface-select)); border-color: rgb(var(--accent-300)); color: #2F5E9C; }
-  @media (hover: hover) { .chip-aura:hover { border-color: rgb(var(--border-strong)); color: rgb(var(--ink-primary)); } .chip-on:hover { background-color: rgb(var(--accent-300) / 0.22); } }
+  @media (hover: hover) { .chip-aura:hover { border-color: rgb(var(--border-strong)); color: rgb(var(--ink-primary)); } .chip-on:hover { background-color: color-mix(in srgb, rgb(var(--surface-select)) 88%, rgb(var(--accent-200))); } }
   /* (그라데이션 글자 — 2026-10-04 'E+황동'으로 삭제. 제목은 단색 text-ink-primary 다) */
 
   /* 홈·랜딩 히어로 오로라 워시(구 --grad-aurora — 2026-09-29 변수도 삭제). 전 레이어 투명 종단 + px 고정 크기라
@@ -1618,7 +1625,7 @@ video {
            rounded-input px-3 py-2 min-h-10
            border border-border-strong
            placeholder:text-ink-muted
-           focus:border-accent-300 focus:ring-1 focus:ring-accent-300
+           focus:border-accent-300 focus:ring-1 focus:ring-focus
            transition-colors duration-150;
     font-size: 0.9375rem; line-height: 1.375rem; /* text-sm(2026-10-05 G4: 14/20 → 15/22). 터치 기기는 아래 규칙이 16px 로 올린다 */
     &:focus { outline: 2px solid transparent; outline-offset: 2px; } /* v3 focus:outline-none */
@@ -2016,6 +2023,9 @@ html.light .text-slate-200 { color: #475569; }
    "라이트 테마 텍스트용 딥 레드" 라고 적어 뒀다). 새 색을 만들지 않고 그 값을 쓴다.
    실측 — danger/10 틴트 위 3.97 → **5.36** · 흰 카드 4.59 → 6.20 · 지면 4.28 → 5.78. */
 html.light .text-danger-light { color: #B82640; }
+/* 2026-10-05 #179 P3: 홈 날짜 칩은 휠 피커 투명도(최소 0.8, 오너 M-10)가 걸린다 — 라이트 보조 글(#465C78)이 흰 카드 위 4.33 이 됐다.
+   보조색 계열을 한 단 진하게(#384C66 — 0.8 에서 흰 카드 5.06 · 지면 4.77). 선택일은 본문색이라 제외. */
+html.light [data-date-pill][aria-pressed="false"], html.light [data-date-pill][aria-pressed="false"] .text-ink-secondary { color: rgb(56 76 102); }
 /* 2026-10-05 4안: 다크 남색 면(mid #1F2D42)에서 #F6465D 글자가 3.94 — 글자만 한 단 밝게(#FF6B7D: mid 5.06 · high 4.59). 배경 채움(bg-danger + 흰 글자)은 그대로. */
 html:not(.light) .text-danger { color: #FF6B7D; }
 /* v9(2026-09-15 실측): 위 규칙은 `text-danger-light` 만 겨냥해 **`text-danger` 단독은 라이트에서 그대로 #F6465D** 였다.
@@ -2680,7 +2690,7 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
 
 /* ── PC 키보드 포커스 링(Linear) — Tab 키 순회 시에만 인디고 링, 마우스 클릭엔 안 뜸 ── */
 :focus-visible {
-  outline: 2px solid rgb(var(--accent-300) / 0.9) !important;
+  outline: 2px solid rgb(var(--focus) / 0.9) !important; /* 2026-10-05 #179 P2-2: 다크는 강조 글 단계(#9FC3FA) — 채운 파랑은 남색 지면 위 3:1 미달 */
   outline-offset: 2px;
   border-radius: 6px;
 }

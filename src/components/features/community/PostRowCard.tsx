@@ -160,7 +160,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
       style={spotV ? { containIntrinsicSize: `auto ${SPOT_CARD_CIS}px` } : undefined}
       className={[
         // v2 아우라 카드(2026-09-02): card-elev+단색 → card-aura(반투명 면·6% 헤어라인·상단 하이라이트). 선택 상태는 바이올렛 틴트가 덮는다.
-        'cv-row-lg min-h-(--row-h-lg) card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300/60',
+        'cv-row-lg min-h-(--row-h-lg) card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus/60',
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
           : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',

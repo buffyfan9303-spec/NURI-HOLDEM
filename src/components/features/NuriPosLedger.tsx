@@ -3629,7 +3629,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                 <button key={name} type="button" aria-pressed={on} onClick={() => toggleDealer(name)}
                   className={[
                     'min-h-[32px] rounded-full border px-2.5 text-xs font-bold transition-colors',
-                    on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                    on ? 'chip-on'
                        : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                   ].join(' ')}>
                   {on && <span aria-hidden className="mr-1">✓</span>}{name}

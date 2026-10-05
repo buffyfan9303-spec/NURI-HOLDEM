@@ -1215,7 +1215,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                             <div className="flex items-center gap-1">
                               <span className="shrink-0 text-2xs text-ink-muted">바인</span>
                               <input type="number" inputMode="numeric" value={payAmt || ''} onChange={(e) => setPayAmt(Math.max(0, Number(e.target.value) || 0))}
-                                className="min-w-0 flex-1 rounded-[5px] border border-border-default bg-surface-high px-1.5 py-1 text-xs tabular-nums text-ink-primary" placeholder="금액" />
+                                className="min-w-0 flex-1 rounded-[5px] border border-border-strong bg-surface-field px-1.5 py-1 text-xs tabular-nums text-ink-primary" placeholder="금액" />
                               <span className="shrink-0 text-2xs text-ink-muted">원</span>
                               <button type="button" onClick={() => setSplitOpen((v) => !v)} className={['shrink-0 rounded-[5px] px-1.5 py-1 text-2xs font-bold', splitOpen ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary'].join(' ')}>분할</button>
                             </div>
@@ -1234,7 +1234,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                                     <label key={m} className="flex flex-col gap-0.5">
                                       <span className="text-2xs text-ink-muted">{PM_LABEL[m]}</span>
                                       <input type="number" inputMode="numeric" value={splitVals[m] || ''} onChange={(e) => setSplitVals((s) => ({ ...s, [m]: Math.max(0, Number(e.target.value) || 0) }))}
-                                        className="w-full rounded-[5px] border border-border-default bg-surface-high px-1 py-1 text-2xs tabular-nums text-ink-primary" placeholder="0" />
+                                        className="w-full rounded-[5px] border border-border-strong bg-surface-field px-1 py-1 text-2xs tabular-nums text-ink-primary" placeholder="0" />
                                     </label>
                                   ))}
                                 </div>

@@ -835,7 +835,7 @@ function HeroSection({
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
           aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
-          className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-300"
+          className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />
       )}
       {slides.length > 1 && (

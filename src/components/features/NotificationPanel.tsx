@@ -593,7 +593,7 @@ export default function NotificationPanel({
                 maxLength={2000}
                 placeholder="쪽지 입력…"
                 aria-label="쪽지 입력"
-                className="min-w-0 flex-1 resize-none rounded-input border border-border-subtle bg-surface-high/60 px-3 py-2 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
+                className="min-w-0 flex-1 resize-none rounded-input border border-border-strong bg-surface-field px-3 py-2 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
               />
               <button
                 type="button"
@@ -621,7 +621,7 @@ export default function NotificationPanel({
                   autoFocus
                   placeholder="받는 사람 닉네임 검색"
                   aria-label="받는 사람 닉네임 검색"
-                  className="w-full rounded-input border border-border-subtle bg-surface-high/60 py-2 pl-8 pr-3 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
+                  className="w-full rounded-input border border-border-strong bg-surface-field py-2 pl-8 pr-3 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
                 />
               </div>
             </div>

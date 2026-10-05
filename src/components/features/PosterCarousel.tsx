@@ -278,7 +278,8 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
            가장 큰 높이로 함께 늘어난다** — 슬라이드마다 높이가 달라지지 않으면서, 글자 확대에는
            프레임이 같이 커져 잘리지 않는다(고정 h- 였다면 200%에서 글자가 잘린다). */
         className={[
-          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px]',
+          // 포커스 링은 안쪽 ::after 로(z-10) — 바깥 2px 링은 스크롤 뷰포트(overflow-x-auto)가 잘랐고, 안쪽 outline 은 위에 깔린 글자 덮개(absolute)가 가렸다(#179 포커스 실측: 대비 1.0 → 1.34).
+          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px] focus-visible:after:pointer-events-none focus-visible:after:absolute focus-visible:after:inset-[3px] focus-visible:after:z-10 focus-visible:after:rounded-[inherit] focus-visible:after:ring-2 focus-visible:after:ring-focus focus-visible:after:content-[""]',
           s.onClick ? '' : 'cursor-default',
         ].join(' ')}
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
@@ -316,7 +317,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 alt=""
                 width={960}
                 height={640}
-                className="pointer-events-none absolute -right-3 -top-10 h-[240px] w-[360px] object-contain opacity-[.72] md:-top-14 md:h-[280px] md:w-[420px]"
+                className="pointer-events-none absolute right-0 -top-10 h-[240px] w-[360px] object-contain opacity-[.72] md:-top-14 md:h-[280px] md:w-[420px]"
                 loading={i < 2 ? 'eager' : 'lazy'}
                 fetchPriority={i === 0 && !dup ? 'high' : 'low'}
                 decoding="async"
@@ -429,7 +430,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 · 화살표는 z-10 으로 알약 위에 그린다(아이콘이 알약에 덮이지 않게), 칩은 pointer-events-none(누름은 화살표가 받는다). */}
             <div className="pointer-events-auto relative flex h-[44px] items-center">
               <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
-                className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white">
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-left" size={13} aria-hidden />
               </button>
               <span data-testid="home-banner-counter" role="img" aria-label={`배너 ${n}장 중 ${idx + 1}번째`}
@@ -442,7 +443,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                   className="hidden" />
               ))}
               <button type="button" onClick={() => go(1)} aria-label="다음 배너"
-                className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white">
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-right" size={13} aria-hidden />
               </button>
             </div>

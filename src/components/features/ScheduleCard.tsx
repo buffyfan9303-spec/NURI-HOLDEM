@@ -984,7 +984,7 @@ function TimetableCard({
       <button type="button" data-testid="schedule-venue-link"
         aria-label={`${schedule.pubName} 매장 페이지`}
         onClick={() => onVenueClick(venueId)}
-        className="absolute left-3 top-1/2 h-[56px] w-[56px] -translate-y-1/2 rounded-[12px] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300" />
+        className="absolute left-3 top-1/2 h-[56px] w-[56px] -translate-y-1/2 rounded-[12px] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus" />
     )}
     </div>
   );

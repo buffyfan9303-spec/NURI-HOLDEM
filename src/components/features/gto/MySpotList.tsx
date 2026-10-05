@@ -158,7 +158,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
                 {/* 🔴 2026-09-25 스윕: 여기엔 max 가 없어 미래 날짜가 그대로 PATCH 됐다 — max=오늘 + 저장 전 clampSpotDate(접힌 값을 칸에도 되돌려 쓴다). */}
                 <input id={`spot-date-${r.id}`} type="date" defaultValue={r.playedOn ?? kstDateOf(r.createdAt)} max={kstToday()}
                   onChange={(e) => { if (!e.target.value) return; const d = clampSpotDate(e.target.value); if (d !== e.target.value) e.target.value = d; cb.current.setDate(r.id, d); }}
-                  className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
+                  className="h-[36px] min-w-0 flex-1 rounded-input border border-border-strong bg-surface-field px-2 text-xs text-ink-primary" />
               </div>
               {ai.has(r.id) && (
                 // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
