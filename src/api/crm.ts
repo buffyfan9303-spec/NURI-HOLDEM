@@ -13,6 +13,7 @@ export async function getCustomerProfile(venueId: string, name: string): Promise
   return data ? { name, birthday: data.birthday ?? null, phone: data.phone ?? null, memo: data.memo ?? null } : null;
 }
 
+// 20261005b: 클라는 (venue_id,name,birthday,phone,memo,updated_at) 칸만 쓸 수 있다 — user_id·방문 집계는 서버만(customerProfilesInsertGuard 계약).
 export async function saveCustomerProfile(venueId: string, name: string, p: { birthday?: string | null; phone?: string | null; memo?: string | null }): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('customer_profiles').upsert(
@@ -22,7 +23,7 @@ export async function saveCustomerProfile(venueId: string, name: string, p: { bi
   if (error) throw error;
 }
 
-/** 손님 정보(생일·연락처·메모·방문 집계) 삭제 — 실제 DELETE. 서버 규칙: customer_profiles_pos_all = can_manage_pos(venue_id).
+/** 손님 정보(생일·연락처·메모·방문 집계) 삭제 — 실제 DELETE. 서버 규칙: customer_profiles_pos_delete = can_manage_pos(venue_id)(20261005b 전에는 pos_all).
  *  장부·쿠폰은 매장 기록이라 지우지 않는다(오너 2026-09-25 DATA-RETENTION). 0행(권한 없음·이미 지워짐)은 실패로 올린다. */
 export async function deleteCustomerProfile(venueId: string, name: string): Promise<void> {
   if (IS_MOCK) return;
@@ -39,7 +40,8 @@ export async function getCustomerAliases(venueId: string): Promise<CustomerAlias
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ alias: r.alias, userId: r.user_id, display: r.profiles?.nickname || r.profiles?.name || '회원' }));
 }
-/** 장부 이름을 회원에 연결(동명 미연결 프로필 방문수 병합). can_manage_pos 강제(RPC). */
+/** 장부 이름을 회원에 연결(동명 미연결 프로필 방문수 병합). can_manage_pos 강제(RPC).
+ *  20261005b: 이 매장에 출석·예약·출석 요청·참가 신청 기록이 있는 회원만 — 아니면 서버 문장으로 거절된다. */
 export async function linkCustomerAlias(venueId: string, alias: string, userId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('link_customer_alias', { p_venue_id: venueId, p_alias: alias, p_user_id: userId });
