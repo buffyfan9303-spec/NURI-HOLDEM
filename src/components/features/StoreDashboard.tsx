@@ -1065,7 +1065,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           onRetry={() => { setLoading(true); reload(); }} />
       ) : (
         <button type="button" onClick={gotoTodayLedger}
-          className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
+          className="section-alt surface-grad block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
@@ -1329,7 +1329,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           같은 특이도로 있어 겹친 그림자가 홑 inset 1줄로 덮인다(2026-09-04 GTO 탭 24장 실측).
           내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
-        <section className="rounded-aura border card-aura p-3">
+        <section className="surface-grad rounded-aura border card-aura p-3">
           {/* 감사 D-1(오너 지적) — items-baseline 이면 제목 h3 가 아이콘 든 flex 라 기준선이 아이콘 바닥이 되어 '통계 →' 가 3.1px 아래로 처졌다 */}
           <div className="flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
@@ -1843,7 +1843,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {/* F14 — 조회가 죽으면 이 표는 통째로 사라졌다('오늘 게임이 없다'와 구분 불가).
           실패했으면 섹션을 남기고 이유·재시도를 보인다. 실패했는데 옛 행이 남아 있으면 개수는 '—'다. */}
       {caps.ledger && (todayGames.length > 0 || !!rangeErr) && (
-        <section className="rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
+        <section className="surface-grad rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
           {/* 제목은 안 쪼개지고(shrink-0), 안내문(274px)은 폭이 모자라면 아랫줄로 내린다(flex-wrap).
               종전엔 제목 p 가 안내문에 밀려 390px 에서 '오늘/게임/· 4개' 세 줄로 찢어졌다(2026-09-18 실측). */}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">

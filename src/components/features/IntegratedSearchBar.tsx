@@ -1,6 +1,6 @@
 /* ============================================================================
  * IntegratedSearchBar — 검색 + 날짜 레일(sticky) + 필터 칩 레일(한 줄)
- *  1) 필터 = 균일 칩 한 줄 레일(APIS·FotMob 문법, §20.1). 모든 칩 h-9 단일 언어.
+ *  1) 필터 = 균일 칩 한 줄 레일(APIS·FotMob 문법, §20.1). 모든 칩 h-8 단일 언어(2026-10-05 G9: 36 → 32).
  *     - GTD/MTT/대회: aria-pressed 토글 칩(재탭=해제 → 전체). 단일 tour 상태에서
  *       SearchState 의 format/gtdOnly/competitionOnly 를 파생(App 계약 불변).
  *     - 지역/등급/예산: FilterSelectChip — 투명 오버레이 <select> 로 네이티브 피커.
@@ -83,15 +83,15 @@ const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
   { id: 'comp', label: '대회' },
 ];
 
-// ── 필터 칩 공용 문법 — 레일의 모든 칩이 같은 높이(h-9)·라운드·서체를 공유한다 ──
+// ── 필터 칩 공용 문법 — 레일의 모든 칩이 같은 높이(h-8 = 32px, 2026-10-05 G9 '필터 칩 32 · 좌우 12')·라운드·서체를 공유한다 ──
 // (예전 세그먼트 박스 3개가 각자 내용 폭으로 끝나 '칸이 제각각'으로 읽히던 문제의 반대 원칙)
 // v4.1(오너): 알약(rounded-badge)은 안이 답답해 보인다 → 클릭 칩은 10px(rounded-chip). 카운트 배지(아래)는 알약 유지.
-const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-chip border border-transparent px-3.5 text-xs font-bold leading-none transition-colors';
+const CHIP_BASE = 'inline-flex h-8 shrink-0 items-center rounded-chip border border-transparent px-3 text-xs font-bold leading-none transition-colors';
 const CHIP_ON = 'bg-accent-300/15 text-accent-300';
 // P1-5(오너 진단 '선 노이즈'): 1px 테두리 대신 배경보다 한 톤 밝은 면으로 그룹화
 const CHIP_OFF = 'bg-surface-high text-ink-secondary hover:bg-surface-float/70';
 /** D4(2026-09-29): 보이는 칩(38.25px)은 그대로, 누름면만 세로 44px — 위로만 넓힌다(`.tap-44`, index.css).
- *  칩 레일은 가로 스크롤 상자라 넘침이 잘리지만, 확장분(≤ 7.75px)은 레일의 위 안쪽 여백(pt-2 = 8.5px) 안에 들어간다. */
+ *  칩 레일은 가로 스크롤 상자라 넘침이 잘리지만, 확장분(32px 칩이면 12px + 테두리 1)은 레일의 위 안쪽 여백(pt-[13px]) 안에 들어간다. */
 const CHIP_HIT = 'tap-44';
 
 // 단일선택 축(지역/등급/예산)용 드롭다운 칩 — 닫힌 칩은 짧은 라벨('지역')을, 값이 있으면
@@ -413,13 +413,13 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
       {/* ── 필터 칩 레일 — 균일 칩 '한 줄'(APIS·FotMob 문법, §20.1) ─────────────
            예전엔 세그먼트 박스 3개 + 드롭다운이 flex-wrap 으로 4줄로 꺾여(각 박스가
            내용 폭대로 제각각 끝남) 필터가 화면 2/3를 먹었다. 규칙:
-           · 모든 칩 h-9 · rounded-badge · 같은 서체/보더 — 시각 언어 하나
+           · 모든 칩 h-8 · rounded-badge · 같은 서체/보더 — 시각 언어 하나
            · 고빈도 이지선다(GTD/MTT/대회)는 즉시 토글 칩(탭 1회, 재탭 = 해제 → 전체)
            · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
              = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
-      {/* pt-[9px]: 칩(h-9 = 36px, 테두리 1px)의 누름면은 padding 상자 위로 10px = 칩 위 9px 까지 나간다. 이 줄은 가로 스크롤러라
-          위 여백이 그보다 작으면 잘린다 — 루트 16px 에서 pt-2(8px)는 1px 모자라 select·검색 칩 실효가 43 이었다(2026-10-04). */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-[9px] pb-1">
+      {/* pt-[13px]: 칩(h-8 = 32px, 테두리 1px)의 누름면은 padding 상자 위로 12px = 칩 위 13px 까지 나간다. 이 줄은 가로 스크롤러라
+          위 여백이 그보다 작으면 잘린다(2026-10-04 실측: 1px 모자라 실효 43). 2026-10-05 G9: 칩 36 → 32 와 위 여백 9 → 13 을 같이 바꿔 줄 높이는 그대로다. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-[13px] pb-1">
         <button
           type="button"
           aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
@@ -428,15 +428,16 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
           //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
           //   2026-10-04 루트 17→16px: 칩이 w-9 = 36px 로 줄어 9 = 8 + 테두리 1px 로 다시 맞춘다(36 + 9 − 1 = 44).
+          //   2026-10-05 G9: 칩 w-8 = 32px → 13 = 12 + 테두리 1px(32 + 13 − 1 = 44). 왼쪽 여백(px-page-x 16px) 안이다.
           //   🔴 px-0 을 **덧붙이지 않고 CHIP_BASE 에서 px-3.5 를 뺀다**(2026-09-29 D3). 둘 다 두면 빌드 CSS 순서상 px-3.5 가 이겨
           //     내용 폭 6.5px 에 아이콘이 6.5×17 로 눌렸다 — 유틸 우열은 className 순서가 아니라 CSS 순서다(e2e/search-chip-icon).
-          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[9px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+          className={['w-8 justify-center', CHIP_BASE.replace(' px-3', ''), CHIP_HIT, 'before:-left-[13px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
         >
           <SearchIcon className="h-4 w-4" />
         </button>
         {/* ── 검색 입력 — 돋보기 칩 **옆에서 가로로** 펼친다(오너 결정 2026-09-30 (a)) ─────────────
              예전엔 sticky 검색+날짜 띠 안, 레일 **위** 줄에 생겨 누른 칩과 레일·본문 전체가 55px 밀렸다(감사 #2).
-             sticky 띠 안이라 스크롤 보정으로도 못 붙잡는다 → 같은 줄(h-9, 칩과 같은 높이)에서 폭만 자라 위아래 이동 0.
+             sticky 띠 안이라 스크롤 보정으로도 못 붙잡는다 → 같은 줄(h-8, 칩과 같은 높이)에서 폭만 자라 위아래 이동 0.
              나머지 칩은 레일 가로 스크롤로 그대로 닿는다. 폭: 390 이상 17rem, 좁은 폭은 화면에서 칩 한 칸+여백을 뺀 값.
              돋보기는 옆 칩이 이미 보여 주므로 칸 안 아이콘은 뺐다(좁은 폭에서 글자 자리를 먼저 준다). */}
         <Fold x open={(searchOpen || rawQuery.length > 0)} className="shrink-0">
@@ -445,7 +446,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           style={{ width: 'min(17rem, calc(100vw - 5.5rem))' }}
           className={[
             'flex items-center gap-2 px-3',
-            'bg-surface-high rounded-chip h-9',
+            'bg-surface-high rounded-chip h-8',
             'border transition-colors duration-(--dur-fast)',
             isFocused
               ? 'border-accent-300'

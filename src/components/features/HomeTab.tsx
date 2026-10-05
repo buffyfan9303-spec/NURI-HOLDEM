@@ -619,7 +619,7 @@ export default function HomeTab({
           <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))] lg:grid-cols-2' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)] lg:grid-cols-1'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
+              className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               {/* 배경 — 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. (우상단 블러 원은 2026-10-04 'E+황동'으로 삭제) */}
               <span aria-hidden className="quick-art quick-art-checkin" />
               {/* 🔴 2026-09-24 HOME-LAYOUT-STRETCH — 제목·배지와 아래 '매장 QR 스캔 ›' 을 **양끝 정렬에서 앞 정렬**로.
@@ -651,7 +651,7 @@ export default function HomeTab({
             {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
+              className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">

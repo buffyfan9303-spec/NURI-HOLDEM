@@ -616,7 +616,7 @@ export default function ToolsPanel() {
             실효 터치 높이가 39px 로 줄었다. 2026-09-24: CHIP_HIT 확장 7+7 → gap-y-3.5(14.875px) 로 두 줄 모두 46px. */}
       {!hits && (
         <div data-main-enter data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
-          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3.5">
+          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3.5 max-[359px]:gap-x-1">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
@@ -625,7 +625,8 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={[CHIP_HIT, 'inline-flex h-[32px] min-w-[44px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
+                // max-[359px]:px-1 · gap-x-1 — 320 에서 다섯째 칩('핸드 리뷰')만 둘째 줄로 혼자 떨어졌다(명세 P3 #16, 실측 합 296.6 > 바 288). 좁은 폭만 칩 안쪽 8→4 · 사이 6→4 로 줄여 한 줄(280.6)에 둔다.
+                className={[CHIP_HIT, 'inline-flex h-[32px] min-w-[44px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors max-[359px]:px-1',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>
@@ -801,7 +802,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
       {/* 2026-10-05: 간격 10 → 8(G3) · 버튼 글자 xs → sm(오너 "글씨 작아") · 고스트 테두리 border-strong/60(mid 위 1.20 → 약 2, 명세 §2-4). */}
       <div className="mt-2 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary btn-brass min-h-[44px] px-2 text-sm">
+        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-sm">
           새 스팟 작성
         </button>
         <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] border-border-strong/60 px-2 text-sm">

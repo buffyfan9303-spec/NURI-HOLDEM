@@ -21,7 +21,7 @@ for (const width of [360, 1280]) {
     });
     expect(m.iw, `아이콘 폭 ${m.iw.toFixed(2)}px — 칩 안쪽 여백에 눌려 찌그러졌다`).toBeGreaterThanOrEqual(15);
     expect(Math.abs(m.iw - m.ih), `아이콘 ${m.iw.toFixed(2)}×${m.ih.toFixed(2)} — 정사각이 아니다`).toBeLessThan(0.5);
-    expect(m.bw, '보이는 칩 폭(w-9)이 바뀌었다').toBeCloseTo(2.25 * 16, 0); // w-9 = 2.25rem — 루트 16px 에서 36(17px 시절 38.25)
+    expect(m.bw, '보이는 칩 폭(w-8)이 바뀌었다').toBeCloseTo(2 * 16, 0); // w-8 = 2rem — 2026-10-05 G9(필터 칩 32) · 그 전 w-9 36 · 17px 시절 38.25
     expect(m, '누름면(44×44) 위·왼쪽 확장과 아래 끝이 이 버튼을 잡지 않는다').toMatchObject({ hitTopLeft: true, hitBottom: true });
   });
 }

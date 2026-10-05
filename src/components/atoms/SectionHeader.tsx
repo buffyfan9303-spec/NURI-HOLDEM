@@ -57,7 +57,7 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
     //   가운데에 섰다 → 390 실측 제목 글자 중심보다 액션(ⓘ·새로고침)이 5.44px 아래. 타일 mt-0.5(2.125px)는
     //   원래 34px 줄 안의 가운데 값이라 그대로 두고, 제목(min-h-8 flex)·액션(min-h-8)이 같은 34px 줄을 쓴다.
     //   lg 이상은 종전과 같다(행 lg:min-h-8 가운데 정렬 · 헤더 47.75px).
-    <header className="flex items-start justify-between gap-3 border-b border-border-subtle pb-3 lg:items-center">
+    <header className="line-fade flex items-start justify-between gap-3 border-b border-border-subtle pb-3 lg:items-center">
       {/* 2026-09-18 PC 실측(1280·1440·1920 동일): 예전 items-start + 타일 mt-0.5 는 타일 중심이 제목 글자 중심보다
           4.5px 아래였고, 행 높이를 글자(26.6)가 아니라 타일(31.9)이 잡아 제목 아래 5px 가 비었다. 액션이 있는
           포스터만 items-end 로 제목이 6.4px 내려가 헤더가 52 vs 45.6 으로 갈렸다. lg 부터 행을 액션 높이(h-8)로

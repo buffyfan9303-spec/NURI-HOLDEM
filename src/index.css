@@ -977,10 +977,15 @@ video {
   /* GTO '자주 쓰는 도구' 타일 4칸(오너 시안 C2 '은은한 질감', 2026-10-05) — 오른쪽 위 모서리에만 옅은 황동. 사선 반짝임·빛번짐 없음. */
   .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(140 94 20 / 0.12) 0%, transparent 62%); }
   html.light .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(140 94 20 / 0.05) 0%, transparent 62%); }
-  /* 황동 주 버튼의 은은한 세로 면(시안 C2 — 주 버튼에만). 흰 글자 대비 위 4.81 · 아래 6.90(AA). 누르면 단색(.btn-primary active)으로. */
-  .btn-brass { background-image: linear-gradient(180deg, #9A6818 0%, #7A5212 100%); }
-  .btn-brass:hover { background-image: linear-gradient(180deg, #8C5E14 0%, #6E4A10 100%); }
-  .btn-brass:active { background-image: none; }
+  /* 강조 카드의 세로 면(명세 §2-3 — 홈 빠른 카드 · 내 매장 요약 카드). 위가 한 단 밝은 면(mid)에서 카드 면(low)으로.
+     가장 밝은 위(#1F2225)에서 기본 글자 14.03 · 흐린 글자 5.64(AA). 라이트는 흰 → #F8F5F1(황동 .06). 배경색은 호출부가 그대로 맡는다. */
+  .surface-grad { background-image: linear-gradient(180deg, rgb(var(--surface-mid)) 0%, rgb(var(--surface-low)) 100%); }
+  html.light .surface-grad { background-image: linear-gradient(180deg, #FFFFFF 0%, #F8F5F1 100%); }
+  /* 빈 상태 카드 — 같은 세로 면 + 아이콘 뒤(위 가운데)만 옅은 황동 원. 흐린 글자 5.9 이상. */
+  .surface-empty { background-image: radial-gradient(60% 50% at 50% 0%, rgb(140 94 20 / 0.10), transparent), linear-gradient(180deg, rgb(var(--surface-mid)) 0%, rgb(var(--surface-low)) 100%); }
+  html.light .surface-empty { background-image: radial-gradient(60% 50% at 50% 0%, rgb(140 94 20 / 0.05), transparent), linear-gradient(180deg, #FFFFFF 0%, #F8F5F1 100%); }
+  /* 섹션 머리 밑줄 — 1px 선이 왼쪽에서 오른쪽으로 옅어진다(선이라 글자 대비와 무관). border-bottom 폭은 호출부 그대로(레이아웃 0). */
+  .line-fade { border-image: linear-gradient(90deg, rgb(var(--border-strong) / 0.55), transparent 80%) 1; }
 
   /* ── Aura LED 백라이트 (2026-09-10, 오너 지시) ────────────────────────────────
      "중요한 상태 **뒤에서** LED 조명이 번지는" 백라이트. 카드 앞의 그림자가 아니다.
@@ -1387,7 +1392,12 @@ video {
      hover/active 는 한 단계 진한 색 스왑(.btn 의 background-color 전환이 잇는다). */
   .btn-primary {
     @apply bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
+    /* 2026-10-05 오너 "밋밋한 곳 그라데이션"(명세 §2-3, 시안 C2 '주 버튼에만'): 같은 황동의 은은한 세로 면. 흰 글자 대비 위 4.81 · 아래 6.90(AA).
+       ⚠ 글자는 흰색 그대로 — ink-primary(#F0F0F0)면 위쪽 4.22 로 미달이다. 다른 색 면이 필요한 호출부는 bg-none! 으로 끈다(대시보드 '미수 회수'). */
+    background-image: linear-gradient(180deg, #9A6818 0%, #7A5212 100%);
   }
+  .btn-primary:hover { background-image: linear-gradient(180deg, #8C5E14 0%, #6E4A10 100%); }
+  .btn-primary:active { background-image: none; }
 
   .btn-ghost {
     @apply bg-transparent text-ink-secondary
@@ -1590,7 +1600,7 @@ video {
   /* ── 입력 필드 ──────────────────────────────────────── */
   .input {
     @apply w-full bg-surface-high text-ink-primary
-           rounded-input px-3 py-2 min-h-[2.4rem]
+           rounded-input px-3 py-2 min-h-10
            border border-border-default
            placeholder:text-ink-muted
            focus:border-accent-300 focus:ring-1 focus:ring-accent-300
@@ -1620,6 +1630,9 @@ video {
     input, select, textarea {
       font-size: 16px !important;
     }
+    /* G8(2026-10-05 명세 §1-2): 입력칸 높이 모바일 44 · PC 40 — 지금은 38.4(기본)·44(호출부 지정) 두 값이 섞여 있었다.
+       기본값 한 곳에서 맞춘다(호출부의 min-h-* 유틸은 뒤라서 그대로 이긴다). */
+    .input { min-height: 2.75rem; }
   }
 
   /* ── 뱃지 ───────────────────────────────────────────── */

@@ -43,7 +43,8 @@ export default function SegmentedTabs<T extends string>({
               'shrink-0 min-w-[44px] rounded-[6px] leading-none transition-colors duration-(--dur-fast) focus:outline-hidden',
               grow ? 'flex-1' : '',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab). 굵기는 위 줄의 font-bold 가 이긴다.
-              size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-1.5 t-tab',
+              // sm 은 보이는 높이 28(t-tab 13 + 위아래 7.5) — G9 '작은 토글 28'(명세 §1-2). 종전 py-1.5 는 25px 였다.
+              size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-[7.5px] t-tab',
               // §T1 탭 굵기 규격: 비활성 600(t-* 기본) / 활성 700
               on ? (quiet ? 'font-bold text-accent-200' : 'font-bold text-white') : 'text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
