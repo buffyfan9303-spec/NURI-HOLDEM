@@ -38,11 +38,13 @@ const PLACEMENT_POINT_MAX = 100;
 const MAX_PLACEMENT_ROWS = 30;
 
 /** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
-export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao = true }: {
+export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao = true, canToggleCheckinGeo = false }: {
   venueId: string;
   /** 카카오 링크를 바꿀 수 있는가 — 서버 venues_update 정책(owner_id = 나 ∪ admin)과 같은 선.
    *  공동운영자는 연락처(can_manage_venue)는 저장되는데 카카오만 거절돼 **부분 저장**이 났다(2026-09-28 F4). */
   canEditKakao?: boolean;
+  /** 「위치 확인 출석」 켜기/끄기 — 서버 set_venue_checkin_geo_required 와 같은 선(대표 업주·관리자, 20261004d F1). 모르면 false(끔 = 안내만). */
+  canToggleCheckinGeo?: boolean;
   /** '손님 화면' — 손님이 보는 이 매장 페이지. 없으면 버튼이 렌더되지 않는다(호출부가 App 배선 전이어도 안전). */
   onOpenVenue?: () => void;
 }) {
@@ -128,7 +130,7 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao
       <VenueContactSection venueId={venueId} canEditKakao={canEditKakao} />
 
       {/* 출석 위치(CHECKIN-GEO) — 좌표가 없으면 서버가 손님 출석을 거부한다(20260923b) */}
-      <CheckinLocationSection venueId={venueId} />
+      <CheckinLocationSection venueId={venueId} canToggleGeo={canToggleCheckinGeo} />
 
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
       <SlugEditor venueId={venueId} onOpenVenue={onOpenVenue} />

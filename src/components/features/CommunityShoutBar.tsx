@@ -754,10 +754,10 @@ export default function CommunityShoutBar({ className }: { className?: string })
     <div ref={rootRef} className={['min-h-11.5', className ?? ''].join(' ')}>
       {/* 카드는 **하나뿐이다.** 방송 중 ↔ 기본 문구가 같은 DOM 을 갈아 끼우므로 전환에서 리마운트도,
           높이 점프도 없다. 20초 슬롯 순환은 페이드로만 갈아 끼운다(캐러셀 슬라이드 아님).
-          ⚠ 2026-09-05 오너 지시로 **가로 전광판**을 도입했다: 한 줄이 칸을 넘칠 때만 MarqueeText 가
+          ⚠ 2026-09-05 오너 지시로 **가로 전광판**을 도입했다(2026-10-05 부터는 넘치지 않아도 항상 흐른다): MarqueeText 가
           옆으로 흘린다. 예전 주석은 '마퀴 금지'라고 못 박아 뒀었는데, 그때 막으려던 것은 '문구가
-          제멋대로 슬라이드로 갈리는 캐러셀'이었다. 지금 것은 넘치는 한 줄에만 붙는 transform 전용
-          루프(모션 헌법 §20.4 #1 무한 루프 예외)라 레이아웃을 건드리지 않고, 안 넘치면 아예 안 붙는다. */}
+          제멋대로 슬라이드로 갈리는 캐러셀'이었다. 지금 것은 한 줄에 붙는 transform 전용
+          루프라 레이아웃을 건드리지 않는다. 동작 줄이기에서는 정적 말줄임이다(index.css .marquee-loop 폴백). */}
       {/* Aura LED(2026-09-10 §8-A) — **실제 방송이 걸려 있을 때만** 뒤에서 밝힌다.
           빈 자리·만료·로딩은 Aura 0: 이 컴포넌트는 오류를 빈 배열로 삼키므로(api/community.ts)
           idle 에 빛을 주면 서버가 죽은 상태를 '강조'하게 된다.
@@ -789,14 +789,13 @@ export default function CommunityShoutBar({ className }: { className?: string })
                 <span className="ml-1.5 text-2xs text-ink-muted">· 방송 중</span>
               </MarqueeText>
             ) : (
-              // 🔴 2026-10-04 오너 캡처 "ㅏ디를 20초 동안 방송합니다" — 안내 문구가 전광판으로 흐르다 앞이 잘린 채 보였다.
-              //   안내 문구는 우리가 쓴 짧은 도움말이라 정적 한 줄 말줄임(…)으로 둔다(게시판 제목과 같은 원칙). 전체는 title.
-              //   유료 방송(위 drawShout)은 최대 60자라 말줄임하면 산 내용이 잘린다 — 오너 결정 전까지 전광판 유지.
-              <span data-testid="shout-idle-line" title={`누리홀덤 안내 · ${drawLine}`} className="block w-full min-w-0 truncate">
+              // 🔴 2026-10-05 오너 "외치기가 옆으로 움직이질 않고 고정되어 있어" — 운영에 방송 중인 외침이 없으면 이 안내 줄이 보이는데,
+              //   6b7e0b95(10-04)에서 정적 말줄임으로 바꿔 멈춰 있었다. 유료 방송 줄과 같은 전광판으로 되돌린다(문구 길이와 무관하게 흐름).
+              <MarqueeText className="w-full" testId="shout-idle-line" text={`누리홀덤 안내 · ${drawLine}`}>
                 <span className="text-2xs font-bold text-ink-secondary">누리홀덤 안내</span>
                 <span className="mx-1.5 text-2xs text-ink-muted">·</span>
                 <span className="text-sm font-semibold leading-snug text-ink-secondary">{drawLine}</span>
-              </span>
+              </MarqueeText>
             )}
           </div>
           {drawShout && (isAdmin || user?.id === drawShout.userId) && (

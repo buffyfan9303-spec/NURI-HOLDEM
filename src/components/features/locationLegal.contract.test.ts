@@ -23,7 +23,7 @@ describe('위치기반서비스 이용약관(LOCATION 절)', () => {
   it('제19조① 3호 — 실제 쓰는 위치 기능 두 가지(가까운 순 · 출석 위치 확인)', () => {
     expect(loc).toMatch(/가까운 순 정렬/);
     expect(loc).toMatch(/단말 안에서만/);
-    expect(loc).toMatch(/출석 위치 확인\(선택\)/);
+    expect(loc).toMatch(/출석 위치 확인\(\$\{CONSENT_NATURE\}\)/);
     expect(loc).toMatch(/반경 300미터/);
   });
   it('제19조① 4호 — 확인자료 보유근거·보유기간', () => {
@@ -43,8 +43,45 @@ describe('위치기반서비스 이용약관(LOCATION 절)', () => {
     expect(loc).not.toMatch(/방송통신위원회/);
     expect(loc).toMatch(/방송미디어통신위원회/);
   });
-  it('시행일·판은 lib/locationConsent 한 곳에서 온다(동의 기록의 terms_version 과 같은 값)', () => {
+  it('시행일·판은 lib/locationTerms 한 곳에서 온다(동의 기록의 terms_version 과 같은 값)', () => {
     expect(loc).toMatch(/시행일: \$\{LOCATION_TERMS_EFFECTIVE\}/);
     expect(loc).toMatch(/제\$\{LOCATION_TERMS_VERSION\}판/);
+    expect(src).toMatch(/from '\.\.\/\.\.\/lib\/locationTerms'/);
+  });
+});
+
+// 제3판(2026-10-04 오너 결정 (다)) — 위치 확인 출석 매장에서 동의·위치가 없으면 QR 출석이 안 된다. 동의는 계속 선택·분리, 대체 경로 명시.
+// 음성 대조: 제3조제5항 줄을 지우면 '거부 효과', 부칙 4·5 를 지우면 '제12조① 변경 이유·내용', 옛 제7조 문장을 되살리면 '옛 문구'가 빨개진다.
+describe('위치기반서비스 이용약관 제3판 — 동의 거부 효과·대체 경로·변경 공개', () => {
+  it('출석 위치 확인은 매장이 켠 경우로 한정(신고서 ② "매장·운영자가 기능을 켠 경우")', () => {
+    expect(loc).toMatch(/매장이 '위치 확인 출석'을 켠 경우에 한하여/);
+    expect(loc).toMatch(/매장이 이 기능을 켜지 않았으면 위치를 받지 않습니다/);
+  });
+  it('제3조제5항 — 시행일부터 켠 매장에서 동의·위치가 없으면 QR 출석 불가 + 대체 경로 + 다른 이용 제한 없음', () => {
+    expect(loc).toMatch(/5\. 위치 확인 출석을 켠 매장에서는 \$\{LOCATION_TERMS_EFFECTIVE\}부터[^\n]*\$\{CHECKIN_SCOPE\}이 처리되지 않습니다\. 이 경우에도 \$\{CHECKIN_ALT_PATH\}\. 업주가 승인한 출석은 이용자가 직접 한 출석과 같은 혜택\(활동 점수·연속 출석·방문 기록·이벤트 참여\)을 받습니다\. 동의하지 않았다는 이유로 그 밖의 서비스 이용을 제한하지 않습니다\./);
+  });
+  it('제7조제1항 — 선택·분리 동의 유지, 거부 효과는 켠 매장의 QR 출석뿐', () => {
+    expect(loc).toMatch(/1\. 출석 위치 확인에 대한 동의는 \$\{CONSENT_NATURE\}이며, 다른 동의와 따로 받습니다\. 동의하지 않아도 서비스 이용에 제한이 없습니다\. 다만 위치 확인 출석을 켠 매장에서는 \$\{LOCATION_TERMS_EFFECTIVE\}부터 동의하지 않으면 \$\{CHECKIN_SCOPE\}이 처리되지 않으며, \$\{CHECKIN_ALT_PATH\}\(제3조제5항\)\./);
+  });
+  it('옛 문구("동의하지 않아도 출석을 포함한 서비스 이용에 제한이 없습니다") 없음 — 제3판과 모순', () => {
+    expect(loc).not.toMatch(/출석을 포함한 서비스 이용에 제한이 없습니다/);
+  });
+  it('제5조제2항 — 법 제2조제5호 용어(이용·제공 일시·방법, 취득 경로, 제공받는 자) · 위치 미사용 출석은 기록 대상 아님', () => {
+    expect(loc).toMatch(/이용·제공 일시, 이용·제공 방법\(서버에서 매장 반경 판정 후 좌표 즉시 파기/);
+    expect(loc).toMatch(/위치를 받지 않은 출석[^\n]*기록하지 않습니다/);
+  });
+  it('부칙 — 공지일·시행일, 변경 이유·내용 공개(제12조①), 불리한 변경 30일 전 공지(이용약관 제16조②), 제2판 원문 링크', () => {
+    expect(loc).toMatch(/제\$\{LOCATION_TERMS_VERSION\}판은 \$\{LOCATION_TERMS_NOTICE\}에 공지하여 \$\{LOCATION_TERMS_EFFECTIVE\}부터 시행합니다/);
+    expect(loc).toMatch(/개정 이유:/);
+    expect(loc).toMatch(/개정 내용:/);
+    expect(loc).toMatch(/이용약관 제16조제2항에 따라 시행일 30일 전에 공지합니다/);
+    expect(loc).toMatch(/제2판 원문: https:\/\/nuriholdem\.com\$\{LOCATION_TERMS_PREV_ARCHIVE_URL\}/);
+  });
+  it('제9조 위치정보관리책임자·연락처 = lib/locationTerms LOCATION_OFFICER(처리방침과 같은 값)', () => {
+    expect(loc).toMatch(/- 연락처: \$\{BIZ\.locationOfficerContact\} · 전화 \$\{BIZ\.locationOfficerPhone\}/);
+    expect(src).toMatch(/locationOfficerPhone: LOCATION_OFFICER\.phone,/);
+    expect(src).toMatch(/locationOfficer: LOCATION_OFFICER\.name,/);
+    expect(src).toMatch(/locationOfficerContact: LOCATION_OFFICER\.contact,/);
+    expect(src).not.toMatch(/지정 예정/);
   });
 });

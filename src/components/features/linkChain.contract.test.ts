@@ -113,13 +113,14 @@ describe('E · 상태가 따라온다', () => {
     //   Q6 에서 두 경로를 `runCheckin` **한 벌**로 합치면서 dispatch 도 1곳이 됐다 —
     //   경로가 줄어든 게 아니라 **같은 코드를 공유**하게 된 것이다(오히려 한 곳만 고치면 둘 다 반영된다).
     //   그래서 '개수' 가 아니라 **"두 경로가 그 한 벌을 실제로 부르는가"** 를 단언한다. 약화가 아니라 정확화다.
-    const helper = /const runCheckin = useCallback\(\(venueId: string\) => \{[\s\S]*?new Event\('nuri:checkin-done'\)/;
+    // 20261004d: 재시도 시트가 '위치 확인 출석 매장'으로 다시 부르도록 opts(geoRequired) 를 받는다 — 같은 한 벌이다.
+    const helper = /const runCheckin = useCallback\(\(venueId: string, opts\?: \{ geoRequired\?: boolean \}\) => \{[\s\S]*?checkIn\(venueId, opts\)[\s\S]*?new Event\('nuri:checkin-done'\)/;
     expect(APP, 'App 의 출석 성공 처리(runCheckin)가 nuri:checkin-done 을 쏘지 않는다').toMatch(helper);
     // 두 경로 = ① QR 딥링크 단일 분기 ② 로그인 왕복 뒤의 '보류된 QR'. 둘 다 같은 함수를 부른다.
     // ③(2026-09-24 CHECKIN-GEO) 위치 재시도 시트의 버튼도 **같은 runCheckin** 을 다시 부른다 — 새 복사본이 아니라 세 번째 호출부다.
     expect((APP.match(/runCheckin\((?!venueId: string)/g) ?? []).length,
       'App 의 출석 경로(딥링크·보류 의도·위치 재시도)가 runCheckin 을 각각 부르지 않는다').toBe(3);
-    expect(APP, '위치 재시도 버튼이 runCheckin 을 다시 부르지 않는다').toMatch(/data-testid="checkin-geo-retry-btn"[\s\S]{0,200}?runCheckin\(v\)/);
+    expect(APP, '위치 재시도 버튼이 runCheckin 을 다시 부르지 않는다').toMatch(/data-testid="checkin-geo-retry-btn"[\s\S]{0,200}?runCheckin\(v, \{ geoRequired: true \}\)/);
     expect(VENUE).toMatch(/window\.dispatchEvent\(new Event\('nuri:checkin-done'\)\);/);
     expect(APP).toMatch(/window\.addEventListener\('nuri:checkin-done', load\);\s*return \(\) => window\.removeEventListener\('nuri:checkin-done', load\);/);
   });

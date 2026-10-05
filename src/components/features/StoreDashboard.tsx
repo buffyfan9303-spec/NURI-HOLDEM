@@ -917,7 +917,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher).
           🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고
              누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼. `caps.issueVoucher`(= 서버 can_manage_pos)로 바꾼다. */}
-      <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); void reloadRange(); }}venueId={venueId} canIssue={caps.issueVoucher} />
+      <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); void reloadRange(); }}venueId={venueId} canIssue={caps.issueVoucher} canStaffCheckin={caps.manage} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}

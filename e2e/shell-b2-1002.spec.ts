@@ -249,7 +249,8 @@ test.describe('B2 내 정보 390', () => {
     await page.route(/\/rest\/v1\/rpc\/get_my_location_consent/, async (r) => {
       hits.loc++;
       return r.fulfill(json(server === 'granted'
-        ? { state: 'granted', terms_version: 2, granted_at: '2026-09-27T00:00:00Z', revoked_at: null }
+        // 20261004d — 현재 판은 제3판(LOCATION_TERMS_VERSION). 제2판 동의는 '옛 약관' 으로 그려지므로 서버 '동의함' 은 현재 판으로 준다.
+        ? { state: 'granted', terms_version: 3, granted_at: '2026-09-27T00:00:00Z', revoked_at: null }
         : { state: 'none', terms_version: null, granted_at: null, revoked_at: null }));
     });
     await page.goto('/?tab=home');
@@ -265,7 +266,7 @@ test.describe('B2 내 정보 390', () => {
     await page.getByRole('button', { name: '휴대폰 본인인증 하기' }).click();   // ③ 보안 탭으로 바로 열기
     await expect(page.locator('[data-profile-tabbar] [role=tab][aria-selected=true]'), '보안 탭으로 바로 열리지 않았다').toHaveText(/보안/, { timeout: 10_000 });
     const st = page.locator('[data-testid="location-consent-state"]').filter({ visible: true });
-    await expect(st, '서버는 동의함인데 미리 받아 둔 옛 상태를 그렸다').toHaveText(/^동의함 · 제2판/, { timeout: 5_000 });
+    await expect(st, '서버는 동의함인데 미리 받아 둔 옛 상태를 그렸다').toHaveText(/^동의함 · 제3판/, { timeout: 5_000 });
     expect(hits, '보안 칸들이 새로 받지 않았다(묵은 미리 받기 값을 썼다)').toEqual({ consents: 2, loc: 2 });
   });
 });

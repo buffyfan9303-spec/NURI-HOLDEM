@@ -5,14 +5,18 @@
 //   (b) 이 칸 — 업주가 매장 안에서 「지금 위치로 등록」 또는 「주소로 등록」.
 // 저장은 set_venue_coords RPC(서버가 can_manage_venue 로 검사). 저장 뒤 **서버 값을 다시 읽어** 보여 준다(거짓 성공 금지 K-03).
 // 매장 전환 늦은 응답: await 뒤마다 venueRef.current(지금 매장)와 시작 때 매장을 비교한다(§C).
+// 20261004d(오너 결정 (다)): 「위치 확인 출석」 스위치 — 매장이 켜야만 손님에게 위치를 묻는다(신고서 ② '매장·운영자가 켠 경우').
+//   켠 매장은 시행일(LOCATION_TERMS_EFFECTIVE)부터 동의·위치가 없으면 QR 출석이 서버에서 거부된다. 좌표가 없으면 켤 수 없다(서버도 막는다).
+//   저장은 set_venue_checkin_geo_required RPC, 확인은 서버 재조회(K-03).
 import { useEffect, useRef, useState } from 'react';
-import { getVenueCheckinSpot } from '../../api/checkins';
+import { getVenueCheckinSpot, setVenueCheckinGeoRequired } from '../../api/checkins';
+import { LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow } from '../../lib/locationTerms';
 import { setVenueCoords } from '../../api/community';
 import { getCheckinPosition, isLowAccuracy, CheckinGeoError, useCheckinGeoEnabled } from '../../lib/checkinGeo';
 import { naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, geocodeAddress } from '../../lib/naverMap';
 import { msgOf } from '../../lib/dbError';
 
-type Spot = { lat: number | null; lng: number | null; address: string };
+type Spot = { lat: number | null; lng: number | null; address: string; geoRequired: boolean };
 type Msg = { tone: 'ok' | 'err'; text: string } | null;
 
 /** 네이버 지도 스크립트가 준비될 때까지(최대 10초). 실패·키 없음이면 false. */
@@ -27,12 +31,14 @@ function naverReady(): Promise<boolean> {
   });
 }
 
-export default function CheckinLocationSection({ venueId }: { venueId: string }) {
+/** canToggleGeo — 「위치 확인 출석」 스위치를 쓸 수 있는가(대표 업주·관리자 — 서버 set_venue_checkin_geo_required 와 같은 선, 20261004d F1).
+ *  공동 운영자·모름(false)이면 상태와 안내만 보인다(fail-closed). 좌표 등록은 공동 운영자도 된다(set_venue_coords = can_manage_venue). */
+export default function CheckinLocationSection({ venueId, canToggleGeo = false }: { venueId: string; canToggleGeo?: boolean }) {
   const venueRef = useRef(venueId);
   venueRef.current = venueId;
   const [spot, setSpot] = useState<Spot | null>(null);
   const [loadErr, setLoadErr] = useState(false);
-  const [busy, setBusy] = useState<'here' | 'addr' | null>(null);
+  const [busy, setBusy] = useState<'here' | 'addr' | 'geo' | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   // 스위치 꺼짐이면 손님 출석은 아직 위치를 안 본다 — '출석할 수 없어요'는 그때 거짓이다.
   const geoOn = useCheckinGeoEnabled();
@@ -102,12 +108,30 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
     finally { if (venueRef.current === id) setBusy(null); }
   };
 
+  /** 「위치 확인 출석」 켜기/끄기 — 서버 저장 → 재조회 값으로만 상태·성공을 말한다. */
+  const toggleGeo = async () => {
+    const id = venueId;
+    if (busy || spot == null || !canToggleGeo) return;
+    const next = !spot.geoRequired;
+    setBusy('geo'); setMsg(null);
+    try {
+      await setVenueCheckinGeoRequired(id, next);
+      const s = await getVenueCheckinSpot(id);
+      if (venueRef.current !== id) return;
+      setSpot(s);
+      if (s.geoRequired !== next) setMsg({ tone: 'err', text: '저장 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요' });
+      else setMsg({ tone: 'ok', text: next ? '위치 확인 출석을 켰습니다' : '위치 확인 출석을 껐습니다' });
+    } catch (e) { fail(id, e, '위치 확인 출석 설정을 저장하지 못했습니다'); }
+    finally { if (venueRef.current === id) setBusy(null); }
+  };
+
   const has = spot != null && spot.lat != null && spot.lng != null;
+  const geoReq = spot?.geoRequired === true;
   return (
     <section data-testid="checkin-location" className="rounded-aura border card-aura p-3 space-y-3">
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">출석 위치</h3>
-        <p className="text-2xs text-ink-muted">손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>에서만 출석 QR로 출석할 수 있습니다{geoOn ? '' : ' (위치 확인이 켜진 뒤부터)'}.</p>
+        <p className="text-2xs text-ink-muted">아래 「위치 확인 출석」을 켜면 손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>(휴대폰 측위 오차는 최대 200m까지 보정)에서 출석 QR로 출석합니다{geoOn ? '' : ' (운영 스위치가 켜진 뒤부터)'}.</p>
       </div>
       {loadErr ? (
         <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">출석 위치를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>
@@ -120,7 +144,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
         </p>
       ) : (
         <p role="alert" data-testid="checkin-location-state" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs font-semibold text-danger-light">
-          {geoOn ? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '출석 위치 확인을 켜기 전에 출석 위치를 등록해 주세요'}
+          {geoOn && geoReq ? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '위치 확인 출석을 켜기 전에 출석 위치를 등록해 주세요'}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -134,6 +158,31 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
         </button>
       </div>
       <p className="text-2xs text-ink-muted">「지금 위치로 등록」은 <b className="text-ink-secondary">매장 안에서</b> 눌러 주세요. 이미 등록돼 있으면 새 위치로 바뀝니다.</p>
+      <div data-testid="checkin-geo-required" className="space-y-1.5 border-t border-border-subtle pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p id="checkin-geo-required-label" className="text-sm font-bold text-ink-primary">위치 확인 출석</p>
+            <p data-testid="checkin-geo-required-state" className="text-2xs text-ink-muted">
+              {spot == null ? '불러오는 중…' : geoReq ? (geoOn ? '켜짐 — 손님에게 위치 확인을 요청합니다' : '켜짐 — 운영 스위치가 켜지면 적용됩니다') : '꺼짐 — 손님에게 위치를 묻지 않습니다'}
+            </p>
+          </div>
+          <button type="button" role="switch" aria-checked={geoReq} aria-labelledby="checkin-geo-required-label"
+            data-testid="checkin-geo-required-switch" onClick={toggleGeo}
+            disabled={!canToggleGeo || !!busy || spot == null || (!has && !geoReq)}
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center disabled:opacity-50">
+            <span className={['relative h-6 w-11 rounded-full transition-colors', geoReq ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
+              <span className={['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', geoReq ? 'translate-x-[1.15rem]' : 'translate-x-0'].join(' ')} />
+            </span>
+          </button>
+        </div>
+        <p className="text-2xs leading-relaxed text-ink-muted">
+          켜면 손님이 이 매장 QR로 출석할 때 위치정보 이용 동의를 받고 현재 위치를 한 번 확인합니다(좌표는 저장하지 않습니다).
+          {' '}<b className="text-ink-secondary">{LOCATION_TERMS_EFFECTIVE_KO}부터</b>는 동의하지 않거나 위치를 확인할 수 없는 손님은 <b className="text-ink-secondary">스스로 출석할 수 없습니다</b>(QR 스캔·매장 페이지 출석 버튼·앱 카메라){isGeoRequiredNow() ? '' : '(그 전에는 출석은 되고 위치만 확인합니다)'}.
+          {' '}그런 손님은 앱에서 출석 요청을 보내니, 대시보드 「출석·QR 명단」에서 <b className="text-ink-secondary">출석 요청을 승인</b>해 주세요(출석과 같은 활동 점수·연속 출석·방문 기록이 쌓입니다).
+        </p>
+        {!canToggleGeo && <p data-testid="checkin-geo-required-owner-only" className="text-2xs text-ink-muted">위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다.</p>}
+        {canToggleGeo && !has && spot != null && <p className="text-2xs text-ink-muted">출석 위치를 먼저 등록해야 켤 수 있습니다.</p>}
+      </div>
       {msg && (
         <p role="status" className={`text-2xs font-semibold ${msg.tone === 'ok' ? 'text-emerald-400' : 'text-danger-light'}`}>{msg.text}</p>
       )}

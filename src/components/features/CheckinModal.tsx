@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
-import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '../../api/checkins';
+import { listVenueCheckins, subscribeCheckins, checkinUrl, getVenueCheckinGeoRequired, staffCheckIn, listCheckinRequests, type Checkin, type CheckinRequest } from '../../api/checkins';
+import { LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow } from '../../lib/locationTerms';
 import { getVenueVisitorStats } from '../../api/crm';
 import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
@@ -36,10 +37,25 @@ export function canSendVoucher(c: Pick<Checkin, 'venueId' | 'userId'>, venueId: 
   return c.venueId === venueId && canIssue && !!c.userId && Number.isInteger(count) && count > 0;
 }
 
-export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
+/** 승인 대기로 보여 줄 출석 요청 — 요청 뒤에 이미 출석한 손님(QR·다른 직원 승인)은 뺀다(승인해도 4시간 중복으로 거부된다). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function pendingCheckinRequests(reqs: CheckinRequest[], todays: Pick<Checkin, 'userId' | 'createdAt'>[]): CheckinRequest[] {
+  return reqs.filter((r) => !todays.some((c) => c.userId === r.userId && Date.parse(c.createdAt) >= Date.parse(r.createdAt)));
+}
+
+/** canStaffCheckin — 손님의 출석 요청을 승인할 수 있는가(서버 staff_check_in·checkin_requests 읽기 RLS 와 같은 can_manage_pos 선, 20261004d v3). */
+export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false, canStaffCheckin = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean; canStaffCheckin?: boolean }) {
   const toast = useToast();
-  // CHECKIN-GEO — 위치 안내는 운영 스위치가 켜졌을 때만(꺼짐이면 위치를 안 보므로 거짓 안내가 된다).
+  // CHECKIN-GEO — 위치 안내는 운영 스위치 + 이 매장의 「위치 확인 출석」이 둘 다 켜졌을 때만(20261004d — 매장이 안 켰으면 위치를 안 본다).
   const geoOn = useCheckinGeoEnabled();
+  const [venueGeo, setVenueGeo] = useState<{ venueId: string; on: boolean } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    (async () => { const on = await getVenueCheckinGeoRequired(venueId); if (alive) setVenueGeo({ venueId, on }); })();
+    return () => { alive = false; }; // 매장 전환 뒤 늦게 온 앞 매장 값은 버린다
+  }, [open, venueId]);
+  const geoHint = geoOn && venueGeo?.venueId === venueId && venueGeo.on;
   /** 지금 이용권을 보낼 손님(체크인 행 id). null 이면 아무 행도 안 펼쳐져 있다. */
   const [sendTo, setSendTo] = useState<string | null>(null);
   const [customCount, setCustomCount] = useState('');
@@ -58,6 +74,9 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
   const mountGenRef = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
 
   const [list, setList] = useState<Checkin[]>([]);
+  // 20261004d v3(오너 B) — 오늘 들어온 출석 요청(승인 권한자만 읽는다). 실패와 0건을 구별한다.
+  const [reqs, setReqs] = useState<CheckinRequest[]>([]);
+  const [reqErr, setReqErr] = useState(false);
   // 🔴 2026-09-20 (R1-3) — '조회 실패' 와 '진짜 0명' 을 구별한다. 종전엔 `.catch(() => {})` 로 오류를
   //   삼켜 실패해도 '아직 출석한 손님이 없습니다' 가 떴다 — 업주는 아무도 안 온 줄 안다.
   const [listErr, setListErr] = useState(false);
@@ -86,7 +105,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
   useEffect(() => {
     reqRef.current = { seq: reqRef.current.seq + 1, owner: venueId };
     mountGenRef.current = { seq: mountGenRef.current.seq + 1, owner: venueId };
-    setList([]); setListErr(false); setVisits({});
+    setList([]); setListErr(false); setVisits({}); setReqs([]); setReqErr(false);
     setSendTo(null); setConfirm(null); setCustomCount(''); setSendBusy(false);
   }, [open, venueId]);
 
@@ -99,6 +118,11 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
       .then((r) => { if (stale()) return; setList(r); setListErr(false); })
       .catch(() => { if (stale()) return; setListErr(true); });
     getVenueVisitorStats(venueId).then((v) => { if (stale()) return; setVisits(v); }).catch(() => {});
+    if (canStaffCheckin) {
+      listCheckinRequests(venueId)
+        .then((r) => { if (stale()) return; setReqs(r); setReqErr(false); })
+        .catch(() => { if (stale()) return; setReqErr(true); });
+    }
   };
   useEffect(() => {
     if (!open) return;
@@ -137,6 +161,24 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     }
   };
 
+  // ── 20261004d v3(오너 B 2026-10-05) — 손님이 보낸 출석 요청을 승인. 위치 확인을 못 하는/안 하는 손님도 출석과 같은 혜택을 받는 대체 경로다.
+  //   v2 의 '전 회원 닉네임 검색 → 출석' 은 손님 모르게 출석·점수·CRM 행을 만들 수 있어 없앴다(서버도 요청 없는 대상은 거부한다).
+  const [scBusy, setScBusy] = useState(false);
+  useEffect(() => { setScBusy(false); }, [open, venueId]);
+  const scCheckin = async (r: CheckinRequest) => {
+    if (scBusy || !canStaffCheckin || r.venueId !== venueId) return;
+    const gen = mountGenRef.current;
+    setScBusy(true);
+    try {
+      const res = await staffCheckIn(venueId, r.userId);
+      if (isStaleResponse(gen, mountGenRef.current)) return; // 다른 매장 화면이 됐다 — 반영하지 않는다
+      toast.show(`${r.displayName || '회원'}님 출석 처리 완료${res.points > 0 ? ` · +${res.points}점` : ''}`, 'success');
+      reload(); // 오늘 방문 명단·요청 목록은 서버 재조회로(실시간 구독도 따라온다)
+    } catch (e) {
+      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(msgOf(e, '출석 처리하지 못했습니다'), 'error');
+    } finally { if (!isStaleResponse(gen, mountGenRef.current)) setScBusy(false); }
+  };
+
   const copy = async () => { try { await navigator.clipboard.writeText(checkinUrl(venueId)); toast.show('출석 링크를 복사했습니다', 'success'); } catch { /* noop */ } };
   const fmt = (iso: string) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const openPicker = (id: string) => { setSendTo((v) => (v === id ? null : id)); setConfirm(null); setCustomCount(''); };
@@ -154,9 +196,28 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
             : qrFailed
               ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR을 만들지 못했습니다</div>
               : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoOn && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인에 동의한 손님은 매장 안에서만 출석됩니다</b></>}</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoHint && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인 출석 매장 · {isGeoRequiredNow() ? '동의하고 매장 안에 있는 손님만 QR로 출석됩니다' : `${LOCATION_TERMS_EFFECTIVE_KO}부터 동의하고 매장 안에 있는 손님만 QR로 출석됩니다`}</b><br />그 밖의 손님은 앱에서 출석 요청을 보내고, {canStaffCheckin ? '아래 「출석 요청」에서 승인해 주세요' : '대표 업주·공동 운영자가 승인합니다'}</>}</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
+        {canStaffCheckin && (
+          <div data-testid="staff-checkin" className="space-y-2 rounded-aura border card-aura p-3">
+            <p className="text-sm font-bold text-ink-primary">출석 요청</p>
+            <p className="text-2xs text-ink-muted">QR로 출석하기 어려운 손님(위치정보 미동의·위치 확인 불가 등)이 앱에서 보낸 오늘의 출석 요청입니다. 매장에 온 손님인지 확인하고 승인해 주세요. 출석과 같은 활동 점수·연속 출석·방문 기록이 쌓이고, 같은 손님은 4시간에 한 번만 됩니다.</p>
+            {(() => {
+              if (reqErr) return <p className="text-2xs text-danger-light">출석 요청을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>;
+              const pend = pendingCheckinRequests(reqs.filter((r) => r.venueId === venueId), list);
+              if (pend.length === 0) return <p data-testid="staff-checkin-empty" className="text-2xs text-ink-muted">아직 들어온 출석 요청이 없습니다.</p>;
+              return <ul className="space-y-1">{pend.map((r) => (
+                <li key={r.id} data-testid="staff-checkin-req" className="flex items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-1">
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{r.displayName ?? '회원'}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{fmt(r.createdAt)} 요청</span>
+                  <button type="button" data-testid="staff-checkin-do" disabled={scBusy} onClick={() => void scCheckin(r)}
+                    className="min-h-[44px] shrink-0 rounded-input border border-accent-400/40 px-3 text-2xs font-bold text-accent-200 hover:bg-accent-500/10 disabled:opacity-50">승인</button>
+                </li>
+              ))}</ul>;
+            })()}
+          </div>
+        )}
         <div>
           <p className="mb-1 text-2xs font-bold text-ink-secondary">오늘 방문 {listErr ? '—' : `${list.length}명`}</p>
           {listErr ? (

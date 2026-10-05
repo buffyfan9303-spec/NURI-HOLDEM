@@ -60,7 +60,7 @@ async function fill(page: Page) {
 }
 
 test.describe('SIGNUP-LOCATION — 가입 때 위치정보 이용 동의(선택)', () => {
-  test('S1 동의 — 위치 칸·전문 보기가 보이고, 가입 뒤 제2판 동의를 한 번 적는다', async ({ page }) => {
+  test('S1 동의 — 위치 칸·전문 보기가 보이고, 가입 뒤 현재 판(제3판) 동의를 한 번 적는다', async ({ page }) => {
     test.setTimeout(90_000);
     const calls = await setup(page, 390, 'dark');
     const box = page.getByTestId('signup-location-consent');
@@ -84,7 +84,8 @@ test.describe('SIGNUP-LOCATION — 가입 때 위치정보 이용 동의(선택)
     await page.getByRole('button', { name: '가입하기' }).click();
     await expect(page.getByText('가입 완료!', { exact: false })).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => calls.setConsent.length, { timeout: 10_000 }).toBe(1);
-    expect(calls.setConsent[0]).toEqual({ p_granted: true, p_terms_version: 2 });
+    // 20261004d — 위치기반서비스 이용약관 제3판(LOCATION_TERMS_VERSION). 가입 화면이 보여 주는 약관이 제3판이라 그 판으로 적는다.
+    expect(calls.setConsent[0]).toEqual({ p_granted: true, p_terms_version: 3 });
     expect(calls.signup.length).toBe(1);
     await page.waitForTimeout(1500);
     expect(calls.setConsent.length, '위치 동의를 두 번 적었다').toBe(1);

@@ -1,21 +1,21 @@
 // src/lib/locationConsent.ts — 출석 위치 확인의 '위치정보 이용 동의'(LOCATION-READY 2026-09-26).
 //
 // 위치정보법 제15조① — 동의 없이 개인위치정보를 수집·이용하지 않는다. 제19조① — 약관에 적은 뒤 동의를 받는다.
-// 그래서 출석이 좌표를 보내기 **전에** 여기서 동의를 확인한다(checkins.ts checkIn 한 곳).
+// 그래서 출석이 좌표를 보내기 **전에** 여기서 동의를 확인한다(checkins.ts checkIn 한 곳 — 위치 확인을 켠 매장에서만 불린다).
 //   · 동의함(현재 약관 판)     → true — 좌표를 보낸다
-//   · 동의 안 함(기록됨)       → false — 묻지 않고 좌표 없이 출석(거절해도 서비스 이용 가능)
+//   · 동의 안 함(기록됨)       → false — 묻지 않고 좌표 없이 보낸다. 단 required(시행일 뒤 켠 매장) 면 다시 묻는다 —
+//                                 동의 없이는 그 매장 QR 출석이 안 되므로 '선택'을 다시 보여 주는 것이 곧 대체 경로 안내다(오너 결정 (다))
 //   · 기록 없음·옛 약관 판     → 시트로 묻는다. 닫으면 이번 출석만 좌표 없이(기록하지 않음 — 다음에 다시 묻는다)
 //   · 조회·저장 실패           → false — 좌표를 보내지 않는다(서버도 동의 행이 없으면 좌표를 버린다 — 20260926b)
-// 서버가 최종 게이트다: 스위치 'on' + 동의 행이 있어야만 좌표를 쓴다. 이 파일은 묻고 기록하는 화면 쪽일 뿐이다.
+// 서버가 최종 게이트다: 스위치 'on' + 매장 켬 + 동의 행(현재 판)이 있어야만 좌표를 쓰고, 시행일 뒤에는 없으면 거부한다(20261004d).
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getMyLocationConsent, setMyLocationConsent, type LocationConsentState } from '../api/locationPrivacy';
 import { supabase } from './supabase';
+import { LOCATION_TERMS_VERSION } from './locationTerms';
 
-/** 위치기반서비스 이용약관 판(版). 약관의 수집·이용 조항을 바꾸면 올린다 — 옛 판 동의자는 다음 출석 때 다시 묻는다. */
-export const LOCATION_TERMS_VERSION = 2;
-/** 제2판 시행일(표기용). ⚠ 배포일과 다르면 배포 담당이 맞춘다. */
-export const LOCATION_TERMS_EFFECTIVE = '2026-09-26';
+// 판·시행일은 lib/locationTerms.ts 한 곳 — 옛 import 경로를 깨지 않게 다시 내보낸다.
+export { LOCATION_TERMS_VERSION, LOCATION_TERMS_EFFECTIVE } from './locationTerms';
 
 /** 지금 동의가 유효한가 — 현재 판 이상의 동의만 유효. */
 export const isConsentCurrent = (s: LocationConsentState) =>
@@ -25,7 +25,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ko-KR')
 /** 내 정보 화면의 상태 한 줄. */
 export function consentSummary(s: LocationConsentState): string {
   if (isConsentCurrent(s)) return `동의함 · 제${s.termsVersion}판${s.grantedAt ? ` · ${fmt(s.grantedAt)}` : ''}`;
-  if (s.state === 'granted') return `옛 약관(제${s.termsVersion ?? '?'}판) 동의 — 다음 출석 때 다시 여쭙겠습니다`;
+  if (s.state === 'granted') return `옛 약관(제${s.termsVersion ?? '?'}판) 동의 — 위치 확인 출석 매장에서 다음 출석 때 다시 여쭙겠습니다`;
   if (s.state === 'denied') return `동의하지 않음${s.revokedAt ? ` · 철회 ${fmt(s.revokedAt)}` : ''}`;
   return '아직 선택하지 않음 — 위치 확인 출석을 처음 쓸 때 여쭤요';
 }
@@ -54,7 +54,8 @@ export function otherGateOpen(doc: Document = document): boolean {
  *  별도 루트에 스스로 마운트한다(Modal 은 컨텍스트 의존이 없다). 시트 모듈은 지연 로드 — 첫 화면 번들에 안 실린다.
  *  두 번 불려도 한 장만 뜨게 진행 중 Promise 를 공유한다. */
 let pending: Promise<boolean | null> | null = null;
-export function askLocationConsent(): Promise<boolean | null> {
+export type ConsentAskOptions = { required?: boolean };
+export function askLocationConsent(opts: ConsentAskOptions = {}): Promise<boolean | null> {
   if (pending) return pending;
   pending = import('../components/features/LocationConsentSheet').then(({ default: View }) =>
     new Promise<boolean | null>((resolve) => {
@@ -63,6 +64,7 @@ export function askLocationConsent(): Promise<boolean | null> {
       document.body.appendChild(host);
       const root = createRoot(host);
       root.render(createElement(View, {
+        required: !!opts.required,
         onChoose: (v: boolean | null) => {
           pending = null;
           resolve(v);
@@ -74,13 +76,17 @@ export function askLocationConsent(): Promise<boolean | null> {
   return pending;
 }
 
-export async function ensureLocationConsent(ask: () => Promise<boolean | null> = askLocationConsent): Promise<boolean> {
+export async function ensureLocationConsent(
+  ask: (opts: ConsentAskOptions) => Promise<boolean | null> = askLocationConsent,
+  opts: ConsentAskOptions = {},
+): Promise<boolean> {
   let s: LocationConsentState;
   try { s = await getMyLocationConsent(); } catch { return false; }
   if (isConsentCurrent(s)) return true;
-  if (s.state === 'denied') return false;
+  // '동의 안 함'을 고른 사람은 다시 묻지 않는다 — required(시행일 뒤 위치 확인 출석 매장)일 때만 다시 묻는다(위 머리말).
+  if (s.state === 'denied' && !opts.required) return false;
   let choice: boolean | null;
-  try { choice = await ask(); } catch { return false; }
+  try { choice = await ask(opts); } catch { return false; }
   if (choice === null) return false;
   try { return isConsentCurrent(await saveLocationConsent(choice)); } catch { return false; }
 }
