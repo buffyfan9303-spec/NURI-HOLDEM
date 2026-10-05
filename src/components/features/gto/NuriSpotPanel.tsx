@@ -31,6 +31,7 @@ import {
 import { evaluateSpot, investedByPos, type SpotEvaluation } from '../../../lib/spotEvaluate';
 import SpotReport, { type SavedRef } from './SpotReport';
 import MySpotList from './MySpotList';
+import BrandDiamond from '../../atoms/BrandDiamond';
 
 export type SpotTab = 'analyze' | 'mine';
 const SPOT_TAB_ORDER: readonly SpotTab[] = ['analyze', 'mine'];
@@ -287,15 +288,11 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
 function SpadeMark() {
   return (
     // h-10(42.5px): 소개 행 높이를 정하는 요소다 — 상단이 첫 화면의 23% 를 먹어(design 실측, 콘텐츠 시작 y=192.6) 한 단 줄였다.
-    <span className="relative grid h-10 w-10 shrink-0 place-items-center" aria-hidden>
+    <span className="relative grid h-10 w-10 shrink-0 items-center justify-items-start" aria-hidden>
       {/* LED 는 토큰([data-aura] hero)으로 — 인라인 rgb 는 라이트·고대비·강제색에서 못 껐다(2026-09-18) */}
       <span data-aura data-aura-level="hero" data-aura-variant="violet" className="pointer-events-none absolute inset-0 rounded-full" />
-      <span
-        className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
-        style={{ background: 'radial-gradient(120% 120% at 50% 0%, #2B4166 0%, #1A2639 58%, #111A27 100%)' /* 2026-10-05 4안 — 푸른 먹색 */ }}
-      >
-        <img src="/brand/nuri-holdem-symbol.svg" alt="" width={22} height={22} draggable={false} />
-      </span>
+      {/* 2026-10-06 오너 C안 로고: 원형 남색 배지·스페이드 → 배경 없는 골드 다이아(28×40). 바깥 h-10 w-10 상자는 그대로라 소개 행 높이 불변. */}
+      <BrandDiamond width={28} height={40} className="relative h-10" />
     </span>
   );
 }

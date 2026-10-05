@@ -61,8 +61,7 @@ import { getActiveHomeBanners, type HomeBannerFeed } from './api/homeBanners';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
-import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
-import NuriMark from './components/atoms/NuriMark';
+import NuriClassicLogo from './components/atoms/NuriClassicLogo'; // 2026-10-06 C안 로고 — 종전 NuriMark+NuriHoldemLogo 대체
 import Icon from './components/atoms/Icon';
 import { Fold } from './components/atoms/Fold';
 import Avatar from './components/atoms/Avatar';
@@ -430,15 +429,15 @@ const AppHeader = memo(function AppHeader({
           aria-label="메인으로 이동"
           className="hidden lg:flex items-center gap-1.5 active:scale-95 transition-transform origin-left"
         >
-          <NuriMark uid="pc" className="h-6 w-6 shrink-0" />
-          <NuriHoldemLogo />
+          {/* 2026-10-06 오너 C안 로고 — 높이 32(h-8) = 종전 워드마크 높이, 가로 99.2 ≈ 종전 마크+워드마크 99.1. */}
+          <NuriClassicLogo className="h-8" priority />
         </button>
         {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=홈 복귀 */}
         <div className="lg:hidden flex min-w-0 items-center gap-2">
           {/* D4(2026-09-29): 누름 높이 30 → 44(min-h). 헤더 줄(59.5px) 안이라 흐름이 안 바뀐다.
               ⚠ 가로 확장은 리드 결정(2026-09-29)으로 하지 않는다 — 높이만 44. */}
           <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring flex min-h-[44px] shrink-0 items-center gap-1.5">
-            <NuriMark uid="m" className="h-6 w-6 shrink-0" />
+            {/* (종전 NuriMark 스페이드는 아래 C안 로고의 다이아로 대체) */}
             {/* ⚠ U01: 320px 에서는 워드마크를 접는다.
                 실측(2026-09-12) — 320 − 좌우 여백 17×2 − 우측 버튼 클러스터 137 = 149px 이 헤더 잔량인데,
                 로고 버튼이 `shrink-0` 이라 96.1px(마크 25.5 + 워드마크 64.2 + gap)을 먼저 가져가고
@@ -454,7 +453,11 @@ const AppHeader = memo(function AppHeader({
                 하나로 통일한다 — 359→372 로 올려 373 미만에서는 어떤 탭이어도 워드마크가 접힌다.
                 글자 크기·히트영역은 그대로다.
                 (재현: `foot.cjs`·`hdr5~9.cjs` 로 TAB_LABEL 10개 × 355~400px 전수 스윕, scratchpad st4 참고). */}
-            <NuriHoldemLogo className="h-7! [@media(max-width:372px)]:hidden" />
+            {/* 2026-10-06 오너 C안 로고(다이아+NURI/HOLDEM) — 높이 28(h-7) = 종전 워드마크 높이, 가로 86.8(종전 마크+워드마크 90.4).
+                373 미만은 위 U01 경계 그대로 **글자 층만** 접고 다이아(20×28)만 남긴다. 상자는 종전 마크 폭 24(w-6) 그대로 —
+                누름 폭 24 이상(e2e header-320)과 현재 위치 제목 x 를 지킨다. */}
+            <NuriClassicLogo priority className="h-7 [@media(max-width:372px)]:aspect-auto [@media(max-width:372px)]:w-6"
+              textClassName="[@media(max-width:372px)]:hidden" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
