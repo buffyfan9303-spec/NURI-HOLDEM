@@ -1,4 +1,6 @@
--- ⏳ 미적용 초안 (store-team 2026-10-05) — 적용은 리드가 critical 반증 뒤 MCP execute_sql 로. 리허설: supabase/tests/20261004d_rehearsal.sql(20261005a 를 감지해 기대값을 바꾼다)
+-- ✅ 적용 완료 2026-10-05 (리드, critical 반증 통과 42/42 · MCP execute_sql) — 적용 뒤 md5(prosrc): check_in 5ad9d7b68314460ff4703bcc0c450dbf ·
+--   request_checkin dbc028cff9263dab82192b4034c5285b · staff_check_in 123d596bc8129cbf19fe216cb22a9689 · ACL 불변(anon 실행 불가).
+-- (원래 머리) 초안 (store-team 2026-10-05) — 리허설: supabase/tests/20261004d_rehearsal.sql(20261005a 를 감지해 기대값을 바꾼다)
 -- 20261005a — 위치 확인 출석 후속(critical 반증 2026-10-05 P2·P3-c·P3-d). 20261004d(✅ 2026-10-05 적용) 본문을 그대로 가져와 아래만 바꾼다.
 --
 -- P2   check_in: 위치 확인 출석 매장에서 반경 밖·정확도 낮음 거부에 code 를 붙인다 — 'geo_out_of_range' · 'geo_low_accuracy'.
