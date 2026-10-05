@@ -937,8 +937,12 @@ function FeedSection({
   const skRows: number | null = postsLoaded ? Math.min(posts.length, 15) : lastRows;
   // 상단 필터 줄(칩·🔍·⇅)을 그릴지 — 글이 있을 때 + **뼈대로 첫 조회를 기다리는 동안**(M7-01 P2-1 — 뼈대 위에 줄이 늦게 붙으면 44px 밀렸다).
   //   개수를 모르는 첫 방문(짧은 카드)에는 미리 잡지 않는다 — 0건·실패로 끝나면 44px 자리가 사라지며 위로 끌려 올라온다(M8-01).
-  const showFilter = hasPosts || listSource.length > 0 || (!serverDone && serverErr == null && postsErr == null && !!skRows);
+  //   검색·분류 중이거나 검색칸이 열려 있으면 늘 그린다 — 검색칸이 이 줄 안에 있다. 첫 방문에 게시판 첫 페이지가 App 글보다 먼저 와서
+  //   그 15건 때문에만 줄이 보이던 때, 한 글자 치자 목록이 비며(App 글 0) 줄째 검색칸이 사라져 나머지 글자가 버려졌다(PR #183 CI ·
+  //   e2e board-search-race ③).
   const firstPage = q.trim() === '' && (!enableCategory || cat === 'all');
+  const showFilter = hasPosts || listSource.length > 0 || !firstPage || searchOpen
+    || (!serverDone && serverErr == null && postsErr == null && !!skRows);
   useEffect(() => {
     // 첫 페이지 행 수가 확정되면(서버 끝 또는 15행 채움) 기억한다 — 다음 방문의 뼈대 높이.
     if (firstPage && listSource.length > 0 && (serverDone || listSource.length >= 15)) writeBoardRows(listSource.length);
