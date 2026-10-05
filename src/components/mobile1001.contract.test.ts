@@ -53,7 +53,7 @@ describe('디자인 개선안 1001 모바일', () => {
     expect(c).not.toMatch(/TitleChip/);
     expect(c).toMatch(/Lv \{prog\.current\.level\} · <b[^>]*>\{prog\.current\.title\}<\/b>/);
   });
-  it('M-12 전광판은 흐를 때만, 동작 허용일 때만 좌우 14px 페이드 — 마스크가 아니라 지면색 오버레이', () => {
+  it('M-12 전광판은 흐를 때만, 동작 허용일 때만 좌우 페이드(10-05 오너: 글자 두 개 폭 min(28px, 칸의 18%)) — 마스크가 아니라 지면색 오버레이', () => {
     const c = code('components/atoms/MarqueeText.tsx');
     expect(c).toMatch(/const edgeFade = loopW > 0 \? ' marquee-fade' : '';/);
     expect(c).toMatch(/overflow-hidden\$\{edgeFade\} /);
@@ -62,7 +62,7 @@ describe('디자인 개선안 1001 모바일', () => {
     const block = /@media \(prefers-reduced-motion: no-preference\) \{\s*\.marquee-fade::before[\s\S]*?\n\}/.exec(css)?.[0] ?? '';
     expect(block).toMatch(/\.marquee-fade::before \{ left: 0; background: linear-gradient\(90deg, var\(--marquee-fade-l, var\(--marquee-fade, rgb\(var\(--surface-low\)\)\)\), transparent\); \}/);
     expect(block).toMatch(/\.marquee-fade::after \{ right: 0; background: linear-gradient\(270deg, var\(--marquee-fade, rgb\(var\(--surface-low\)\)\), transparent\); \}/);
-    expect(block).toMatch(/width: 14px; pointer-events: none;/);
+    expect(block).toMatch(/width: min\(28px, 18%\); pointer-events: none;/);
     expect(block).not.toMatch(/mask|filter|will-change|transform/);
   });
 });
