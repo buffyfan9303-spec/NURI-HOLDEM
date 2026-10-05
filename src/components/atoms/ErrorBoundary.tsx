@@ -86,7 +86,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: '12px',
-        background: '#0A0A0A', color: '#F0F0F0', padding: '24px', textAlign: 'center',
+        background: '#101823', color: '#EDF3FA', padding: '24px', textAlign: 'center',
         fontFamily: "'Apple SD Gothic Neo','Malgun Gothic',sans-serif",
       }}>
         <p style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>일시적인 문제가 발생했습니다</p>
@@ -94,7 +94,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         {/* dev 에서만 보이는 한 줄 — 이 화면이 '라이브 장애' 가 아니라 편집 중 스냅샷임을 알린다.
             프로덕션 번들에서는 import.meta.hot 이 없어 통째로 사라진다. */}
         {import.meta.hot && (
-          <p style={{ fontSize: '12px', color: '#D9B25A', margin: 0 }}>
+          <p style={{ fontSize: '12px', color: '#9FC3FA', margin: 0 }}>
             개발 서버(HMR) — 파일 저장이 끝나면 자동으로 복구됩니다.
           </p>
         )}
@@ -103,8 +103,8 @@ export default class ErrorBoundary extends Component<Props, State> {
           onClick={() => window.location.reload()}
           style={{
             marginTop: '8px', padding: '10px 22px', borderRadius: '8px',
-            /* CSS 미로드 대비 하드 hex — 다크 accent-300 정본(#8C5E14 진한 황동, 2026-10-04)과 동기(index.css) */
-            background: '#8C5E14', color: '#FFFFFF', fontWeight: 700,
+            /* CSS 미로드 대비 하드 hex — 다크 accent-300 정본(#355FA7, 2026-10-05 4안)과 동기(index.css) */
+            background: '#355FA7', color: '#FFFFFF', fontWeight: 700,
             border: 'none', cursor: 'pointer', fontSize: '14px',
           }}
         >

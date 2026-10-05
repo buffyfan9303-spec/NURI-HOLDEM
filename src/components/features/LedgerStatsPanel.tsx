@@ -942,7 +942,7 @@ function OpsReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onR
 body{padding:32px;color:#1a1a1a;max-width:720px;margin:0 auto}
 h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20px}
 .c{border:1px solid #e3e3e3;border-radius:10px;padding:14px 16px;margin-bottom:12px}
-.c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#8C5E14}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
+.c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#2F5E9C}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
 @media print{body{padding:16px}}
 </style></head><body>
 <h1>NURI 운영 리포트</h1><div class="sub">최근 ${days}일 집계 · 개인정보 없는 집계 데이터 · nuriholdem.com</div>

@@ -257,9 +257,9 @@ function AuraSpade({ size }: { size: number }) {
         width: size, height: size,
         background: [
           // ① 좌상단 광원 — 2026-10-04 'E+황동': 보라 광원·시안 반사광을 걷고 무채색 광원 + 황동 기운 한 점
-          'radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.20) 0%, rgb(140 94 20 / 0.16) 24%, transparent 56%)',
+          'radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.20) 0%, rgb(53 95 167 / 0.20) 24%, transparent 56%)',
           // 구 본체(무채색)
-          'radial-gradient(120% 120% at 50% 4%, #2E3034 0%, #17181B 52%, #0A0A0A 100%)',
+          'radial-gradient(120% 120% at 50% 4%, #2A4062 0%, #172335 52%, #101823 100%)',
         ].join(', '),
         boxShadow: [
           'inset 0 1.5px 0 rgb(255 255 255 / 0.30)',      // ③ 상단 스펙큘러
