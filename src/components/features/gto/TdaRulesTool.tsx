@@ -234,7 +234,9 @@ function RuleCard({ rule, open, defaultOpen, onToggle }: {
         className="flex w-full items-center gap-2 px-2.5 py-2 text-left">
         {/* max-w-[45%] + truncate: 긴 섹션 이름('자리 지정, 테이블 브레이크 및 테이블 밸런싱')도 제목 칸을 절반 넘게 먹지 못한다. */}
         <span title={rule.section} className="max-w-[45%] shrink-0 truncate rounded-chip bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">{head}</span>
-        <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{rule.title}</span>
+        {/* 실전 예제 부록의 제목은 '규칙 49 예시: …' 처럼 배지와 같은 번호로 시작한다 — 화면에서는 겹치는 머리('규칙 49 ')만 떼고 보인다
+            (320 에서 같은 말이 두 번이라 뒤 내용이 말줄임으로 잘렸다, 독립 검토 2026-10-05). 전체 제목은 title 툴팁에 그대로. */}
+        <span title={rule.title} className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{rule.no !== null && rule.title.startsWith(`${head} `) ? rule.title.slice(head.length + 1) : rule.title}</span>
         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} className="shrink-0 text-ink-muted" />
       </button>
       <Fold open={isOpen}>
