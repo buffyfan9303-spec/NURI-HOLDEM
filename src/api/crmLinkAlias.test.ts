@@ -38,7 +38,12 @@ describe('O-2 — 연결·해제 실패 이유가 화면 문장까지 간다', (
 
 const MIG = readFileSync(join(__dirname, '..', '..', 'supabase', 'migrations', '20261006a_link_customer_alias_adopt_unlinked.sql'), 'utf-8')
   .replace(/--[^\n]*/g, '');
-const body = MIG.slice(MIG.indexOf('create or replace function public.link_customer_alias'), MIG.indexOf('end $function$;'));
+const fnBody = (name: string) => {
+  const i = MIG.indexOf(`create or replace function public.${name}(`);
+  expect(i, name).toBeGreaterThan(-1);
+  return MIG.slice(i, MIG.indexOf('end $function$;', i));
+};
+const body = fnBody('link_customer_alias');
 
 describe('R8-01 — 20261006a 동명 미연결 행 묶기', () => {
   it('관계 확인(20261005b) → 회원 행 → 동명 미연결 행 묶기 → 새 행 순서', () => {
@@ -56,8 +61,16 @@ describe('R8-01 — 20261006a 동명 미연결 행 묶기', () => {
 
   it('병합은 메모·생일·전화를 버리지 않는다', () => {
     expect(body).toMatch(/birthday = coalesce\(t\.birthday, m\.bd\)/);
-    expect(body).toMatch(/phone = coalesce\(nullif\(btrim\(t\.phone\),''\), m\.ph\)/);
+    // 대상 전화가 있으면 손대지 않는다(공백 다듬기도 하지 않는다 — critical X4)
+    expect(body).toMatch(/phone = case when nullif\(btrim\(t\.phone\),''\) is null then coalesce\(m\.ph, t\.phone\) else t\.phone end/);
     expect(body).toMatch(/memo = coalesce\(nullif\(concat_ws\(E'\\n', nullif\(btrim\(t\.memo\),''\), m\.memo\), ''\), t\.memo\)/);
+  });
+
+  it('(critical X1·X8) 방문·출석의 이름 충돌 insert 는 다른 회원 행에 방문을 더하지 않는다', () => {
+    for (const name of ['_apply_checkin', '_apply_venue_visit']) {
+      const f = fnBody(name);
+      expect(f, name).toMatch(/on conflict \(venue_id, name\) do update[\s\S]*?where public\.customer_profiles\.user_id is null or public\.customer_profiles\.user_id = p_uid;\s+if not found then[\s\S]*?v_disp \|\| ' #' \|\| left\(p_uid::text, 8\)[\s\S]*?on conflict do nothing;/);
+    }
   });
 
   it('정의자·search_path 고정·anon 회수', () => {

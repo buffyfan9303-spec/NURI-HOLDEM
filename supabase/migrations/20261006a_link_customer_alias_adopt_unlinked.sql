@@ -1,6 +1,5 @@
 -- 초안 (store-team 2026-10-06) — 미적용. 적용 판단·실행은 리드. 리허설: supabase/tests/20261006a_rehearsal.sql (+ 20261005b_rehearsal.sql 회귀)
--- 라이브 롤백 리허설(2026-10-06, rehearse-geo.mjs · ZZ999): 이 파일+6a 리허설 9/9 · 이 파일+5b 리허설 18/18 · 이 파일 두 번+6a 9/9(재적용)
---   음성 대조(빈 파일 = 라이브 본문): 5/9 — S5·S5d·S5e 23505, M1 메모·생일·전화 소실. 리허설 뒤 프로브 null·md5 그대로·행 수 5/0.
+-- 라이브 롤백 리허설 결과는 PR 본문(#182)에 있다 — critical 반증(X1·X8) 반영판.
 -- 20261006a — 장부명↔회원 연결이 '같은 이름의 미연결 고객 행'에서 23505 로 실패하던 것 (audit8-regress-connect.md#R8-01)
 --
 -- 결함: link_customer_alias 의 insert(name = 회원 표시 이름)가 on conflict (venue_id, user_id) 하나뿐이라,
@@ -23,18 +22,130 @@
 --
 -- 20261005b 불변식 유지: 관계 확인 블록·칸 GRANT(user_id·방문 집계 서버 전용)·비정의자 트리거 trg_guard_customer_profile_link.
 --   ② 의 user_id UPDATE 는 정의자 함수 안(current_user = postgres)이라 트리거를 통과한다 — 클라는 여전히 못 한다.
+--
+-- (critical 반증 X1·X8 — 근본 원인은 _apply_checkin·_apply_venue_visit) 고객 행 이름은 장부 이름으로 남을 수 있어서, 다른 회원 u3 에
+--   묶인 행의 이름이 회원 u4 의 닉네임과 같을 수 있다. 그때 u4 의 방문·출석 3단계 insert … on conflict (venue_id, name) do update 가
+--   **u3 행에 방문을 더하고**(user_id 는 coalesce 로 u3 유지) u4 행은 생기지 않았다. 6a 의 묶기가 이 상황을 더 자주 만들고(X1),
+--   6a 없이도 업주가 장부명을 연결하면 같은 일이 난다(X8 — 라이브 본문에서도 FAIL).
+--   ⓪ 두 함수의 3단계 do update 에 `where 기존 행 user_id is null or = p_uid` 를 걸고, 걸리지 않으면(not found)
+--      '표시 이름 #회원id 앞 8자' 로 이 회원 행을 따로 만든다(on conflict do nothing). 포인트·연속 출석·checkins 행 등 다른 분기는 그대로.
 -- 기존 데이터(2026-10-06 읽기 조회 ro.mjs): customer_profiles 5행 전부 user_id null · customer_aliases 0행. 이 파일은 행을 바꾸지 않는다.
--- 되돌리기: link_customer_alias 를 20261005b 의 ③ 본문으로 create or replace(같은 시그니처 → ACL 보존). 표·정책·트리거는 건드리지 않는다.
+-- 되돌리기: link_customer_alias 를 20261005b 의 ③ 본문으로, _apply_checkin 을 20260905k 본문으로, _apply_venue_visit 을 20260921b 본문으로
+--   create or replace(같은 시그니처 → ACL 보존). 표·정책·트리거는 건드리지 않는다.
 
--- §0 적용 전 게이트 — 라이브 본문이 2026-10-06 실측(20261005b 적용본) 그대로이거나 이 파일 본문(재적용)이어야 한다.
---   재적용 판별은 주석이 아니라 코드 조각(v_tgt)으로 한다 — 적용 경로에 따라 본문의 -- 주석이 지워진다(audit8 §4).
+-- §0 적용 전 게이트 — 세 함수의 라이브 본문이 2026-10-06 실측 md5(prosrc) 그대로이거나, 이 파일 본문 전체(재적용)여야 한다.
+--   재적용 판별은 '주석·공백을 지운 본문'의 md5 전체 일치다 — 적용 경로가 -- 주석을 지우고(audit8 §4) 체크아웃이 줄끝을 CRLF 로
+--   바꿔도 같은 값이 나오게. 일부 조각(like)으로 보면 나중에 바뀐 본문을 이 파일이 덮어쓸 수 있다(critical P3).
 do $pre$
-declare s text := (select prosrc from pg_proc where oid = 'public.link_customer_alias(uuid,text,uuid)'::regprocedure);
+declare g record; s text;
 begin
-  if not (md5(s) = '4dcf9813b6ecc0f1ad1095fe6c62bab2' or s like '%v_tgt%') then
-    raise exception '20261006a: link_customer_alias 라이브 본문이 예상과 다릅니다(md5 %) — 그 사이 바뀐 내용을 먼저 합치세요', md5(s);
-  end if;
+  for g in select * from (values
+      ('public.link_customer_alias(uuid,text,uuid)', '4dcf9813b6ecc0f1ad1095fe6c62bab2', 'd75c18bd90fcf97b96ab2c80f5b91c64'),
+      ('public._apply_checkin(uuid,uuid)',           'f3e16d1634102932f15b50a0b8117875', '2bad93fed17811bc5e0e55ddcfbf43b6'),
+      ('public._apply_venue_visit(uuid,uuid)',       'c72b76c1539ec2c2c02175c64c3af1b4', 'b946a6dbc26ee903f60492c9826e2c54')) v(sig, live_md5, new_norm)
+  loop
+    s := (select prosrc from pg_proc where oid = g.sig::regprocedure);
+    -- 정규화: 주석(대시 두 개 ~ 줄끝) 제거 → 공백 전부 제거. 패턴에 대시 두 개를 그대로 쓰지 않는다(주석 제거기가 리터럴을 자를 수 있다).
+    if md5(s) is distinct from g.live_md5
+       and md5(regexp_replace(regexp_replace(s, '[-]{2}[^\n]*', '', 'g'), '\s+', '', 'g')) is distinct from g.new_norm then
+      raise exception '20261006a: % 라이브 본문이 예상과 다릅니다(md5 %) — 그 사이 바뀐 내용을 먼저 합치세요', g.sig, md5(s);
+    end if;
+  end loop;
 end $pre$;
+
+-- ⓪-1 _apply_checkin — 3단계(이름 충돌) 한 곳만 바꾼다. 나머지 본문은 2026-10-06 라이브(f3e16d16…) 그대로.
+create or replace function public._apply_checkin(p_venue_id uuid, p_uid uuid)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+declare v_disp text; v_today_cnt int; v_today date; v_last date; v_streak int; v_pts int := 0;
+begin
+  v_today := (now() at time zone 'Asia/Seoul')::date;
+  select count(*) into v_today_cnt from public.checkins
+   where venue_id = p_venue_id and user_id = p_uid
+     and created_at >= date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul';
+  select coalesce(nickname, name) into v_disp from public.profiles where id = p_uid;
+  insert into public.checkins(venue_id, user_id, display_name) values (p_venue_id, p_uid, v_disp);
+  if v_today_cnt = 0 then
+    v_pts := v_pts + 3;
+    update public.profiles set activity_points = coalesce(activity_points, 0) + 3 where id = p_uid;
+  end if;
+  select last_checkin_date, checkin_streak into v_last, v_streak from public.profiles where id = p_uid;
+  if v_last is distinct from v_today then
+    if v_last = v_today - 1 then v_streak := coalesce(v_streak, 0) + 1; else v_streak := 1; end if;
+    v_pts := v_pts + (case when v_streak % 7 = 0 then 10 else 0 end);
+    update public.profiles set checkin_streak = v_streak, last_checkin_date = v_today,
+           activity_points = coalesce(activity_points, 0) + (case when v_streak % 7 = 0 then 10 else 0 end)
+     where id = p_uid;
+  end if;
+  update public.customer_profiles
+     set visit_count = coalesce(visit_count,0) + 1, last_visit_at = now(),
+         name = coalesce(nullif(btrim(name),''), v_disp), updated_at = now()
+   where venue_id = p_venue_id and user_id = p_uid;
+  if not found then
+    update public.customer_profiles
+       set user_id = p_uid, visit_count = coalesce(visit_count,0) + 1, last_visit_at = now(), updated_at = now()
+     where venue_id = p_venue_id and user_id is null and lower(btrim(name)) = lower(btrim(v_disp));
+    if not found then
+      insert into public.customer_profiles(venue_id, user_id, name, visit_count, first_visit_at, last_visit_at)
+      values (p_venue_id, p_uid, v_disp, 1, now(), now())
+      on conflict (venue_id, name) do update
+        set user_id = coalesce(public.customer_profiles.user_id, excluded.user_id),
+            visit_count = coalesce(public.customer_profiles.visit_count,0) + 1,
+            last_visit_at = now(), updated_at = now()
+        where public.customer_profiles.user_id is null or public.customer_profiles.user_id = p_uid;
+      if not found then
+        -- 20261006a: 그 이름이 다른 회원의 행이면 거기에 방문을 더하지 않고 이 회원 행을 따로 만든다(critical X1·X8)
+        insert into public.customer_profiles(venue_id, user_id, name, visit_count, first_visit_at, last_visit_at)
+        values (p_venue_id, p_uid, v_disp || ' #' || left(p_uid::text, 8), 1, now(), now())
+        on conflict do nothing;
+      end if;
+    end if;
+  end if;
+  return jsonb_build_object('points', v_pts, 'streak', coalesce(v_streak, 0));
+end $function$;
+revoke all on function public._apply_checkin(uuid, uuid) from public, anon, authenticated;
+grant execute on function public._apply_checkin(uuid, uuid) to service_role;
+
+-- ⓪-2 _apply_venue_visit — 같은 한 곳. 나머지는 2026-10-06 라이브(c72b76c1…) 그대로.
+create or replace function public._apply_venue_visit(p_venue_id uuid, p_uid uuid)
+ returns void
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+declare v_disp text;
+begin
+  select coalesce(nickname, name) into v_disp from public.profiles where id = p_uid;
+  update public.customer_profiles
+     set visit_count = coalesce(visit_count,0) + 1, last_visit_at = now(),
+         name = coalesce(nullif(btrim(name),''), v_disp), updated_at = now()
+   where venue_id = p_venue_id and user_id = p_uid;
+  if not found then
+    update public.customer_profiles
+       set user_id = p_uid, visit_count = coalesce(visit_count,0) + 1, last_visit_at = now(), updated_at = now()
+     where venue_id = p_venue_id and user_id is null and lower(btrim(name)) = lower(btrim(v_disp));
+    if not found then
+      insert into public.customer_profiles(venue_id, user_id, name, visit_count, first_visit_at, last_visit_at)
+      values (p_venue_id, p_uid, v_disp, 1, now(), now())
+      on conflict (venue_id, name) do update
+        set user_id = coalesce(public.customer_profiles.user_id, excluded.user_id),
+            visit_count = coalesce(public.customer_profiles.visit_count,0) + 1,
+            last_visit_at = now(), updated_at = now()
+        where public.customer_profiles.user_id is null or public.customer_profiles.user_id = p_uid;
+      if not found then
+        -- 20261006a: 그 이름이 다른 회원의 행이면 거기에 방문을 더하지 않고 이 회원 행을 따로 만든다(critical X1·X8)
+        insert into public.customer_profiles(venue_id, user_id, name, visit_count, first_visit_at, last_visit_at)
+        values (p_venue_id, p_uid, v_disp || ' #' || left(p_uid::text, 8), 1, now(), now())
+        on conflict do nothing;
+      end if;
+    end if;
+  end if;
+end $function$;
+revoke all on function public._apply_venue_visit(uuid, uuid) from public, anon, authenticated;
+grant execute on function public._apply_venue_visit(uuid, uuid) to service_role;
 
 create or replace function public.link_customer_alias(p_venue_id uuid, p_alias text, p_user_id uuid)
  returns void
@@ -92,7 +203,7 @@ begin
     first_visit_at = least(t.first_visit_at, m.fv),
     last_visit_at = greatest(t.last_visit_at, m.lv),
     birthday = coalesce(t.birthday, m.bd),
-    phone = coalesce(nullif(btrim(t.phone),''), m.ph),
+    phone = case when nullif(btrim(t.phone),'') is null then coalesce(m.ph, t.phone) else t.phone end,
     memo = coalesce(nullif(concat_ws(E'\n', nullif(btrim(t.memo),''), m.memo), ''), t.memo),
     updated_at = now()
   from (select sum(o.visit_count) vc, min(o.first_visit_at) fv, max(o.last_visit_at) lv,
@@ -111,16 +222,32 @@ revoke all on function public.link_customer_alias(uuid, text, uuid) from public,
 grant execute on function public.link_customer_alias(uuid, text, uuid) to authenticated, service_role;
 
 -- §9 자가검사 — 하나라도 어긋나면 적용 전체를 되돌린다
+--   ⚠ 한계: 세 함수 모두 이미 라이브에 있어 create or replace 가 ACL 을 보존한다 → 이 파일의 revoke/grant 줄을 지워도 아래 ACL 항목은
+--   통과한다(CLAUDE.md 보안 3). 그리고 20261004b 기본 권한(fail-closed) 때문에 새 함수도 anon·PUBLIC 실행이 처음부터 없다.
+--   그래서 ACL 항목은 '파일이 권한을 줬는가' 가 아니라 **적용 직후 라이브의 실제 실행 권한**만 판정한다(has_function_privilege —
+--   PUBLIC 경유 권한까지 포함한다). revoke/grant 줄 자체의 효과는 drop 후 재생성에서만 검증된다.
 do $check$
 declare s text := (select prosrc from pg_proc where oid = 'public.link_customer_alias(uuid,text,uuid)'::regprocedure);
 begin
   if s not like '%v_tgt%' or s not like '%_venue_customer_ids(array[p_venue_id])%'
-     or not (select prosecdef from pg_proc where oid = 'public.link_customer_alias(uuid,text,uuid)'::regprocedure) then
+     or not (select bool_and(prosecdef) from pg_proc where oid in ('public.link_customer_alias(uuid,text,uuid)'::regprocedure,
+               'public._apply_checkin(uuid,uuid)'::regprocedure, 'public._apply_venue_visit(uuid,uuid)'::regprocedure)) then
     raise exception '20261006a 자가검사: link_customer_alias 본문(동명 행 묶기·20261005b 관계 확인)이나 정의자 속성이 기대와 다르다';
   end if;
+  if (select count(*) from pg_proc where oid in ('public._apply_checkin(uuid,uuid)'::regprocedure, 'public._apply_venue_visit(uuid,uuid)'::regprocedure)
+        and prosrc like '%public.customer_profiles.user_id is null or public.customer_profiles.user_id = p_uid%') <> 2 then
+    raise exception '20261006a 자가검사: _apply_checkin·_apply_venue_visit 의 이름 충돌 가드(다른 회원 행에 방문 합산 금지)가 없다';
+  end if;
+  -- 실제 실행 권한: link 는 로그인 사용자만, 내부 함수 둘은 클라 역할 전부 불가 · service_role 가능
   if has_function_privilege('anon', 'public.link_customer_alias(uuid,text,uuid)', 'EXECUTE')
-     or not has_function_privilege('authenticated', 'public.link_customer_alias(uuid,text,uuid)', 'EXECUTE') then
-    raise exception '20261006a 자가검사: link_customer_alias ACL 이 기대와 다르다';
+     or not has_function_privilege('authenticated', 'public.link_customer_alias(uuid,text,uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public._apply_checkin(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public._apply_checkin(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public._apply_checkin(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public._apply_venue_visit(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public._apply_venue_visit(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public._apply_venue_visit(uuid,uuid)', 'EXECUTE') then
+    raise exception '20261006a 자가검사: 실행 권한(ACL)이 기대와 다르다';
   end if;
   -- 20261005b 불변식이 그대로인지(이 파일은 건드리지 않지만, 적용 순서가 어긋났으면 여기서 멈춘다)
   if has_column_privilege('authenticated', 'public.customer_profiles', 'user_id', 'INSERT')
