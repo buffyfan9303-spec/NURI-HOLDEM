@@ -28,7 +28,7 @@ describe('P1-2 광고성 알림 — 알림함은 그대로, 푸시만 동의·�
   it.each(['send_venue_announcement', 'send_weekly_follow_digest', 'notify_followers_on_poster'])('%s 의 insert 가 is_ad=true 를 싣는다', (name) => {
     const body = fn(L, name);
     expect(body).toMatch(/insert into public\.notifications \([^)]*\bis_ad\)/);
-    expect(body).toMatch(/,\s*true\s*\n\s*(from|  from)/);
+    expect(body).toMatch(/,\s*true\s*\n\s*from\b/);
     expect(body, '수신자를 동의자로 좁히면 알림함 기능이 사라진다(리드 결정: 알림함은 모두에게)').not.toMatch(/agreed_to_marketing/);
   });
   it('push_on_notification 이 is_ad 행을 동의·야간으로 거르고 (광고)·전송자·수신거부를 붙인다', () => {
@@ -79,10 +79,28 @@ describe('P1-3 처리 결과 통지 · P2-1 설정 토글', () => {
 });
 
 describe('P2-8 ② 제재 계정 본인 탈퇴 — 재가입 차단은 유지', () => {
-  it('withdraw_my_account 가 제재 상태로 막지 않고, 제재 계정 CI 는 banned 로 남긴다', () => {
+  it('withdraw_my_account 가 제재 상태로 막지 않고, 영구정지는 banned · 기간 안 정지는 suspended · 기간 끝난 정지는 일반 탈퇴', () => {
     const body = fn(M, 'withdraw_my_account');
     expect(body).not.toContain('제재 중인 계정은 탈퇴할 수 없습니다');
-    expect(body).toMatch(/case when v_status in \('banned', 'suspended'\) then 'banned' else 'withdrawn' end/);
+    expect(body).toMatch(/when v_status = 'banned' then 'banned'/);
+    // 서버 _actor_not_sanctioned() 와 같은 판정(pr188-review P3-2)
+    expect(body).toMatch(/when v_status = 'suspended' and \(v_until is null or v_until > now\(\)\) then 'suspended'/);
+    expect(body).toMatch(/values \(v_hash, v_kind\)/);
+  });
+  it('(P2-A 리드 결정 b) 영구정지 변환값은 5년, 그 밖은 6개월 — 기간 정지 중 탈퇴도 재가입 거절 목록에 든다', () => {
+    expect(fn(M, '_purge_withdrawn_identities')).toMatch(/case when reason = 'banned' then interval '5 years' else interval '6 months' end/);
+    expect(fn(M, 'verify_identity_commit')).toMatch(/w\.reason in \('banned', 'admin_withdrawn', 'suspended'\)/);
+    for (const [doc, src] of [['처리방침', read('src/pages/legal/PrivacyPolicy.tsx')], ['계정 삭제 안내', read('src/pages/legal/AccountDeletion.tsx')],
+      ['하단 창', read('src/components/features/LegalDocsModal.tsx')], ['이용 제한 시트', read('src/components/features/SanctionedAccountSheet.tsx')]]) {
+      expect(src, `${doc}: 영구 이용 제한 5년 보관 고지가 없다`).toMatch(/영구 이용 제한[^']{0,60}5년/);
+    }
+  });
+  it('20261006l 적용 절차: 엣지 함수와 같은 날 · 401 확인 · 10-09 10:30 KST 기한 · 못 맞추면 크론 중지(pr188-review P2-B)', () => {
+    const head = read('supabase/migrations/20261006l_marketing_ad_gate.sql');
+    expect(head).toContain('supabase functions deploy weekly-email-digest');
+    expect(head).toMatch(/POST → \*\*401\*\*/);
+    expect(head).toContain('2026-10-09(금) 10:30 KST');
+    expect(head).toContain("cron.unschedule('weekly-email-digest')");
   });
   it('20261006s2(탈퇴 파일 큐) 위에 얹는다 — 큐 넣기를 지우지 않고 SQL 메타 삭제를 되살리지 않는다 · s2 뒤 정의 게이트', () => {
     const body = fn(M, 'withdraw_my_account');

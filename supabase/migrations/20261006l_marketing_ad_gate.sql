@@ -20,6 +20,32 @@ select set_config('statement_timeout', '60s', true);
 --
 -- 리허설: Documents/누리홀덤_영상분석_0930/security-1006/legal-fix/20261006l_rehearsal.sql (rehearse-geo.mjs 로 롤백 전용)
 -- 적용 순서(리드 결정): 20261006s1 → 20261006s2 → 20261006l → 20261006m. 이 파일은 탈퇴 함수를 건드리지 않는다.
+--
+-- 🔴 적용 절차(pr188-review P2-B) — 이 파일과 엣지 함수 weekly-email-digest 는 **같은 날 짝으로** 나간다.
+--   1. 이 파일 적용과 같은 날 `supabase functions deploy weekly-email-digest`(함께 묶이는 _shared/email/weeklyDigest.ts·layout.ts·brand.gen.ts 포함).
+--   2. 배포 확인: 시크릿 헤더 없이 POST → **401** 이어야 한다(첫 분기 게이트가 살아 있다).
+--   3. 둘 다 **2026-10-09(금) 10:30 KST**(크론 weekly-email-digest, 금 01:30 UTC) 전에 끝낸다.
+--      한쪽만 나가면 위법 상태다 — 이 파일만: 동의자에게 '(광고)'·수신거부 없는 메일(§50④) / 엣지만: 미동의자에게 메일(§50①).
+--   4. 기한을 못 맞추면 그 주 발송을 멈춘다: `select cron.unschedule('weekly-email-digest');`(legal.md O-1) — 둘 다 나간 뒤
+--      `select cron.schedule('weekly-email-digest', '30 1 * * 5', $$select public.cron_weekly_email_digest()$$);` 로 되살린다.
+--   5. 이 파일이 없어도 매장 공지·팔로우 소식·새 포스터 푸시는 지금 구독 0건이라 실제 도달 0이다(legal.md q3) — 그래도 같은 날 적용한다.
+
+-- 출발점 게이트(pr188-review P3-4): 교체하는 5개 함수가 작성 때(2026-10-06 라이브 ro.mjs md5)와 같아야 한다.
+--   그 사이 다른 PR 이 바꿨으면 조용히 되돌리지 않고 멈춘다 — 라이브 정의를 다시 떠서 합쳐라.
+do $gate$
+declare r record;
+begin
+  for r in select * from (values
+      ('public.push_on_notification()',                       '47d3b7023782c9839088fc5df3acc28d'),
+      ('public.send_venue_announcement(uuid,text,text)',      '0d9f869f3ee1de2a815860ba74418dd3'),
+      ('public.send_weekly_follow_digest()',                  '2c9beaea08f6490ccde4c2ebe52784fd'),
+      ('public.notify_followers_on_poster()',                 '91ab35cb7ffb6e3ea97e23a340e91fe5'),
+      ('public.weekly_email_digest_rows()',                   '960250676198f09448079b73bf2b5388')) v(fn, want) loop
+    if md5(pg_get_functiondef(r.fn::regprocedure)) is distinct from r.want then
+      raise exception '20261006l 게이트: % 가 작성 때(2026-10-06)와 다르다 — 라이브 정의를 다시 떠서 합쳐라', r.fn;
+    end if;
+  end loop;
+end $gate$;
 
 -- ① ───────────────────────────────────────────────────────────────────────
 alter table public.notifications add column if not exists is_ad boolean not null default false;
@@ -243,5 +269,7 @@ begin
     from public.profiles p where p.id = v_uid;
   return v_at;
 end $function$;
+-- ⚠ anon 차단은 이 revoke 와 20261004b 기본 권한(새 함수에 anon·PUBLIC 실행 없음) 둘 다에 기댄다 — DROP 후 재생성으로
+--   음성 대조하면 기본 권한 때문에 revoke 를 빼도 막혀 보인다(pr188-review P3-1). 이 줄을 지우지 마라.
 revoke all on function public.set_my_marketing_consent(boolean) from public, anon;
 grant execute on function public.set_my_marketing_consent(boolean) to authenticated, service_role;
