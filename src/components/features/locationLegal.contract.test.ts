@@ -70,11 +70,12 @@ describe('위치기반서비스 이용약관 제3판 — 동의 거부 효과·�
     expect(loc).toMatch(/이용·제공 일시, 이용·제공 방법\(서버에서 매장 반경 판정 후 좌표 즉시 파기/);
     expect(loc).toMatch(/위치를 받지 않은 출석[^\n]*기록하지 않습니다/);
   });
-  it('부칙 — 공지일·시행일, 변경 이유·내용 공개(제12조①), 불리한 변경 30일 전 공지(이용약관 제16조②), 제2판 원문 링크', () => {
+  // 2026-10-06 오너 결정 — 시행은 정식 오픈일(30일 간격 없음). 공지는 2026-10-05 에 했다.
+  it('부칙 — 공지일·시행일, 변경 이유·내용 공개(제12조①), 정식 오픈과 함께 시행, 제2판 원문 링크', () => {
     expect(loc).toMatch(/제\$\{LOCATION_TERMS_VERSION\}판은 \$\{LOCATION_TERMS_NOTICE\}에 공지하여 \$\{LOCATION_TERMS_EFFECTIVE\}부터 시행합니다/);
     expect(loc).toMatch(/개정 이유:/);
     expect(loc).toMatch(/개정 내용:/);
-    expect(loc).toMatch(/이용약관 제16조제2항에 따라 시행일 30일 전에 공지합니다/);
+    expect(loc).toMatch(/제\$\{LOCATION_TERMS_VERSION\}판은 \$\{LOCATION_TERMS_EFFECTIVE\} 정식 오픈과 함께 시행합니다/);
     expect(loc).toMatch(/제2판 원문: https:\/\/nuriholdem\.com\$\{LOCATION_TERMS_PREV_ARCHIVE_URL\}/);
   });
   it('제9조 위치정보관리책임자·연락처 = lib/locationTerms LOCATION_OFFICER(처리방침과 같은 값)', () => {

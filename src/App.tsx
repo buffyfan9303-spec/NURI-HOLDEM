@@ -194,6 +194,7 @@ const VerifyGateSheet   = lazyWithReload(() => shellDeferred().then((m) => ({ de
 // 정지·영구정지 계정의 '탈퇴만 가능' 안내(2026-10-06 P2-8 ②) — 그런 계정으로 로그인했을 때만 받는다(user=null 이라 막을 화면이 없다).
 const SanctionedAccountSheet = lazyWithReload(() => import('./components/features/SanctionedAccountSheet'));
 const OwnerTermsGate       = lazyWithReload(() => import('./components/features/OwnerTermsGate'));
+const VenueShareNote       = lazyWithReload(() => import('./components/features/VenueShareNote'));
 const StaffInviteBanner = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.StaffInviteBanner })));
 const LevelUpWatcher    = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.LevelUpWatcher })));
 // 쪽지·알림 패널도 같은 청크다 — 닫혀 있을 땐 아무것도 그리지 않는다(render=false).
@@ -4881,6 +4882,7 @@ export default function App() {
                   className="w-full rounded-input border border-border-default px-3 py-2 text-xs text-ink-secondary hover:text-ink-primary">아무 게임이나 (매장이 배정)</button>
               </div>
               <button type="button" onClick={() => setBuyinPick(null)} className="w-full pt-1 text-2xs text-ink-muted">취소</button>
+              <Suspense fallback={null}><VenueShareNote kind="buyin" className="pt-1" /></Suspense>
             </div>
           </div>
         );
@@ -4909,6 +4911,8 @@ export default function App() {
                     .catch((e) => { if (uidRef.current === forUid) toast.show(msgOf(e, '출석 요청을 보내지 못했습니다'), 'error'); });
                 }}
                 className="btn-ghost min-h-[44px] w-full border border-border-default text-sm">출석 요청 보내기</button>
+              {/* 처리방침 제9조② — 출석·출석 요청 화면의 매장 제공 고지(pr188-193-review P2-3). 첫 화면 번들 밖(지연). */}
+              <Suspense fallback={null}><VenueShareNote kind="request" /></Suspense>
             </div>
           </Modal>
         );

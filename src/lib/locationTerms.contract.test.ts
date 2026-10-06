@@ -1,6 +1,6 @@
 // 20261004d(오너 결정 (다) 2026-10-04) — 위치 확인 출석의 '같은 사실'이 서버·클라·법정 문서에서 어긋나지 않게 잠근다.
 //   · 서버 거부 시작 시각(_checkin_geo_required_from) = 클라 시행일(LOCATION_TERMS_EFFECTIVE) — 한쪽만 미루면 약관과 실제가 다르다
-//   · 공지일 → 시행일 30일 이상(이용약관 제16조② 불리한 변경 · 처리방침 제14조②)
+//   · 공지일 ≤ 시행일(2026-10-06 오너 결정: 시행은 정식 오픈일 — 30일 간격을 두지 않는다. 공지는 2026-10-05 에 했다)
 //   · 서버 동의 판(terms_version >= N) = LOCATION_TERMS_VERSION · 서버 거부 code = 클라 GEO_REQUIRED_CODES
 //   · 처리방침 두 벌(가입 화면·하단 창)에 위치정보법 제21조의2 항목 · 책임자 연락처 · '현재 사용하지 않습니다' 제거
 //   · 제2판 원문 보존본(제12조① 변경 공개의 짝 · 처리방침 제14조③ 원칙)
@@ -23,8 +23,10 @@ const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf8');
 const sql = read('supabase/migrations/20261004d_checkin_geo_required_after_notice.sql');
 // 20261005a 가 check_in·request_checkin·staff_check_in 을 다시 정의한다 — **가장 나중 정의**(5a → 4d 순)를 본다.
 const sql5 = read('supabase/migrations/20261005a_checkin_geo_codes_business_day.sql');
+// 20261006o 가 _checkin_geo_required_from() 을 정식 오픈일로 다시 정의한다 — 가장 나중 정의(6o → 5a → 4d 순)를 본다.
+const sql6 = read('supabase/migrations/20261006o_geo_required_from_open_day.sql');
 const fnBody = (name: string) => {
-  for (const s of [sql5, sql]) {
+  for (const s of [sql6, sql5, sql]) {
     const i = s.indexOf(`create or replace function public.${name}(`);
     if (i >= 0) return s.slice(i, s.indexOf('$function$;', i));
   }
@@ -37,14 +39,14 @@ describe('locationTerms — 서버·클라 단일 사실', () => {
     const m = fnBody('_checkin_geo_required_from').match(/timestamptz '(\d{4}-\d{2}-\d{2}) 00:00:00\+09'/);
     expect(m?.[1]).toBe(LOCATION_TERMS_EFFECTIVE);
     expect(GEO_REQUIRED_FROM_MS).toBe(Date.parse(`${LOCATION_TERMS_EFFECTIVE}T00:00:00+09:00`));
-    expect(sql).toContain(`'${LOCATION_TERMS_EFFECTIVE} 00:00:00+09'`); // 자가검사도 같은 값
+    expect(sql6).toContain(`timestamptz '${LOCATION_TERMS_EFFECTIVE} 00:00:00+09' then`); // 자가검사도 같은 값
     expect(isGeoRequiredNow(GEO_REQUIRED_FROM_MS - 1)).toBe(false);
     expect(isGeoRequiredNow(GEO_REQUIRED_FROM_MS)).toBe(true);
     expect(LOCATION_TERMS_EFFECTIVE_KO).toBe(`${Number(LOCATION_TERMS_EFFECTIVE.slice(0, 4))}년 ${Number(LOCATION_TERMS_EFFECTIVE.slice(5, 7))}월 ${Number(LOCATION_TERMS_EFFECTIVE.slice(8, 10))}일`);
   });
-  it('② 공지일부터 시행일까지 30일 이상(불리한 변경)', () => {
+  it('② 공지일 ≤ 시행일(오너 결정 2026-10-06 — 시행은 정식 오픈일)', () => {
     const gap = (Date.parse(`${LOCATION_TERMS_EFFECTIVE}T00:00:00+09:00`) - Date.parse(`${LOCATION_TERMS_NOTICE}T00:00:00+09:00`)) / DAY;
-    expect(gap).toBeGreaterThanOrEqual(30);
+    expect(gap).toBeGreaterThanOrEqual(0);
   });
   it('③ 서버 동의 판 = LOCATION_TERMS_VERSION, 옛 판(>= N-1) 비교가 남지 않았다', () => {
     const body = fnBody('check_in');

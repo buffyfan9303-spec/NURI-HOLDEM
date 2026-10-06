@@ -11,11 +11,11 @@ import { OWNER_TERMS_VERSION } from './legalDeploy';
 
 export { OWNER_TERMS_VERSION, OWNER_TERMS_EFFECTIVE_DATE } from './legalDeploy';
 
-/** 내가 동의한 가장 높은 판(없으면 0). RLS 가 본인 행만 내보낸다. */
-export async function getMyOwnerTermsVersion(): Promise<number> {
+/** 내가 동의한 가장 높은 판(없으면 0). 본인 행만 묻는다 — RLS 는 관리자에게 남의 행도 보여 주므로 user_id 를 직접 건다(pr188-193-review P3-7). */
+export async function getMyOwnerTermsVersion(uid: string): Promise<number> {
   if (IS_MOCK) return OWNER_TERMS_VERSION;
   const { data, error } = await supabase.from('owner_terms_consents')
-    .select('terms_version').order('terms_version', { ascending: false }).limit(1);
+    .select('terms_version').eq('user_id', uid).order('terms_version', { ascending: false }).limit(1);
   if (error) throw new Error(error.message);
   return Number(data?.[0]?.terms_version ?? 0);
 }

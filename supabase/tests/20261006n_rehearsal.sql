@@ -46,12 +46,18 @@ begin
       t := t || ' badsrc=열림';
     exception when others then t := t || ' badsrc=거절';
     end;
+    begin
+      perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+      perform public.record_my_owner_terms_consent(999, 'gate');   -- P3-1 미래 판 미리 적기
+      t := t || ' future=열림';
+    exception when others then t := t || ' future=거절';
+    end;
     t := t || ' acl=' || has_function_privilege('anon', 'public.record_my_owner_terms_consent(integer,text)', 'execute')::text
                || '/' || has_function_privilege('authenticated', 'public.record_my_owner_terms_consent(integer,text)', 'execute')::text;
     raise exception using errcode = 'ZZ001', message = t;
   exception
     when sqlstate 'ZZ001' then
-      if sqlerrm = 'own=1 other=0 at_now=t anon=거절 badsrc=거절 acl=false/true' then out := out || 'O1 PASS; ';
+      if sqlerrm = 'own=1 other=0 at_now=t anon=거절 badsrc=거절 future=거절 acl=false/true' then out := out || 'O1 PASS; ';
       else fails := fails + 1; out := out || 'O1 FAIL ' || sqlerrm || '; '; end if;
     when others then execute 'reset role'; fails := fails + 1; out := out || 'O1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
@@ -110,10 +116,15 @@ begin
     insert into public.rank_verifications(user_id, nickname, event_name, amount_won, proof_url, id_card_path, event_kind, id_consent_version, id_masked_confirmed)
     values (u1, 'ZZ', 'ZZ-REH-1006n-DONE', 1000000, u1::text || '/zz-proof.webp', u1::text || '/zz-done-idcard.webp', 'official', 1, true);
     update public.rank_verifications set status = 'approved', decided_at = now() where event_name = 'ZZ-REH-1006n-DONE';
+    update public.rank_verifications set admin_note = 'ZZ메모' where event_name = 'ZZ-REH-1006n-OLD';   -- P3-3 관리자가 미리 적은 메모
+    -- P3-5 행 없는 업로드(2일 전) · 행이 가리키는 파일(2일 전) — 앞의 것만 큐로 간다
+    insert into storage.objects(bucket_id, name, owner, created_at) values
+      ('verifications', u1::text || '/zz-orphan-idcard.webp', u1, now() - interval '2 days'),
+      ('verifications', u1::text || '/zz-proof.webp', u1, now() - interval '2 days');
     select count(*) into n1 from public.notifications where user_id = u1 and title = '순위 인증 반려';
     n2 := public._expire_rank_verification_idcards();
     t := format('n=%s', n2);
-    select status, id_card_path is null as gone, admin_note like '심사 기한(30일)%' as note into r from public.rank_verifications where event_name = 'ZZ-REH-1006n-OLD';
+    select status, id_card_path is null as gone, admin_note like '심사 기한(30일)%(운영 메모: ZZ메모)' as note into r from public.rank_verifications where event_name = 'ZZ-REH-1006n-OLD';
     t := t || format(' old=%s/%s/%s', r.status, r.gone, r.note);
     select status, id_card_path is null as gone into r from public.rank_verifications where event_name = 'ZZ-REH-1006n-NEW';
     t := t || format(' new=%s/%s', r.status, r.gone);
@@ -124,10 +135,13 @@ begin
       exists (select 1 from public.storage_purge_queue where bucket_id = 'verifications' and name = u1::text || '/zz-new-idcard.webp'),
       exists (select 1 from public.storage_purge_queue where bucket_id = 'verifications' and name = u1::text || '/zz-done-idcard.webp'));
     t := t || ' notif+' || ((select count(*) from public.notifications where user_id = u1 and title = '순위 인증 반려') - n1);
+    t := t || format(' orphan=%s/%s',
+      exists (select 1 from public.storage_purge_queue where bucket_id = 'verifications' and name = u1::text || '/zz-orphan-idcard.webp' and reason = 'rank_upload_orphan'),
+      exists (select 1 from public.storage_purge_queue where bucket_id = 'verifications' and name = u1::text || '/zz-proof.webp'));
     raise exception using errcode = 'ZZ001', message = t;
   exception
     when sqlstate 'ZZ001' then
-      if sqlerrm = 'n=1 old=rejected/t/t new=pending/f done=approved/t q=t/f/t notif+1' then out := out || 'R2 PASS; ';
+      if sqlerrm = 'n=1 old=rejected/t/t new=pending/f done=approved/t q=t/f/t notif+1 orphan=t/f' then out := out || 'R2 PASS; ';
       else fails := fails + 1; out := out || 'R2 FAIL ' || sqlerrm || '; '; end if;
     when others then fails := fails + 1; out := out || 'R2 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
@@ -165,6 +179,25 @@ begin
       if sqlerrm = 'r1=true r2=true st=suspended/t/t notif=t active=false' then out := out || 'U1 PASS; ';
       else fails := fails + 1; out := out || 'U1 FAIL ' || sqlerrm || '; '; end if;
     when others then fails := fails + 1; out := out || 'U1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+
+  -- U3 (P3-2) 다른 사유로 기간 정지 중인 회원 → 상태·기간·사유를 덮어쓰지 않고 감사 기록(activity_log)·관리자 알림만 · 하루 안 재호출은 아무것도 안 함
+  total := total + 1;
+  begin
+    perform set_config('request.jwt.claims', '', true);
+    update public.profiles set status = 'suspended', suspended_until = now() + interval '3 days', sanction_reason = 'ZZ 다른 사유' where id = u2;
+    select count(*) into n2 from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한';
+    t := 'r=' || public.restrict_underage_account(u2)::text || '/' || public.restrict_underage_account(u2)::text;
+    select status::text st, suspended_until is not null as keep_until, sanction_reason = 'ZZ 다른 사유' as keep_reason into r from public.profiles where id = u2;
+    t := t || format(' st=%s/%s/%s log=%s notif=%s', r.st, r.keep_until, r.keep_reason,
+      (select count(*) from public.activity_log where action = 'suspend_underage' and target_id = u2 and target_summary like '%기존 정지 유지%'),
+      (select count(*) from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한') - n2 = (select count(*) from public.profiles where role::text = 'admin'));
+    raise exception using errcode = 'ZZ001', message = t;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'r=true/true st=suspended/t/t log=1 notif=t' then out := out || 'U3 PASS; ';
+      else fails := fails + 1; out := out || 'U3 FAIL ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'U3 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
 
   -- U2 영구정지 계정은 건드리지 않는다 · 일반 회원(authenticated)·anon 은 직접 못 부른다 · 양성: 부르지 않은 회원 u2 는 그대로 active

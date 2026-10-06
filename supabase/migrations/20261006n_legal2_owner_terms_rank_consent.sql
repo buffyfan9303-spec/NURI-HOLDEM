@@ -8,6 +8,8 @@ select set_config('statement_timeout', '60s', true);
 --   P1-5 매장 운영자 이용약관(개인정보 처리위탁 포함) 동의 기록 — 화면: AuthModal(업주 가입) · OwnerTermsGate(기존 업주, 내 매장)
 --   P1-3 순위 인증 신분증 사진 — 별도 동의·가림 확인 기록(서버가 없으면 접수 거부) + 미심사 30일 자동 반려·신분증 파일 삭제
 --   P2-6 만 19세 미만 확인 → 이용 제한 + 관리자 알림(restrict_underage_account · 엣지 verify-identity 가 부른다 — 엣지 배포는 리드)
+-- 🔴 적용 절차(pr188-193-review P3-10): s2 → 이 파일 → verify-identity 엣지 배포를 **화면 배포(정식 오픈)와 같은 날**에.
+--   약관 제9조⑤·처리방침 제12조③('이용 제한')은 이 파일 + 엣지가 있어야 사실이고, 처리방침 제9조④('전화 조회 거부')는 store-team s3 가 있어야 사실이다.
 --
 -- 선행: 20261006s2(PR #187) — storage_purge_queue · cron_storage_purge(10분마다 storage-purge 엣지가 Storage API 로 지운다).
 --   신분증 파일 삭제를 그 큐에 넣는다. 큐가 없으면 아래 게이트에서 멈춘다(s2 를 먼저 적용).
@@ -47,16 +49,19 @@ create or replace function public.record_my_owner_terms_consent(p_version intege
  security definer
  set search_path = public, pg_temp
 as $fn$
-declare v_uid uuid := auth.uid(); v_at timestamptz;
+-- 서버가 아는 **현재 판**만 기록한다(pr188-193-review P3-1 — 미래 판(999)을 미리 적어 두면 판을 올려도 게이트가 안 뜬다).
+--   판을 올릴 때는 src/lib/legalDeploy.ts OWNER_TERMS_VERSION 과 이 상수를 같은 커밋에서 올린다. 인자는 일치 검사용이다.
+declare c_current constant integer := 1; v_uid uuid := auth.uid(); v_at timestamptz;
 begin
   if v_uid is null then raise exception '로그인이 필요합니다'; end if;
-  if p_version is null or p_version not between 1 and 1000 then raise exception '약관 판이 올바르지 않습니다'; end if;
+  if p_version is distinct from c_current then raise exception '현재 매장 운영자 이용약관 판이 아닙니다. 새로고침 뒤 다시 동의해 주세요'; end if;
   if p_source is null or p_source not in ('signup', 'gate') then raise exception '동의 경로가 올바르지 않습니다'; end if;
   insert into public.owner_terms_consents(user_id, terms_version, source)
-  values (v_uid, p_version, p_source)
+  values (v_uid, c_current, p_source)
   returning agreed_at into v_at;
   return v_at;
 end $fn$;
+-- ⚠ 이 revoke 를 지우지 마라 — 라이브 기본 권한(20261004b) 때문에 지워도 아래 anon 자가검사는 통과한다(pr188-193-review P3-6 거짓 통과).
 revoke all on function public.record_my_owner_terms_consent(integer, text) from public, anon;
 grant execute on function public.record_my_owner_terms_consent(integer, text) to authenticated, service_role;
 
@@ -118,25 +123,46 @@ create or replace function public._expire_rank_verification_idcards()
  security definer
  set search_path = public, pg_temp
 as $fn$
-declare v_n integer;
+-- pr188-193-review P3-4: 고르기·상태 바꾸기·큐 넣기를 **한 문장**(CTE)에서 한다 — 문장 사이에 심사된 행이 경로만 지워지고 큐에 안 들어가
+--   비공개 버킷에 고아 파일이 남던 경합을 없앤다. 다른 관리자가 잡고 있는 행은 건너뛴다(다음 회차에 다시 본다).
+-- P3-3: 자동 반려 사유는 늘 자동 문장으로 시작하고, 관리자가 미리 적어 둔 메모는 그 뒤에 붙여 보존한다.
+-- P3-5: 행 없이 남은 업로드(신청 저장 실패 등)는 하루 뒤 같은 큐로 지운다 — 경로를 가리키는 행이 없어 크론이 못 찾던 파일.
+declare
+  c_note constant text := '심사 기한(30일)이 지나 자동으로 반려했습니다. 신분증 사진은 삭제했으니 필요하면 다시 신청해 주세요';
+  v_n integer;
 begin
+  with tgt as (
+    select rv.id, rv.id_card_path, rv.status as old_status
+      from public.rank_verifications rv
+     where (rv.status = 'pending' and rv.created_at < now() - interval '30 days')
+        or (rv.status <> 'pending' and rv.id_card_path is not null)
+     for update skip locked
+  ), upd as (
+    update public.rank_verifications rv
+       set status = case when t.old_status = 'pending' then 'rejected' else rv.status end,
+           admin_note = case when t.old_status = 'pending'
+                             then c_note || coalesce(' (운영 메모: ' || nullif(btrim(rv.admin_note), '') || ')', '')
+                             else rv.admin_note end,
+           decided_at = case when t.old_status = 'pending' then now() else rv.decided_at end,
+           id_card_path = null
+      from tgt t
+     where rv.id = t.id
+    returning t.old_status, t.id_card_path
+  ), q as (
+    insert into public.storage_purge_queue(bucket_id, name, reason)
+    select 'verifications', u.id_card_path, 'rank_idcard_retention' from upd u where u.id_card_path is not null
+    on conflict (bucket_id, name) do update set done_at = null, last_error = null, attempts = 0
+    returning 1
+  )
+  select count(*) filter (where old_status = 'pending') into v_n from upd;
+
   insert into public.storage_purge_queue(bucket_id, name, reason)
-  select 'verifications', rv.id_card_path, 'rank_idcard_retention'
-    from public.rank_verifications rv
-   where rv.id_card_path is not null
-     and (rv.status <> 'pending' or rv.created_at < now() - interval '30 days')
-  on conflict (bucket_id, name) do update set done_at = null, last_error = null, attempts = 0;
-
-  update public.rank_verifications
-     set status = 'rejected',
-         admin_note = coalesce(nullif(btrim(admin_note), ''), '심사 기한(30일)이 지나 자동으로 반려했습니다. 신분증 사진은 삭제했으니 필요하면 다시 신청해 주세요'),
-         decided_at = now(),
-         id_card_path = null
-   where status = 'pending' and created_at < now() - interval '30 days';
-  get diagnostics v_n = row_count;
-
-  update public.rank_verifications set id_card_path = null
-   where status <> 'pending' and id_card_path is not null;
+  select o.bucket_id, o.name, 'rank_upload_orphan'
+    from storage.objects o
+   where o.bucket_id = 'verifications'
+     and o.created_at < now() - interval '1 day'
+     and not exists (select 1 from public.rank_verifications rv where rv.proof_url = o.name or rv.id_card_path = o.name)
+  on conflict (bucket_id, name) do nothing;
   return v_n;
 end $fn$;
 revoke all on function public._expire_rank_verification_idcards() from public, anon, authenticated;
@@ -158,21 +184,35 @@ create or replace function public.restrict_underage_account(p_uid uuid)
  security definer
  set search_path = public, pg_temp
 as $fn$
+-- pr188-193-review P3-2: 감사 기록(activity_log)을 남기고, 다른 사유로 이미 정지 중이면 상태·기간·사유를 덮어쓰지 않는다(기록·알림만).
+--   같은 회원을 하루 안에 다시 부르면(반복 인증 시도) 아무것도 하지 않는다.
 declare
   c_reason constant text := '본인인증에서 만 19세 미만으로 확인되어 이용이 제한되었습니다. 고객센터로 문의하시거나 이 화면에서 탈퇴하실 수 있습니다.';
-  v_status text; v_role text; v_reason text; v_nick text;
+  v_status text; v_role text; v_reason text; v_nick text; v_changed boolean := false;
 begin
   if p_uid is null then return false; end if;
   select status::text, role::text, sanction_reason, nickname into v_status, v_role, v_reason, v_nick
     from public.profiles where id = p_uid for update;
   if not found or v_status in ('banned', 'withdrawn') or v_role = 'admin' then return false; end if;
-  if v_status = 'suspended' and v_reason is not distinct from c_reason then return true; end if;
-  update public.profiles
-     set status = 'suspended', suspended_until = null, sanction_reason = c_reason
-   where id = p_uid;
+  if (v_status = 'suspended' and v_reason is not distinct from c_reason)
+     or exists (select 1 from public.activity_log l
+                 where l.action = 'suspend_underage' and l.target_id = p_uid and l.created_at > now() - interval '1 day') then
+    return true;
+  end if;
+  if v_status is distinct from 'suspended' then
+    update public.profiles
+       set status = 'suspended', suspended_until = null, sanction_reason = c_reason
+     where id = p_uid;
+    v_changed := true;
+  end if;
+  insert into public.activity_log(actor_id, actor_name, action, target_type, target_id, target_owner_id, target_summary)
+  values (null, '시스템(본인인증)', 'suspend_underage', 'profile', p_uid, p_uid,
+          format('본인인증 만 19세 미만 확인 — 이전 상태 %s · 이전 사유 %s · %s', v_status, coalesce(v_reason, '없음'),
+                 case when v_changed then '무기한 정지' else '기존 정지 유지(덮어쓰지 않음)' end));
   insert into public.notifications(user_id, type, title, message, link)
   select a.id, 'system', '만 19세 미만 본인인증 — 이용 제한',
-         left(coalesce(v_nick, '(닉네임 없음)'), 30) || ' 회원의 본인인증에서 만 19세 미만이 확인되어 이용을 제한했습니다. 이용계약 해지·개인정보 파기를 처리해 주세요',
+         left(coalesce(v_nick, '(닉네임 없음)'), 30) || ' 회원의 본인인증에서 만 19세 미만이 확인되었습니다'
+           || case when v_changed then '(이용 제한함)' else '(이미 다른 사유로 정지 중)' end || '. 이용계약 해지·개인정보 파기를 처리해 주세요',
          '/admin'
     from public.profiles a where a.role = 'admin';
   return true;

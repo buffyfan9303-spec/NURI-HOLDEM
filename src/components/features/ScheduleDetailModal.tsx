@@ -9,6 +9,7 @@ import { useToast } from '../atoms/Toast';
 import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
+import VenueShareNote from './VenueShareNote';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText, prizeParts, buyInText, liveBadge } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
@@ -1112,6 +1113,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       .finally(() => setSending(false));
   };
   return (
+    <>
     <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/5 p-2.5">
       {/* QR 은 비동기로 만들어진다 — 오기 전에도, 만들기에 실패해도 72×72 자리를 잡아 둔다. 안 그러면 도착 순간 글 칸이 84px
           좁아져 '꾹 눌러 참가 신청' 줄이 다시 감기며 20px 밀렸고(재점검 1회차 L1-1), 실패 때 자리를 지우면 버튼이 85px 튄다(하-1). */}
@@ -1140,6 +1142,9 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
         </HoldToConfirmButton>
       </div>
     </div>
+    {/* 처리방침 제9조② — 참가 신청 화면의 매장 제공 고지(pr188-193-review P2-3). 박스(72px 고정) 밖 형제라 박스 높이는 그대로. */}
+    <VenueShareNote kind="buyin" className="px-1" />
+    </>
   );
 }
 

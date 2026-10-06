@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { LEGAL_VERSION } from '../../lib/legalVersion';
 import { TERMS_NEXT, OWNER_TERMS_VERSION, LEGAL_DEPLOY_ISO, TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO, PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO, OWNER_TERMS_EFFECTIVE_DATE } from '../../lib/legalDeploy';
+import { LOCATION_TERMS_EFFECTIVE } from '../../lib/locationTerms';
 import { ARTICLE_10_2, CHANGES } from '../../lib/termsNextDraft';
 
 const ROOT = path.join(__dirname, '../../..');
@@ -132,21 +133,38 @@ describe('P2-3·P2-4·P2-6·P2-9 약관 정정·보완', () => {
   });
 });
 
-describe('리드 결정 ①④ — 배포일 기준 날짜 한 곳 · 약관 보완 7일 공지', () => {
-  const days = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000;
-  it('보완·처리방침 제3판 공지일 = 배포일, 시행 = +7 / +30, 매장 운영자 약관 시행 = 배포일', () => {
-    expect(TERMS_SUPPLEMENT_NOTICE_ISO).toBe(LEGAL_DEPLOY_ISO);
-    expect(days(TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO)).toBe(7);
-    expect(PRIVACY_V3_NOTICE_ISO).toBe(LEGAL_DEPLOY_ISO);
-    expect(days(PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO)).toBe(30);
+describe('오너 결정 2026-10-06 — 모든 시행일 = 정식 오픈일(LEGAL_DEPLOY_ISO) 한 곳', () => {
+  it('처리방침 제3판·약관 보완·매장 운영자 약관·위치 약관 제3판 = 공지 = 시행 = 정식 오픈일', () => {
+    for (const iso of [TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO, PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO, LOCATION_TERMS_EFFECTIVE]) {
+      expect(iso).toBe(LEGAL_DEPLOY_ISO);
+    }
     const [y, mo, d] = LEGAL_DEPLOY_ISO.split('-').map(Number);
     expect(OWNER_TERMS_EFFECTIVE_DATE).toBe(`${y}년 ${mo}월 ${d}일`);
+    // 서버 거부 시작 시각(20261006o)도 같은 날
+    expect(read('supabase/migrations/20261006o_geo_required_from_open_day.sql')).toContain(`select timestamptz '${LEGAL_DEPLOY_ISO} 00:00:00+09'`);
   });
-  it('날짜 문자열이 다른 소스에 박히지 않았다(legalDeploy 한 곳)', () => {
+  it('날짜 문자열이 다른 소스에 박히지 않았고, 사전 공지 간격(7일·30일) 문구가 이번 개정 안내에 없다', () => {
+    // locationTerms.ts 의 공지일(2026-10-05)은 이미 지난 사실이라 문자열로 남는다 — 시행일만 LEGAL_DEPLOY_ISO 를 쓰는지 본다.
+    expect(read('src/lib/locationTerms.ts')).toContain('export const LOCATION_TERMS_EFFECTIVE = LEGAL_DEPLOY_ISO;');
     for (const p of ['src/lib/legalVersion.ts', 'src/pages/legal/OwnerTerms.tsx', 'src/pages/legal/TermsOfService.tsx', 'src/lib/legalHistory.ts', 'src/lib/ownerTerms.ts']) {
       expect(read(p), p).not.toMatch(/'2026-1[01]-\d\d'|2026년 1[01]월 \d+일/);
     }
-    expect(read('src/pages/legal/TermsOfService.tsx')).toContain('data-testid="terms-supplement-notice"');
+    const t = read('src/pages/legal/TermsOfService.tsx');
+    const box = t.slice(t.indexOf('data-testid="terms-supplement-notice"'), t.indexOf('</div>', t.indexOf('data-testid="terms-supplement-notice"')));
+    expect(box).toContain('정식 오픈과 함께 시행');
+    expect(box).not.toMatch(/7일|30일/);
+    const pp = read('src/pages/legal/PrivacyPolicy.tsx');
+    const rn = pp.slice(pp.indexOf('data-testid="revision-notice"'), pp.indexOf('</div>', pp.indexOf('data-testid="revision-notice"')));
+    expect(rn).toContain('정식 오픈과 함께 시행');
+    expect(rn).not.toContain('30일 전에 공지');
+  });
+  it('P2-5 제2판 보존본 배너에 지난 날짜(10-06 공지·11-05 시행)가 없다', () => {
+    // 본문(게시 당시 원문)은 그대로 두고 머리 배너만 본다 — 본문 첫 조항 앞까지.
+    const full = read('public/legal/archive/2026-10-06/privacy.html');
+    const a = full.slice(0, full.indexOf('제1조 (개인정보의 처리 목적)'));
+    expect(a.length).toBeGreaterThan(1000);
+    expect(a).not.toMatch(/2026-11-05|11월 5일|10월 6일 제3판/);
+    expect(a).toContain('제3판 시행(정식 오픈) 전까지');
   });
 });
 
@@ -158,5 +176,32 @@ describe('리드 결정 ② — 만 19세 미만 확인 시 이용 제한 + 관�
     expect(m).toMatch(/set status = 'suspended', suspended_until = null, sanction_reason = c_reason/);
     expect(read('supabase/functions/verify-identity/index.ts')).toContain("admin.rpc('restrict_underage_account', { p_uid: userId })");
     expect(read('supabase/functions/verify-identity/logic.ts')).toMatch(/if \(age !== null && age < 19\) \{[\s\S]{0,200}deps\.restrictUnderage\?\.\(uid\)/);
+  });
+});
+
+describe('pr188-193-review P2-3·P2-4 — 기능 화면 고지 · 출석·순위 기록 귀속', () => {
+  it('출석·QR·출석 요청·참가 신청·이용권 화면에 매장 제공 한 줄 고지(처리방침 제9조②)', () => {
+    const where: [string, string][] = [
+      ['src/components/features/VenuePage.tsx', '<VenueShareNote kind="checkin" />'],
+      ['src/components/features/MyVoucherSheet.tsx', '<VenueShareNote kind="qr"'],
+      ['src/components/features/MyVoucherSheet.tsx', '<VenueShareNote kind="voucher"'],
+      ['src/App.tsx', '<VenueShareNote kind="request" />'],
+      ['src/App.tsx', '<VenueShareNote kind="buyin"'],
+      ['src/components/features/ScheduleDetailModal.tsx', '<VenueShareNote kind="buyin"'],
+    ];
+    for (const [p, tag] of where) expect(read(p), `${p}: ${tag}`).toContain(tag);
+  });
+  it('처리방침 제3조 매장 기록에서 출석 기록이 빠지고, 업주 약관이 회사의 출석·순위 이용을 명시한다', () => {
+    const pp = read('src/pages/legal/PrivacyPolicy.tsx');
+    expect(pp).not.toContain('매장 기록: 제2조⑦의 정보와 출석 기록');
+    expect(pp).toContain('매장이 등록한 대회 순위 기록(닉네임·등수·대회)');
+    const ot = read('src/pages/legal/OwnerTerms.tsx');
+    expect(ot).toContain('회사도 개인정보처리방침 제2조⑥의 목적');
+    expect(ot).toContain('회사가 전국 입상 경력 순위 산정에 이용');
+  });
+  it('P3-1 서버는 현재 판만 기록 · P3-7 게이트 조회는 본인 행만', () => {
+    const m = read('supabase/migrations/20261006n_legal2_owner_terms_rank_consent.sql');
+    expect(m).toMatch(/c_current constant integer := 1;[\s\S]{0,300}if p_version is distinct from c_current then raise/);
+    expect(read('src/lib/ownerTerms.ts')).toContain(".eq('user_id', uid)");
   });
 });

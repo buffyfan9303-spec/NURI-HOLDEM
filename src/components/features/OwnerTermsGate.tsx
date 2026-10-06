@@ -25,7 +25,7 @@ export default function OwnerTermsGate({ onLeave }: { onLeave: () => void }) {
   useEffect(() => {
     if (!uid) return;
     let alive = true;
-    getMyOwnerTermsVersion()
+    getMyOwnerTermsVersion(uid)
       .then((v) => { if (alive) setNeed({ uid, v: v < OWNER_TERMS_VERSION }); })
       .catch(() => { if (alive) setNeed({ uid, v: false }); });
     return () => { alive = false; };

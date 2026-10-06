@@ -24,7 +24,7 @@
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
 import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
-import { TERMS_SUPPLEMENT_NOTICE_DATE, TERMS_SUPPLEMENT_EFFECTIVE_DATE } from '../../lib/legalDeploy';
+import { TERMS_SUPPLEMENT_EFFECTIVE_DATE } from '../../lib/legalDeploy';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -80,13 +80,12 @@ export default function TermsOfService() {
 
       <RevisionNotice />
 
-      {/* 2026-10-06 리드 결정 ① — 제2판 보완(새 조항)은 약관 제16조② 에 따라 7일 공지 뒤 적용. 날짜는 legalDeploy.ts(배포일 기준) 한 곳. */}
+      {/* 2026-10-06 오너 결정 — 제2판 보완(새 조항)은 정식 오픈일(legalDeploy.ts LEGAL_DEPLOY_ISO)과 함께 시행. */}
       <div data-testid="terms-supplement-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
-        <p className="text-xs font-bold text-ink-primary">보완 안내 — {TERMS_SUPPLEMENT_NOTICE_DATE} 공지 · {TERMS_SUPPLEMENT_EFFECTIVE_DATE}부터 적용</p>
+        <p className="text-xs font-bold text-ink-primary">보완 안내 — {TERMS_SUPPLEMENT_EFFECTIVE_DATE} 정식 오픈과 함께 시행</p>
         <p className="text-2xs text-ink-muted leading-relaxed">
-          제2조제1호·제3조제1항(제공 서비스 목록)·제3조제6항(그룹 매니저의 조치)·제3조제7항(AI 결과는 참고용)과 제5조제7항부터 제10항(권리침해 게시물의 삭제 요청·임시조치·통지)은
-          {' '}{TERMS_SUPPLEMENT_EFFECTIVE_DATE}부터 적용합니다. 그 전까지 제3조제1항은 종전 문안(홀덤 매장 및 토너먼트 정보 제공, 이용자 간 커뮤니티 게시판, 중고 물품 거래 중개 게시판 서비스)이 적용되며,
-          회원에게 불리한 내용은 없습니다. 자세한 내용은 문서 끝의 「부칙 — 개정 이력」에 있습니다.
+          제2조제1호·제3조제1항(제공 서비스 목록)·제3조제6항(그룹 매니저의 조치)·제3조제7항(AI 결과는 참고용)과 제5조제7항부터 제10항(권리침해 게시물의 삭제 요청·임시조치·통지)을
+          더했습니다. 회원에게 불리한 내용은 없으며, 자세한 내용은 문서 끝의 「부칙 — 개정 이력」에 있습니다.
         </p>
       </div>
 
@@ -182,9 +181,9 @@ export default function TermsOfService() {
           '매장 회원이 등록하는 대회·매장 정보는 사실과 일치하여야 합니다. 거짓 또는 과장된 사실을 알리거나 기만적 방법을 사용하여 이용자를 유인하는 행위는 「전자상거래 등에서의 소비자보호에 관한 법률」 제21조 위반에 해당할 수 있습니다.',
           // 2026-10-06 약관 재검토 P2-3 — 정보통신망법 §44의2⑤ "필요한 조치에 관한 내용·절차 등을 미리 약관에 구체적으로 밝혀야 한다".
           //   ②(신청인·게재자 통지·공시) · ④(임시조치 30일 이내) · §44의3(직권 임시조치). 조문 번호를 밀지 않으려고 제5조 끝에 붙인다.
-          '게시물로 사생활 침해·명예훼손 등 권리를 침해받은 사람은 침해 사실을 소명하여 고객센터(ace@nuriholdem.com) 또는 게시물의 「신고」로 그 게시물의 삭제나 반박 내용의 게재를 요청할 수 있습니다(「정보통신망 이용촉진 및 정보보호 등에 관한 법률」 제44조의2).',
+          '게시물로 사생활 침해·명예훼손 등 권리를 침해받은 사람은 침해 사실을 소명하여 고객센터(ace@nuriholdem.com) 또는 게시물의 「신고」로 그 게시물의 삭제나 반박 내용의 게재를 요청할 수 있습니다(「정보통신망 이용촉진 및 정보보호 등에 관한 법률」 제44조의2). 커뮤니티 게시글은 서비스 내 「신고」로, 댓글·후기·포스터 등 그 밖의 게시물은 고객센터로 요청하면 이 조의 같은 절차로 처리합니다.',
           '회사는 제7항의 요청을 받으면 지체 없이 삭제·임시조치 등 필요한 조치를 하고, 그 사실을 요청한 사람과 게시물 작성자에게 알리며, 조치한 게시물 자리에 그 사실을 표시합니다.',
-          '회사는 권리 침해 여부를 판단하기 어렵거나 이해당사자 사이에 다툼이 예상되는 경우 30일 이내의 기간 동안 해당 게시물을 임시로 가릴 수 있습니다(임시조치). 게시물 작성자는 그 기간 안에 고객센터로 다시 게시를 요청할 수 있으며, 회사는 이를 검토하여 그 결과를 알립니다.',
+          '회사는 권리 침해 여부를 판단하기 어렵거나 이해당사자 사이에 다툼이 예상되는 경우 30일 이내의 기간 동안 해당 게시물을 임시로 가릴 수 있습니다(임시조치). 게시물 작성자는 그 기간 안에 고객센터로 다시 게시를 요청할 수 있으며, 회사는 이를 검토하여 그 결과를 알립니다. 임시조치 기간(30일)이 끝나면 회사는 게시 재개 또는 삭제를 결정하여 요청인과 게시자에게 알립니다.',
           '회사는 권리 침해가 명백하다고 인정되는 게시물에 대하여는 요청이 없더라도 임시조치를 할 수 있습니다(같은 법 제44조의3).',
         ]} />
       </Article>
