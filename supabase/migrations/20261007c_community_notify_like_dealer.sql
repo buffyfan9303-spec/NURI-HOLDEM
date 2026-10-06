@@ -1,3 +1,4 @@
+-- ✅ 적용 완료 2026-10-07(리드, commit.mjs) — 롤백 리허설 7/7 PASS 후 적용. 실측: notify_on_post_like md5 8dbe1e9742144ed258537741d43ee32b · notify_on_dealer_application md5 bcda8bdc7ce429bd22a597bd220a7cfe · 둘 다 DEFINER·search_path 고정·authenticated 실행 불가·트리거 각 1
 select set_config('lock_timeout', '3s', true);
 select set_config('statement_timeout', '60s', true);
 -- ⏳ 미적용 — 초안(community-team, 2026-10-07). 라이브 롤백 리허설만 했다. 적용 판단·실행은 리드.

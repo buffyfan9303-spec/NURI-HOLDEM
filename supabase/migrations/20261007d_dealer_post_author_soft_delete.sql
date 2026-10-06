@@ -1,3 +1,4 @@
+-- ✅ 적용 완료 2026-10-07(리드, commit.mjs) — critical-reviewer 재반증 APPROVE · 롤백 리허설 9/9 PASS 후 적용. 실측: delete_dealer_post md5 e0c54c9b693049f418feed6edfac8aa7 · DEFINER · search_path=public, pg_temp · anon 불가 · authenticated 가능 · dealer_posts_read 정책 md5 bdf5500f 불변
 select set_config('lock_timeout', '3s', true);
 select set_config('statement_timeout', '60s', true);
 -- ⏳ 미적용 — 초안(community-team, 2026-10-07 재작업). 라이브 롤백 리허설만 했다. 적용 판단·실행은 리드.
