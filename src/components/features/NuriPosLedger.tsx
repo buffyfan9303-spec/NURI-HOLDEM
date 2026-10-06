@@ -2058,7 +2058,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
           </div>
 
           {discHelp && session.discounts.some((d) => d.amount > 0) && (
-            <p id="ledger-disc-help" className="break-keep text-2xs leading-tight text-ink-muted">
+            <p id="ledger-disc-help" className="break-keep text-2xs text-ink-muted">
               {discPick === null
                 ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
                 : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
@@ -2256,14 +2256,14 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
                           <button type="button" disabled={closed}
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
                             title="+1 바인 · 결제수단 선택"
-                            className="tap-y-44 block w-full whitespace-nowrap rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
+                            className="tap-y-44 block w-full whitespace-nowrap rounded-input px-0.5 py-0.5 text-left transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </button>
                         ) : first ? (
-                          <span className="leading-tight block whitespace-nowrap text-left">
+                          <span className="block whitespace-nowrap text-left">
                             <b className="text-accent-200">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </span>
@@ -2642,13 +2642,13 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       {/* 1행: 레벨/시간 제어 */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
-          <p className="text-2xs text-ink-muted leading-none flex items-center gap-1">
+          <p className="text-2xs text-ink-muted flex items-center gap-1">
             <span className="inline-flex items-center gap-1"><Icon name="timer" size={12} className="shrink-0" />{cur.kind === 'break' ? '브레이크' : `레벨 ${no}`}</span>
             {clock.running
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
               : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
-          <p className="text-base font-extrabold text-ink-primary tabular-nums leading-tight mt-0.5 truncate">
+          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 truncate">
             {cur.kind === 'break'
               ? (cur.label || 'BREAK')
               : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
@@ -2675,7 +2675,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
 
       {/* 2행: 아웃 처리(최우선) — 생존 카운트 + 큰 아웃 버튼 + 되돌리기 아이콘 */}
       <div className="flex items-center gap-2 border-t border-accent-400/15 pt-2">
-        <div className="min-w-0 flex-1 leading-none">
+        <div className="min-w-0 flex-1">
           <span className="text-2xs text-ink-secondary">생존</span>
           <span className="ml-1.5 text-lg font-extrabold text-emerald-300 tabular-nums">{alive}</span>
           {clock.eliminations > 0 && <span className="ml-2 text-2xs text-ink-muted">아웃 <b className="text-ink-secondary tabular-nums">{clock.eliminations}</b></span>}
@@ -2837,7 +2837,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
   }, [gameSeq, games.length]);
   const md = date.slice(5).replace('-', '/').replace(/^0/, '').replace('/0', '/');
   const live = games.filter((g) => !g.closed).length;
-  const chip = (on: boolean) => ['inline-flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
+  const chip = (on: boolean) => ['inline-flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-3.5 text-xs font-bold transition-colors',
     on ? 'chip-on' : 'border border-transparent bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ');
   return (
     <div data-ledger-games="" className="flex min-w-0 items-center gap-2">
@@ -2857,7 +2857,7 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd, date, today
         )}
         {canAdd && !showPending && (
           <button type="button" onClick={onAddSide}
-            className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">+ 사이드</button>
+            className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10">+ 사이드</button>
         )}
       </div>
       {games.length >= 6 && (
@@ -2885,13 +2885,13 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
       {/* truncate — 640 미만 2열에서 '총 바이인(제외 적용)'(94.59px)이 칸(72.5px)보다 넓어 2줄이 되면
           그 칸의 값만 11.69px 아래로 내려가 옆 '티켓' 칸과 어긋났다. 라벨은 한 줄로 두고 전체 문구는 title 로
           보여 준다(같은 파일 Mini/Tile 과 같은 관용구). PC(sm 이상 4열)는 폭이 넉넉해 렌더가 변하지 않는다. */}
-      <p className="truncate text-2xs text-ink-muted leading-none" title={label}>{label}</p>
+      <p className="truncate text-2xs text-ink-muted" title={label}>{label}</p>
       {/* ⚠ 2026-09-14: 375 의 4열 칸이 좁아 값이 **숫자 중간**에서 끊겼다("7,194 / .44만", "250.3 / 7만").
           금액은 한 덩어리라 쪼개지면 읽는 사람이 다른 수로 오해한다 — 줄바꿈을 막는다. */}
-      <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
+      <p className={['text-sm font-bold tabular-nums mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
       {/* 보조 수 — 같은 칸에서 '횟수 vs 엔트리' 처럼 **다른 척도**를 나란히 세울 때만 쓴다 */}
       {/* 한 줄 고정 — 직원 360 3칸(칸 ~81px)에서 '엔트리 N · 생존 M'이 두 줄로 꺾여 옆 칸과 높이가 갈렸다. 넘치면 말줄임 + title. */}
-      {sub && <p className="truncate text-2xs tabular-nums leading-none text-ink-muted mt-0.5" title={sub}>{sub}</p>}
+      {sub && <p className="truncate text-2xs tabular-nums text-ink-muted mt-0.5" title={sub}>{sub}</p>}
     </div>
   );
 }
@@ -3438,7 +3438,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {/* D1: 바인이 한 건이라도 기록된 뒤에는 단가·할인을 못 고친다. 입력을 하나씩 disabled 로 다는 대신
           fieldset 하나로 감싼다 — 중첩된 input·button 이 전부 네이티브로 잠기고, 나중에 칸이 늘어도 자동으로 덮인다. */}
       {lockPricing && (
-        <p className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-2 text-2xs leading-relaxed text-accent-200">
+        <p className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-2 text-2xs text-accent-200">
           이미 기록된 바인이 있어 <b>단가와 기존 할인은 잠겨 있습니다</b> — 바꾸면 이미 저장된 바인의
           엔트리·달성률까지 <b>소급해서 바뀝니다</b>. 금액을 잘못 넣었다면 해당 바인 기록을 지운 뒤 고쳐 주세요.<br />
           다만 <b>할인은 뒤에 새로 추가할 수 있습니다</b> — 기존 바인은 자리번호로 할인을 참조해 영향이 없습니다.
@@ -3503,7 +3503,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
-          <p className="text-2xs leading-relaxed text-ink-muted">
+          <p className="text-2xs text-ink-muted">
             할인은 <b className="text-ink-primary">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바인 <b className="text-ink-primary">1회</b> · 엔트리 <b className="text-ink-primary">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
@@ -3519,7 +3519,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {/* 2026-09-14: 375 에서 `기준)` 이 고아로 떨어졌다 — 괄호 설명을 줄여 한 줄에 맞춘다(아래 설명 줄이 전체를 말한다). */}
       <Field label="대회 시작 시각 · 선택">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
-        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
+        <p className="text-2xs text-ink-muted mt-1">
           얼리 구간은 <b className="text-ink-primary">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-accent-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
@@ -3539,7 +3539,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <EarlyNum label="더블얼리 마감레벨" value={earlyDoubleLevel} onChange={setEarlyDoubleLevel} suffix="LV" disabled={!!clockState?.running} />
           <EarlyNum label="1얼리 마감레벨" value={earlySingleLevel} onChange={setEarlySingleLevel} suffix="LV" disabled={!!clockState?.running} />
         </div>
-        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
+        <p className="text-2xs text-ink-muted mt-1">
           {clockState?.running
             ? '클락이 진행 중이라 얼리 설정은 클락 화면에서만 변경할 수 있습니다.'
             : '여기서 변경하면 연동 클락 설정에 반영됩니다(장부 시작 시 저장). 예) 더블얼리 1LV · 1얼리 4LV.'}
@@ -3560,14 +3560,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <Field label="기준 엔트리(통계용) · 선택">
           <div className="flex items-center gap-2">
             <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(Math.max(0, parseInt(e.target.value, 10) || 0))} placeholder="100" className="input w-32 shrink-0 text-sm tabular-nums" />
-            <span className="text-2xs text-ink-muted leading-snug">통계의 목표 달성률에 사용</span>
+            <span className="text-2xs text-ink-muted">통계의 목표 달성률에 사용</span>
           </div>
         </Field>
       ) : (
         <Field label="맥스 엔트리 · 선택">
           <div className="flex items-center gap-2">
             <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(Math.max(0, parseInt(e.target.value, 10) || 0))} placeholder="200" className="input w-32 shrink-0 text-sm tabular-nums" />
-            <span className="text-2xs text-ink-muted leading-snug">최대 참가 인원 · 무제한이면 비움</span>
+            <span className="text-2xs text-ink-muted">최대 참가 인원 · 무제한이면 비움</span>
           </div>
         </Field>
       )}
@@ -3593,7 +3593,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               </div>
             </div>
           ) : (
-            <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
+            <span className="text-2xs text-ink-muted">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
         </div>
       </Field>
@@ -3641,7 +3641,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <textarea value={dealers} onChange={(e) => setDealers(e.target.value)} rows={2}
           placeholder={dealerOptions.length > 0 ? '명부에 없는 딜러는 여기에 한 줄에 한 명' : '한 줄에 한 명'}
           maxLength={300} className="input w-full text-sm resize-none" />
-        <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+        <p className="mt-1 text-2xs text-ink-muted">
           {dealerOptions.length > 0
             ? <>위 칩은 <b className="text-ink-secondary">매장에 등록된 직원·딜러</b>입니다(직원 관리 · 인건비 명부). 눌러서 넣고 뺍니다.</>
             : '등록된 직원·딜러가 없어 목록이 비었습니다 — 내 매장 › 직원에서 등록하면 여기서 고를 수 있습니다.'}
@@ -3929,7 +3929,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                         unpaidMode
                           ? 'border-danger/50 bg-danger/10 text-danger-light hover:bg-danger/20'
                           : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'].join(' ')}>
-                      <span className="block leading-tight">{m.label} {unpaidMode ? '미수' : '완납'}</span>
+                      <span className="block">{m.label} {unpaidMode ? '미수' : '완납'}</span>
                       <span className="block text-2xs font-semibold tabular-nums">
                         {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T.
                             ⚠ TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞으면 T 표시가 조용히 틀어진다. */}
@@ -4006,7 +4006,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
               ) : (
                 /* 2026-09-16 오너 리포트 "분납은 있는데 할인이 없어" — 헤더가 '분납 / 할인' 이라고 약속해 놓고
                    프리셋이 0개면 줄 자체를 안 그려 **기능이 없는 것처럼 보였다.** 없으면 없다고 말한다. */
-                <p className="text-2xs leading-relaxed text-ink-muted">
+                <p className="text-2xs text-ink-muted">
                   {/* ⚠ 줄 끝 `{' '}` 없으면 JSX 가 줄바꿈+들여쓰기를 통째로 지워 `…수정’의‘할인 이벤트’…` 로 붙는다(2026-09-16 실측). */}
                   등록된 할인이 없어요 — <b className="text-ink-secondary">‘세션 정보 수정’ → ‘할인 이벤트’</b>에서 추가
                 </p>

@@ -97,7 +97,7 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     expect(SD).toMatch(/getStaffSchedule\(venueId, d, d\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
     expect(SD).toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setMonthShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
     expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr \|\| shiftErr( \|\| !!payRules\.err)?;/);
-    expect(SD).toMatch(/\{shiftErr && <p className="text-\[11px\] text-danger-light">출근 기록을 불러오지 못해/);
+    expect(SD).toMatch(/\{shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해/);
     // '오늘 출근' 카드도 실패를 '배정 없음' 으로 그리지 않는다
     expect(SD).toMatch(/shifts\.length === 0 && !shiftErr \?/);
   });
@@ -116,7 +116,7 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     expect(SD).not.toMatch(/\.catch\(guard\(\(\) => setMonthDealers\(\[\]\)\)\)/);
     expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| shiftErr)?( \|\| !!payRules\.err)?;/);
     expect(SD).toMatch(/<Stat label="총 인건비" value=\{laborErr \? '—' : wonToMan\(laborTotal\)\} unit=\{laborErr \? '' : '만원'\} gold \/>/);
-    expect(SD).toMatch(/\{dealerErr && <p className="text-\[11px\] text-danger-light">딜러 근무 기록을 불러오지 못해/);
+    expect(SD).toMatch(/\{dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해/);
     expect(SD).toMatch(/\{!laborErr && dealerPay > 0 &&/);
   });
 });

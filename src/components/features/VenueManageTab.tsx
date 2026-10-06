@@ -139,7 +139,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
+              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
                 // P-10(2026-10-01) — 위험 구역은 일상 탭과 2px 거리였다(오클릭). 줄 오른쪽 끝으로 뗀다(승인된 After 이미지 그대로 — 구분선은 그림에 없다). DOM·키보드 순서 불변,
                 // 탭이 넘쳐 가로 스크롤이 생기면 ml-auto 는 0 이 된다.
@@ -387,23 +387,56 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const secPanelRef = useRef<HTMLDivElement>(null);
   const secInnerRef = useRef<HTMLDivElement>(null);
   const [lockPx, setLockPx] = useState<number | null>(null);
+  /** 예약 올림(ratchet) 감시를 끊는다 — 해제·언마운트 때. */
+  const ratchetOff = useRef<(() => void) | null>(null);
+  /** 누른 순간 '안쪽 높이 − 판 높이' — 안쪽 첫·끝 자식의 음수 여백(설정 하위탭 줄 -my-[7px])이 판 밖으로 겹쳐(margin collapse)
+   *  안쪽 상자가 판보다 커 보이는 몫. 올림은 이만큼 빼고 비교한다(아래 lockPane). */
+  const ratchetSlack = useRef(0);
   /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
   const lockPane = useCallback(() => {
     const p = secPanelRef.current;
+    const inner = secInnerRef.current;
     const h = p?.getBoundingClientRect().height;
     if (!p || !h || h <= 0) return;
+    // 🔴 2026-10-06 store-p3-1006 독립 검토(P3) — 매장 설정(하위탭 줄 -my-[7px])에서 누르면 안쪽이 판보다 7px 커서, 감시를 거는 즉시
+    //   첫 콜백이 예약을 h+7 로 올렸다(1440 매장 설정→직원 관리 5/5 '+7 뒤 감소'). 누른 순간의 차이를 기준선으로 빼고 비교한다 —
+    //   새 판의 안쪽이 차이가 더 작으면 올림이 그만큼 덜 될 뿐 판은 제 내용 높이로 그려지므로 줄어드는 일은 없다.
+    ratchetSlack.current = Math.max(0, (inner?.getBoundingClientRect().height ?? h) - h);
+    // 🔴 2026-10-06 store-p3-1006 — 예약은 **DOM 만** 가진다(React style 로 넘기지 않는다). 올림도 **누른 순간부터** 건다.
+    //   종전엔 올림이 커밋 뒤 이펙트에서야 시작됐고, 커밋 때 React 가 style 의 minHeight 를 누른 순간 값(lockPx)으로 다시 썼다.
+    //   그래서 로딩 중인 대시보드를 누르면(1272) 커밋 전에 떠나는 판이 늦은 카드 데이터로 1314 까지 자란 뒤, 커밋에서 새 판이
+    //   짧게 서는 순간 판이 1272 로 41px 떨어졌다가(푸터가 올라옴) 해제 때 목적지 높이로 또 움직였다 — e2e/mystore-transition-cls
+    //   B(PC) 간헐 실패 '증가 뒤 감소 1313.89→1272.39' 의 기전(rAF 시계열로 확인, A4 가 결정적으로 재현).
+    //   이제 커밋 전에 자란 높이도 바닥이 되고, React 는 이 값을 건드리지 않는다(해제는 release 가 DOM 에서 지운다).
+    if (!ratchetOff.current && inner && typeof ResizeObserver !== 'undefined') {
+      let on = true;
+      const ro = new ResizeObserver(() => {
+        if (!on) return; // PR #100 — 해제 뒤 올림이 남아 영구 바닥이 되면 안 된다
+        const ih = inner.getBoundingClientRect().height - ratchetSlack.current;
+        if (ih > (parseFloat(p.style.minHeight) || 0)) p.style.minHeight = `${Math.ceil(ih)}px`;
+      });
+      ro.observe(inner);
+      ratchetOff.current = () => { on = false; ro.disconnect(); };
+    }
     // 🔴 2026-09-27 — 예약은 **누른 그 순간** DOM 에 건다. setLockPx 만 두면 PC 사이드바처럼 startTransition 안에서 부를 때
     //   예약도 전환 레인이라 커밋 때에야 걸린다. 그 사이(~100~180ms) 떠나는 판은 아직 살아 있어 제 데이터 도착으로 줄 수 있고
     //   (대시보드 스켈레톤→실데이터 1121→1093), 커밋에서 옛 높이 예약이 다시 부풀려 '줄었다 다시 자람' 오르내림이 됐다
     //   (e2e/mystore-transition-cls PC A2·B 간헐 실패 — root-cause 실측, 하위 탭 handoff 전 빌드 aa91cf04 에도 같은 기전).
-    //   state 는 그대로 둔다 — 커밋에서 같은 값이 다시 쓰이고, 해제(null)는 React 가 이 값을 지운다.
+    //   state(lockPx)는 해제 이펙트를 돌리는 신호일 뿐이다 — 값은 위 2026-10-06 주석대로 DOM 만 가진다.
     p.style.minHeight = `${h}px`;
     setLockPx(h);
   }, []);
   useEffect(() => {
     if (lockPx == null) return;
     const inner = secInnerRef.current;
-    if (!inner) { setLockPx(null); return; }
+    const outer = secPanelRef.current;
+    // 해제 = 올림 감시를 끊고 DOM 의 예약을 지운다(React 는 이 값을 모른다 — lockPane 주석).
+    const unlock = () => {
+      ratchetOff.current?.(); ratchetOff.current = null;
+      if (outer) outer.style.minHeight = '';
+      setLockPx(null);
+    };
+    if (!inner) { unlock(); return; }
     // 콘텐츠 실제 높이가 예약 높이를 따라잡으면 그 순간부터 예약은 시각적 변화 없이 풀린다
     // (그 지점부턴 콘텐츠가 이미 그 높이거나 더 크다 — CSS min-height 는 항상 max(예약,콘텐츠)를 그린다).
     // ⚠ 2026-09-19 회귀 실측(e2e/mystore-transition-cls.spec.ts, 4173): "따라잡은 첫 순간"에 바로 풀면
@@ -417,16 +450,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   (이용권: 예약 1208 → 해제 → 보유자 판이 열리며 1081 기록, 실측). 그 바닥 때문에 접기에서 문서가 덜 줄어 scrollY 가
     //   애매하게 깎이고(602→584·539), 다시 열어도 판이 바닥 안에서만 자라 되돌아오지 않았다(e2e/voucher-reason-stats 재열림).
     let off = false;
-    const release = () => { off = true; setLockPx(null); };
+    const release = () => { off = true; unlock(); };
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const outer = secPanelRef.current;
+    // M-5c(2026-10-02 store-link-1002) — 예약은 로딩 중 '올라가기만' 한다. 새 판의 첫 프레임이 예약보다 커졌다가(장부: 505→671)
+    //   스켈레톤으로 줄면(541) 그 낙차가 로딩 중에 보였다(푸터 932→802). 안쪽이 예약을 넘으면 그 높이로 예약을 올린다 —
+    //   그 올림은 2026-10-06 부터 lockPane 이 **누른 순간** 거는 감시(ratchetOff)가 한다(커밋 전 성장까지 받으려고). 여기는 해제 판정만.
     const ro = new ResizeObserver(() => {
       if (off) return;
-      // M-5c(2026-10-02 store-link-1002) — 예약은 로딩 중 '올라가기만' 한다. 새 판의 첫 프레임이 예약보다 커졌다가(장부: 505→671)
-      //   스켈레톤으로 줄면(541) 그 낙차가 로딩 중에 보였다(푸터 932→802). 종전엔 화면 높이 바닥(735)이 이 낙차를 가렸는데,
-      //   바닥을 '정렬에 필요한 최소'로 줄이면서 드러났다. 안쪽이 예약을 넘으면 그 높이로 예약을 올린다(바깥만 바꾸므로 RO 루프 없음).
-      const h = inner.getBoundingClientRect().height;
-      if (outer && h > (parseFloat(outer.style.minHeight) || 0)) outer.style.minHeight = `${Math.ceil(h)}px`;
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
         // F-2 — '따라잡음'만으로 풀지 않는다. 스켈레톤이 예약을 넘긴 채 잠잠해도(장부 첫 진입: 스켈레톤 1620 ≥ 예약) 실제 내용이
@@ -449,6 +479,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const stop = waitSettled(() => secInnerRef.current, release, undefined, true, PANE_LOCK_ESCAPE_MS);
     return () => { off = true; ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
+  useEffect(() => () => { ratchetOff.current?.(); ratchetOff.current = null; }, []); // 언마운트 — 올림 감시 정리
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
     // ⚠ from 은 **ref 를 고치기 전에** 읽어야 한다. 아래에서 gameStepRef 를 먼저 s 로 바꾸면
@@ -1213,8 +1244,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           {/* M-5(2026-10-02) — 판 바닥. 600 에서 짧은 판(출근 관리·직원)으로 가면 판 윗변 정렬(76) 뒤 예약이 풀리며 문서가 짧아져
               scrollY 가 두 번 더 깎였다(600→76→63→45). 바닥 = 정렬된 자리에서 문서 끝이 화면 끝에 닿는 최소 높이(--pane-floor, 위 실측).
               재기 전 첫 프레임만 종전 .pane-reserve 값으로 둔다. */}
-          <div data-mystore-secpanel ref={secPanelRef} className="min-h-[var(--pane-floor,calc(100svh-3.5rem-var(--tabbar-safe)))] mt-3 min-w-0 flex-1 lg:mt-0"
-            style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
+          {/* 예약 min-height 는 style prop 이 아니라 lockPane/unlock 이 DOM 에 직접 건다(2026-10-06 — React 가 커밋에서 올린 값을 되돌렸다). */}
+          <div data-mystore-secpanel ref={secPanelRef} className="min-h-[var(--pane-floor,calc(100svh-3.5rem-var(--tabbar-safe)))] mt-3 min-w-0 flex-1 lg:mt-0">
           <div ref={secInnerRef} className="space-y-3">
             {dItem?.locked && !shellBusy && (
               <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
@@ -1434,7 +1465,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
-                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" /></div>}
+                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" reserve /></div>}
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
@@ -1826,7 +1857,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             const on = g.gameSeq === current;
             return (
               <button key={g.gameSeq} type="button" aria-pressed={on} onClick={() => onPick(g.gameSeq, g.title)}
-                className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
+                className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold transition-colors',
                   on ? 'chip-on' : 'border border-transparent bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                 <span>{label(g.gameSeq)}</span>
                 {/* ⚠ 2026-09-14 실측(1440·1280, 게임 4개): 칩 하나가 192~236px 라 레일이 1012 / 948 로 넘쳐
@@ -1842,7 +1873,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
           })}
           {canPosters && (
             <button type="button" onClick={onNewGame}
-              className="inline-flex h-9 shrink-0 items-center rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">
+              className="inline-flex h-9 shrink-0 items-center rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10">
               + 새 게임
             </button>
           )}

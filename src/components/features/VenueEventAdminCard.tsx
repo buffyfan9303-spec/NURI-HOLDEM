@@ -92,7 +92,7 @@ export default function VenueEventAdminCard({ onChanged }: { onChanged?: () => v
                     {r.desiredStart && <> · 희망 {r.desiredStart}{r.desiredEnd ? ` ~ ${r.desiredEnd}` : ''}</>}
                   </p>
                 )}
-                {r.body && <p className="wrap-break-word text-2xs leading-relaxed text-ink-secondary">{r.body}</p>}
+                {r.body && <p className="wrap-break-word text-2xs text-ink-secondary">{r.body}</p>}
                 <p className="text-2xs text-ink-muted">신청 {r.requester || '(알 수 없음)'}</p>
 
                 <input value={note[r.id] ?? ''} onChange={(e) => setNote((n) => ({ ...n, [r.id]: e.target.value }))}

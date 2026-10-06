@@ -115,7 +115,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                 라이트에서 얹히는 배경에 불투명 bg-danger 가 0곳이라, src/index.css 에 html.light 전역 교정을 넣었다.
                 그래서 이 파일의 -light 지정은 이제 중복이지만 같은 값(#B82640)이라 무해하다. */}
           <h3 className="text-sm font-bold text-danger-light">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
-          <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
+          <p className="mt-0.5 text-2xs text-ink-muted">
             내 매장의 <b className="text-ink-secondary">모든 데이터(장부·순위·이용권·직원·클락·로그 전부)</b>를 영구 삭제합니다.
             <b className="text-danger-light"> 복구할 수 없습니다.</b> 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
           </p>
@@ -156,7 +156,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
             <>
               <div className="rounded-card border border-amber-500/30 bg-amber-500/6 p-3">
                 <p className="text-2xs font-bold text-amber-300">킬스위치 비밀번호 설정 (최초 1회)</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                <p className="mt-1 text-2xs text-ink-muted">
                   이 비밀번호는 매장 전체를 삭제할 때 필요합니다. <b className="text-danger-light">한 번 설정하면 변경·재설정할 수 없으니</b> 신중히 정하고 안전하게 보관하세요.
                 </p>
               </div>
@@ -179,7 +179,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               {/* 법정 보존(장부·근무 기록)은 매장 책임이다 — 지우기 전에 먼저 받아 두게 한다. 삭제를 막지는 않는다. */}
               <div className="rounded-card border border-border-subtle bg-surface-low p-3" data-testid="kill-export">
                 <p className="text-2xs font-bold text-ink-primary">먼저 자료를 내려받으세요</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">삭제하면 다시 받을 수 없습니다. 장부·근무 기록의 법정 보존은 매장 몫입니다.</p>
+                <p className="mt-1 text-2xs text-ink-muted">삭제하면 다시 받을 수 없습니다. 장부·근무 기록의 법정 보존은 매장 몫입니다.</p>
                 <div className="mt-2 grid grid-cols-2 gap-1.5">
                   {(Object.keys(VENUE_EXPORT_GROUPS) as VenueExportGroup[]).map((g) => (
                     <button key={g} type="button" onClick={() => doExport(g)} disabled={exporting !== null}
@@ -194,7 +194,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/5 p-3">
                     <p className="text-2xs font-bold text-danger-light">1단계 · 본인 확인</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">본인의 실명</b>을 입력하세요.</p>
+                    <p className="mt-1 text-2xs text-ink-muted">본인인증된 <b className="text-ink-secondary">본인의 실명</b>을 입력하세요.</p>
                   </div>
                   <Lbl label="실명">
                     <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="input w-full text-sm" placeholder="실명 입력" autoFocus />
@@ -210,7 +210,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/5 p-3">
                     <p className="text-2xs font-bold text-danger-light">2단계 · 킬스위치 비밀번호</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">최초에 설정한 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 입력하세요.</p>
+                    <p className="mt-1 text-2xs text-ink-muted">최초에 설정한 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 입력하세요.</p>
                   </div>
                   <Lbl label="킬스위치 비밀번호">
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="input w-full text-sm" placeholder="비밀번호" autoFocus />
@@ -226,7 +226,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                 <>
                   <div className="rounded-card border border-danger/50 bg-danger/8 p-3">
                     <p className="text-2xs font-bold text-danger-light">3단계 · 최종 확인</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                    <p className="mt-1 text-2xs text-ink-muted">
                       정말 <b className="text-danger-light">매장 전체를 영구 삭제</b>하시겠습니까? 장부·순위·이용권·직원·클락 등 <b className="text-ink-secondary">모든 데이터가 즉시 사라지며 복구할 수 없습니다.</b>
                     </p>
                   </div>

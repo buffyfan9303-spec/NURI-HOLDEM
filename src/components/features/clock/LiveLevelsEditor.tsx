@@ -41,7 +41,7 @@ export default function LiveLevelsEditor({ state, onClose, onApply }: {
   return (
     <Modal open onClose={onClose} title="블라인드 구조 수정" maxWidth="lg" variant="sheet">
       <div className="space-y-2 p-4" data-testid="clk-live-editor">
-        <p className="text-2xs leading-relaxed text-ink-muted">
+        <p className="text-2xs text-ink-muted">
           {finished
             ? '마지막 레벨까지 끝난 대회입니다. 아래에 레벨을 덧붙이면 그 레벨에서 일시정지로 이어지고, [계속하기]로 재개합니다.'
             : '지난 레벨은 바꿀 수 없습니다. 진행 중 레벨은 블라인드·앤티만, 남은 시간은 콘솔의 Min/Sec ± 로 조정하세요. 엔트리·탈락·경과 기록은 그대로입니다.'}

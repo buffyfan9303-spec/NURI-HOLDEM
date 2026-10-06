@@ -472,7 +472,7 @@ ${cards}
       <div className="rounded-aura border card-aura p-6 text-center">
         <Icon name="ticket" size={22} className="mx-auto text-ink-muted" />
         <p className="mt-2 text-sm font-bold text-ink-primary">매장이용권은 현재 비활성화되어 있습니다</p>
-        <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+        <p className="mt-1 text-2xs text-ink-secondary">
           본인인증 준비가 끝나면 다시 열립니다. 전송·보유 기록은 그대로 보관되어 있으며 삭제되지 않았습니다.
         </p>
       </div>
@@ -508,7 +508,7 @@ ${cards}
           <ul data-testid="voucher-feed" className="max-h-[calc(20*1.75rem+19*0.25rem)] space-y-1 overflow-y-auto">
             {feed.map((e, i) => (
               <li key={i} className="flex h-7 items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
-                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
+                <span className={['shrink-0 rounded-badge px-1.5 font-bold',
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                   <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용' : '전송'}
                 </span>
@@ -518,7 +518,7 @@ ${cards}
                   {e.n > 1 && <b className="shrink-0 text-accent-300">×{e.n}</b>}
                   {/* 전송 취소 — 시각이 없어 따로 줄을 만들지 않고 그 전송 줄에 장수로 붙인다(유형별 표 '전송 취소'와 같은 수). */}
                   {e.revoked > 0 && (
-                    <span data-testid="voucher-feed-revoked" className="shrink-0 rounded-badge bg-danger/15 px-1.5 py-0.5 font-bold leading-none text-danger-light">
+                    <span data-testid="voucher-feed-revoked" className="shrink-0 rounded-badge bg-danger/15 px-1.5 font-bold text-danger-light">
                       {e.revoked === e.n ? '전송 취소' : `취소 ${e.revoked}`}
                     </span>
                   )}
@@ -589,13 +589,13 @@ ${cards}
               {reason === 'other' && (
                 <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 전송 이유를 적어 주세요(필수)" className="input w-full text-sm" />
               )}
-              <p className="text-2xs leading-relaxed text-ink-muted">대회 순위·입상을 근거로 한 이용권은 전송할 수 없습니다(2026-09-05). 전송 근거는 기록에 남습니다.</p>
+              <p className="text-2xs text-ink-muted">대회 순위·입상을 근거로 한 이용권은 전송할 수 없습니다(2026-09-05). 전송 근거는 기록에 남습니다.</p>
               {/* 손님 화면 미리보기(오너 지시 #19) — 매장명은 **자동으로 붙는다**.
                   왜 필요한가: 라이브 데이터 101장 중 100장의 제목에 업주가 '로티아레나'를 손으로 타이핑해
                   두었다. 이제 그럴 필요가 없고, 그렇게 해도 중복은 표시 단계에서 걷힌다는 걸 여기서 보여 준다.
                   매장명은 이 매장이 이미 발급한 이용권에서 읽는다(새 네트워크 0) — 모르면 줄 자체를 내린다. */}
               {venueName && (
-                <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs leading-relaxed text-ink-muted">
+                <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs text-ink-muted">
                   <Icon name="eye" size={12} className="mt-0.5 shrink-0 text-accent-300" />
                   <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b>{josa(stripVenuePrefix(title, venueName), '으로')} 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
                 </p>
@@ -766,7 +766,7 @@ ${cards}
                   두어야 누르기 직전에 읽힌다 — 화면 맨 끝에 두면 스크롤 밖에 남는다(실측 대상 아님, 배치 원칙).
                   ⚠ 같은 취지의 문구가 출석 명단(CheckinModal)에도 있다. 거기도 이용권을 **보내는** 자리라서다.
                     두 곳의 문구가 갈리면 안 된다 — 한쪽을 고치면 다른 쪽도 같이 고쳐라. */}
-              <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-secondary">
+              <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs text-ink-secondary">
                 {/* 🔴 2026-09-20 — '인증된 매장 업주에게만' 은 서버와 어긋난 문구였다. 라이브 `issue_voucher` 는
                     `can_manage_pos`(admin ∪ 소유자 ∪ **승인 공동운영자**)를 보고, 그다음 `venues.voucher_issue_approved`
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
@@ -776,7 +776,7 @@ ${cards}
                 <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 이 매장의 업주·공동운영자 중 관리자 승인을 받은 계정만 할 수 있습니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
-              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 우리 매장 손님만 · 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
+              <p className="text-2xs text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 우리 매장 손님만 · 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
@@ -810,26 +810,26 @@ ${cards}
                   {srcOf(qr)
                     ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님이 스캔해 사용 (고정)</p>
+                  <p className="text-center text-2xs text-ink-secondary">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
                   {srcOf(checkinQr)
                     ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
+                  <p className="text-center text-2xs text-ink-secondary">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-snug text-ink-secondary">스캔 시 회원가입 페이지로 이동</p>
+                  <p className="text-center text-2xs text-ink-secondary">스캔 시 회원가입 페이지로 이동</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {srcOf(buyinQr)
                     ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 참가 요청 → 장부에서 승인</p>
+                  <p className="text-center text-2xs text-ink-secondary">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
               {/* 인쇄할 QR 선택 — 종이가 작아 한꺼번에 안 됨. 1~3개 선택 */}
@@ -955,7 +955,7 @@ ${cards}
                       )}
                     </>);
                   })()}
-                  <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">삭제한 미사용 이용권은 집계되지 않습니다. 기간은 전송일(한국 시간) 기준입니다.<br />위 ‘전송’ 타일은 전송 취소한 이용권을 뺀 수입니다.</p>
+                  <p className="mt-1.5 text-2xs text-ink-muted">삭제한 미사용 이용권은 집계되지 않습니다. 기간은 전송일(한국 시간) 기준입니다.<br />위 ‘전송’ 타일은 전송 취소한 이용권을 뺀 수입니다.</p>
                 </div>
               </>);
             })()}
@@ -1004,7 +1004,7 @@ ${cards}
                             미사용분에만 걸리고, 사용 완료분은 아래 내역으로 그대로 남는다. */}
                         {canIssue && (
                           <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
-                            <p className="min-w-0 flex-1 text-2xs leading-relaxed text-ink-muted">
+                            <p className="min-w-0 flex-1 text-2xs text-ink-muted">
                               잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 전송 취소할 수 있습니다
                               {g.used.length > 0 && <> · 사용 완료 {g.used.length}장은 내역으로 보존</>}
                             </p>
@@ -1144,7 +1144,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
             {busy ? '보내는 중…' : pending ? '이미 검토 중인 요청이 있습니다' : `${amount.toLocaleString()}장 증액 요청하기`}
           </button>
           {/* 🔴 비용이 없다는 사실을 **화면에** 적는다 — 업주가 '돈이 드나?' 로 읽으면 요청 자체를 안 한다. */}
-          <p className="text-2xs leading-relaxed text-ink-muted">
+          <p className="text-2xs text-ink-muted">
             <b className="text-ink-secondary">비용은 없습니다.</b> 관리자가 확인한 뒤 전송 가능 장수만 늘려 드립니다.
             매장이용권은 금전적 가치가 없으며, 구매·충전 개념이 아닙니다.
           </p>
