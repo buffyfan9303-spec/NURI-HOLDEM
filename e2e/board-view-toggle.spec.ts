@@ -9,13 +9,15 @@
 //   ③ aria-pressed · data-view · 저장값(nuri:board-view) · 실제 렌더(PostCard/PostRow)가 일치한다.
 //   ④ N08: 키 없음 / 손상 값 / 저장소 차단(throw) → compact(모아보기). 저장값 feed → 펼쳐보기(카드) 유지. 새로고침·탭 왕복 후 유지.
 //   ⑤ 첫 프레임부터 모아보기 — 버튼이 처음 그려진 프레임부터 매 rAF 마다 상태·행 종류를 기록해 펼쳐보기가 한 번도 비치지 않았는지 본다.
-// 게시글은 운영 DB 읽기(_fixtures 가 쓰기를 막는다) — 글이 0건이면 렌더 판정을 skip 이 아니라 **실패**로 알린다.
+// 게시글은 mockPosts(24건)로 고정한다 — 운영 글이 0건(오픈 초기화 뒤)이어도 렌더 판정이 서도록. 글이 0건이면 skip 이 아니라 **실패**로 알린다.
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
+import { mockPosts } from './_mocks';
 
 /** stored: null = 키 제거(미선택) · 문자열 = 그 값 · 생략 = 저장소를 건드리지 않는다(재진입 검사용 — init script 는 매 탐색마다 다시 돈다) */
 async function openBoard(page: Page, opts: { theme?: 'dark' | 'light'; stored?: string | null; blockStorage?: boolean } = {}) {
+  await mockPosts(page);
   await page.addInitScript(({ theme, stored, blockStorage }) => {
     try { localStorage.setItem('nuri-theme', theme ?? 'dark'); } catch { /* 차단 */ }
     try {

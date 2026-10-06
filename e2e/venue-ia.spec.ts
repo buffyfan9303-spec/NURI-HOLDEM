@@ -22,7 +22,7 @@ async function anyVenueId(): Promise<string | null> {
 test.describe('매장 페이지 — 3계층 IA', () => {
   test('🔴 비로그인 첫 뷰포트: 행동 요소 ≤6 · QR 체크인 존재 · 내 활동 미렌더', async ({ page }) => {
     const vid = await anyVenueId();
-    test.skip(!vid, '공개 매장이 없어 판단 불가(데이터 부재)');
+    expect(vid, '공개 매장이 하나도 없다 — 오픈 초기화 뒤에도 로티아레나 1곳은 남는다(예전엔 skip 이라 조용히 꺼졌다)').toBeTruthy();
 
     await stabilizeBackstack(page);
     await page.goto(`/?v=${vid}`);

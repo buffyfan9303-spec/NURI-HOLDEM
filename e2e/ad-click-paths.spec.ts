@@ -13,6 +13,7 @@
 import { test, expect } from './_fixtures';
 import { type Route } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { mockPaidVenue } from './_mocks';
 
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 const BANNERS_REST = /\/rest\/v1\/home_banners\?/;
@@ -97,6 +98,7 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
   test('🔴 유료 노출 매장 카드(AD 배지)는 카드 전체가 매장 상세로 간다', async ({ page }) => {
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
+    await mockPaidVenue(page);   // 유료 노출 매장 1곳을 보장 — 운영에 없어도 같은 판정(예전엔 skip)
     await page.goto('/?tab=community');
     await dismissOverlays(page);
     const bar = page.locator('[data-community-secbar]');
@@ -106,7 +108,7 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
 
     // AD 배지가 붙은 매장 카드가 있으면 그 루트가 버튼이어야 한다(배지만 클릭되는 구조 금지).
     const adBadge = page.locator('[data-tab="community"] span', { hasText: /^AD$/ }).first();
-    if (await adBadge.count() === 0) test.skip(true, '지금 유료 노출 매장이 없다');
+    await expect(adBadge, 'AD 배지가 없다 — mockPaidVenue 가 안 먹었거나 배지 렌더가 끊겼다').toBeVisible({ timeout: 10_000 });
     const root = adBadge.locator('xpath=ancestor::button[1]');
     await expect(root, 'AD 배지가 버튼 안에 있지 않다 — 카드 전체가 클릭 대상이 아니다').toHaveCount(1);
   });
@@ -133,13 +135,15 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
   test("🔴 '광고 문의' placeholder 는 게재물이 아니다 — 실제 AD 로 세지 않는다", async ({ page }) => {
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
+    // 비로그인 '내 정보' 랜딩은 UI 버튼으로 닿지 않는다(헤더 아바타 메뉴는 로그인 전용, 로그인 버튼은 AuthModal) —
+    //   앱이 스스로 이 판을 여는 길은 '비밀번호 변경 OTP 중 리로드 복귀'(sessionStorage nh_pw_otp, 5분 이내)다. 그 길로 연다.
+    //   예전에는 로그인 버튼을 눌러 보고 항목이 없으면 건너뛰었다 — 항상 건너뛰어 이 검사는 한 번도 돌지 않았다.
+    await page.addInitScript(() => { try { sessionStorage.setItem('nh_pw_otp', String(Date.now())); } catch { /* 스토리지 차단 */ } });
     await page.goto('/');
     await dismissOverlays(page);
-    await page.getByRole('button', { name: /내 정보|프로필|로그인/ }).first().click().catch(() => {});
-    await page.waitForTimeout(1200);
 
     const inquiry = page.getByText('광고 문의', { exact: true }).first();
-    if (await inquiry.count() === 0) test.skip(true, '이 화면에 광고 문의 항목이 없다');
+    await expect(inquiry, '비로그인 내 정보 랜딩에 광고 문의 항목이 없다').toBeVisible({ timeout: 15_000 });
     // 문의는 mailto 링크 — 목적지가 분명하고, AD 배지를 달지 않는다
     const href = await inquiry.locator('xpath=ancestor::a[1]').getAttribute('href');
     expect(href, '광고 문의에 목적지가 없다').toMatch(/^mailto:/);
