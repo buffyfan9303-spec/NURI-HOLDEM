@@ -128,7 +128,12 @@ export async function stabilizeBackstack(page: Page): Promise<void> {
 export async function dismissOverlays(page: Page): Promise<void> {
   // 앱이 실제로 붙을 때까지 — 헤더 알림 버튼이 마운트 마커(다른 스펙들과 같은 계약)
   await page.waitForSelector('button[aria-label^="알림"]', { timeout: 20_000 }).catch(() => {});
-  const dialog = page.locator('[role="dialog"]');
+  // ⚠ '내 정보'(로그인·비로그인 랜딩, CustomerDashboardPage) 는 진입을 가로막는 게이트가 아니라 **사용자가 연 전면 화면**이다
+  //   (fc98cc5e 가 role="dialog" 를 달았다 — 접근성상 맞는 의미). 이걸 거르지 않으면 skip 루프의 '닫기'가 랜딩을 닫아 버린다.
+  //   그런데 닫히느냐는 **레이스**였다: 랜딩은 lazy 청크라 아래 count() 가 마운트보다 먼저 돌면 0 으로 조기 return(CI 에서는 그래서 통과),
+  //   먼저 마운트되면 닫아 버려 실패(로컬 웜 서버에서 4회 중 3회 실패 — 2026-10-07 10회차 점검 P2).
+  //   그래서 헬퍼 대상에서 '내 정보' 를 빼 **타이밍과 무관하게 같은 결과**가 되게 한다. 다른 dialog(동의 게이트·온보딩류)는 그대로 걷는다.
+  const dialog = page.locator('[role="dialog"]:not([aria-label^="내 정보"])');
   for (let i = 0; i < 4; i++) {
     if (!(await dialog.count())) return;
 
