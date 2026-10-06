@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NURI HOLDEM 업주 운영 가이드</title>
-<meta name="description" content="NURI HOLDEM 홀덤펍 업주 운영 가이드 — 포스터 등록부터 일정 노출·장부·클락·순위·정산까지 6단계를 실제 화면과 함께 한눈에 안내합니다.">
+<meta name="description" content="NURI HOLDEM 홀덤펍 업주 운영 가이드 — 처음 시작, 매장 등록·인증, 포스터, 장부·클락, 정산·통계, 이용권, 직원, 순위, 설정까지 순서대로 쉽게 안내합니다.">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <!-- 앱과 같은 글꼴(Pretendard Variable · SIL OFL 1.1 · self-host). 예전엔 family 이름을 'Pretendard' 로 적어
      불러온 'Pretendard Variable' 과 이름이 달라 맑은 고딕으로 그려졌다(2026-09-30 CDP 실측). -->
@@ -40,15 +40,14 @@
   .wrap { max-width:1200px; margin:0 auto; padding:48px 32px 64px; }
   .lead { font-size:18px; margin-top:14px; max-width:720px; }
 
-  /* 6단계 파이프라인 — 첫 화면에서 흐름 전체가 보이게 한 줄 */
-  .flow { list-style:none; display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-top:32px; counter-reset:s; }
-  .flow a { position:relative; display:block; height:100%; padding:18px 16px; border-radius:16px; background:var(--card);
+  /* 10절 차례 — 첫 화면에서 순서 전체가 보이게 5칸 × 2줄 */
+  .flow { list-style:none; display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:32px; }
+  .flow a { display:block; height:100%; padding:16px 16px; border-radius:16px; background:var(--card);
     border:1px solid var(--line); text-decoration:none; }
   .flow a:hover { border-color:var(--link); }
-  .flow li + li a::before { content:''; position:absolute; left:-11px; top:50%; width:10px; height:2px; background:var(--line); }
   .flow .n { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:9px; background:var(--fill); color:#fff;
     font-size:14px; font-weight:800; }
-  .flow h3 { margin-top:12px; color:var(--ink); }
+  .flow h3 { margin-top:10px; color:var(--ink); }
   .flow p { font-size:14px; line-height:1.5; margin-top:4px; }
 
   .pre { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:20px; padding:16px 20px; border-radius:14px;
@@ -60,9 +59,9 @@
   .pre .next { display:inline-flex; align-items:center; gap:14px; white-space:nowrap; }
   .pre .cap { flex-basis:100%; }
 
-  /* 단계 — 왼쪽 설명(짧게) · 오른쪽 실제 화면 */
+  /* 절 — 왼쪽 설명(짧게) · 오른쪽 실제 화면 */
   /* 그림 칸 8.5fr — 1440 에서 ≈771px. 캡처(1100 폭 본문 840px)의 가장 작은 앱 글자 10px 가 9px 아래로 줄지 않는다(2026-10-01 실측) */
-  .step { display:grid; grid-template-columns:minmax(0,3.5fr) minmax(0,8.5fr); gap:48px; align-items:center;
+  .step { display:grid; grid-template-columns:minmax(0,3.5fr) minmax(0,8.5fr); gap:48px; align-items:start;
     padding:56px 0; border-top:1px solid var(--line); scroll-margin-top:72px; }
   .wrap > .step:first-of-type { margin-top:56px; }
   .step .key { font-size:18px; color:var(--ink); margin-top:10px; }
@@ -74,6 +73,10 @@
   .path i { font-style:normal; color:var(--mute); }
   .tip { margin-top:14px; font-size:15px; color:var(--ok); }
   .tip.w { color:var(--warn); }
+  /* 아직 앱에 들어오지 않은 화면·문구 — 병합되면 이 표시를 지운다 */
+  .soon { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; border:1px solid var(--warn); color:var(--warn);
+    font-size:12px; font-weight:800; line-height:1.5; vertical-align:2px; white-space:nowrap; }
+  .figs { display:grid; gap:20px; min-width:0; }
   figure .shot { display:block; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#000; }
   figure img { display:block; width:100%; height:auto; }
   figure a.shot:hover { border-color:var(--link); }
@@ -81,10 +84,15 @@
   figure.phone { justify-self:center; width:320px; }
   figure.phone .shot { border-radius:20px; }
   figcaption { margin-top:8px; text-align:center; }
+  /* 캡처 자리 — 최신 화면 촬영 뒤 <img> 로 바꾼다 */
+  figure.slot .ph { display:grid; place-items:center; min-height:200px; padding:24px; border:1px dashed var(--line); border-radius:14px;
+    background:var(--card); color:var(--mute); font-size:14px; text-align:center; }
 
-  .news { padding:56px 0; border-top:1px solid var(--line); }
-  .news .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px 32px; margin-top:24px; align-items:start; }
-  .news figure:nth-child(n+3) { grid-column:1 / -1; }
+  .faq { padding:56px 0; border-top:1px solid var(--line); scroll-margin-top:72px; }
+  .faq dl { margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; }
+  .faq .qa { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .faq dt { font-size:16px; font-weight:700; color:var(--ink); }
+  .faq dd { margin-top:6px; font-size:15px; }
   .end { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding-top:56px; border-top:1px solid var(--line); }
   .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
   .box h2 { font-size:22px; margin-bottom:14px; }
@@ -97,15 +105,15 @@
   footer b { color:var(--sub); font-weight:600; }
 
   /* PC 가 기준 — 좁은 창에서는 깨지지 않게만 접는다 */
-  @media (max-width:1100px) { .flow { grid-template-columns:repeat(3,1fr); } .flow li:nth-child(4) a::before { display:none; } }
+  @media (max-width:1100px) { .flow { grid-template-columns:repeat(3,1fr); } }
   @media (max-width:860px) {
     h1 { font-size:32px; } h2 { font-size:24px; }
     .wrap { padding:32px 20px 56px; } .bar .in { padding:0 16px; }
-    .step, .end, .news .grid { grid-template-columns:1fr; gap:24px; } .step { padding:40px 0; }
+    .step, .end, .faq dl { grid-template-columns:1fr; gap:24px; } .step { padding:40px 0; }
     figure.phone { width:min(320px,80%); }
   }
   @media (max-width:560px) {
-    .flow { grid-template-columns:1fr 1fr; } .flow li a::before { display:none; }
+    .flow { grid-template-columns:1fr 1fr; }
     .bar a.l.opt { display:none; }
   }
   @media print {
@@ -114,8 +122,7 @@
     :root { --bg:#fff; --card:#f5f6f8; --card2:#eceef2; --ink:#111; --sub:#333; --mute:#555; --line:#ccc;
       --gold:#7a5a12; --ok:#0f6b44; --warn:#7c5300; --link:#4a36c4; --teal:#0e6f80; }
     .step { break-inside:avoid; }
-    /* 인쇄 폭(A4 ≈ 794px)에서는 860 이하 접힘이 걸려 세로로 긴 새 기능 사진 두 장이 각각 한 쪽을 차지했다 — 인쇄에서는 두 칸으로 */
-    .news .grid { grid-template-columns:1fr 1fr; } .news figure { break-inside:avoid; }
+    .faq .qa { break-inside:avoid; }
   }
 </style>
 </head>
@@ -123,178 +130,276 @@
 <header class="bar"><div class="in">
   <a class="brand" href="/">NURI <span>HOLDEM</span> · 업주 가이드</a>
   <a class="l" href="/guide/manual.html">전체 사용설명서</a>
+  <a class="l opt" href="/guide/user.html">손님용 설명서</a>
   <a class="l opt" href="/guide/owner.pdf" download>PDF 내려받기</a>
   <a class="l opt" href="mailto:ace@nuriholdem.com">문의</a>
 </div></header>
 
 <main class="wrap">
-  <p class="kicker">업주 운영 가이드</p>
-  <h1>포스터 한 장이 정산까지 이어집니다</h1>
-  <p class="lead">앱의 <b>내 매장 › 게임 진행</b>에서 시작하세요. 6단계가 차례로 연결되어, 앞 단계에 적은 것이 다음 단계로 자동으로 넘어갑니다.</p>
+  <p class="kicker">업주 운영 가이드 · 2026-10-08 정식 오픈판</p>
+  <h1>가입부터 정산까지, 이 순서대로 하시면 됩니다</h1>
+  <p class="lead">앱의 <b>내 매장</b>에서 시작하세요. 포스터에 적은 것이 장부, 클락, 순위, 정산으로 자동으로 이어집니다. 아래 10개 순서대로 읽으면 처음 오신 사장님도 오픈 첫날 운영할 수 있습니다.</p>
+  <p class="cap" style="margin-top:10px"><span class="soon" style="margin-left:0">반영 예정</span> 표시는 앱에 곧 들어오는 화면·문구입니다. 정식 오픈 전에 적용됩니다.</p>
 
-  <ol class="flow" aria-label="운영 6단계">
-    <li><a href="#s1"><span class="n">1</span><h3>포스터 등록</h3><p>대회를 올리면</p></a></li>
-    <li><a href="#s2"><span class="n">2</span><h3>일정 노출</h3><p>손님이 찾고 예약</p></a></li>
-    <li><a href="#s3"><span class="n">3</span><h3>장부</h3><p>바인을 기록하면</p></a></li>
-    <li><a href="#s4"><span class="n">4</span><h3>클락</h3><p>인원이 TV에 뜨고</p></a></li>
-    <li><a href="#s5"><span class="n">5</span><h3>순위</h3><p>명단이 자동으로</p></a></li>
-    <li><a href="#s6"><span class="n">6</span><h3>정산</h3><p>그날 숫자가 한 장에</p></a></li>
+  <ol class="flow" aria-label="업주 가이드 차례">
+    <li><a href="#s1"><span class="n">1</span><h3>처음 시작</h3><p>가입, 본인인증, 약관</p></a></li>
+    <li><a href="#s2"><span class="n">2</span><h3>매장 등록·인증</h3><p>승인 뒤 운영 기능이 열림</p></a></li>
+    <li><a href="#s3"><span class="n">3</span><h3>포스터</h3><p>대회를 올리면 일정에 노출</p></a></li>
+    <li><a href="#s4"><span class="n">4</span><h3>장부·클락</h3><p>바인 기록, TV 송출</p></a></li>
+    <li><a href="#s5"><span class="n">5</span><h3>정산·통계</h3><p>그날 숫자를 한 장에</p></a></li>
+    <li><a href="#s6"><span class="n">6</span><h3>이용권</h3><p>받는 손님 찾기, 사용</p></a></li>
+    <li><a href="#s7"><span class="n">7</span><h3>직원</h3><p>초대, 권한, 출근</p></a></li>
+    <li><a href="#s8"><span class="n">8</span><h3>순위</h3><p>장부 명단에서 골라 담기</p></a></li>
+    <li><a href="#s9"><span class="n">9</span><h3>설정·위험 구역</h3><p>위치 출석, 대표 전용</p></a></li>
+    <li><a href="#s10"><span class="n">10</span><h3>자주 묻는 질문</h3><p>막힐 때 먼저 보세요</p></a></li>
   </ol>
-
-  <div class="pre">
-    <p>시작 전 준비</p>
-    <span class="chip">① 회원가입·본인인증</span>
-    <span class="next"><span class="arr" aria-hidden="true">→</span><span class="chip">② 내 매장 만들기</span></span>
-    <span class="next"><span class="arr" aria-hidden="true">→</span><span class="chip">③ 관리자 승인</span></span>
-    <p class="cap">승인 전에는 대시보드에 「관리자 승인 후 운영 기능이 열립니다」 카드만 보입니다. 승인되면 운영 기능이 열리고, 매장이 일정 탐색·커뮤니티에 공개됩니다.</p>
-  </div>
 
   <section class="step" id="s1">
     <div>
-      <p class="kicker">STEP 1</p>
-      <h2>포스터 등록</h2>
-      <p class="key">대회를 올리면 손님 앱의 일정에 바로 실립니다.</p>
+      <p class="kicker">1 · 처음 시작</p>
+      <h2>가입부터 첫 화면까지</h2>
+      <p class="key">회원가입, 본인인증, 약관 동의, 이 세 가지를 먼저 끝냅니다.</p>
       <ul>
-        <li>포스터 이미지, 대회명, 날짜와 시간, 참가비, GTD를 입력합니다</li>
-        <li>세부 규칙: 리엔트리, 얼리칩(최대 4단), <b>참가 1회 = 이용권 N장</b></li>
-        <li><b>지난 포스터 불러오기</b>로 반복 대회는 몇 초 만에 올립니다</li>
-        <li>자주 쓰는 구성은 <b>게임 프리셋</b>에 저장합니다</li>
+        <li>로그인 창의 <b>업주 가입</b> 탭에서 가입합니다. 만 19세 미만은 가입할 수 없습니다</li>
+        <li>첫 로그인 뒤 <b>휴대폰 본인인증</b>을 합니다. 대표자 본인 명의로 해야 하고, 한 사람이 한 계정에서만 인증할 수 있습니다</li>
+        <li>이용약관이 새 판으로 바뀌면 접속할 때 <b>다시 동의</b>하는 창이 한 번 뜹니다. 동의해야 계속 쓸 수 있습니다</li>
+        <li><b>내 매장</b>을 처음 열면 <b>매장 운영자 이용약관</b>(개인정보 처리위탁 포함) 동의 창이 뜹니다. 필수이고, 동의하기 전에는 내 매장 화면을 쓸 수 없습니다</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 포스터 <i>›</i> + 새 게임</span>
-      <p class="tip">인증 매장은 운영자 승인 없이 즉시 게시됩니다. 게시 뒤 참가비 칸을 고치면 다시 심사를 받습니다.</p>
+      <span class="path">로그인 <i>›</i> 업주 가입</span>
+      <p class="tip">운영자 약관에 동의하지 않아도 손님으로서 앱을 쓰는 데는 제한이 없습니다. 창의 「다른 화면으로」를 누르면 됩니다.</p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-poster.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster.webp" width="1680" height="1324" loading="lazy" decoding="async"
-      alt="포스터 화면 — 날짜별 게임 목록과 게임마다 예약관리·장부·손님화면·수정·삭제 버튼"></a>
-      <figcaption class="cap">포스터 목록 — 게임마다 예약·장부로 바로 이동</figcaption></figure>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="owner-start-terms"><div class="ph">화면 준비 중 — 매장 운영자 이용약관 동의 창</div>
+        <figcaption class="cap">내 매장을 처음 열 때 뜨는 약관 동의 창</figcaption></figure>
+    </div>
   </section>
 
   <section class="step" id="s2">
     <div>
-      <p class="kicker">STEP 2</p>
-      <h2>일정 노출 · 예약</h2>
-      <p class="key">손님은 날짜·지역·참가비로 찾아 앱에서 예약합니다.</p>
+      <p class="kicker">2 · 매장 등록·인증</p>
+      <h2>매장을 만들고 승인을 기다립니다</h2>
+      <p class="key">승인이 나야 포스터·장부·클락이 열리고, 매장이 손님 앱에 공개됩니다.</p>
       <ul>
-        <li>포스터 목록의 <b>예약관리</b>에서 예약자 명단을 확인합니다</li>
-        <li>새 대회가 승인되면 매장 팔로워에게 자동으로 알림이 갑니다</li>
-        <li>매장에 <b>매장 QR</b>을 두면 손님이 스캔해 출석합니다</li>
+        <li>매장이 없으면 <b>내 매장</b>을 여는 순간 「내 매장 만들기」가 나옵니다. <b>이름·주소·전화번호</b>는 꼭 적고, 사진·지역·소개는 나중에 채워도 됩니다</li>
+        <li>만든 뒤 <b>관리자 승인</b>까지는 대시보드에 안내 카드만 보입니다. 보통 영업일 기준 1~2일 걸립니다</li>
+        <li><b>인증 매장</b> 배지는 승인과 별개입니다. 사장님이 신청하는 버튼은 없고, 운영자가 검토한 뒤 줍니다. 인증 매장은 인증 배지, 목록 상단 노출, 공식 결과 기록지를 받습니다 <span class="soon">반영 예정</span></li>
+        <li>매장 안에서 일하는 사람은 세 종류입니다. <b>대표 업주</b>, <b>공동운영</b>, <b>직원</b>. 위험한 설정은 대표 업주만 할 수 있습니다(9번 참고)</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 이용권 · QR</span>
+      <span class="path">내 매장 <i>›</i> 매장 만들기</span>
+      <p class="tip w">대회를 올려도 바로 일정에 실리지 않는 것이 기본입니다. 자세한 규칙은 다음 절(포스터)에 있습니다.</p>
     </div>
-    <figure class="phone"><a class="shot" href="/guide/img/about-browse.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/about-browse.webp" width="640" height="722" loading="lazy" decoding="async"
-      alt="손님 앱의 일정 탐색 화면 — 날짜별로 매장 대회가 나열된다"></a>
-      <figcaption class="cap">손님이 보는 일정 탐색(모바일)</figcaption></figure>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="owner-verify-card"><div class="ph">화면 준비 중 — 매장 인증 상태 카드(비인증·심사 중·인증)</div>
+        <figcaption class="cap">내 매장 맨 위의 인증 상태 카드</figcaption></figure>
+    </div>
   </section>
 
   <section class="step" id="s3">
     <div>
-      <p class="kicker">STEP 3</p>
-      <h2>장부</h2>
-      <p class="key">오늘 게임을 고르고, 바인만 누르면 됩니다.</p>
+      <p class="kicker">3 · 포스터</p>
+      <h2>대회를 올리면 손님 일정에 뜹니다</h2>
+      <p class="key">손님은 날짜, 지역, 참가비로 찾아서 앱에서 예약합니다.</p>
       <ul>
-        <li>포스터(게임)와 연결된 장부가 날짜별로 열리고, 사이드 게임도 추가할 수 있습니다</li>
-        <li>바인·리바인을 터치로 기록합니다(현금, 카드, 이체, <b>이용권</b>, 분납). 이용권은 포스터의 ‘N장 = 참가 1회’ 기준으로 묶여 기록됩니다</li>
-        <li>손님의 QR 바인 요청은 <b>승인</b>만 하면 기록됩니다. 이용권이 모자라면 남은 금액의 결제 방법을 고른 뒤 승인합니다</li>
+        <li>포스터 이미지, 대회명, 날짜와 시간, 참가비, GTD를 적습니다</li>
+        <li>세부 규칙: 리엔트리, 얼리칩(최대 4단), <b>참가 1회 = 이용권 N장</b></li>
+        <li><b>지난 포스터 불러오기</b>로 반복 대회는 몇 초 만에 올리고, 자주 쓰는 구성은 <b>게임 프리셋</b>에 저장합니다</li>
+        <li>대회를 올리면 <b>운영자 승인 뒤</b> 손님 앱의 일정에 실립니다 <span class="soon">반영 예정</span></li>
+        <li>포스터 목록의 <b>예약관리</b>에서 예약자 명단을 보고, 승인된 새 대회는 매장 팔로워에게 알림이 갑니다</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 장부</span>
-      <p class="tip w">게임이 끝나면 <b>마감</b>하세요 — 마감해야 순위·정산이 정확해집니다.</p>
+      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 포스터 <i>›</i> + 새 게임</span>
+      <p class="tip w">승인 없이 바로 공개되는 것은 프리미엄 매장뿐입니다. 인증 매장도 승인을 거칩니다. 공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 포스터 이미지를 고치면 다시 심사를 받습니다(프리미엄 매장은 제외) <span class="soon">반영 예정</span></p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-ledger.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ledger.webp" width="1680" height="1108" loading="lazy" decoding="async"
-      alt="장부 화면 — 날짜, 게임 선택, 플레이어 검색과 플레이어별 바인 표(칸마다 결제 수단과 시각)"></a>
-      <figcaption class="cap">장부 — 칸을 누르면 결제 방법을 골라 기록합니다</figcaption></figure>
+    <div class="figs">
+      <figure><a class="shot" href="/guide/img/owner-poster.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster.webp" width="1680" height="1324" loading="lazy" decoding="async"
+        alt="포스터 화면 — 날짜별 게임 목록과 게임마다 예약관리·장부·손님화면·수정·삭제 버튼"></a>
+        <figcaption class="cap">포스터 목록 — 게임마다 예약·장부로 바로 이동</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-poster-rules.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster-rules.webp" width="932" height="1338" loading="lazy" decoding="async"
+        alt="포스터 등록 창의 세부 규칙 — 리엔트리 참가비·최대, 참가 1회 = 이용권 10장, 회차별 리엔트리 스택, 얼리칩"></a>
+        <figcaption class="cap">포스터 › 세부 규칙 — 참가 1회 = 이용권 N장</figcaption></figure>
+      <figure class="phone"><a class="shot" href="/guide/img/about-browse.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/about-browse.webp" width="640" height="722" loading="lazy" decoding="async"
+        alt="손님 앱의 일정 탐색 화면 — 날짜별로 매장 대회가 나열된다"></a>
+        <figcaption class="cap">손님이 보는 일정 탐색(모바일)</figcaption></figure>
+    </div>
   </section>
 
   <section class="step" id="s4">
     <div>
-      <p class="kicker">STEP 4</p>
-      <h2>클락</h2>
-      <p class="key">장부와 연결하면 참가 인원이 클락에 그대로 뜹니다.</p>
+      <p class="kicker">4 · 장부·클락</p>
+      <h2>오늘 게임을 열고, 바인만 누르면 됩니다</h2>
+      <p class="key">장부에 적은 인원이 클락과 TV에 그대로 뜹니다.</p>
       <ul>
-        <li>블라인드 구조는 프리셋으로 저장하고 불러옵니다</li>
-        <li><b>TV 송출</b>로 매장 TV에 큰 화면을 띄웁니다(바인 QR 포함)</li>
-        <li>TV 왼쪽 칸은 <b>시상 → 추가 페이지 → 광고</b> 순서로 넘어갑니다. 시상은 금액 대신 문구로도 적을 수 있습니다</li>
-        <li>클락 테마·강조색·배경 이미지(매장 사진·로고)를 고를 수 있습니다</li>
-        <li>휴대폰을 <b>클락 리모컨</b>으로 쓰면 여러 기기가 실시간으로 맞춰집니다</li>
+        <li>포스터와 연결된 장부가 날짜별로 열립니다. 사이드 게임도 추가할 수 있습니다</li>
+        <li>바인·리바인을 터치로 기록하고 결제 방법을 고릅니다. 이용권은 포스터의 ‘N장 = 참가 1회’ 기준으로 묶여 기록됩니다</li>
+        <li>손님이 앱에서 보낸 <b>바인 요청</b>은 승인만 하면 기록됩니다. 이용권이 모자라면 남은 금액의 결제 방법을 고른 뒤 승인합니다</li>
+        <li>장부 요약의 <b>총 바인</b>(기록 횟수)과 <b>총 엔트리</b>(금액 기준 엔트리)는 다른 숫자입니다. 할인·얼리가 있으면 서로 달라집니다</li>
+        <li>손님이 위치 확인이 안 될 때 보낸 <b>출석 요청</b>은 대시보드의 「출석·QR 명단」에 뜹니다. 손님이 매장 안에 있는지 확인하고 승인하세요. 일반 출석과 같은 기록이 쌓이고, 같은 매장에는 4시간에 한 번만 됩니다</li>
+        <li>클락은 장부와 연결하면 참가 인원이 자동으로 맞춰집니다. <b>TV 송출</b>로 매장 TV에 큰 화면을 띄우고, 휴대폰을 <b>클락 리모컨</b>으로 쓸 수 있습니다</li>
+        <li>TV 왼쪽 칸은 <b>시상 → 추가 페이지 → 광고</b> 순서로 넘어갑니다. 테마, 강조색, 배경 이미지도 고를 수 있습니다</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 클락</span>
+      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 장부 / 클락</span>
+      <p class="tip w">게임이 끝나면 <b>마감</b>하세요. 마감해야 순위와 정산이 정확해집니다.</p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-tv.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-tv.webp" width="1480" height="833" loading="lazy" decoding="async"
-      alt="TV 송출 클락 화면 — 왼쪽 칸에 바운티 안내 추가 페이지(시상·추가 페이지·광고가 차례로 넘어감), 레벨 2와 남은 시간, 현재·다음 블라인드, 참가 인원과 리바인 수"></a>
-      <figcaption class="cap">TV 송출 화면</figcaption></figure>
+    <div class="figs">
+      <figure><a class="shot" href="/guide/img/owner-ledger.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ledger.webp" width="1680" height="1108" loading="lazy" decoding="async"
+        alt="장부 화면 — 날짜, 게임 선택, 플레이어 검색과 플레이어별 바인 표(칸마다 결제 수단과 시각)"></a>
+        <figcaption class="cap">장부 — 칸을 누르면 결제 방법을 골라 기록합니다</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-voucher-split.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-voucher-split.webp" width="1634" height="326" loading="lazy" decoding="async"
+        alt="장부 접수대의 이용권 요청 카드 — 10장 중 7장만 있어 남은 30,000원의 결제 방법을 고르는 칸"></a>
+        <figcaption class="cap">이용권이 모자라면 남은 금액을 나눠서 결제</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-tv.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-tv.webp" width="1480" height="833" loading="lazy" decoding="async"
+        alt="TV 송출 클락 화면 — 왼쪽 칸에 바운티 안내 추가 페이지(시상·추가 페이지·광고가 차례로 넘어감), 레벨 2와 남은 시간, 현재·다음 블라인드, 참가 인원과 리바인 수"></a>
+        <figcaption class="cap">TV 송출 화면</figcaption></figure>
+      <figure><a class="shot" href="/guide/img/owner-clock-pages.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-clock-pages.webp" width="1088" height="1584" loading="lazy" decoding="async"
+        alt="클락 TV 페이지 편집 창 — 등수별 금액(원 단위)과 시상 문구, 바운티 안내 추가 페이지"></a>
+        <figcaption class="cap">클락 › TV 페이지 — 시상 문구, 추가 페이지</figcaption></figure>
+    </div>
   </section>
 
   <section class="step" id="s5">
     <div>
-      <p class="kicker">STEP 5</p>
-      <h2>순위</h2>
-      <p class="key">그날 장부 명단이 자동으로 올라옵니다.</p>
+      <p class="kicker">5 · 정산·통계</p>
+      <h2>그날 하루를 한 화면으로 마무리합니다</h2>
+      <p class="key">장부 기록에서 자동으로 계산됩니다. 따로 적을 것이 없습니다.</p>
       <ul>
-        <li>명단에서 <b>+</b>로 추가하고, 줄 순서가 곧 등수입니다</li>
-        <li>순위는 참가자와 등수만 기록합니다(상금·이용권 없음)</li>
-        <li>손님 화면에는 <b>닉네임</b>으로 나오고, 실명은 그 손님이 프로필에서 ‘실명 공개’를 켠 경우에만 보입니다</li>
-        <li>매장 순위·시즌·명예의 전당으로 이어집니다(설정: 매장 설정 › 매장 페이지). 포인트·보상은 지급되지 않습니다</li>
+        <li>정산에서 완납 매출, 미수금, 총 바인, 참여 인원을 봅니다</li>
+        <li>기준 엔트리 대비와 받은 방법별 합계를 봅니다. 매장이용권에는 애드온 몫도 포함됩니다</li>
+        <li>대시보드의 <b>오늘 장부</b> 카드는 휴대폰에서 큰 숫자를 <b>총 엔트리</b>로, PC에서는 <b>총 바인</b>으로 보여 줍니다</li>
+        <li>기간별 통계와 손님 분석은 <b>매출·손님</b> 메뉴에서 봅니다</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 순위</span>
+      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 정산 / 매출·손님</span>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-ranking.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ranking.webp" width="1680" height="1324" loading="lazy" decoding="async"
-      alt="순위 화면 — 입력할 게임 선택과 그날 장부 명단(닉네임별 바인 수) 칩"></a>
-      <figcaption class="cap">순위 — 장부 명단에서 골라 담기</figcaption></figure>
+    <div class="figs">
+      <figure><a class="shot" href="/guide/img/owner-settle.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-settle.webp" width="1680" height="1324" loading="lazy" decoding="async"
+        alt="정산 화면 — 완납 매출·미수금·총 바인·참여 인원 카드와 기준 엔트리 대비"></a>
+        <figcaption class="cap">정산 — 장부 기록에서 자동 계산</figcaption></figure>
+      <figure class="slot" data-capture-slot="owner-dashboard"><div class="ph">화면 준비 중 — 대시보드 오늘 장부 카드(총 엔트리)</div>
+        <figcaption class="cap">대시보드 — 오늘 장부와 지금 할 일</figcaption></figure>
+    </div>
   </section>
 
   <section class="step" id="s6">
     <div>
-      <p class="kicker">STEP 6</p>
-      <h2>정산</h2>
-      <p class="key">그날 하루를 한 화면으로 마무리합니다.</p>
+      <p class="kicker">6 · 이용권</p>
+      <h2>받는 손님을 정확히 찾아서 보냅니다</h2>
+      <p class="key">이용권은 매장에서 쓰는 이용 수단입니다. 보내는 사람과 받는 사람이 기록에 남습니다.</p>
       <ul>
-        <li>완납 매출, 미수금, 총 바인, 참여 인원을 봅니다</li>
-        <li>기준 엔트리 대비와 받은 방법(현금, 카드, 이체, 매장이용권)을 봅니다. 매장이용권에는 애드온 몫도 포함됩니다</li>
-        <li>기간 통계와 손님 분석은 <b>매출·손님</b> 메뉴에서 봅니다</li>
+        <li>받는 손님은 두 가지 방법으로 찾습니다. <b>닉네임·실명으로 지정</b>, <b>전화번호로 지정</b></li>
+        <li>전화번호는 앞의 <b>010</b>이 고정이고, <b>뒤 8자리</b>를 모두 넣어야 조회됩니다. 통째로 붙여넣어도 됩니다</li>
+        <li>닉네임은 <b>2글자 이상</b>부터 찾습니다. 실명은 <b>우리 매장 손님</b>만 검색됩니다</li>
+        <li>결과에는 닉네임과 가려진 이름·번호만 나옵니다. 본인인증을 하지 않은 손님은 「미인증 · 전송 불가」로 표시되어 보낼 수 없습니다</li>
+        <li>손님이 프로필에서 <b>매장 전화번호 조회 허용</b>을 꺼 두었다면 번호로는 찾을 수 없고 닉네임으로만 찾습니다</li>
+        <li>하루에 조회할 수 있는 횟수에 한도가 있습니다. 최근에 보낸 손님은 칩으로 바로 고를 수 있습니다</li>
+        <li>사용은 장부 결제, 직접 차감 등으로 합니다. 이용 내역과 보유자 현황은 같은 메뉴에서 봅니다</li>
+        <li>매장 QR(이용권·출석·가입·바인 요청)도 이 메뉴에서 인쇄합니다</li>
       </ul>
-      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 정산</span>
+      <span class="path">내 매장 <i>›</i> 이용권 · QR</span>
+      <p class="tip w">이용권을 다른 값으로 바꿔 주거나 사고파는 일은 허용되지 않습니다. 서비스 전체에서 불법 환전·사행성 행위는 금지입니다.</p>
     </div>
-    <figure><a class="shot" href="/guide/img/owner-settle.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-settle.webp" width="1680" height="1324" loading="lazy" decoding="async"
-      alt="정산 화면 — 완납 매출·미수금·총 바인·참여 인원 카드와 기준 엔트리 대비"></a>
-      <figcaption class="cap">정산 — 장부 기록에서 자동 계산</figcaption></figure>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="owner-voucher-search"><div class="ph">화면 준비 중 — 이용권 전송 창(전화번호 010 + 8자리 조회)</div>
+        <figcaption class="cap">이용권 전송 — 받는 손님 찾기</figcaption></figure>
+    </div>
   </section>
 
-  <section class="news" id="new">
-    <p class="kicker">새로 생긴 기능</p>
-    <h2>이번에 바뀐 화면</h2>
-    <div class="grid">
-      <figure><a class="shot" href="/guide/img/owner-poster-rules.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster-rules.webp" width="932" height="1338" loading="lazy" decoding="async"
-        alt="포스터 등록 창의 세부 규칙 — 리엔트리 참가비·최대, 참가 1회 = 이용권 10장, 회차별 리엔트리 스택, 얼리칩"></a>
-        <figcaption class="cap">포스터 › 세부 규칙 — 참가 1회 = 이용권 N장</figcaption></figure>
-      <figure><a class="shot" href="/guide/img/owner-clock-pages.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-clock-pages.webp" width="1088" height="1584" loading="lazy" decoding="async"
-        alt="클락 TV 페이지 편집 창 — 등수별 금액(원 단위)과 시상 문구, 바운티 안내 추가 페이지"></a>
-        <figcaption class="cap">클락 › TV 페이지 — 시상 문구 · 추가 페이지</figcaption></figure>
-      <figure><a class="shot" href="/guide/img/owner-voucher-split.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-voucher-split.webp" width="1634" height="326" loading="lazy" decoding="async"
-        alt="장부 접수대의 이용권 요청 카드 — 10장 중 7장만 있어 남은 30,000원의 결제 방법(현금·카드·계좌·미수)을 고르는 칸"></a>
-        <figcaption class="cap">장부 › 이용권이 모자라면 남은 금액을 분납</figcaption></figure>
+  <section class="step" id="s7">
+    <div>
+      <p class="kicker">7 · 직원</p>
+      <h2>초대하고, 권한을 나누고, 출근을 기록합니다</h2>
+      <p class="key">직원은 업주가 준 권한만큼만 메뉴가 보입니다.</p>
+      <ul>
+        <li><b>직원 관리</b>에서 이메일로 초대하면 직원이 알림에서 수락해 소속됩니다</li>
+        <li>구성원 목록, 딜러 출근 스케줄, 인건비 관리, 인건비 정산, 직원 출근일지가 한 곳에 있습니다</li>
+        <li>구성원 종류는 <b>대표 업주</b> · <b>공동운영</b> · <b>직원</b>입니다. 공동운영은 관리자 승인을 받은 계정만 업주와 같은 권한을 씁니다</li>
+        <li>직원은 화면 맨 위 <b>출근·퇴근</b> 버튼으로 기록합니다</li>
+        <li>인건비 화면의 합계와 금액 표시(1만 원 미만은 ‘N원’)가 정리됩니다 <span class="soon">반영 예정</span></li>
+      </ul>
+      <span class="path">내 매장 <i>›</i> 직원 관리 / 출근 관리</span>
+      <p class="tip w">직원에게 장부 권한을 주면 장부뿐 아니라 클락, 순위, 정산까지 한 묶음으로 열립니다.</p>
+    </div>
+    <div class="figs">
       <figure><a class="shot" href="/guide/img/owner-staff-punch.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-staff-punch.webp" width="2164" height="228" loading="lazy" decoding="async"
         alt="직원 화면 맨 위 오늘 출퇴근 줄 — 출근 전 상태와 출근·퇴근 버튼"></a>
         <figcaption class="cap">직원 화면 맨 위 — 출근·퇴근 버튼</figcaption></figure>
     </div>
   </section>
 
+  <section class="step" id="s8">
+    <div>
+      <p class="kicker">8 · 순위</p>
+      <h2>그날 장부 명단이 자동으로 올라옵니다</h2>
+      <p class="key">줄 순서가 곧 등수입니다.</p>
+      <ul>
+        <li>명단에서 <b>+</b>로 추가하고, 줄을 끌어 순서를 바꿉니다</li>
+        <li>순위는 참가자와 등수만 기록합니다. 순위에는 상금도 이용권도 따라붙지 않습니다</li>
+        <li>손님 화면에는 <b>닉네임</b>으로 나옵니다. 실명은 그 손님이 프로필에서 ‘실명 공개’를 켠 경우에만 보입니다</li>
+        <li>매장 순위, 시즌, 명예의 전당으로 이어집니다(설정은 매장 설정 › 매장 페이지)</li>
+      </ul>
+      <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 순위</span>
+    </div>
+    <div class="figs">
+      <figure><a class="shot" href="/guide/img/owner-ranking.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-ranking.webp" width="1680" height="1324" loading="lazy" decoding="async"
+        alt="순위 화면 — 입력할 게임 선택과 그날 장부 명단(닉네임별 바인 수) 칩"></a>
+        <figcaption class="cap">순위 — 장부 명단에서 골라 담기</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s9">
+    <div>
+      <p class="kicker">9 · 설정·위험 구역</p>
+      <h2>매장 설정과 대표 업주만 하는 일</h2>
+      <p class="key">매장 설정에는 매장 페이지, 게임 프리셋, POS·결제, 운영 도구, 위험 구역이 있습니다.</p>
+      <ul>
+        <li><b>위치 확인 출석</b>: 매장 스위치를 켜면 손님은 매장에서 300m 안에 있을 때만 직접 출석됩니다. 기본은 꺼져 있고, 주소로 찾거나 「지금 위치로 등록」을 누르면 됩니다. 손님 위치 좌표는 저장하지 않습니다</li>
+        <li>2026-10-08부터는 위치 동의나 위치 확인이 없는 손님이 직접 출석할 수 없습니다. 이때 손님은 「출석 요청 보내기」를 쓰고, 업주가 승인합니다</li>
+        <li><b>대표 업주만</b> 할 수 있는 일: 위험 구역(매장 영구 삭제), 위치 확인 출석 켜기·끄기, 카카오톡 채팅방 링크, 인증 등급 관련 설정</li>
+        <li><b>매장 영구 삭제</b>는 되돌릴 수 없습니다. 처음 한 번 삭제용 비밀번호(4글자 이상)를 정하고, 세 단계를 거칩니다: 등록된 대표 실명, 그 비밀번호, 「영구 삭제」 입력. 삭제 전에 CSV로 내려받아 두세요</li>
+        <li>대표를 다른 사람에게 넘길 수 있습니다. 넘긴 뒤에는 새 대표만 되돌릴 수 있습니다</li>
+      </ul>
+      <span class="path">내 매장 <i>›</i> 매장 설정 <i>›</i> 위험 구역</span>
+      <p class="tip w">회원 탈퇴는 매장을 먼저 정리(삭제 또는 대표 양도)해야 할 수 있습니다.</p>
+    </div>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="owner-checkin-geo"><div class="ph">화면 준비 중 — 매장 설정 › 위치 확인 출석 스위치</div>
+        <figcaption class="cap">위치 확인 출석 — 대표 업주만 켤 수 있습니다</figcaption></figure>
+      <figure class="slot" data-capture-slot="owner-danger-zone"><div class="ph">화면 준비 중 — 위험 구역(매장 영구 삭제 3단계)</div>
+        <figcaption class="cap">위험 구역 — 대표 업주 전용</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="faq" id="s10">
+    <p class="kicker">10 · 자주 묻는 질문</p>
+    <h2>막힐 때 먼저 보세요</h2>
+    <dl>
+      <div class="qa"><dt>승인이 오래 걸려요</dt><dd>영업일 기준 1~2일입니다. 그보다 길어지면 <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a>으로 매장 이름과 함께 문의하세요.</dd></div>
+      <div class="qa"><dt>직원 화면에 메뉴가 안 보여요</dt><dd>업주가 직원 관리에서 권한을 켜야 합니다. 켠 뒤 직원이 앱으로 돌아오면 자동으로 다시 확인됩니다.</dd></div>
+      <div class="qa"><dt>손님이 출석이 안 된대요</dt><dd>위치 확인 출석을 켠 매장이면 손님의 위치 동의와 위치 확인이 필요합니다. 안 되면 손님이 「출석 요청 보내기」를 누르고, 업주가 대시보드에서 승인합니다.</dd></div>
+      <div class="qa"><dt>이용권이 안 보내져요</dt><dd>받는 손님이 본인인증을 하지 않았거나(미인증), 오늘 조회 한도를 다 쓴 경우입니다. 전화번호 조회는 손님이 허용했을 때만 됩니다.</dd></div>
+      <div class="qa"><dt>포스터를 고쳤더니 다시 심사래요</dt><dd>공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 이미지를 바꾸면 다시 심사를 받습니다. 프리미엄 매장은 제외입니다 <span class="soon">반영 예정</span></dd></div>
+      <div class="qa"><dt>대표를 바꾸고 싶어요</dt><dd>내 매장의 공동 운영자 관리에서 대표를 넘길 수 있습니다. 한 번 넘기면 새 대표만 되돌릴 수 있으니 신중하게 하세요.</dd></div>
+      <div class="qa"><dt>매장을 지우고 싶어요</dt><dd>대표 업주만 매장 설정 › 위험 구역에서 할 수 있고, 되돌릴 수 없습니다. 삭제 전에 CSV를 내려받아 두세요.</dd></div>
+      <div class="qa"><dt>손님용 설명서는 어디 있나요</dt><dd>손님에게는 <a href="/guide/user.html">손님용 사용설명서</a> 링크를 보내 주세요. 모든 메뉴의 자세한 안내는 <a href="/guide/manual.html">전체 사용설명서</a>에 있습니다.</dd></div>
+    </dl>
+  </section>
+
   <div class="end">
     <div class="box">
       <h2>오픈 첫 주 체크리스트</h2>
       <ol>
-        <li>① 매장 만들기 → 관리자 승인 확인 → 매장 페이지(사진·소개) 꾸미기</li>
-        <li>② 게임 프리셋 저장 → 첫 포스터 등록</li>
+        <li>① 가입, 본인인증, 매장 만들기, 운영자 약관 동의, 승인 확인</li>
+        <li>② 매장 페이지(사진·소개) 꾸미기, 게임 프리셋 저장, 첫 포스터 등록</li>
         <li>③ 매장에 매장 QR 비치(출석·바인 요청)</li>
-        <li>④ 대회 당일: 장부 열기 → 클락 실행 → TV 송출</li>
-        <li>⑤ 끝나면: 장부 마감 → 순위 입력 → 정산 확인</li>
+        <li>④ 대회 당일: 장부 열기, 클락 실행, TV 송출</li>
+        <li>⑤ 끝나면: 장부 마감, 순위 입력, 정산 확인</li>
       </ol>
     </div>
     <div class="box">
-      <h2>함께 쓰면 좋은 기능</h2>
+      <h2>운영 원칙</h2>
       <ul>
-        <li><b>이용권 · QR</b> — 이용권 전송·사용, 매장 QR(이용권·출석·가입·바인 요청) 인쇄</li>
-        <li><b>매장 설정 › 매장 페이지</b> — 사진·소개·탭 순서·내 매장 링크·시즌·순위 보드</li>
-        <li><b>직원 관리 · 출근 관리</b> — 직원 초대·권한, 출근 스케줄. 직원은 화면 맨 위 출근·퇴근 버튼으로 기록합니다</li>
-        <li><b>파트너 매장 · 이벤트 신청</b> — 연합 대회를 함께 열 매장 찾기, 이용권 이벤트 신청</li>
-        <li><b>전체 사용설명서</b> — 모든 메뉴를 자세히 안내합니다: <a href="/guide/manual.html">사용설명서 열기</a></li>
+        <li><b>참가비·GTD</b>는 상품 가격 정보라 그대로 표시합니다</li>
+        <li>순위는 기록입니다. 순위만으로 상금이나 이용권이 지급되지 않습니다</li>
+        <li><b>만 19세 미만</b>은 이용할 수 없습니다</li>
+        <li>손님 개인정보(실명·전화번호)는 가려서 보이고, 필요한 만큼만 조회됩니다</li>
+        <li>궁금한 점은 <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a></li>
       </ul>
     </div>
   </div>

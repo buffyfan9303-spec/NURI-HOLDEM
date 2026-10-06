@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NURI HOLDEM 손님용 사용설명서</title>
+<meta name="description" content="NURI HOLDEM 손님용 사용설명서 — 가입·동의, 일정 찾기와 예약, 출석, 커뮤니티, GTO 도구, 이용권 지갑, 내 정보와 보안까지 휴대폰 화면 기준으로 쉽게 안내합니다.">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<!-- 앱과 같은 글꼴(Pretendard Variable · SIL OFL 1.1 · self-host). 동기 link 여야 첫 페인트에 폴백 face 가 빠지지 않는다(2026-10-01 실측). -->
+<link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
+<style>
+  /* 색 = 앱 다크 토큰(src/index.css). owner.html 과 같은 값 — 바탕 #06080F 대비 ink 18.5 · sub 8.5 · mute 6.4 · link 9.4 */
+  :root { --bg:#06080F; --card:#0E1322; --card2:#151C30; --line:#29354A; --ink:#F4F6FA; --sub:#9AAAC2; --mute:#8293AD;
+    --link:#B5A6FF; --fill:#6344CE; --gold:#D9B25A; --ok:#6EE7B7; --warn:#F2C879; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior:smooth; } }
+  body { background:var(--bg); color:var(--ink); line-height:1.65; -webkit-text-size-adjust:100%;
+    font-family:'Pretendard Variable','Pretendard','Pretendard FB Win','Pretendard FB Android',system-ui,sans-serif;
+    word-break:keep-all; overflow-wrap:anywhere; }
+  a { color:var(--link); }
+  /* 휴대폰(390) 기준 위계: 제목 30/800 · 절 제목 22/800 · 항목 16/700 · 본문 16 · 캡션 13. 넓은 화면에서도 본문 폭은 640 에 고정 */
+  h1 { font-size:30px; line-height:1.25; font-weight:800; letter-spacing:-.025em; text-wrap:balance; }
+  h2 { font-size:22px; line-height:1.3; font-weight:800; letter-spacing:-.015em; text-wrap:balance; }
+  h3 { font-size:16px; line-height:1.4; font-weight:700; }
+  p, li { font-size:16px; color:var(--sub); text-wrap:pretty; }
+  b { color:var(--ink); font-weight:700; }
+  .cap { font-size:13px; line-height:1.5; color:var(--mute); }
+  .kicker { font-size:13px; font-weight:800; letter-spacing:.14em; color:var(--gold); margin-bottom:8px; }
+
+  .bar { position:sticky; top:0; z-index:5; background:rgba(6,8,15,.92); border-bottom:1px solid var(--line); }
+  .bar .in { max-width:640px; margin:0 auto; padding:0 16px; height:52px; display:flex; align-items:center; gap:8px; }
+  .bar .brand { font-size:14px; font-weight:800; color:var(--ink); text-decoration:none; margin-right:auto; }
+  .bar .brand span { color:var(--gold); }
+  .bar a.l { display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:10px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:13px; font-weight:700; text-decoration:none; }
+
+  .wrap { max-width:640px; margin:0 auto; padding:32px 16px 56px; }
+  .lead { font-size:17px; margin-top:12px; }
+
+  /* 8절 차례 — 첫 화면에서 순서 전체가 보이게 2칸 */
+  .flow { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:24px; }
+  .flow a { display:block; height:100%; padding:12px 14px; border-radius:14px; background:var(--card); border:1px solid var(--line); text-decoration:none; }
+  .flow .n { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:8px; background:var(--fill); color:#fff;
+    font-size:13px; font-weight:800; }
+  .flow h3 { margin-top:8px; color:var(--ink); font-size:15px; }
+  .flow p { font-size:13px; line-height:1.45; margin-top:2px; }
+
+  .step { padding:40px 0; border-top:1px solid var(--line); scroll-margin-top:64px; }
+  .wrap > .step:first-of-type { margin-top:40px; }
+  .step .key { font-size:17px; color:var(--ink); margin-top:8px; }
+  .step ul { list-style:none; margin-top:14px; display:grid; gap:8px; }
+  .step li { position:relative; padding-left:18px; }
+  .step li::before { content:''; position:absolute; left:2px; top:.7em; width:6px; height:6px; border-radius:2px; background:var(--link); }
+  .path { display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:16px; padding:6px 12px; border-radius:10px;
+    background:var(--card2); border:1px solid var(--line); font-size:14px; font-weight:700; color:var(--ink); }
+  .path i { font-style:normal; color:var(--mute); }
+  .tip { margin-top:14px; font-size:15px; color:var(--ok); }
+  .tip.w { color:var(--warn); }
+  /* 아직 앱에 들어오지 않은 화면·문구 — 병합되면 이 표시를 지운다 */
+  .soon { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; border:1px solid var(--warn); color:var(--warn);
+    font-size:12px; font-weight:800; line-height:1.5; vertical-align:2px; white-space:nowrap; }
+  .nw { white-space:nowrap; }
+  .figs { display:grid; gap:16px; margin-top:20px; min-width:0; }
+  figure { justify-self:center; width:min(320px,100%); }
+  figure .shot { display:block; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:#000; }
+  figure img { display:block; width:100%; height:auto; }
+  figcaption { margin-top:8px; text-align:center; }
+  /* 캡처 자리 — 최신 화면 촬영 뒤 <img> 로 바꾼다 */
+  figure.slot .ph { display:grid; place-items:center; min-height:200px; padding:24px; border:1px dashed var(--line); border-radius:20px;
+    background:var(--card); color:var(--mute); font-size:14px; text-align:center; }
+
+  .faq { padding:40px 0; border-top:1px solid var(--line); scroll-margin-top:64px; }
+  .faq dl { margin-top:16px; display:grid; gap:10px; }
+  .faq .qa { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .faq dt { font-size:16px; font-weight:700; color:var(--ink); }
+  .faq dd { margin-top:6px; font-size:15px; }
+  .box { margin-top:12px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .box h2 { font-size:19px; margin-bottom:10px; }
+  .box ul { list-style:none; display:grid; gap:8px; }
+  .box li { font-size:15px; }
+
+  .notice { margin-top:32px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  .notice p { font-size:14px; color:var(--mute); }
+  .notice p + p { margin-top:8px; }
+  footer { margin-top:24px; border-top:1px solid var(--line); padding-top:16px; font-size:13px; line-height:1.7; color:var(--mute); }
+  footer b { color:var(--sub); font-weight:600; }
+
+  @media (min-width:700px) { h1 { font-size:36px; } h2 { font-size:26px; } }
+  @media (max-width:360px) { .flow { grid-template-columns:1fr; } .bar a.l.opt { display:none; } }
+  @media print {
+    .bar { display:none; } body { background:#fff; }
+    /* 인쇄는 흰 바탕 — 다크용 금·초록·노랑·보라 글자를 4.5:1 이상으로 어둡게 바꾼다 */
+    :root { --bg:#fff; --card:#f5f6f8; --card2:#eceef2; --ink:#111; --sub:#333; --mute:#555; --line:#ccc;
+      --gold:#7a5a12; --ok:#0f6b44; --warn:#7c5300; --link:#4a36c4; }
+    .step, .faq .qa { break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="brand" href="/">NURI <span>HOLDEM</span> · 손님 가이드</a>
+  <a class="l opt" href="/guide/manual.html">전체 설명서</a>
+  <a class="l" href="mailto:ace@nuriholdem.com">문의</a>
+</div></header>
+
+<main class="wrap">
+  <p class="kicker">손님용 사용설명서 · 2026-10-08 정식 오픈판</p>
+  <h1>가입하고, 대회를 찾고, 출석하는 순서입니다</h1>
+  <p class="lead">NURI HOLDEM은 홀덤펍 대회를 찾고 예약하고, 매장에서 출석하고, 연습 도구까지 쓰는 앱입니다. 아래 8개 순서대로 읽으면 처음 오신 분도 바로 쓸 수 있습니다. 휴대폰 화면 기준으로 설명합니다.</p>
+  <p class="cap" style="margin-top:10px"><span class="soon" style="margin-left:0">반영 예정</span> 표시는 앱에 곧 들어오는 화면·문구입니다. 정식 오픈 전에 적용됩니다.</p>
+
+  <ol class="flow" aria-label="손님용 설명서 차례">
+    <li><a href="#s1"><span class="n">1</span><h3>가입·동의</h3><p>로그인, 본인인증, 약관</p></a></li>
+    <li><a href="#s2"><span class="n">2</span><h3>홈·일정·예약</h3><p>대회 찾고 예약하기</p></a></li>
+    <li><a href="#s3"><span class="n">3</span><h3>출석</h3><p>매장 QR, 위치 확인</p></a></li>
+    <li><a href="#s4"><span class="n">4</span><h3>커뮤니티</h3><p>글쓰기, 외치기, 신고</p></a></li>
+    <li><a href="#s5"><span class="n">5</span><h3>GTO 도구</h3><p>자주 쓰는 도구, AI 코칭</p></a></li>
+    <li><a href="#s6"><span class="n">6</span><h3>이용권 지갑</h3><p>매장 이용권 확인</p></a></li>
+    <li><a href="#s7"><span class="n">7</span><h3>내 정보·보안</h3><p>동의 설정, 탈퇴</p></a></li>
+    <li><a href="#s8"><span class="n">8</span><h3>자주 묻는 질문</h3><p>막힐 때 먼저 보세요</p></a></li>
+  </ol>
+
+  <section class="step" id="s1">
+    <p class="kicker">1 · 가입·동의</p>
+    <h2>로그인하고 한 번만 인증합니다</h2>
+    <p class="key">대회 예약, 출석, 글쓰기는 로그인과 본인인증이 되어 있어야 합니다.</p>
+    <ul>
+      <li>화면의 <b>로그인</b> 창에서 가입합니다. 만 19세 미만은 이용할 수 없습니다</li>
+      <li>처음에는 <b>이용약관과 개인정보 처리 동의</b>를 합니다. 마케팅 수신 동의는 선택이고, 나중에 바꿀 수 있습니다</li>
+      <li>글쓰기나 이용권 받기 같은 기능을 쓰려면 <b>휴대폰 본인인증</b>이 필요합니다. 한 사람이 한 계정으로만 인증할 수 있습니다</li>
+      <li>약관이 새 판(3판)으로 바뀌면 접속할 때 <b>다시 동의</b>하는 창이 한 번 뜹니다. 동의해야 계속 쓸 수 있습니다</li>
+    </ul>
+    <span class="path">로그인 <i>›</i> 약관 동의 <i>›</i> 본인인증</span>
+    <p class="tip">둘러보기(일정 보기, 라이브 보기)는 로그인 없이도 됩니다.</p>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-login-consent"><div class="ph">화면 준비 중 — 로그인과 약관 동의 창</div>
+        <figcaption class="cap">로그인 · 약관 동의 창</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s2">
+    <p class="kicker">2 · 홈·일정·예약</p>
+    <h2>대회를 찾아서 앱에서 예약합니다</h2>
+    <p class="key">아래 탭 맨 앞의 <b>홈</b>에서 시작합니다. 탭은 홈, 라이브, 커뮤니티, GTO, 그리고 내 매장(업주) 또는 캘린더입니다.</p>
+    <ul>
+      <li><b>홈</b>에서 오늘의 대회와 배너를 봅니다. 날짜와 지역으로 대회를 좁혀 찾을 수 있습니다</li>
+      <li>대회 카드에는 <b>참가비</b>와 <b>GTD</b>가 상품 가격 정보로 그대로 표시됩니다</li>
+      <li>마음에 드는 대회를 열어 <b>예약</b>하면 매장의 예약자 명단에 올라갑니다. 매장을 팔로우하면 새 대회가 올라올 때 알림이 옵니다</li>
+      <li><b>라이브</b> 탭에서는 지금 진행 중인 대회 현황을 봅니다</li>
+      <li>대회는 <b>운영자 승인 뒤</b> 일정에 올라옵니다. 방금 올라온 대회가 안 보이면 잠시 뒤 다시 보세요 <span class="soon">반영 예정</span></li>
+    </ul>
+    <span class="path">홈 <i>›</i> 대회 카드 <i>›</i> 예약</span>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-home"><div class="ph">화면 준비 중 — 홈 화면(대회 카드, 아래 탭)</div>
+        <figcaption class="cap">홈 — 대회 카드와 아래 탭</figcaption></figure>
+      <figure class="slot" data-capture-slot="user-browse"><div class="ph">화면 준비 중 — 일정 탐색과 예약 화면</div>
+        <figcaption class="cap">일정 탐색 · 예약</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s3">
+    <p class="kicker">3 · 출석</p>
+    <h2>매장에 도착하면 출석합니다</h2>
+    <p class="key">화면 위쪽의 <b>이용권 · 출석</b>을 누르면 출석 QR이 있는 창이 열립니다.</p>
+    <ul>
+      <li>매장에 비치된 <b>출석 QR</b>을 찍거나, 창의 안내에 따라 출석합니다</li>
+      <li>같은 매장에는 <b>4시간에 한 번</b>만 출석됩니다</li>
+      <li>매장이 <b>위치 확인 출석</b>을 켜 두었다면, 매장 300m 안에 있을 때만 직접 출석됩니다. 위치 정보는 확인에만 쓰고 저장하지 않습니다</li>
+      <li>위치 동의를 하지 않았거나 위치 확인이 안 되면 <b>출석 요청 보내기</b>를 누릅니다. 매장 업주가 확인하고 승인하면 같은 출석 기록이 쌓입니다</li>
+      <li>이벤트로 열리는 매장(예: 로티아 아레나)에는 전용 출석 카드가 나올 수 있습니다</li>
+    </ul>
+    <span class="path">위쪽 <i>›</i> 이용권 · 출석 <i>›</i> 출석</span>
+    <p class="tip w">2026-10-08부터는 위치 동의·확인이 없으면 위치 확인 매장에서 직접 출석할 수 없고, 출석 요청으로 진행합니다.</p>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-checkin"><div class="ph">화면 준비 중 — 이용권 · 출석 창(출석 QR)</div>
+        <figcaption class="cap">이용권 · 출석 창</figcaption></figure>
+      <figure class="slot" data-capture-slot="user-checkin-request"><div class="ph">화면 준비 중 — 출석 요청 보내기</div>
+        <figcaption class="cap">위치 확인이 안 될 때의 출석 요청</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s4">
+    <p class="kicker">4 · 커뮤니티</p>
+    <h2>글쓰기, 외치기, SPOT 공유</h2>
+    <p class="key">다른 손님과 이야기하고, 내 핸드를 공유하는 곳입니다.</p>
+    <ul>
+      <li><b>커뮤니티</b> 탭에서 게시글을 보고 댓글을 씁니다. 글쓰기는 본인인증 뒤에 됩니다</li>
+      <li><b>외치기</b>는 짧은 한 줄을 바로 올리는 곳입니다</li>
+      <li><b>NURI SPOT</b>에서 저장한 핸드는 커뮤니티에 공유하면 다른 손님이 보고 댓글을 달 수 있습니다</li>
+      <li>규칙에 맞지 않는 글은 <b>신고</b>할 수 있습니다. 신고 사유에 <b>권리침해</b>(내 저작물·초상 등이 허락 없이 올라온 경우)가 있고, 게시글에만 쓸 수 있습니다. 권리침해 신고는 신고 내용을 적어야 접수됩니다</li>
+      <li>권리침해 신고가 접수되면 해당 글은 <b>최대 30일 동안 가려질 수 있습니다</b>(임시조치). 신고한 사람과 글쓴이 모두에게 알림이 갑니다</li>
+      <li>임시조치에 이의가 있는 글쓴이는 <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a>으로 반박 의견을 보낼 수 있습니다</li>
+    </ul>
+    <span class="path">커뮤니티 <i>›</i> 글쓰기 / 외치기</span>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-community"><div class="ph">화면 준비 중 — 커뮤니티 게시판과 글쓰기 창</div>
+        <figcaption class="cap">커뮤니티 — 게시글과 글쓰기</figcaption></figure>
+      <figure class="slot" data-capture-slot="user-report"><div class="ph">화면 준비 중 — 신고 창(권리침해 사유)</div>
+        <figcaption class="cap">신고 — 권리침해 사유와 신고 내용</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s5">
+    <p class="kicker">5 · GTO 도구</p>
+    <h2>연습 도구를 내 것으로 모읍니다</h2>
+    <p class="key">GTO 탭 맨 위의 <b>자주 쓰는 도구</b>에서 바로 엽니다.</p>
+    <ul>
+      <li>자주 쓰는 도구는 2칸 × 2줄의 타일로 보입니다. 처음에는 <b>누리 스팟</b>, <b>프리플랍 레인지 차트</b>, <b>푸시·폴드 차트</b>, <b>GTO 핸드 분석</b> 네 개입니다</li>
+      <li>도구 옆 <b>별</b>을 눌러 즐겨찾기를 만듭니다. 최대 6개이고, 앞의 4개가 타일이 됩니다. 5번째부터는 <b>즐겨찾기 N개</b> 목록에서 엽니다</li>
+      <li><b>NURI SPOT</b>은 핸드를 입력하면 GTO 기준으로 결정을 평가하는 도구입니다</li>
+      <li>SPOT 결과에서 <b>AI 아쉬운 포인트 보기</b>를 누르면 AI 코칭을 받습니다. 처음 몇 번은 무료이고, 그다음부터는 한 번에 <b>활동 포인트 30P</b>가 쓰입니다. 하루 3번까지 받을 수 있습니다</li>
+      <li>이미 받은 코칭을 <b>다시 보는 것은 무료</b>입니다</li>
+    </ul>
+    <span class="path">GTO <i>›</i> 자주 쓰는 도구</span>
+    <p class="tip w">GTO 결과는 연습용 참고입니다. 실제 게임 결과를 보장하지 않으며, 이 앱에서 어떤 금전 거래도 하지 않습니다.</p>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-gto-tools"><div class="ph">화면 준비 중 — GTO 탭의 자주 쓰는 도구 2×2 타일과 별 즐겨찾기</div>
+        <figcaption class="cap">자주 쓰는 도구 — 별로 고른 앞 4개가 타일</figcaption></figure>
+      <figure class="slot" data-capture-slot="user-spot-coaching"><div class="ph">화면 준비 중 — NURI SPOT 결과와 AI 아쉬운 포인트 보기</div>
+        <figcaption class="cap">NURI SPOT — AI 아쉬운 포인트 보기</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s6">
+    <p class="kicker">6 · 이용권 지갑</p>
+    <h2>내가 받은 매장 이용권을 확인합니다</h2>
+    <p class="key">이용권은 그 매장에서만 쓰는 이용 수단입니다.</p>
+    <ul>
+      <li>화면 위쪽 <b>이용권 · 출석</b> 창에 <b>출석 QR</b>과 <b>매장 이용권 지갑</b>이 함께 있습니다</li>
+      <li>매장별로 가진 이용권 수와 사용 내역을 봅니다</li>
+      <li>이용권은 매장 업주가 보내 줍니다. 받으려면 본인인증이 되어 있어야 합니다</li>
+      <li>이용권은 <b>다른 값으로 바꾸거나 사고팔 수 없습니다</b>. 매장에서 이용하는 용도로만 씁니다</li>
+    </ul>
+    <span class="path">위쪽 <i>›</i> 이용권 · 출석 <i>›</i> 매장 이용권 지갑</span>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-voucher"><div class="ph">화면 준비 중 — 매장 이용권 지갑</div>
+        <figcaption class="cap">매장 이용권 지갑</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s7">
+    <p class="kicker">7 · 내 정보·보안</p>
+    <h2>내 정보를 확인하고, 동의를 직접 바꿉니다</h2>
+    <p class="key">프로필에서 닉네임과 공개 범위, 보안 설정을 바꿉니다.</p>
+    <ul>
+      <li><b>내 정보 › 보안</b>에서 세 가지를 직접 켜고 끕니다</li>
+      <li><b>마케팅 수신</b> — 이벤트·혜택 알림을 받을지 정합니다</li>
+      <li><b>매장 전화번호 조회 허용</b> — 끄면 매장이 내 전화번호로 나를 찾을 수 없습니다. 닉네임으로만 찾습니다</li>
+      <li><b>위치 정보</b> — 위치 확인 출석을 쓸 때 필요한 동의입니다. 끄면 위치 확인 출석 대신 출석 요청을 씁니다</li>
+      <li><b>실명 공개</b>를 켜지 않으면 순위 등에는 닉네임만 나옵니다</li>
+      <li>이용약관, 개인정보처리방침은 앱 안의 법적 고지에서 언제든 다시 읽을 수 있습니다</li>
+      <li><b>회원 탈퇴</b>는 프로필에서 합니다. 이용이 정지된 계정도 탈퇴할 수 있습니다. 매장을 운영하는 계정은 매장을 먼저 정리해야 합니다</li>
+    </ul>
+    <span class="path">프로필 <i>›</i> 내 정보 <i>›</i> 보안</span>
+    <div class="figs">
+      <figure class="slot" data-capture-slot="user-security"><div class="ph">화면 준비 중 — 내 정보 › 보안(마케팅·전화번호 조회·위치 동의)</div>
+        <figcaption class="cap">내 정보 › 보안</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="faq" id="s8">
+    <p class="kicker">8 · 자주 묻는 질문</p>
+    <h2>막힐 때 먼저 보세요</h2>
+    <dl>
+      <div class="qa"><dt>출석이 안 돼요</dt><dd>위치 확인 매장이면 위치 동의와 위치 확인이 필요합니다. 안 되면 「출석 요청 보내기」를 눌러 주세요. 업주가 승인하면 출석됩니다.</dd></div>
+      <div class="qa"><dt>글쓰기를 눌렀는데 인증하래요</dt><dd>글쓰기는 휴대폰 본인인증을 한 계정만 됩니다. 인증은 한 번만 하면 됩니다.</dd></div>
+      <div class="qa"><dt>이용권을 받지 못했어요</dt><dd>본인인증을 하지 않았거나, 매장이 전화번호로 찾았는데 「매장 전화번호 조회 허용」이 꺼져 있으면 매장이 찾지 못합니다. 닉네임을 알려 주세요.</dd></div>
+      <div class="qa"><dt>내 글이 가려졌어요</dt><dd>권리침해 신고가 접수되면 최대 30일 동안 글이 가려질 수 있습니다. 알림을 확인하고, 이의가 있으면 <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a>으로 반박 의견을 보내 주세요.</dd></div>
+      <div class="qa"><dt>AI 코칭이 안 열려요</dt><dd>오늘 3번을 다 썼거나 활동 포인트가 모자란 경우입니다. 이미 받은 코칭은 다시 볼 수 있습니다.</dd></div>
+      <div class="qa"><dt>알림이 안 와요</dt><dd>기기의 알림 허용과 앱의 알림 설정을 확인하세요. 마케팅 알림은 내 정보 › 보안에서 켭니다.</dd></div>
+      <div class="qa"><dt>탈퇴하고 싶어요</dt><dd>프로필에서 회원 탈퇴를 누르면 됩니다. 탈퇴하면 되돌릴 수 없으니 신중하게 하세요.</dd></div>
+      <div class="qa"><dt>매장 사장님이에요</dt><dd><a href="/guide/owner.html">업주 운영 가이드</a>를 보세요. 모든 메뉴의 자세한 안내는 <a href="/guide/manual.html">전체 사용설명서</a>에 있습니다.</dd></div>
+    </dl>
+  </section>
+
+  <div class="box">
+    <h2>이용 원칙</h2>
+    <ul>
+      <li><b>참가비·GTD</b>는 상품 가격 정보라 그대로 표시합니다</li>
+      <li>순위는 기록입니다. 순위만으로 상금이나 이용권이 지급되지 않습니다</li>
+      <li><b>만 19세 미만</b>은 이용할 수 없습니다</li>
+      <li>개인정보(실명·전화번호)는 가려서 보이고, 동의한 범위에서만 쓰입니다</li>
+      <li>궁금한 점은 <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a></li>
+    </ul>
+  </div>
+
+  <div class="notice" data-testid="guide-legal-notice">
+    <p>NURI HOLDEM은 마인드 스포츠로 불리는 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.<br>
+    <b>만 19세 미만은 이용할 수 없습니다</b> · 도박문제 상담 <b class="nw">1336(24시간·무료)</b></p>
+    <p>관련 법령: 국민체육진흥법 제2조 (체육의 정의). 홀덤은 신체 활동이 아닌 두뇌 경기로서 마인드 스포츠로 통칭됩니다</p>
+  </div>
+  <footer data-testid="guide-business-info">
+    <span class="nw"><b>상호</b> 엔에이치홀딩스</span> · <span class="nw"><b>사업자등록번호</b> 525-20-02937</span> · <span class="nw"><b>대표자</b> 김윤혜</span> ·
+    <b>사업장 주소</b> 경기도 남양주시 다산중앙로82번안길 <span class="nw">166-46,</span> <span class="nw">207-본244호</span> · <span class="nw"><b>전화번호</b> 070-8098-1727</span> ·
+    <span class="nw"><b>고객센터</b> <a href="mailto:ace@nuriholdem.com">ace@nuriholdem.com</a></span> · <span class="nw"><b>호스팅 제공자</b> Vercel Inc.</span><br>
+    © 2026 엔에이치홀딩스 · <a href="/legal/privacy.html">개인정보처리방침</a> · <a href="/">nuriholdem.com으로 이동</a>
+  </footer>
+</main>
+</body>
+</html>
