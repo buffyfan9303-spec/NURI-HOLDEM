@@ -96,12 +96,15 @@ async function renderAll() {
   const entry = join(TMP_DIR, 'legal-ssr-entry.js');
   if (!existsSync(entry)) throw new Error('SSR 번들 산출물이 없다: ' + entry);
   const mod = await import(pathToFileURL(entry).href);
+  // 2026-10-07: 첫 화면 밖 아이콘(iconsExtra)은 동적 청크다 — SSR 도 먼저 받아 둬야 빈 svg 가 아니라 실제 아이콘을 찍는다.
+  await mod.loadIconsExtra();
   const out = {};
   for (const d of DOCS) {
     const Comp = mod[d.export];
     if (typeof Comp !== 'function') throw new Error(d.slug + ": export '" + d.export + "' 를 찾을 수 없다");
     const html = renderToStaticMarkup(createElement(Comp));
     if (html.length < 500) throw new Error(d.slug + ': 렌더 결과가 비정상적으로 짧다(' + html.length + '자)');
+    if (html.includes('data-icon-pending')) throw new Error(d.slug + ': 아이콘이 빈 칸으로 찍혔다(iconsExtra 미로딩)');
     out[d.slug] = html;
   }
   return out;
