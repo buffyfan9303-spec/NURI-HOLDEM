@@ -39,8 +39,7 @@
 //   채운 아이콘(solid)만 사용한다 — 아웃라인은 굵기가 갈리지 않게 lucide 로 통일.
 //
 // 아래 PATHS 의 포커 도메인 글리프는 누리홀덤 자체 제작이다(Lucide 원본 아님).
-import type { ComponentType, ReactElement, SVGProps } from 'react';
-import { StarIcon as StarSolid, HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import type { ReactElement, SVGProps } from 'react';
 import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
   Maximize2, Minimize2, Gavel,
@@ -241,9 +240,18 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
 //    같은 화면에 나란히 두면 굵기가 갈려 조잡해진다(2026-08-29 에 이모지 300곳을 SVG 로
 //    통일한 이유가 정확히 그것이다). 그래서 **아웃라인은 lucide 로 통일**하고,
 //    heroicons 는 stroke 가 아예 없는 solid 만 쓴다 — 굵기가 갈릴 여지 자체를 없앤다.
-const HERO_SOLID: Partial<Record<IconName, ComponentType<SVGProps<SVGSVGElement>>>> = {
-  'star-fill': StarSolid,
-  'heart-fill': HeartSolid,
+// 2026-10-07 번들 감축 PR A ②: 두 글리프만 쓰려고 @heroicons/react(첫 화면 vendor-react 안 ~0.9KB gz — 컴포넌트 래퍼·forwardRef)
+//   를 싣던 것을 path 데이터 직접 인라인으로 바꿨다. path·속성은 heroicons 2.2.0 24/solid 의 StarIcon·HeartIcon 원문 그대로다
+//   (MIT 고지는 위 라이선스 블록에 유지). 렌더 DOM 도 같다 — svg 속성(xmlns·viewBox·fill·aria-hidden·data-slot) + path 하나.
+const HERO_SOLID: Partial<Record<IconName, SVGProps<SVGPathElement>>> = {
+  'star-fill': {
+    fillRule: 'evenodd',
+    d: 'M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z',
+    clipRule: 'evenodd',
+  },
+  'heart-fill': {
+    d: 'm11.645 20.91-.007-.003-.022-.012a15.247 15.247 0 0 1-.383-.218 25.18 25.18 0 0 1-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0 1 12 5.052 5.5 5.5 0 0 1 16.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 0 1-4.244 3.17 15.247 15.247 0 0 1-.383.219l-.022.012-.007.004-.003.001a.752.752 0 0 1-.704 0l-.003-.001Z',
+  },
 };
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -255,7 +263,12 @@ export default function Icon({ name, size = 20, strokeWidth = 2, className, ...r
   const Solid = HERO_SOLID[name];
   if (Solid) {
     // solid 는 stroke 가 없다 — strokeWidth 를 넘기지 않는다(넘기면 도형이 다시 뚱뚱해진다).
-    return <Solid width={size} height={size} className={className} aria-hidden {...rest} />;
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"
+        width={size} height={size} className={className} {...rest}>
+        <path {...Solid} />
+      </svg>
+    );
   }
   const L = LUCIDE[name];
   if (L) {
