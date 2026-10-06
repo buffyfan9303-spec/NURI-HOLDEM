@@ -60,7 +60,11 @@ export const mockEventBoard = (cards = 12, opened = 0) => ({
   cards: Array.from({ length: cards }, (_, i) => (i < opened
     ? { idx: i + 1, opened: true, tier: 1, count: 1, by: '누군가' }
     : { idx: i + 1, opened: false, tier: null, count: null, by: null })),
-  myTickets: 0, remainByTier: { 1: 0, none: cards - opened }, totalByTier: { 1: opened, none: cards - opened }, voucherByTier: { 1: 1 },
+  // 등급을 섞는다(1·2·3등 + 꽝) — 모두 0 이면 확률 표가 한 줄(100%)뿐이라 '합이 100%' 검사가 아무것도 못 잰다.
+  myTickets: 0,
+  remainByTier: { 1: 1, 2: 2, 3: 3, none: Math.max(0, cards - 6 - opened) },
+  totalByTier: { 1: 1, 2: 2, 3: 3, none: Math.max(0, cards - 6) },
+  voucherByTier: { 1: 3, 2: 2, 3: 1 },
 });
 export const mockEventCampaigns = () => [
   { slug: MOCK_EVENT_SLUG, title: '오픈 기념 이벤트', subtitle: null, status: 'live', hidden_at: null, starts_at: null, ends_at: null },
@@ -89,7 +93,30 @@ export const mockSchedule = (page: Page) =>
     return r.fulfill(json(single ? mockScheduleRow() : [mockScheduleRow()]));
   });
 
-/** 유료 광고(AD 배지) 매장 한 곳 — 커뮤니티 '홀덤펍' 목록이 이 한 곳으로 선다(운영에 유료 노출 매장이 없어도). id 지정 조회는 건드리지 않는다. */
+/** 장터 매물 — 용품 3 · 아이템 2 · 기타 1(분류마다 건수가 달라 '전체 → 아이템' 전환에서 판이 실제로 바뀐다). 운영 매물이 0건이어도 같은 목록이 선다. */
+export const mockListings = (page: Page) =>
+  page.route(/\/rest\/v1\/marketplace_listings\?/, (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    const cats = ['pokerGear', 'pokerGear', 'pokerGear', 'item', 'item', 'etc'];
+    return r.fulfill(json(cats.map((category, i) => ({
+      id: `00000000-0000-4000-8000-00000000d${i}00`, title: `E2E 목 매물 ${i}`, category, description: '목 매물', price: 10_000 * (i + 1), condition: 'B',
+      status: 'on_sale', images: [], region: '서울', shipping_available: false, pickup_only: true,
+      seller_id: '00000000-0000-4000-8000-0000000000e2', seller_name: '판매자', seller_avatar_color: '#5A6175', seller_trade_count: 0, seller_verified: false,
+      created_at: new Date(Date.UTC(2026, 8, 30, 12) - i * 3_600_000).toISOString(), view_count: i, like_count: 0, comment_count: 0,
+    }))));
+  });
+
+/** 일반 매장 count 곳 — 커뮤니티 '홀덤펍' 목록(기본 섹션)이 길게 선다(운영 매장이 0곳이어도). id 지정 조회는 건드리지 않는다. */
+export const mockVenues = (page: Page, count = 12) =>
+  page.route(/\/rest\/v1\/venues\?/, (r: Route) => {
+    const req = r.request();
+    if (req.method() !== 'GET' || req.url().includes('id=eq.')) return r.fallback();
+    return r.fulfill(json(Array.from({ length: count }, (_, i) => ({
+      ...mockGroupRow, id: `00000000-0000-4000-8000-00000000f${String(i).padStart(3, '0')}`, name: `E2E 목 매장 ${i}`, kind: 'venue', display_order: i + 1,
+    }))));
+  });
+
+/** 유료 광고(AD 배지) 매장 한 곳— 커뮤니티 '홀덤펍' 목록이 이 한 곳으로 선다(운영에 유료 노출 매장이 없어도). id 지정 조회는 건드리지 않는다. */
 export const mockPaidVenue = (page: Page) =>
   page.route(/\/rest\/v1\/venues\?/, (r: Route) => {
     const req = r.request();
