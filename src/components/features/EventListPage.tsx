@@ -146,11 +146,11 @@ export default function EventListPage({ open, onClose, onSelect }: {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const onListTouchEnd = () => {
+  const onListTouchEnd = (e: React.TouchEvent) => {
     if (startY.current == null) return;
     const el = rootRef.current;
     const wasDragging = dragging.current;
-    const v = releaseVelocity(samples.current); // px/s — 아래가 양
+    const v = releaseVelocity(samples.current, e.timeStamp); // px/s — 아래가 양. 손 뗀 시각까지(멈췄다 놓으면 0 근처 — spring.ts)
     resetGesture();
     if (!el) return;
     if (!wasDragging) {
