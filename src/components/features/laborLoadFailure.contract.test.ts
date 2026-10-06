@@ -115,7 +115,7 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     expect(SD).toMatch(/getDealerShifts\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ds: DealerShift\[\]\) => \{ setMonthDealers\(ds\); setDealerErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthDealers\(\[\]\); setDealerErr\(true\); \}\)\)/);
     expect(SD).not.toMatch(/\.catch\(guard\(\(\) => setMonthDealers\(\[\]\)\)\)/);
     expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| shiftErr)?( \|\| !!payRules\.err)?;/);
-    expect(SD).toMatch(/<Stat label="총 인건비" value=\{laborErr \? '—' : wonToMan\(laborTotal\)\} unit=\{laborErr \? '' : '만원'\} gold \/>/);
+    expect(SD).toMatch(/<Stat label="총 인건비" value=\{laborErr \? '—' : wonAmount\(laborTotal\)\[0\]\} unit=\{laborErr \? '' : wonAmount\(laborTotal\)\[1\]\} gold \/>/);
     expect(SD).toMatch(/\{dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해/);
     expect(SD).toMatch(/\{!laborErr && dealerPay > 0 &&/);
   });

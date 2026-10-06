@@ -153,6 +153,10 @@ export const WON_PER_MAN = 10000;
 export function wonToMan(won: number): string {
   return (won / WON_PER_MAN).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+/** 원 → [값, 단위]. 0 이 아닌 1만 미만은 원 단위로 쓴다 — 8분 근무 1,600원이 '0.16만원' 으로 읽히던 자리(audit10 P3-3). */
+export function wonAmount(won: number): [string, '만원' | '원'] {
+  return won !== 0 && Math.abs(won) < WON_PER_MAN ? [Math.round(won).toLocaleString(), '원'] : [wonToMan(won), '만원'];
+}
 
 /** 카드 결제에 적용할 단가(카드단가 미설정 시 현금단가) */
 export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }): number {

@@ -585,7 +585,7 @@ export async function saveClockState(s: ClockState): Promise<void> {
     ends_at: s.endsAt, remaining_ms: s.remainingMs,
     adj_entries: s.adjEntries, adj_rebuys: s.adjRebuys, adj_earlies: s.adjEarlies,
     adj_addons: s.adjAddons, eliminations: s.eliminations,
-    live_stats: (s.liveStats ?? null) as unknown as object,
+    live_stats: storedLiveStats(s.liveStats) as unknown as object,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,game_seq' });
   if (error) throw error;
@@ -596,6 +596,15 @@ export async function saveClockState(s: ClockState): Promise<void> {
 function noteTournamentStart(s: Pick<ClockState, 'venueId' | 'gameSeq' | 'sessionDate'>): void {
   if (!s.sessionDate) return;
   void markTournamentStart(s.venueId, s.sessionDate, s.gameSeq ?? 1, new Date(serverNow()).toISOString()).catch(() => {});
+}
+
+/** 저장할 live_stats — 장부 몫(ledger)이 있으면 **장부 몫·buyInAmount 만** 싣는다(audit10 P3-5, 2026-10-07).
+ *  생존·엔트리·총칩·평균은 읽는 쪽(rowToState → composeLiveStats)이 행의 열로 다시 합성하고, 서버 트리거(20260929t)는 장부 몫만 고친다 —
+ *  그래서 화면이 함께 싣던 상위 칸(entries·alive·totalStack…)은 탈락·바인 뒤 낡은 채 DB 에 남았다(장부 5·370,000 vs 저장 4·310,000).
+ *  서버·클라이언트에 상위 칸을 읽는 곳은 없다(clock_adjust_counts 도 ledger 만 본다). 장부 몫이 없는 스냅샷(미연동·낡은 판)은 그대로. */
+export function storedLiveStats(ls: ClockLiveStats | null | undefined): Partial<ClockLiveStats> | null {
+  if (!ls) return null;
+  return ls.ledger ? { ledger: ls.ledger, buyInAmount: ls.buyInAmount ?? null } : ls;
 }
 
 /** 통계 전용 부분 업데이트 — `live_stats` 컬럼만 쓴다(제어 필드는 절대 건드리지 않는다).
@@ -610,7 +619,7 @@ function noteTournamentStart(s: Pick<ClockState, 'venueId' | 'gameSeq' | 'sessio
 export async function saveClockLiveStats(venueId: string, gameSeq: number, liveStats: ClockLiveStats | null): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('clock_states').update({
-    live_stats: (liveStats ?? null) as unknown as object,
+    live_stats: storedLiveStats(liveStats) as unknown as object,
     updated_at: new Date().toISOString(),
   }).eq('venue_id', venueId).eq('game_seq', gameSeq);
   if (error) throw error;
@@ -1033,7 +1042,7 @@ export function composeLiveStats(g: Pick<ClockState, 'sessionDate' | 'config' | 
   return ls;
 }
 
-/** 장부 몫으로 만든 **저장용** 스냅샷. 옛 필드(alive 등)도 같이 싣는 것은 아직 새로고침 안 한 옛 화면(TV 등)을 위한 것이다. */
+/** 장부 몫으로 만든 스냅샷(표시값 포함). 저장할 때는 storedLiveStats 가 장부 몫만 남긴다. */
 export function ledgerLiveStats(
   s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null }) | null,
 ): ClockLiveStats {

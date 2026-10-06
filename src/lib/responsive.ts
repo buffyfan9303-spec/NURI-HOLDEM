@@ -20,6 +20,11 @@ export function useIsMdUp(): boolean {
   return useMinWidth(768);
 }
 
+/** Tailwind `xl`(min-width:1280px) 이상 — 장부 표가 바인 10칸을 가로 스크롤 없이 담는 폭(1024 는 78px 모자란다, audit10 ⑩). */
+export function useIsXl(): boolean {
+  return useMinWidth(1280);
+}
+
 /**
  * 1440px 이상 — 장부 작업대가 이용권 레일을 표 옆에 **상시 펼치는** 폭(그 아래는 접힌 띠, LedgerWorkspace).
  * Tailwind 기본 브레이크포인트가 아니라 CSS 쪽 대응 클래스가 없다 — 이 값으로 렌더를 가르는 곳은 JS 만 쓴다.

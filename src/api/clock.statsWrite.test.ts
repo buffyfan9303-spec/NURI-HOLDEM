@@ -57,4 +57,19 @@ describe('saveClockLiveStats · 통계 전용 부분 업데이트(C01)', () => {
     await saveClockLiveStats('v1', 1, { entries: 5, rebuys: 0, earlies: 0, addons: 0, alive: 5, eliminations: 0, totalStack: 0, avgStack: 0 });
     expect(updates[0]).not.toHaveProperty('running');
   });
+
+  // audit10 P3-5(2026-10-07) — 장부 연동 클락은 장부 몫만 저장한다. 상위 칸(entries·alive·totalStack…)을 같이 실으면
+  //   탈락(clock_adjust_counts)·서버 트리거(장부 몫만 고침) 뒤 DB 에 낡은 값이 남는다. 읽는 쪽은 composeLiveStats 로 다시 합성한다.
+  //   음성 대조: storedLiveStats 의 `ls.ledger ? {…} : ls` 를 `ls` 로 되돌리면 실패.
+  it('장부 몫이 있으면 live_stats 는 ledger·buyInAmount 만 싣는다', async () => {
+    const ledger = { entries: 5, rebuys: 1, earlies: 0, doubleEarlies: 0, totalBuyins: 6, addons: 1, earlyUnits: 10 };
+    await saveClockLiveStats('v1', 1, { entries: 4, rebuys: 1, earlies: 0, addons: 1, alive: 4, eliminations: 0, totalStack: 310000, avgStack: 77500, buyInAmount: 50000, ledger });
+    expect(updates[0].live_stats).toEqual({ ledger, buyInAmount: 50000 });
+  });
+
+  it('장부 몫이 없는 스냅샷(미연동)은 그대로 싣는다', async () => {
+    const snap = { entries: 5, rebuys: 0, earlies: 0, addons: 0, alive: 5, eliminations: 0, totalStack: 0, avgStack: 0 };
+    await saveClockLiveStats('v1', 1, snap);
+    expect(updates[0].live_stats).toEqual(snap);
+  });
 });

@@ -287,7 +287,7 @@ export interface CustomerStat {
   lastVisit: string | null;  // YYYY-MM-DD
 }
 
-const PAY_LABEL: Record<string, string> = { cash: '현금', card: '카드', transfer: '이체', ticket: '이용권', support: '서포트' };
+const PAY_LABEL: Record<string, string> = { cash: '현금', card: '카드', transfer: '이체', ticket: '이용권', support: '서포트', split: '분할' };
 export function paymentLabel(code: string | null): string { return code ? (PAY_LABEL[code] ?? code) : '-'; }
 
 export async function getVenueCustomerStats(venueId: string, from?: string, to?: string): Promise<CustomerStat[]> {
@@ -334,7 +334,8 @@ export async function getVenueCustomerStats(venueId: string, from?: string, to?:
     if (b.session_date) { a.dates.add(b.session_date); if (b.session_date > a.last) a.last = b.session_date; }
     if (b.is_unpaid) a.unpaid += 1;
     const pm = b.is_split ? 'split' : String(b.payment_method ?? '');
-    if (pm && pm !== 'split') a.pay[pm] = (a.pay[pm] ?? 0) + 1;
+    // 분할(분납) 결제도 한 표다 — 빼면 분할로만 낸 손님의 '결제' 칸이 '-' 로 비었다(audit10 P3-4).
+    if (pm) a.pay[pm] = (a.pay[pm] ?? 0) + 1;
     if (b.buyin_at) {
       const h = new Date(b.buyin_at).getHours();
       if (!Number.isNaN(h)) a.hours[h] = (a.hours[h] ?? 0) + 1;
