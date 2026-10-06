@@ -152,13 +152,17 @@ begin
   if not found then return 0; end if;
   -- 지워진(또는 지워지는 중인) 글로는 링크를 걸지 않는다 — 삭제 트리거는 BEFORE DELETE 라 post_id 가 아직 남아 있다.
   v_link := case when t.post_id is not null and t.status not in ('removed', 'author_deleted') then '/posts/' || t.post_id::text end;
-  if t.author_id is not null and p_author_msg is not null then
+  -- 받는 사람 프로필이 아직 있을 때만 쓴다 — 프로필 하드 삭제(관리자·서비스·더미 정리)의 연쇄로 글이 지워질 때
+  --   지워지는 회원에게 알림을 쓰면 notifications_user_id_fkey(23503)로 삭제 전체가 롤백된다(최종 반증 Z2).
+  if t.author_id is not null and p_author_msg is not null
+     and exists (select 1 from public.profiles where id = t.author_id) then
     perform public._notify_user(t.author_id, 'system'::public.notif_type, p_author_title, p_author_msg, v_link);
     n := n + 1;
   end if;
   if p_requester_msg is not null then
     for u in select distinct x from unnest(array[t.requester_id] || t.other_requesters) x
-              where x is not null and x is distinct from t.author_id loop
+              where x is not null and x is distinct from t.author_id
+                and exists (select 1 from public.profiles p where p.id = x) loop
       perform public._notify_user(u, 'system'::public.notif_type, p_requester_title, p_requester_msg, v_link);
       n := n + 1;
     end loop;
@@ -449,7 +453,8 @@ begin
               where target_type = 'post' and target_id = old.id and status = 'open'
                 and public._is_rights_report(target_type, reason)
              returning reporter_id)
-           select distinct reporter_id from closed where reporter_id is not null loop
+           select distinct reporter_id from closed
+            where reporter_id is not null and exists (select 1 from public.profiles p where p.id = reporter_id) loop
     perform public._notify_user(u, 'system'::public.notif_type, '권리침해 신고 처리 결과',
       case when v_by_author then '신고하신 게시물을 작성자가 삭제해 신고를 처리 완료로 닫았습니다.'
            else '신고하신 게시물이 삭제되어 신고를 처리 완료로 닫았습니다.' end, null);
