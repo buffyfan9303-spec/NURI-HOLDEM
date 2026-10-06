@@ -278,7 +278,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
             <Icon name="calendar" size={20} />
           </span>
           <p className="text-sm font-bold text-ink-primary">로그인하면 내 캘린더가 열립니다</p>
-          <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+          <p className="mt-1 text-2xs text-ink-secondary">
             예약·찜한 대회와 내 기록을 날짜별로 모아요
           </p>
           {/* 막다른 길 금지 — 비로그인 모바일에서 이 화면이 5번째 칸이라 여기서 로그인으로 갈 수 있어야 한다 */}
@@ -392,7 +392,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                 ].join(' ')}>
                 {/* 다른 달 칸 — 칸 전체 opacity 0.35 를 걷고 날짜 숫자만 보조색으로(M-03, 2026-10-01).
                     눌리는 버튼인데 라이트 2.27:1 로 읽히지 않았다(AA 미달 11/42 → 0/42). */}
-                <span className={['text-xs leading-4 tabular-nums md:text-sm md:leading-5', isToday ? 'font-extrabold text-accent-200' : outside ? 'font-semibold text-ink-muted' : 'font-semibold text-ink-primary'].join(' ')}>
+                <span className={['text-xs tabular-nums md:text-sm', isToday ? 'font-extrabold text-accent-200' : outside ? 'font-semibold text-ink-muted' : 'font-semibold text-ink-primary'].join(' ')}>
                   {d.getDate()}
                 </span>
                 {/* 그날 +/− — 칸 폭(320: 39px)에 맞춘 짧은 금액. 없으면 같은 높이를 비워 둔다(칸 높이가 날마다 안 바뀐다). */}
@@ -551,7 +551,7 @@ function SumCell({ label, value, tone, testId, full, hint }: {
   return (
     <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low px-1 py-1.5 text-center"
       title={hint ?? fullText} aria-label={`${label} ${fullText ?? value}${hint ? ` · ${hint}` : ''}`}>
-      <p className={`whitespace-nowrap text-base font-extrabold leading-5 tabular-nums ${cls}`}>{value}</p>
+      <p className={`whitespace-nowrap text-base font-extrabold tabular-nums ${cls}`}>{value}</p>
       <p className="mt-0.5 whitespace-nowrap text-2xs leading-4 text-ink-muted">{label}</p>
     </div>
   );
@@ -575,7 +575,7 @@ function Stat({ label, value, sub, tone, testId, full }: {
     <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low p-1.5 text-center"
       title={shown !== value ? value : undefined} aria-label={shown !== value ? `${label} ${value}` : undefined}>
       {/* 360px 3칸(칸 ~100px)에서 '-150,000' 같은 8자 값이 두 줄로 꺾였다(2026-09-10 캡처) — 숫자는 절대 꺾지 않고 긴 값만 한 단 줄인다 */}
-      <p className={`${shown.length > 7 ? 'text-sm' : 'text-base'} whitespace-nowrap font-extrabold leading-5 tabular-nums ${cls}`}>{shown}</p>
+      <p className={`${shown.length > 7 ? 'text-sm' : 'text-base'} whitespace-nowrap font-extrabold tabular-nums ${cls}`}>{shown}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
       {/* 값이 없어도 자리를 지킨다 — 조건부 렌더는 월 이동마다 아래를 15px 밀어 올린다 */}
       <p className="text-2xs tabular-nums text-ink-muted">{sub ?? ' '}</p>
@@ -702,7 +702,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
         </span>
         <div className="flex min-w-0 flex-1 items-baseline gap-2">
           {/* 2026-09-24 — entry 판 제목은 고른 날('9월 24일 기록'), stats 판은 '뱅크롤 · ROI'. */}
-          <h3 className="text-sm font-bold leading-tight text-ink-primary">{part === 'entry' ? `${title} 기록` : title}</h3>
+          <h3 className="text-sm font-bold text-ink-primary">{part === 'entry' ? `${title} 기록` : title}</h3>
           {part === 'entry' && <span className="text-xs tabular-nums text-ink-muted">{dayRows.length + othersCount}건</span>}
         </div>
       </div>
@@ -861,7 +861,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
           /* 개인 ROI 입력(선택) — 접어 둔다: +/- 만 적는 사람에게 칸 5개는 소음이다. 같은 6칸 그리드라 오른쪽 변이 맞는다. */
           <details className="col-span-6 rounded-input bg-surface-high/40 px-2 py-1.5" data-testid="roi-inputs">
             <summary onClick={onSummaryClick} className="cursor-pointer select-none text-2xs font-semibold text-ink-secondary">참가비 · 매장 · 게임 적기 (선택)</summary>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">금액은 참가비를 뺀 순결과로 적습니다. 참가비를 적으면 ROI·ITM이 계산됩니다.</p>
+            <p className="mt-1 text-2xs text-ink-muted">금액은 참가비를 뺀 순결과로 적습니다. 참가비를 적으면 ROI·ITM이 계산됩니다.</p>
             {/* 라벨을 눈에 보이게 단다(2026-09-10 §6) — placeholder 는 입력을 시작하는 순간 사라져서
                 '이 칸이 뭐였지'를 만든다. <label> 이 그리드 칸을 잡고 input 은 그 안에서 100% 를 쓴다.
                 aria-label 은 그대로 둔다 — e2e 가 getByLabel 로 잡는 계약이다. */}

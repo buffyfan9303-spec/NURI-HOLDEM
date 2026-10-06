@@ -410,7 +410,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expe
           ))}
           <div className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed p-1.5 text-center font-bold">
             <span className="text-lg leading-none">＋</span>
-            <span className="text-2xs leading-tight">사이드 클락</span>
+            <span className="text-2xs">사이드 클락</span>
           </div>
         </div>
       </div>
@@ -456,7 +456,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expe
         <button type="button" onClick={() => onAddSide(nextSide)} title="사이드 게임 클락 추가(메인 설정 복사)"
           className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed border-accent-400/50 p-1.5 text-center font-bold text-accent-300 hover:bg-accent-300/10">
           <span className="text-lg leading-none" aria-hidden>＋</span>
-          <span className="text-2xs leading-tight">사이드 클락</span>
+          <span className="text-2xs">사이드 클락</span>
         </button>
       </div>
     </div>
@@ -1589,7 +1589,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, hiddenOld = 0, i
           )}
         </div>
         {seededFromLedger && linkDate && (
-          <p className="text-2xs text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
+          <p className="text-2xs text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2">
             <Icon name="notebook" size={13} className="inline-block align-[-2px] mr-1 shrink-0" /><b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
           </p>
         )}

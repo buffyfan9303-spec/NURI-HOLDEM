@@ -81,11 +81,14 @@ async function openMobileMenuIfPresent(page: Page): Promise<void> {
 }
 
 interface RawSeries {
-  heights: { t: number; h: number }[];
+  /** old — 그 표본에서 떠나는 대시보드 판이 아직 보였는가 · locked — 판에 높이 예약(inline min-height)이 걸려 있었는가. */
+  heights: { t: number; h: number; old: boolean; locked: boolean; painted: boolean }[];
   shifts: { t: number; value: number }[];
   mainMissingFrames: number;
   /** 대시보드 판이 아직 보인 표본 수 — 커밋 전(전환 대기) 구간을 실제로 봤는가(A3 의 거짓 통과 방지). */
   oldFrames: number;
+  /** growOldPx 를 실제로 넣었는가 — 커밋 전(대시보드가 아직 보이는) rAF 가 한 번은 와야 넣을 수 있다. */
+  grew?: boolean;
   error?: string;
 }
 
@@ -93,10 +96,14 @@ interface RawSeries {
  *  판정(단조 비감소·정착 후 300ms CLS)은 Node 쪽에서 한다 — 브라우저 evaluate 안에서 판정 로직까지
  *  넣으면 사람이 못 읽는다. Node↔브라우저 왕복 지연이 순간적인 변화를 놓칠 수 있어, 관찰 루프와
  *  클릭을 **같은 동기 턴**에서 시작한다. */
-async function watchTransition(page: Page, label: string, durationMs = 1900, shrinkOldPx = 0): Promise<RawSeries> {
-  return page.evaluate(({ label, durationMs, shrinkOldPx }) => new Promise<RawSeries>((resolve) => {
+async function watchTransition(page: Page, label: string, durationMs = 1900, shrinkOldPx = 0, growOldPx = 0): Promise<RawSeries> {
+  return page.evaluate(({ label, durationMs, shrinkOldPx, growOldPx }) => new Promise<RawSeries>((resolve) => {
     // shrinkOldPx — 떠나는 판이 **커밋 전에** 스스로 줄어드는 순간(늦은 데이터 도착: 대시보드 스켈레톤→실데이터 −28px)을
     //   결정적으로 만든다. 누르기 전 판 안쪽에 그만큼 칸을 넣어 두고(예약이 그 높이를 잰다) 누른 **같은 턴**에 뺀다.
+    // growOldPx — 반대로 **커밋 전에 자라는** 순간(대시보드 로딩 중 1272→1314, 2026-10-06 실측)을 만든다. 누른 뒤 **첫 rAF**(커밋 전이면)에
+    //   떠나는 대시보드 판 안에 그만큼 칸을 넣는다 — 판이 커밋으로 숨으면 그 칸도 같이 사라지므로 '늦게 자란 옛 판' 과 같다.
+    //   ⚠ 누른 같은 턴(동기)에 넣으면 안 된다: 그 높이가 **한 번도 그려지지 않은 채** 커밋될 수 있어(부하 12워커 100회 중 1회),
+    //   화면에 없던 높이를 '최고점' 으로 세는 거짓 실패가 났다. rAF 안에서 넣으면 그 프레임의 레이아웃·그리기에 반드시 들어간다.
     const inner = document.querySelector('[data-mystore-secpanel]')?.firstElementChild;
     let spacer: HTMLElement | null = null;
     if (shrinkOldPx > 0 && inner) {
@@ -105,7 +112,7 @@ async function watchTransition(page: Page, label: string, durationMs = 1900, shr
       inner.appendChild(spacer);
       void (inner as HTMLElement).offsetHeight;
     }
-    const heights: { t: number; h: number }[] = [];
+    const heights: RawSeries['heights'] = [];
     const shifts: { t: number; value: number }[] = [];
     const start = performance.now();
     // 🔴 2026-09-24 — 모바일 메뉴 시트 닫힘은 **원인으로** 가려낸다(시각으로 면제하지 않는다).
@@ -132,20 +139,52 @@ async function watchTransition(page: Page, label: string, durationMs = 1900, shr
     try { po.observe({ type: 'layout-shift', buffered: false }); } catch { /* 미지원 브라우저 — shifts 비워서 진행 */ }
     let mainMissingFrames = 0;
     let oldFrames = 0;
-    const sample = () => {
+    let grew = false;
+    const measure = (painted: boolean) => {
       if (!document.querySelector('[data-tab="my-store"]')) mainMissingFrames++;
-      if (document.querySelector('[data-mystore-secpanel] [data-pane="dashboard"]')?.getClientRects().length) oldFrames++;
-      const panel = document.querySelector('[data-mystore-secpanel]');
-      heights.push({ t: Math.round(performance.now() - start), h: panel ? panel.getBoundingClientRect().height : 0 });
-      if (performance.now() - start < durationMs) requestAnimationFrame(sample);
-      else { po.disconnect(); resolve({ heights, shifts, mainMissingFrames, oldFrames }); }
+      const old = !!document.querySelector('[data-mystore-secpanel] [data-pane="dashboard"]')?.getClientRects().length;
+      if (old) oldFrames++;
+      const panel = document.querySelector<HTMLElement>('[data-mystore-secpanel]');
+      heights.push({ t: Math.round(performance.now() - start), h: panel ? panel.getBoundingClientRect().height : 0, old, locked: !!panel?.style.minHeight, painted });
     };
-    requestAnimationFrame(sample);
+    const sample = () => {
+      if (growOldPx > 0 && !grew) {
+        const pane = document.querySelector('[data-mystore-secpanel] [data-pane="dashboard"]');
+        if (pane?.getClientRects().length) { const g = document.createElement('div'); g.style.height = `${growOldPx}px`; pane.appendChild(g); grew = true; }
+        else growOldPx = 0; // 첫 rAF 에 이미 커밋됨 — 이번 실행은 '커밋 전 성장' 을 만들 수 없다(grew=false 로 알린다)
+      }
+      measure(true);
+      if (performance.now() - start < durationMs) requestAnimationFrame(sample);
+      else { po.disconnect(); resolve({ heights, shifts, mainMissingFrames, oldFrames, grew }); }
+    };
     const btn = [...document.querySelectorAll('button')]
       .find((b) => (b as HTMLElement).offsetParent !== null && (b.textContent ?? '').trim().includes(label));
-    if (!btn) resolve({ heights: [], shifts: [], mainMissingFrames: -1, oldFrames: 0, error: `버튼을 못 찾음: ${label}` });
-    else { (btn as HTMLElement).click(); spacer?.remove(); }
-  }), { label, durationMs, shrinkOldPx });
+    if (!btn) { resolve({ heights: [], shifts: [], mainMissingFrames: -1, oldFrames: 0, error: `버튼을 못 찾음: ${label}` }); return; }
+    // 🔴 2026-10-06 — 누르기 직전과 누른 직후(같은 턴)를 **동기로** 한 번씩 잰다. 첫 rAF 만 기다리면, 부하가 걸린 러너에서
+    //   전환 렌더가 그 프레임보다 먼저 커밋돼 '누른 순간' 의 판을 한 번도 못 보는 실행이 있었다(A3 PC oldFrames 0 — 3회 중 1회).
+    //   동기 측정은 강제 레이아웃이라 '그 순간 그려질 판' 그대로다. 전환이 동기로 커밋되는 경로면 직후 표본에 이미 새 판이 잡힌다.
+    measure(false);
+    (btn as HTMLElement).click();
+    spacer?.remove();
+    measure(false);
+    requestAnimationFrame(sample);
+  }), { label, durationMs, shrinkOldPx, growOldPx });
+}
+
+/** 떠나는 대시보드 판이 로딩을 마칠 때까지 — 판 안 스켈레톤·aria-busy 가 0 이고 높이가 300ms 동안 그대로.
+ *  🔴 2026-10-06 — 전환 측정의 출발 상태를 고정한다. 그전엔 beforeEach 직후 바로 눌러, 대시보드가 아직 로딩 중
+ *  (1200→1272→1314: 인증 카드 늦은 삽입 +72, 카드 격자 스켈레톤 409→450.5)인 실행만 측정 창 안에 **떠나는 판 자신의
+ *  로딩 성장**이 섞였다(부하 걸린 전체 실행에서만 B PC '증가 뒤 감소 1313.89→1272.39'). 그 '커밋 전 성장' 경우는 아래 A4 가
+ *  결정적으로 따로 잰다 — 여기서 빼는 것이 아니라 우연에 맡기지 않는 것이다. */
+async function waitDashboardSettled(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() =>
+    document.querySelectorAll('[data-mystore-secpanel] .skeleton, [data-mystore-secpanel] [aria-busy="true"]').length)).toBe(0);
+  await expect.poll(async () => {
+    const h = () => page.evaluate(() => document.querySelector('[data-mystore-secpanel]')?.getBoundingClientRect().height ?? -1);
+    const a = await h();
+    await page.waitForTimeout(300);
+    return a === await h();
+  }).toBe(true);
 }
 
 /** ③ 정착 후 300ms CLS — '정착' 시각(settleAt)은 순수 함수(paneTransitionShape.ts)가 계산하고,
@@ -171,6 +210,7 @@ for (const vp of VIEWPORTS) {
       await bootOwner(page, { viewport: { width: vp.width, height: vp.height } });
       await openMyStore(page);
       await expect(page.locator('[data-mystore-secpanel]')).toBeVisible();
+      await waitDashboardSettled(page); // 출발 상태 고정(위 함수 주석) — 커밋 전 성장은 A4, 커밋 전 줄어듦은 A3 가 결정적으로 잰다
     });
 
     test('A — 매장 설정(계단식 성장): 오르내림 없음 · main 안 사라짐 · 정착 후 300ms CLS<0.02', async ({ page }) => {
@@ -199,15 +239,45 @@ for (const vp of VIEWPORTS) {
     //   제 데이터 도착으로 1121→1093 줄고, 커밋에서 옛 높이 예약이 다시 부풀려 '줄었다 다시 자람'이 됐다. 대시보드가 로딩 중일 때
     //   누른 판만 걸려 우연에 기댔다 — 여기서는 커밋 전 줄어듦(−60px)을 직접 만들어 **매번** 잰다. 예약을 누른 순간 걸지 않으면 빨개진다.
     test('A3 — 떠나는 판이 커밋 전에 줄어도(늦은 데이터 도착) 예약이 누른 순간부터 버틴다: 오르내림 없음', async ({ page }) => {
-      // 대시보드 로딩이 끝난 뒤 — 줄어듦이 아래에서 만드는 한 번뿐이게
-      await expect.poll(() => page.evaluate(() =>
-        document.querySelectorAll('[data-mystore-secpanel] .skeleton, [data-mystore-secpanel] [aria-busy="true"]').length)).toBe(0);
+      // 대시보드 로딩은 beforeEach 가 끝내 둔다 — 줄어듦이 아래에서 만드는 한 번뿐이게
       await openMobileMenuIfPresent(page);
       const r = await watchTransition(page, '게임 진행', 1900, 60);
       expect(r.error, r.error).toBeUndefined();
       expect(r.oldFrames, '커밋 전(대시보드가 아직 보이는) 프레임을 못 봤다 — 이 검사가 아무것도 안 잰 것').toBeGreaterThan(0);
       const osc = findOscillation(r.heights);
       expect(osc, osc ? `t=${osc.t}ms 에 ${osc.kind}(${osc.from}→${osc.to})` : '').toBeNull();
+    });
+
+    // 🔴 2026-10-06 — A3 의 반대 방향. 업주가 대시보드 로딩 중에 누르면 떠나는 판이 **커밋 전에 자란다**(1272→1314, 늦은 카드 데이터).
+    //   예약은 누른 순간 높이(1272)로만 걸려 있어, 커밋에서 새 판이 짧게 서는 순간 판이 1314→1272 로 41px 떨어졌다가(푸터가 올라옴)
+    //   해제 때 목적지 높이로 다시 움직였다(부하 걸린 전체 실행에서 B PC 'increase 뒤 감소 1313.89→1272.39' 로만 보이던 간헐 실패).
+    //   판정: 예약이 걸려 있는 동안(커밋 뒤 ~ 해제 전) 판은 커밋 전 최고 높이 밑으로 내려가지 않는다. 해제 때 목적지로 한 번 내려앉는 것은
+    //   정상이다(목적지가 원래 더 짧다 — 위 3차 주석). 예약이 누른 순간 높이에 머물면 빨개진다.
+    test('A4 — 떠나는 판이 커밋 전에 자라도(로딩 중 클릭) 예약이 그 높이를 따라간다: 커밋 뒤 예약 중 하강 없음', async ({ page }) => {
+      // 첫 rAF 전에 커밋돼 버린 실행(부하)은 '커밋 전 성장' 을 만들 수 없다 — 판정을 건너뛰지 않고 새로 열어 다시 만든다(최대 4번).
+      let r: RawSeries | null = null;
+      for (let i = 0; i < 4; i++) {
+        if (i > 0) {
+          await page.reload();
+          await openMyStore(page);
+          await expect(page.locator('[data-mystore-secpanel]')).toBeVisible();
+          await waitDashboardSettled(page);
+        }
+        await openMobileMenuIfPresent(page);
+        r = await watchTransition(page, '이벤트 신청', 1900, 0, 60);
+        if (r.error || r.grew) break;
+      }
+      expect(r!.error, r!.error).toBeUndefined();
+      expect(r!.grew, '4번 모두 첫 프레임 전에 커밋돼 커밋 전 성장을 만들지 못했다 — 이 검사가 아무것도 안 잰 것').toBe(true);
+      expect(r!.mainMissingFrames, 'main 이 사라진 프레임').toBe(0);
+      const before = r!.heights[0]?.h ?? 0;
+      // 그려진 프레임만 — 강제 레이아웃(동기 표본)은 화면에 안 나간 높이일 수 있다
+      const oldPeak = Math.max(...r!.heights.filter((s) => s.old && s.painted).map((s) => s.h));
+      expect(oldPeak, `커밋 전 판이 자란 표본이 없다(출발 ${before}) — 이 검사가 아무것도 안 잰 것`).toBeGreaterThanOrEqual(before + 59);
+      const lockedAfter = r!.heights.filter((s) => !s.old && s.locked);
+      expect(lockedAfter.length, '커밋 뒤 예약이 걸린 표본이 없다 — 이 검사가 아무것도 안 잰 것').toBeGreaterThan(0);
+      const dip = lockedAfter.find((s) => s.h < oldPeak - 1);
+      expect(dip, dip ? `t=${dip.t}ms 예약 중인데 판이 ${oldPeak}→${dip.h} 로 내려갔다(예약이 누른 순간 높이에 머묾)` : '').toBeUndefined();
     });
 
     test('B — 이벤트 신청(첫 방문 lazy 청크): 오르내림 없음 · main 안 사라짐 · 정착 후 300ms CLS<0.02', async ({ page }) => {

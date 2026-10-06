@@ -1015,7 +1015,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
               <Icon name="store" size={13} />
             </span>
-            <span className="truncate text-base font-bold leading-none text-ink-primary">{venueName}</span>
+            <span className="truncate text-base font-bold text-ink-primary">{venueName}</span>
             {/* 날짜는 매장명 **옆**. 우측 끝 블록으로 두면 좁은 폭에선 '로티아레나 ……… 09.05 금' 으로 찢어지고
                 (오너 2026-09-05), 넓은 폭에선 날짜만 오른쪽 끝에 홀로 떨어져 더 크게 치우친다(오너 2026-09-06).
                 두 폭 모두 '이름 바로 옆' 하나가 답이라 분기를 없애고 한 요소로 합쳤다 — '오늘'만 좁은 폭에서 접는다. */}
@@ -1159,7 +1159,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '대회 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (
                   wLvl.kind === 'break' ? (
-                    <p className="text-2xl font-extrabold leading-none text-ink-primary">BREAK</p>
+                    <p className="text-2xl font-extrabold text-ink-primary">BREAK</p>
                   ) : (
                     <>
                       <p className="text-xl font-extrabold leading-none text-ink-primary tabular-nums">{wLvl.sb.toLocaleString()}<span className="text-ink-muted">/</span>{wLvl.bb.toLocaleString()}</p>
@@ -1591,7 +1591,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <div className="flex items-end justify-between gap-2">
               <div>
                 <p className="text-2xs text-ink-muted">레벨 {levelNo}</p>
-                <p className="text-xl font-extrabold text-ink-primary tabular-nums leading-tight">{lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}</p>
+                <p className="text-xl font-extrabold text-ink-primary tabular-nums">{lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}</p>
                 {lvl.ante > 0 && <p className="text-2xs text-ink-muted">ante {lvl.ante.toLocaleString()}</p>}
               </div>
               <div className="text-right">
@@ -1758,9 +1758,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <Stat label="총 인건비" value={laborErr ? '—' : wonToMan(laborTotal)} unit={laborErr ? '' : '만원'} gold />
                 <Stat label="총 근무" value={dealerErr ? '—' : hoursValue(labor.netMin)} unit={dealerErr ? '' : '시간'} />
               </div>
-              {wageErr && <p className="text-[11px] text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
-              {dealerErr && <p className="text-[11px] text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
-              {shiftErr && <p className="text-[11px] text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+              {wageErr && <p className="text-2xs text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
+              {dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+              {shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
               {!laborErr && dealerPay > 0 && (
                 <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonToMan(laborTotal - dealerPay)}만 · 딜러 {wonToMan(dealerPay)}만</p>
               )}
@@ -2052,7 +2052,7 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
       <div className="space-y-3 p-4">
         <div className="rounded-card border border-accent-400/30 bg-accent-300/6 p-3 space-y-2">
           <p className="text-sm font-bold text-accent-300">이런 효과가 있어요</p>
-          <ul className="space-y-1 text-sm leading-relaxed text-ink-secondary">
+          <ul className="space-y-1 text-sm text-ink-secondary">
             <li>· 같은 시간대 일정 중에서 <b className="text-ink-primary">맨 앞</b>에 표시됩니다</li>
             {/* 🔴 2026-09-21 — 문구를 사실에 맞췄다. 종전 "일정탐색 맨 위에 고정" 은 거짓이었다:
                 `src/lib/scheduleSort.ts:15-16` 의 `compareByStartThenBoost` 는
@@ -2084,7 +2084,7 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
               )}
             </div>
           ) : (
-            <p className="py-2 text-center text-sm leading-relaxed text-ink-muted">문의 연락처를 준비하고 있습니다</p>
+            <p className="py-2 text-center text-sm text-ink-muted">문의 연락처를 준비하고 있습니다</p>
           )}
           <p className="text-xs text-ink-muted">문의 주시면 기간·비용 안내 후, 확인되는 대로 포스터를 상단에 올려드립니다.</p>
         </div>

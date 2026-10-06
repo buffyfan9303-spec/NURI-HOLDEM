@@ -112,14 +112,14 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
           </button>
         ))}
       </div>
-      <p className="text-2xs leading-relaxed text-ink-muted">
+      <p className="text-2xs text-ink-muted">
         {kind === 'campaign'
           ? <>매장이용권을 경품으로 걸고 여는 이벤트입니다. 승인되면 누리홀덤이 <b className="text-ink-secondary">7일 이내</b>에 열어 드립니다.</>
           : <>규모·날짜가 아직 없어도 됩니다. 하고 싶은 이벤트를 자유롭게 적어 주세요.</>}
       </p>
 
       {notDeployed && (
-        <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-muted">
+        <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs text-ink-muted">
           이벤트 신청 기능을 <b className="text-ink-secondary">준비 중</b>입니다. 곧 열립니다.
         </p>
       )}
@@ -156,7 +156,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                 이걸 안 적으면 업주는 '공짜로 더 주는 것' 으로 이해하고, 나중에 한도가 줄어 있는 걸
                 보고 사고로 받아들인다. */}
             {/* C1 E-1(2026-10-02) — 3줄 → 2줄. 한도 차감·보류·증액 경로·비용 없음 네 사실은 그대로 둔다. */}
-            <p className="mt-1 font-normal leading-relaxed text-ink-muted">
+            <p className="mt-1 font-normal text-ink-muted">
               승인되면 이 장수만큼 <b className="text-ink-secondary">매장 발행 한도에서 빠져요</b>(<b className="text-ink-secondary">비용 없음</b>).
               모자라면 승인이 보류되니 <b className="text-ink-secondary">이용권 · QR</b> 탭에서 증액을 요청하세요.
             </p>
@@ -231,11 +231,11 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                   </p>
                 )}
                 {r.status === 'approved' && (
-                  <p className="mt-0.5 text-2xs leading-relaxed text-emerald-300">
+                  <p className="mt-0.5 text-2xs text-emerald-300">
                     승인됐습니다 — 누리홀덤이 7일 이내에 이벤트를 엽니다.
                   </p>
                 )}
-                {r.adminNote && <p className="mt-0.5 wrap-break-word text-2xs leading-relaxed text-ink-muted">관리자: {r.adminNote}</p>}
+                {r.adminNote && <p className="mt-0.5 wrap-break-word text-2xs text-ink-muted">관리자: {r.adminNote}</p>}
               </li>
             );
           })}
