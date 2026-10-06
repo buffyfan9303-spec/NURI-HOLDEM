@@ -169,9 +169,13 @@ describe('20261006t 마이그레이션 계약', () => {
     expect(fn('admin_reject_rights_request')).toMatch(/if\s+not\s+public\._is_rights_report\(r\.target_type,\s*r\.reason\)\s+then\s+raise/i);
   });
 
-  it('권리침해 판정 문자열이 화면 사유(RIGHTS_REASON)와 같다', async () => {
+  it('권리침해 판정 문자열이 화면 사유(RIGHTS_REASON)와 같다 · 관리자 직접 UPDATE 정책도 같은 식으로 권리침해 신고를 뺀다', async () => {
     const { RIGHTS_REASON } = await import('./reports');
     expect(fn('_is_rights_report')).toContain(`starts_with(coalesce(p_reason, ''), '${RIGHTS_REASON}')`);
+    const pol = sql.slice(sql.search(/alter\s+policy\s+reports_admin_update/i));
+    const stmt = pol.slice(0, pol.indexOf(';'));
+    expect(stmt.split(`starts_with(coalesce(reason, ''), '${RIGHTS_REASON}')`).length - 1, 'using·with check 둘 다').toBe(2);
+    expect(stmt).toMatch(/using\s*\([\s\S]*with\s+check\s*\(/i);
   });
 
   it('다시 게시는 임시조치 전 숨김으로 되돌린다(P1-1) · 삭제는 이미지 파일을 삭제 큐로(P2-3, 큐 없으면 건너뜀)', () => {
@@ -188,7 +192,17 @@ describe('20261006t 마이그레이션 계약', () => {
     expect(cron).toMatch(/set\s+expiry_notified_at\s*=\s*now\(\)/i);
     expect(cron).not.toMatch(/blinded\s*=\s*false|delete\s+from/i);
     expect(sql).toMatch(/cron\.schedule\('takedown-expiry',\s*'0 1 \* \* \*'/);
-    expect(fn('_post_takedown_on_delete')).toMatch(/'author_deleted'/);
+    // 관리자는 하루 한 통(건수 요약) — 건마다 보내던 루프 안 통지가 돌아오지 않게
+    expect(cron).toMatch(/if\s+n\s*>\s*0\s+then[\s\S]{0,400}새로 끝난 게시물 %s건/);
+    const del = fn('_post_takedown_on_delete');
+    expect(del).toMatch(/'author_deleted'/);
+    // 재반증 ⑦: 어떤 경로로 지워져도 당사자 통지 + 열린 권리침해 신고 종결·통지
+    expect(del).toMatch(/_notify_takedown_parties\(t\.id,/);
+    expect(del).toMatch(/update\s+public\.reports\s+set\s+status\s*=\s*'resolved'[\s\S]{0,200}_is_rights_report\(target_type,\s*reason\)/i);
+    // 임시조치 '삭제' 판단은 지우기 전에 기록을 먼저 종결한다 → 트리거가 다시 통지하지 않는다
+    const decideBody = fn('admin_decide_takedown');
+    expect(decideBody.indexOf("set status = 'removed'")).toBeGreaterThan(-1);
+    expect(decideBody.indexOf("set status = 'removed'")).toBeLessThan(decideBody.indexOf('delete from public.community_posts'));
     expect(sql).toMatch(/create\s+trigger\s+trg_post_takedown_on_delete\s+before\s+delete\s+on\s+public\.community_posts/i);
   });
 
@@ -205,6 +219,8 @@ describe('화면 계약', () => {
     const modal = strip(read('src/components/features/ReportModal.tsx'));
     expect(modal).toMatch(/target\?\.type\s*===\s*'post'\s*\?\s*\[\.\.\.REASONS,\s*RIGHTS_REASON\]/);
     expect(modal).toMatch(/rights\s*&&\s*detail\.trim\(\)\.length\s*<\s*RIGHTS_MIN_DETAIL/);
+    // 재측정 r2: 버튼 줄은 시트 하단 고정(360×640·740 에서 접힘선 아래였다) — 크기별 실측은 e2e post-takedown
+    expect(modal).toMatch(/className="sticky bottom-0[^"]*bg-surface-mid[^"]*" data-testid="report-actions"/);
   });
 
   it('상세: 임시조치 글은 전용 안내(누구에게나)로, 관리자 숨김 해제 배너는 임시조치에 뜨지 않는다', () => {

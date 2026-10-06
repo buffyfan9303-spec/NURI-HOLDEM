@@ -37,9 +37,17 @@ test('🔴 ?post=<임시조치 글> — 비로그인에게 임시조치 안내·
 
 // #196 화면 검토 B — 권리침해 소명(최대 1000자)을 길게 써도 '신고 접수' 버튼이 화면 안에 있다(textarea 가 40vh 까지 자라 접힘선 아래로 밀었다).
 //   목킹 로그인(계정 없음 · 운영 쓰기 0) + 남의 글 한 건. 취소 후 다시 열면 입력이 비어 있다(P3).
-for (const width of [390, 360]) {
-  test(`권리침해 신고 시트 ${width} — 1000자 소명에서도 접수 버튼이 보이고, 다시 열면 입력이 비어 있다`, async ({ page }) => {
-    await bootOwner(page, { viewport: { width, height: 844 }, profile: { role: 'user', venue_id: null }, goto: false });
+//   재측정 r2(2026-10-06): 360×740 은 긴 소명에서 13px 잘리고 360×640 은 소명 없이도 버튼이 아래였다 → 버튼 줄을 시트 하단 고정.
+//   세 크기 모두 '빈 소명'과 '1000자 소명' 두 상태에서 취소·접수 버튼 **전체**가 화면 안이다.
+const inView = async (page: import('@playwright/test').Page, testId: string, vh: number, when: string) => {
+  const box = await page.getByTestId(testId).boundingBox();
+  expect(box, `${testId} 가 없다(${when})`).not.toBeNull();
+  expect(box!.y, `${testId} 위가 화면 밖(${when})`).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height, `${testId} 가 접힘선(${vh}) 아래로 잘렸다 — bottom=${box!.y + box!.height}(${when})`).toBeLessThanOrEqual(vh);
+};
+for (const { width, height } of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 360, height: 640 }]) {
+  test(`권리침해 신고 시트 ${width}×${height} — 빈 소명·1000자 소명 모두 버튼 전체가 보이고, 다시 열면 입력이 비어 있다`, async ({ page }) => {
+    await bootOwner(page, { viewport: { width, height }, profile: { role: 'user', venue_id: null }, goto: false });
     const row = postRow(1, { id: ID, user_id: '00000000-0000-4000-8000-0000000000aa', title: '남의 글' });
     await page.route(/\/rest\/v1\/community_posts\?/, (r) =>
       r.request().method() === 'GET' && r.request().url().includes(`id=eq.${ID}`) ? r.fulfill(json([row])) : r.fallback());
@@ -48,16 +56,17 @@ for (const width of [390, 360]) {
     await page.getByRole('button', { name: '신고', exact: true }).click();
     await page.getByTestId('report-reason-rights').click();
     const detail = page.getByTestId('report-detail');
+    await expect(detail).toBeVisible();
+    await page.waitForTimeout(400);   // 시트 진입 애니(sheet-up 0.26s)가 끝난 자리에서 잰다
+    await inView(page, 'report-cancel', height, '빈 소명');
+    await inView(page, 'report-submit', height, '빈 소명');
     await detail.fill('가'.repeat(1000));
     await expect(page.getByTestId('report-rights-count')).toContainText('1000/1000');
-    const submit = page.getByTestId('report-submit');
-    await expect(submit).toBeEnabled();
-    const box = await submit.boundingBox();
-    expect(box, '접수 버튼이 없다').not.toBeNull();
-    expect(box!.y + box!.height, `접수 버튼이 접힘선(844) 아래로 밀렸다 — bottom=${box!.y + box!.height}`).toBeLessThanOrEqual(844);
-    expect(box!.y).toBeGreaterThanOrEqual(0);
+    await expect(page.getByTestId('report-submit')).toBeEnabled();
+    await inView(page, 'report-cancel', height, '1000자 소명');
+    await inView(page, 'report-submit', height, '1000자 소명');
     // 취소 → 다시 열기: 앞 소명이 남아 있지 않다
-    await page.getByRole('button', { name: '취소', exact: true }).click();
+    await page.getByTestId('report-cancel').click();
     await expect(detail).toHaveCount(0);
     await page.locator('summary[aria-label="게시글 메뉴"]').click();
     await page.getByRole('button', { name: '신고', exact: true }).click();

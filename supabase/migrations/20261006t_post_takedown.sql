@@ -22,6 +22,10 @@ select set_config('statement_timeout', '60s', true);
 --   P2-3 '삭제' 종결이면 그 글의 community_images 객체를 storage_purge_queue(20261006s2)에 넣는다. 큐가 없으면 건너뛰고 결과에 queued=null.
 --   P3 제3자는 숨김 글에 댓글을 못 단다(comments_insert) · 비로그인 숨김 판정 함수 제거(정책 안 EXISTS 로 대체 — 존재 노출 없음)
 --      · 작성자가 스스로 지우면 기록을 'author_deleted' 로 종결(트리거) · 안내 응답에 ex_officio(직권 여부) — 화면 문구용.
+-- 재반증(cfab4750 · 조건부 APPROVE) 반영:
+--   ⑦ 글이 다른 경로(관리자 직접 삭제·일반 신고 삭제·정지+삭제·탈퇴 연쇄)로 지워지면 삭제 트리거가 임시조치 당사자에게 '삭제' 통지,
+--      같은 글의 열린 권리침해 신고를 resolved 로 닫고 신청인에게 통지한다(작성자 자진 삭제면 신청인에게만).
+--   P3 관리자 PostgREST 직접 UPDATE 로 권리침해 신고를 닫지 못하게 reports_admin_update 정책에 조건 · 만료 통지는 관리자당 하루 1통(건수 요약).
 --
 -- 가림은 서버가 한다: 기존 숨김(blinded)을 그대로 쓴다 — posts_select(작성자·운영자만)·첨부 3정책·_poll_visible·끌올·광고가
 --   이미 blinded 를 본다. blinded_source = 'takedown' 으로 출처를 남겨 관리자 '블라인드 해제' 토글이 임시조치를 몰래 풀지 못하게 한다.
@@ -33,6 +37,8 @@ select set_config('statement_timeout', '60s', true);
 -- 되돌리기(데이터 보존):
 --   alter policy comments_select on public.comments using ((NOT COALESCE((user_id = ANY (COALESCE(( SELECT my_blocked_ids() AS my_blocked_ids), '{}'::uuid[]))), false)) OR (user_id = ( SELECT auth.uid() AS uid)) OR (my_role() = 'admin'::user_role));
 --   alter policy comments_insert on public.comments with check ((( SELECT auth.uid() AS uid) IS NOT NULL) AND (user_id = ( SELECT auth.uid() AS uid)));
+--   drop policy reports_admin_update on public.reports;                                     -- 원래 with check 없음(null) → 다시 만든다
+--   create policy reports_admin_update on public.reports for update using ((my_role() = 'admin'::user_role));
 --   update public.community_posts p set blinded = t.prev_blinded, blinded_source = t.prev_blinded_source from public.post_takedowns t
 --    where t.post_id = p.id and p.blinded_source = 'takedown' and t.status in ('active','kept') and t.prev_blinded;   -- 이전 숨김 복원
 --   update public.community_posts set blinded_source = 'admin' where blinded_source = 'takedown';                    -- 나머지는 가림 유지
@@ -63,6 +69,10 @@ begin
   if (select md5(with_check) from pg_policies where schemaname = 'public' and tablename = 'comments' and policyname = 'comments_insert')
      is distinct from 'e3c0a20cd58c855c10c9017a80c359f5' then
     raise exception '20261006t 게이트: comments_insert 가 작성 때와 다르다';
+  end if;
+  if (select md5(qual) from pg_policies where schemaname = 'public' and tablename = 'reports' and policyname = 'reports_admin_update')
+     is distinct from 'ceeb451e34f9dc3224605a58e1a9dced' then
+    raise exception '20261006t 게이트: reports_admin_update 가 작성 때와 다르다';
   end if;
   if (select pg_get_constraintdef(oid) from pg_constraint
        where conrelid = 'public.community_posts'::regclass and conname = 'community_posts_blinded_source_chk')
@@ -140,7 +150,8 @@ declare
 begin
   select * into t from public.post_takedowns where id = p_takedown_id;
   if not found then return 0; end if;
-  v_link := case when t.post_id is not null then '/posts/' || t.post_id::text end;
+  -- 지워진(또는 지워지는 중인) 글로는 링크를 걸지 않는다 — 삭제 트리거는 BEFORE DELETE 라 post_id 가 아직 남아 있다.
+  v_link := case when t.post_id is not null and t.status not in ('removed', 'author_deleted') then '/posts/' || t.post_id::text end;
   if t.author_id is not null and p_author_msg is not null then
     perform public._notify_user(t.author_id, 'system'::public.notif_type, p_author_title, p_author_msg, v_link);
     n := n + 1;
@@ -364,6 +375,8 @@ begin
     v_what := case when t.prev_blinded then '임시조치를 해제하기로' else '다시 게시하기로' end;
   elsif p_action = 'remove' then
     select images into v_imgs from public.community_posts where id = t.post_id;
+    -- 먼저 종결해 둔다 — 그래야 삭제 트리거(다른 경로 삭제 통지)가 이 건을 다시 통지하지 않는다(통지는 아래 한 번).
+    update public.post_takedowns set status = 'removed', decided_at = now(), decided_by = auth.uid(), decision_note = v_note where id = t.id;
     delete from public.community_posts where id = t.post_id;
     v_status := 'removed'; v_what := '삭제하기로';
     -- P2-3: 공개 버킷 파일은 행을 지워도 URL 로 열린다 → 실제 객체를 삭제 큐로(엣지 storage-purge 가 Storage API 로 지운다).
@@ -403,20 +416,44 @@ end $function$;
 revoke all on function public.admin_decide_takedown(uuid, text, text) from public, anon;
 grant execute on function public.admin_decide_takedown(uuid, text, text) to authenticated, service_role;
 
--- ── 9) 작성자가 스스로 지우면(또는 다른 경로로 지워지면) 기록을 종결한다(P3) ──────────────────────────────
---   BEFORE DELETE — FK(on delete set null)가 post_id 를 비우기 전에 행을 찾는다. 임시조치 '삭제' 판단은 함수가 뒤에서 덮어쓴다.
+-- ── 9) 글이 어떤 경로로든 지워지면 — 임시조치 기록 종결 + 당사자 통지 + 열린 권리침해 신고 종결·통지 ──────────────
+--   BEFORE DELETE — FK(on delete set null)가 post_id 를 비우기 전에 행을 찾는다.
+--   경로: 작성자 자진 삭제 · 관리자 상세 '삭제'(직접 DELETE) · 일반 신고의 '삭제'·'정지+삭제' · 탈퇴 연쇄 — 한 곳에서 덮는다(재반증 ⑦).
+--   임시조치 '삭제' 판단(admin_decide_takedown)은 지우기 전에 기록을 먼저 종결하므로 여기서 다시 통지되지 않는다.
 create or replace function public._post_takedown_on_delete()
  returns trigger
  language plpgsql
  security definer
  set search_path to 'public', 'pg_temp'
 as $function$
+declare
+  v_by_author boolean := auth.uid() is not distinct from old.user_id;
+  t record;
+  u uuid;
 begin
-  update public.post_takedowns
-     set status = case when auth.uid() is not distinct from old.user_id then 'author_deleted' else 'removed' end,
-         decided_at = now(), decided_by = auth.uid(),
-         decision_note = case when auth.uid() is not distinct from old.user_id then '작성자 삭제' else '다른 경로로 삭제' end
-   where post_id = old.id and status in ('active', 'kept');
+  for t in update public.post_takedowns
+              set status = case when v_by_author then 'author_deleted' else 'removed' end,
+                  decided_at = now(), decided_by = auth.uid(),
+                  decision_note = case when v_by_author then '작성자 삭제' else '다른 경로로 삭제' end
+            where post_id = old.id and status in ('active', 'kept')
+           returning id loop
+    -- 작성자가 지웠으면 작성자에게는 알릴 것이 없다 — 신청인에게만 알린다.
+    perform public._notify_takedown_parties(t.id,
+      '임시조치 검토 결과', case when v_by_author then null else '임시조치된 회원님의 게시물이 삭제되었습니다.' end,
+      '권리침해 신고 처리 결과',
+      case when v_by_author then '신고하신 게시물을 작성자가 삭제했습니다.' else '신고하신 게시물이 삭제되었습니다.' end);
+  end loop;
+  -- 임시조치 없이 열려 있던 권리침해 신고 — 글이 없어지면 처리 완료로 닫고 신청인에게 알린다(통지 없이 열린 채 남지 않게).
+  for u in with closed as (
+             update public.reports set status = 'resolved'
+              where target_type = 'post' and target_id = old.id and status = 'open'
+                and public._is_rights_report(target_type, reason)
+             returning reporter_id)
+           select distinct reporter_id from closed where reporter_id is not null loop
+    perform public._notify_user(u, 'system'::public.notif_type, '권리침해 신고 처리 결과',
+      case when v_by_author then '신고하신 게시물을 작성자가 삭제해 신고를 처리 완료로 닫았습니다.'
+           else '신고하신 게시물이 삭제되어 신고를 처리 완료로 닫았습니다.' end, null);
+  end loop;
   return old;
 end $function$;
 revoke all on function public._post_takedown_on_delete() from public, anon, authenticated;
@@ -424,7 +461,7 @@ drop trigger if exists trg_post_takedown_on_delete on public.community_posts;
 create trigger trg_post_takedown_on_delete before delete on public.community_posts
   for each row execute function public._post_takedown_on_delete();
 
--- ── 10) 기간 만료 통지 — 매일 한 번, 건마다 한 번(P2-2 리드 결정: 자동 공개·삭제 없음) ─────────────────────────
+-- ── 10) 기간 만료 통지 — 매일 한 번. 당사자는 건마다 한 번, 관리자는 하루 한 통(건수 요약)(P2-2 리드 결정: 자동 공개·삭제 없음) ──
 create or replace function public.cron_takedown_expiry()
  returns integer
  language plpgsql
@@ -444,12 +481,16 @@ begin
       '게시물의 임시조치 기간이 끝났습니다. 운영자가 게시 재개 또는 삭제를 결정해 알려 드립니다. 결정 전까지 게시물은 가려진 상태로 유지됩니다.',
       '임시조치 기간 만료 안내',
       '신고하신 게시물의 임시조치 기간이 끝났습니다. 운영자가 게시 재개 또는 삭제를 결정해 알려 드립니다.');
-    for a in select id from public.profiles where role = 'admin'::public.user_role loop
-      perform public._notify_user(a, 'system'::public.notif_type, '임시조치 기간 만료 — 판단 필요',
-        '임시조치 기간이 끝난 게시물이 있습니다. 관리자 → 신고 처리의 임시조치 목록에서 게시 재개·삭제·가림 유지를 정해 주세요.', null);
-    end loop;
     n := n + 1;
   end loop;
+  -- 관리자는 하루 한 통 — 오늘 새로 만료된 건수와 아직 판단하지 않은 만료 건수를 함께 적는다(재반증 P3).
+  if n > 0 then
+    for a in select id from public.profiles where role = 'admin'::public.user_role loop
+      perform public._notify_user(a, 'system'::public.notif_type, '임시조치 기간 만료 — 판단 필요',
+        format('임시조치 기간이 새로 끝난 게시물 %s건(판단 대기 전체 %s건)이 있습니다. 관리자 → 신고 처리의 임시조치 목록에서 게시 재개·삭제·가림 유지를 정해 주세요.',
+               n, (select count(*) from public.post_takedowns where status = 'active' and ends_at <= now())), null);
+    end loop;
+  end if;
   return n;
 end $function$;
 revoke all on function public.cron_takedown_expiry() from public, anon, authenticated;
@@ -648,6 +689,16 @@ end $function$;
 revoke all on function public.admin_dismiss_report(uuid) from public, anon;
 grant execute on function public.admin_dismiss_report(uuid) to authenticated, service_role;
 
+-- 관리자의 PostgREST 직접 UPDATE 로 권리침해 신고를 통지 없이 닫는 길도 막는다(재반증 P3). 권리침해 신고의 상태 변경은
+--   정의자 RPC(임시조치·요청 기각·삭제 트리거)만 한다 — 정의자는 표 소유자라 RLS 를 타지 않는다(FORCE RLS 꺼짐, 2026-10-06 실측).
+--   reports 에 트리거를 다는 대신 정책 조건으로 둔다(reportDecide.contract.test.ts 가 reports 트리거 추가를 막는다).
+--   정책은 호출 역할로 돌므로 내부 판정 함수(_is_rights_report, 클라이언트 실행 회수) 대신 같은 식을 그대로 적는다.
+alter policy reports_admin_update on public.reports
+  using (public.my_role() = 'admin'::public.user_role
+         and not (target_type = 'post' and starts_with(coalesce(reason, ''), '권리침해(명예훼손·사생활 침해 등)')))
+  with check (public.my_role() = 'admin'::public.user_role
+         and not (target_type = 'post' and starts_with(coalesce(reason, ''), '권리침해(명예훼손·사생활 침해 등)')));
+
 -- ── 12) 숨김 글의 댓글 — 읽기·쓰기를 부모 글이 보이는 사람 + 댓글 작성자 본인으로(P3: 제3자 댓글 쓰기 차단) ─────────
 --   EXISTS 는 호출자의 posts_select 를 탄다(정의자 함수 없음 → 비로그인이 숨김 여부를 캐물을 함수가 없다).
 --   PK 조회 한 번(community_posts_pkey) · idx_comments_post 로 글별 댓글을 고른 뒤 행마다 평가한다.
@@ -695,6 +746,9 @@ begin
   if (select qual from pg_policies where schemaname = 'public' and tablename = 'comments' and policyname = 'comments_select') not like '%community_posts%'
      or (select with_check from pg_policies where schemaname = 'public' and tablename = 'comments' and policyname = 'comments_insert') not like '%community_posts%' then
     raise exception '20261006t 자가검사: 댓글 정책에 숨김 글 조건이 없다';
+  end if;
+  if (select qual from pg_policies where schemaname = 'public' and tablename = 'reports' and policyname = 'reports_admin_update') not like '%권리침해%' then
+    raise exception '20261006t 자가검사: reports_admin_update 에 권리침해 신고 제외 조건이 없다';
   end if;
   if not exists (select 1 from cron.job where jobname = 'takedown-expiry') then
     raise exception '20261006t 자가검사: 만료 통지 크론이 없다';

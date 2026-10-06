@@ -309,7 +309,8 @@ begin
   update public.post_takedowns set created_at = now() - interval '31 days', ends_at = now() - interval '1 day' where id = v_td4;
   n := public.cron_takedown_expiry();
   select count(*) into m from public.notifications where created_at = now() and title = '임시조치 기간 만료 안내' and user_id in (v_c, v_d, v_adm2);
-  select count(*) into k from public.notifications where created_at = now() and title = '임시조치 기간 만료 — 판단 필요';
+  select count(*) into k from public.notifications where created_at = now() and title = '임시조치 기간 만료 — 판단 필요'
+     and message like '임시조치 기간이 새로 끝난 게시물 1건%';
   if n = 1 and m = 3 and k = (select count(*) from public.profiles where role = 'admin'::public.user_role)
      and public.cron_takedown_expiry() = 0
      and (select blinded and blinded_source = 'takedown' from public.community_posts where id = v_post4)
@@ -330,10 +331,87 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', v_adm, 'role', 'authenticated')::text, true);
   j := public.admin_decide_takedown(v_td4, 'remove', 'ZZ 사생활 사진');
   if (j->>'purge_queued')::int = 1
+     -- 삭제 판단 통지는 한 번 — 삭제 트리거가 다시 보내지 않는다(기록을 먼저 종결)
+     and (select count(*) from public.notifications where created_at = now() and user_id = v_adm2 and title = '임시조치 검토 결과') = 1
      and exists (select 1 from public.storage_purge_queue where bucket_id = 'community_images' and name = 'zz-reh-1006t/a.webp' and reason = 'takedown_remove')
      and not exists (select 1 from public.community_posts where id = v_post4)
      and (select status from public.post_takedowns where id = v_td4) = 'removed' then out := out || 'X10 PASS; ';
   else fails := fails + 1; out := out || format('X10 FAIL %s; ', j); end if;
+
+  -- ── 재반증 ⑦·P3 반영분 ── 같은 회원의 두 번째 글·신고는 12초·10초 제한에 걸리므로 이 트랜잭션 안에서만 제한 트리거를 끈다(롤백)
+  alter table public.community_posts disable trigger trg_rl_posts;
+  alter table public.reports disable trigger trg_rl_reports;
+
+  -- X11 (⑦) 임시조치 중 글을 관리자가 상세 '삭제'(직접 DELETE)로 지우면 — 기록 종결 + 작성자·신청인 '삭제' 통지(링크 없음)
+  total := total + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_adm2, 'role', 'authenticated')::text, true);
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_adm2, 'zz', 'post', v_post, '권리침해(명예훼손·사생활 침해 등) — ZZ 소명 11') returning id into v_rep5;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_adm, 'role', 'authenticated')::text, true);
+  v_td := (public.admin_takedown_post(v_post, 'ZZ 재조치', v_rep5)->>'id')::uuid;
+  execute 'set local role authenticated';
+  delete from public.community_posts where id = v_post;
+  get diagnostics n = row_count;
+  execute 'reset role';
+  select count(*) into m from public.notifications where created_at = now() and link is null
+     and ((user_id = v_a and title = '임시조치 검토 결과' and message = '임시조치된 회원님의 게시물이 삭제되었습니다.')
+          or (user_id = v_adm2 and title = '권리침해 신고 처리 결과' and message = '신고하신 게시물이 삭제되었습니다.'));
+  if n = 1 and m = 2 and (select status = 'removed' and decision_note = '다른 경로로 삭제' from public.post_takedowns where id = v_td) then
+    out := out || 'X11 PASS; ';
+  else fails := fails + 1; out := out || format('X11 FAIL deleted=%s notices=%s; ', n, m); end if;
+
+  -- X12 (⑦) 열린 권리침해 신고가 있는 글을 다른 일반 신고의 '삭제'로 지우면 — 권리침해 신고 resolved + 신청인 통지
+  total := total + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_d, 'role', 'authenticated')::text, true);
+  insert into public.community_posts(user_id, user_name, title, content, category)
+    values (v_d, 'zz', 'ZZ-REH-1006t-6', 'ZZ 리허설 본문6', 'free') returning id into v_post3;
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_c, 'zz', 'post', v_post3, '권리침해(명예훼손·사생활 침해 등) — ZZ 소명 12') returning id into v_rep4;
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_b, 'zz', 'post', v_post3, '스팸/도배 — ZZ') returning id into v_rep4b;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_adm, 'role', 'authenticated')::text, true);
+  perform public.admin_decide_report(v_rep4b, 'delete', true, false, null, null);
+  if not exists (select 1 from public.community_posts where id = v_post3)
+     and (select status from public.reports where id = v_rep4) = 'resolved'
+     and exists (select 1 from public.notifications where created_at = now() and user_id = v_c and title = '권리침해 신고 처리 결과'
+                    and message = '신고하신 게시물이 삭제되어 신고를 처리 완료로 닫았습니다.') then out := out || 'X12 PASS; ';
+  else fails := fails + 1; out := out || format('X12 FAIL rights=%s; ', (select status from public.reports where id = v_rep4)); end if;
+
+  -- X12b 작성자가 스스로 지우면 — 권리침해 신고 resolved + 신청인에게 '작성자가 삭제' 통지
+  total := total + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_d, 'role', 'authenticated')::text, true);
+  insert into public.community_posts(user_id, user_name, title, content, category)
+    values (v_d, 'zz', 'ZZ-REH-1006t-7', 'ZZ 리허설 본문7', 'free') returning id into v_post3;
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_c, 'zz', 'post', v_post3, '권리침해(명예훼손·사생활 침해 등) — ZZ 소명 12b') returning id into v_rep4;
+  execute 'set local role authenticated';
+  delete from public.community_posts where id = v_post3;
+  execute 'reset role';
+  if (select status from public.reports where id = v_rep4) = 'resolved'
+     and exists (select 1 from public.notifications where created_at = now() and user_id = v_c
+                    and message = '신고하신 게시물을 작성자가 삭제해 신고를 처리 완료로 닫았습니다.') then out := out || 'X12b PASS; ';
+  else fails := fails + 1; out := out || 'X12b FAIL; '; end if;
+
+  -- X13 (P3) 관리자가 PostgREST 로 권리침해 신고를 직접 UPDATE 하면 0행 · 양성 대조: 일반 신고는 그대로 1행
+  total := total + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_d, 'role', 'authenticated')::text, true);
+  insert into public.community_posts(user_id, user_name, title, content, category)
+    values (v_d, 'zz', 'ZZ-REH-1006t-8', 'ZZ 리허설 본문8', 'free') returning id into v_post3;
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_c, 'zz', 'post', v_post3, '권리침해(명예훼손·사생활 침해 등) — ZZ 소명 13') returning id into v_rep4;
+  insert into public.reports(reporter_id, reporter_name, target_type, target_id, reason)
+    values (v_b, 'zz', 'post', v_post3, '스팸/도배 — ZZ 13') returning id into v_rep4b;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_adm, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  update public.reports set status = 'dismissed' where id = v_rep4;
+  get diagnostics n = row_count;
+  begin update public.reports set reason = '권리침해(명예훼손·사생활 침해 등) — 바꿔치기' where id = v_rep4b; k := 1;
+  exception when others then k := 0; end;
+  update public.reports set status = 'resolved' where id = v_rep4b;
+  get diagnostics m = row_count;
+  execute 'reset role';
+  if n = 0 and k = 0 and m = 1 and (select status from public.reports where id = v_rep4) = 'open' then out := out || 'X13 PASS; ';
+  else fails := fails + 1; out := out || format('X13 FAIL rights_rows=%s relabel=%s normal_rows=%s; ', n, k, m); end if;
 
   -- X9 (P3) 비로그인 숨김 판정 함수가 없다(존재 노출 제거) — 판정은 정책 안의 EXISTS 뿐
   total := total + 1;

@@ -85,8 +85,10 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
             <span className="tabular-nums">{detail.length}/1000</span>
           </p>
         )}
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={close} className="btn-ghost flex-1">취소</button>
+        {/* 버튼 줄은 시트 하단 고정 — 360×640 은 소명 없이도, 360×740 은 긴 소명에서 버튼이 접힘선 아래였다(#196 재측정 r2).
+            안전영역(홈 인디케이터)은 Modal 시트가 이미 예약한다 — 여기서 또 더하면 이중 예약(Modal.tsx 주석). */}
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex gap-2 border-t border-border-subtle bg-surface-mid px-4 py-3" data-testid="report-actions">
+          <button type="button" onClick={close} className="btn-ghost flex-1" data-testid="report-cancel">취소</button>
           <button type="button" onClick={submit} disabled={saving || !reason || (rights && detail.trim().length < RIGHTS_MIN_DETAIL)}
             className="btn-danger flex-1 disabled:opacity-60" data-testid="report-submit">{saving ? '접수 중…' : '신고 접수'}</button>
         </div>
