@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
+import { reloadBootTab, rememberTab } from './lib/reloadTab';
 import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
@@ -100,7 +101,7 @@ import { nextHeaderShrunk, restoreScrollTop } from './lib/headerShrink';
 // ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
 //   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
 import { dropFromCtx, type PostNavCtx } from './lib/postNavCtx';
-import { useIsDesktop, useIsMdUp } from './lib/responsive';
+import { useIsDesktop, useIsMdUp, useIsWide } from './lib/responsive';
 import { sweepScrollLocks } from './lib/scrollLock';
 import HomeTab from './components/features/HomeTab';
 import { lazyWithReload } from './lib/lazyWithReload';
@@ -1139,7 +1140,8 @@ export default function App() {
       // 🔴 2026-09-26(auth-boot-gap G7) — 푸시 부팅 링크(?nl=)가 권한 탭(/admin · /my-store/* · /staff-schedule)을 가리키면
       //   그 탭으로 시작한다. 홈으로 시작하면 권한이 오기 전 ~100~150ms 홈이 그려졌다가 바뀌었다(깜빡임).
       //   권한이 없으면 아래 탭 가드가 확인 뒤 홈으로 보낸다(?tab=admin 과 같은 길).
-      return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')) ?? 'home';
+      // audit10 P3-6 — 내 매장에서 새로고침하면 내 매장으로(권한 확인 전 홀드는 아래 pendingDeepTab 이 맡는다).
+      return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')) ?? reloadBootTab() ?? 'home';
     } catch { return 'home'; }
   });
   /** 🔴 `?tab=` 이 가리킨 탭이 **권한이 도착한 뒤에야 생기는** 경우를 위한 기억 (2026-09-18).
@@ -1160,7 +1162,7 @@ export default function App() {
       const sp0 = new URLSearchParams(window.location.search);
       const t0 = sp0.get('tab');
       if (t0 === 'my-store' || t0 === 'admin') pendingDeepTab.current = t0;
-      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')); // 알림 부팅 링크도 같은 기억(G7)
+      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')) ?? reloadBootTab(); // 알림 부팅 링크·새로고침도 같은 기억(G7 · P3-6)
     } catch { /* noop */ }
   }
   /** 알림 부팅 링크(?nl=)가 가리킨 권한 탭 — 부팅 동안만 의미가 있는 상수(G7). 아래 탭 가드가 '업주의 /admin' 을 내 매장으로 보낼 때 쓴다. */
@@ -2840,6 +2842,13 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab, authLoading]);
 
+  useEffect(() => { rememberTab(activeTab); }, [activeTab]);
+  // audit10 ⑨(2026-10-07) — ≥1440 내 매장은 셸·판 폭 상한을 푼다(VenueManageTab useUncapAncestors · F-2 결정). 그 훅은 판이 **마운트된 뒤**에야 돌아
+  //   새로고침·직접 진입에서 이미 그려진 1152px 셸(헤더·사이드바)이 1440 으로 벌어졌다(CLS 0.18 · 1440 목 업주 5회 중 3회).
+  //   같은 조건을 셸이 첫 렌더부터 적용한다 — 훅은 이미 풀린 칸을 건너뛴다(maxWidth 'none' 이면 continue).
+  const isWideShell = useIsWide();
+  const storeUncap = activeTab === 'my-store' && isWideShell;
+
   // 위 가드가 홈으로 되돌린 **뒤에라도** 권한이 도착해 그 탭이 생기면 딥링크 의도를 한 번 살린다.
   //   (근거는 pendingDeepTab 선언부 주석 — 실측된 회귀다.)
   useEffect(() => {
@@ -4103,7 +4112,7 @@ export default function App() {
     //     내 매장에 들어가는 순간 좌우로 68px 씩 벌어지는 것만 보였다(오너 보고 "전체가 넓어져서 이질감").
     //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
     //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
-    <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+    <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle" style={storeUncap ? { maxWidth: 'none' } : undefined}>
       {/* 전면 오버레이 안의 사업자 푸터도 약관·문의를 열 수 있게 — 콜백 공급(BusinessFooter.tsx FooterActionsContext) */}
       <FooterActionsContext.Provider value={footerActions}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
@@ -4791,7 +4800,7 @@ export default function App() {
       )}
 
       {(isOwner || isStaff || isAdmin) && (activeTab === 'my-store' || visitedTabs.has('my-store')) && (
-        <main data-tab="my-store" className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
+        <main data-tab="my-store" className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : storeUncap ? { maxWidth: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="my-store">
           <VenueManageTabM
             schedules={schedules}
