@@ -1,6 +1,7 @@
 import { test, expect } from './_fixtures';
 // `_fixtures` 는 test·expect·READ_ONLY_RPCS·isAllowedRequest 만 export 한다 — 타입은 원본에서 받는다.
 import { type Page } from '@playwright/test';
+import { mockEvent } from './_mocks';
 
 // 클릭 경로 감사 — "눌렀을 때 **의도한 화면**으로 가는가"(오너 지시 2026-09-06).
 //
@@ -14,6 +15,7 @@ import { type Page } from '@playwright/test';
 const nav = (page: Page) => page.getByRole('navigation', { name: '하단 내비게이션' });
 
 test.beforeEach(async ({ page }) => {
+  await mockEvent(page);   // 이벤트 진입 검사들이 운영 이벤트 유무와 무관하게 같은 판을 본다(오픈 초기화 전·후)
   await page.goto('/');
   await expect(page.getByTestId('home-schedule-title')).toBeVisible();
 });
@@ -96,9 +98,8 @@ test('이벤트 페이지 — 확률 공개가 **최하단에** 있고 합이 10
   // ⚠ 다이얼로그가 보이는 시점은 아직 **로딩 스켈레톤**이다 — 그때 표를 세면 0 이라 조용히 skip 된다
   //   (이 테스트가 처음에 그렇게 자기 자신을 꺼 버렸다). 표나 '이벤트 없음' 중 하나가 나올 때까지 기다린다.
   const table = dlg.locator('table');
-  const none = dlg.getByTestId('event-empty');
-  await expect(table.or(none).first()).toBeVisible({ timeout: 20_000 });
-  if (await none.isVisible()) test.skip(true, '진행 중 이벤트가 없어 확률 표가 없다');
+  // 이벤트는 mockEvent 로 보장된다 — '이벤트 없음' 이면 건너뛰지 않고 실패다(예전엔 skip 이라 조용히 꺼졌다).
+  await expect(table, '확률 표가 없다 — mockEvent 가 안 먹었거나 이벤트 판이 표를 안 그린다').toBeVisible({ timeout: 20_000 });
 
   await expect(dlg.getByText('당첨 확률 공개')).toBeVisible();
   const pcts = await table.locator('tbody tr td:nth-child(4)').allInnerTexts();
@@ -136,7 +137,7 @@ test('비로그인 QR 딥링크 — 로그인 게이트로 보내고, 하려던 
 
 test('푸터 법적 링크 — 문서가 열리고 홈이 사라지지 않는다', async ({ page }) => {
   const terms = page.getByRole('button', { name: /이용약관/ }).first();
-  if (await terms.count() === 0) test.skip(true, '푸터 약관 버튼이 없다');
+  await expect(terms, '푸터에 이용약관 버튼이 없다 — 사업자 정보·약관 상시 노출 계약이 끊겼다').toBeVisible();
   await terms.click();
   await expect(page.getByText(/약관|제1조|총칙/).first()).toBeVisible({ timeout: 10_000 });
 });

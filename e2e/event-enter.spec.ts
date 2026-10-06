@@ -15,6 +15,7 @@
 // 이 스펙이 잠그는 것: ① 진입 구간에 폴백 오버레이가 **한 프레임도** 뜨지 않는다.
 //                    ② 화면 교체 횟수가 2회를 넘지 않는다. ③ 느릴 때는 스켈레톤이 그대로 뜬다.
 import { test, expect } from './_fixtures';
+import { mockEvent } from './_mocks';
 
 const DIALOG = '[role="dialog"][aria-label="이벤트"]';
 
@@ -40,7 +41,8 @@ const RECORDER = () => {
 const stop = (page: import('@playwright/test').Page) =>
   page.evaluate(() => { const w = window as unknown as { __f: string[]; __raf: number }; cancelAnimationFrame(w.__raf); return w.__f; });
 
-/** 홈의 이벤트 **배너(광고)**. 진행 중인 이벤트가 없으면 아예 렌더되지 않으므로 없으면 건너뛴다.
+/** 홈의 이벤트 **배너(광고)**. 이벤트는 mockEvent 로 고정한다(운영에 이벤트가 없거나 다른 이벤트가 공개돼도 같은 판정) —
+ *  그래서 배너가 없으면 건너뛰지 않고 **실패**다.
  *  ⚠ 텍스트로 잡지 않는다(2026-09-12 §4): 이제 배너가 없을 때도 같은 자리에 **메뉴 한 줄**이 남는데,
  *    그 줄에도 '이벤트'가 적혀 있어 텍스트 필터로는 둘이 구분되지 않는다. 이 스펙이 재는 것은
  *    '씨앗이 있는 진입'이라 반드시 배너 쪽이어야 한다 → data-testid 로 고정한다. */
@@ -50,6 +52,7 @@ const bannerOf = (page: import('@playwright/test').Page) =>
 test.describe('오픈 기념 이벤트 — 진입', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
+    await mockEvent(page);   // 진행 중 이벤트 1건 + 12칸 보드 고정(운영 이벤트 유무와 무관)
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     // 청크 프리페치(warm)가 idle 에 돌 시간을 준다 — 이 스펙은 '데워진 뒤에도 남는' 깜빡임을 본다.
@@ -58,7 +61,7 @@ test.describe('오픈 기념 이벤트 — 진입', () => {
 
   test('🔴 진입에 폴백 빈 화면이 끼지 않는다 — Suspense 경계를 조건 안에 넣지 말 것', async ({ page }) => {
     const banner = bannerOf(page);
-    test.skip(await banner.count() === 0, '진행 중인 이벤트가 없다(홈 배너 없음)');
+    await expect(banner, '홈 이벤트 배너가 없다 — mockEvent 가 안 먹었거나 배너 배선이 끊겼다').toBeVisible({ timeout: 10_000 });
 
     await page.evaluate(RECORDER);
     await banner.click();
@@ -82,9 +85,9 @@ test.describe('오픈 기념 이벤트 — 진입', () => {
   //   (auth 변화에 캐시를 버린다). 앞의 것이 실사용 경로라 그것으로 잠근다.
   test('씨앗이 없고 보드가 느리면(QR 딥링크 콜드 진입) 스켈레톤이 뜨고, 그 격자는 본문과 같은 칸 수다', async ({ page }) => {
     test.setTimeout(90_000);
-    // beforeEach 가 홈을 열어 두었다 — 진행 중인 이벤트가 없으면(2026-09-10 런칭 정리로 오픈 이벤트 삭제) 딥링크 판은
-    // 열려도 카드가 없어 스켈레톤→본문 교체를 잴 수 없다. 다른 테스트와 같은 전제 검사로 건너뛴다.
-    test.skip(await bannerOf(page).count() === 0, '진행 중인 이벤트가 없다(홈 배너 없음)');
+    // beforeEach 가 mockEvent 로 홈을 열어 두었다 — 이벤트가 없으면 딥링크 판은 열려도 카드가 없어 스켈레톤→본문 교체를 잴 수 없다.
+    //   예전에는 이 전제가 깨지면 건너뛰었다(거짓 통과) — 이제 이벤트가 목으로 보장되므로 없으면 실패다.
+    await expect(bannerOf(page), '홈 이벤트 배너가 없다').toBeVisible({ timeout: 10_000 });
     // 실제 응답을 그대로 되돌려주되 900ms 늦춘다 — 200ms 지연 게이트를 넘겨 로딩 표시가 살아 있는지 본다.
     //   (게이트를 넣으면서 스켈레톤을 통째로 죽이지 않았는지가 이 테스트의 요지다.)
     await page.route(/\/rest\/v1\/rpc\/event_board/, async (route) => {
@@ -97,9 +100,7 @@ test.describe('오픈 기념 이벤트 — 진입', () => {
 
     await page.goto('/?event=1');
     const dialog = page.locator(DIALOG);
-    // 진행 중인 이벤트가 없으면 딥링크로도 판이 안 열린다 — 그때는 잴 것이 없다.
-    await dialog.waitFor({ timeout: 20_000 }).catch(() => {});
-    test.skip(await dialog.count() === 0, '진행 중인 이벤트가 없다');
+    await expect(dialog, '이벤트 딥링크(?event=1)로 판이 안 열린다').toBeVisible({ timeout: 20_000 });
 
     const sk = page.locator(`${DIALOG} [aria-busy="true"] .skeleton`).first();
     await expect(sk, '느린 응답인데도 스켈레톤이 안 뜬다 — 지연 게이트가 로딩 표시를 아예 죽였다')
@@ -117,7 +118,7 @@ test.describe('오픈 기념 이벤트 — 진입', () => {
   test('배너로 들어가면 씨앗이 있어 로딩 표시 자체가 없다 — 느린 응답에도 본문이 먼저 선다', async ({ page }) => {
     test.setTimeout(90_000);
     const banner = bannerOf(page);
-    test.skip(await banner.count() === 0, '진행 중인 이벤트가 없다(홈 배너 없음)');
+    await expect(banner, '홈 이벤트 배너가 없다').toBeVisible({ timeout: 10_000 });
     // 홈이 이미 보드를 받아 둔 뒤에 재조회만 느리게 만든다 — 씨앗이 있으면 그 지연이 보이면 안 된다.
     await page.route(/\/rest\/v1\/rpc\/event_board/, async (route) => {
       // 요청을 **보내기 전에** 늦춘다. 응답을 미리 받아 두었다가 늦춰 되돌려주면, 어설션이 먼저 끝났을 때

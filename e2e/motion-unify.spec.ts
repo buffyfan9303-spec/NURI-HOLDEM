@@ -23,6 +23,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { ANON_KEY, dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
+import { mockPosts, mockListings } from './_mocks';
 
 type F = { t: number; cov: number; ca: number; sy: number; ph: number; sig: string; sk: number; skr: number; vt: number; op: number | null; shown: boolean };
 type Rec = { F: F[]; LS: [number, number][] };
@@ -116,6 +117,7 @@ async function boot(page: Page, width: number, height: number) {
   await stabilizeBackstack(page);
   await page.setViewportSize({ width, height });
   await mockSchedules(page);
+  await mockPosts(page); await mockListings(page); // 운영 글·매물이 0건이어도 같은 판(게시판 행·장터 분류별 건수)이 서도록
   await page.addInitScript(RECORDER);
   await page.goto('/');
   await dismissOverlays(page);

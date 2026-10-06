@@ -15,8 +15,11 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
+import { mockPosts } from './_mocks';
 
 async function openBoard(page: Page) {
+  // 게시글 24건 고정 — 운영 글 수(오픈 초기화 뒤 0건)에 기대지 않는다.
+  await mockPosts(page);
   await stabilizeBackstack(page);
   await page.goto('/?tab=community');
   await dismissOverlays(page);
@@ -276,16 +279,26 @@ for (const w of [1440, 1024]) {
     const y0 = await page.evaluate(() => scrollY);
     for (let i = 0; i < n; i++) {
       const chip = rail.locator('button').nth(i);
-      // 칩이 레일 안에 온전히 들어올 때까지 레일 위에서 휠(아래로)
+      // 칩이 레일 안에 온전히 들어올 때까지 레일 위에서 휠(아래로).
+      //   온전함의 허용 오차 1.5px = 제품이 '레일 끝'으로 보는 오차(CommunityTab wheel: scrollLeft >= max - 1)보다 조금 크다.
+      //   scrollWidth 는 정수로 반올림돼 소수 폭 칩이 끝에서 0.5px 넘게 잘려 보일 수 있다(CI 1024·글 24건 목에서 실제로 났다).
+      //   그때 레일이 끝이면 휠을 더 보내지 않는다 — 보내면 제품 설계대로 페이지가 내려가 칩이 화면 밖으로 가 누름이 빗나간다.
       for (let k = 0; k < 20; k++) {
-        const inside = await chip.evaluate((c) => { const r = c.getBoundingClientRect(); const p = c.parentElement!.getBoundingClientRect(); return r.left >= p.left - 0.5 && r.right <= p.right + 0.5; });
-        if (inside) break;
+        const st = await chip.evaluate((c) => {
+          const r = c.getBoundingClientRect(); const rail = c.parentElement!; const p = rail.getBoundingClientRect();
+          return { inside: r.left >= p.left - 1.5 && r.right <= p.right + 1.5, atEnd: rail.scrollLeft >= rail.scrollWidth - rail.clientWidth - 1 };
+        });
+        if (st.inside || st.atEnd) break;
         await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
         await page.mouse.wheel(0, 60);
         await page.waitForTimeout(80);
       }
-      const b = (await chip.boundingBox())!;
-      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      // 누르는 자리 = 칩과 레일이 겹치는 부분의 가운데(잘림 0.x px 이 있어도 보이는 쪽을 누른다)
+      const pt = await chip.evaluate((c) => {
+        const r = c.getBoundingClientRect(); const p = c.parentElement!.getBoundingClientRect();
+        return { x: (Math.max(r.left, p.left) + Math.min(r.right, p.right)) / 2, y: r.top + r.height / 2 };
+      });
+      await page.mouse.click(pt.x, pt.y);
       await expect(chip, `${i}번째 칩을 꺼내 누르지 못했다`).toHaveAttribute('aria-pressed', 'true');
     }
     expect(await page.evaluate(() => scrollY), '레일을 휠로 밀 수 있는 동안 페이지가 세로로 움직였다').toBe(y0);
@@ -334,19 +347,9 @@ test('⑪ 검색칸 × 는 하나(닫기) · ⇅ 메뉴는 ↑↓ 로 항목을 
 //    가짜로 줄여 resize 를 쏴도 탭바 기준 간격이 그대로인지 본다. 소스 쪽은 communityFab.contract.test.ts 가 막는다.
 //    '맨 위로'(같은 right-4 열)는 게시판에서만 FAB 왼쪽 같은 줄로 비켜서고(탭바 숨김에도 — 세로 중심 일치), 다른 하위 탭·PC 에서는 예전 자리다.
 //    운영 익명 피드는 글이 적어 FAB 가 피드 끝 칸에 내려앉는다(390×640 에서도) — 떠 있는 상태를 재려고 목록을 24건으로 목킹한다.
-const longFeed = (page: Page) => page.route(/\/rest\/v1\/community_posts\?/, (r) => {
-  if (r.request().method() !== 'GET') return r.fallback();
-  return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(Array.from({ length: 24 }, (_, i) => ({
-    id: `fab-${i}`, user_id: `u-fab-${i}`, user_name: `작성자${i}`, user_role: 'user', user_color: '#888', user_avatar: null,
-    content: `본문 ${i}`, created_at: new Date(Date.UTC(2026, 8, 30, 12) - i * 3600_000).toISOString(),
-    like_count: 0, comment_count: 0, view_count: 0, category: 'free', title: `목록 길이용 글 ${i}`, images: [],
-    badbeat_count: 0, goodrun_count: 0, blinded: false, cheer_count: 0, bumped_until: null, bump_count: 0, pinned_at: null,
-  }))) });
-});
 for (const [w, h] of [[390, 640], [360, 640], [320, 640], [390, 700], [360, 740], [390, 844]] as const) {
   test(`⑫ ${w}×${h}: FAB 가 탭바 바로 위 오른쪽 · 주소창 흉내에도 유지 · '맨 위로'와 안 겹침`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: h });
-    await longFeed(page);
     await openBoard(page);
     const probe = () => page.evaluate(() => {
       const fab = document.querySelector('[data-testid="board-write"]')!.getBoundingClientRect();
@@ -400,7 +403,6 @@ for (const [w, h] of [[390, 844], [390, 640], [360, 800], [320, 640], [412, 915]
   test(`⑫-c ${w}×${h}: 스크롤 0→끝→0 4px 훑기 — FAB 와 '맨 위로' 겹침 0 · FAB 중심 누름 = 글쓰기`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: w, height: h });
-    await longFeed(page);
     await openBoard(page);
     const r = await page.evaluate(async () => {
       const fab = document.querySelector<HTMLElement>('[data-testid="board-write"]')!;
@@ -458,7 +460,6 @@ for (const [w, h] of [[390, 844], [390, 640], [360, 800], [320, 640], [412, 915]
 for (const [w, h] of [[390, 844], [360, 740], [390, 640]] as const) {
   test(`⑫-d ${w}×${h}: 피드 끝에서 '맨 위로'가 오른쪽 기둥으로 돌아온다 · FAB 와 안 겹침 · 누름 가로채지 않음`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: h });
-    await longFeed(page);
     await openBoard(page);
     const probe = () => page.evaluate(() => {
       const fab = document.querySelector('[data-testid="board-write"]')!.getBoundingClientRect();

@@ -12,6 +12,7 @@ import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useDelayedUnmount } from '../../lib/useDelayedUnmount';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
+import { useDialogFocus } from '../atoms/useDialogFocus';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import { Fold } from '../atoms/Fold';
@@ -268,6 +269,11 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
     return () => { unlockScroll(); };
   }, [open]);
 
+  // 전면 판(z-60)도 대화상자다 — role/aria-modal/이름은 두 루트(로그인·비로그인)에 달고, 첫 포커스·Tab 트랩·닫을 때 복원은
+  //   Modal·VenuePage 와 같은 공유 훅이 맡는다. 훅은 early return(아래) 앞에 둔다.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, dialogRef);
+
   // keep-alive(메인 탭과 같은 조리법) — 한 번 열린 뒤에는 언마운트하지 않고 display 토글만.
   // 재열림이 '풀 마운트 + 데이터 상태 재구축' 대신 display 복원이 되어, GTO 같은 무거운 탭 위에서
   // '내 정보'를 열 때의 마운트 커밋 프레임 드롭(확 버벅)이 사라진다. App 쪽은 VT 스냅샷 뒤 동기 커밋.
@@ -279,7 +285,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   // 비로그인 — 대시보드 대신 로그인 랜딩(APIS '내 게임' 문법). 훅은 전부 위에서 이미 실행됐고
   // 데이터 이펙트는 user 가드로 잠겨 있어 user=null 렌더가 안전하다.
   // 숨김 중 로그인이 확정되면(user 등장) 갈래 전환은 자연 리렌더로 처리된다.
-  if (!user) return <LoginLanding onClose={onClose} hidden={hidden} closing={!open} />;
+  if (!user) return <LoginLanding onClose={onClose} hidden={hidden} closing={!open} dialogRef={dialogRef} />;
 
   const usageMap = new Map<string, { name: string; visits: number; buyins: number; amount: number; lastAt: string | null }>();
   for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, buyins: 0, amount: 0, lastAt: null });
@@ -320,7 +326,8 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   return (
     // 루트 전환 — 전면 판 공용 한 벌(atoms/pageMotion). 닫히는 220ms 는 입력을 받지 않는다.
     // data-scroll-lock: 잠금 소유자 표식 — 탭 전환 sweep 이 '보이는 소유자 없는 잠금'만 회수한다(lib/scrollLock).
-    <div data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="내 정보"
+      data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
       inert={!open || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
         <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
@@ -788,7 +795,7 @@ function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, o
 
 /** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
  *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */
-function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: () => void; hidden?: boolean; closing?: boolean }) {
+function LoginLanding({ onClose, hidden = false, closing = false, dialogRef }: { onClose: () => void; hidden?: boolean; closing?: boolean; dialogRef: React.RefObject<HTMLDivElement | null> }) {
   const toast = useToast();
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
   const [busy, setBusy] = useState<'google' | null>(null);
@@ -816,7 +823,8 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
   };
 
   return (
-    <div data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="내 정보 로그인"
+      data-scroll-lock className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
       inert={closing || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
