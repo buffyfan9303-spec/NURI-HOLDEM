@@ -434,7 +434,8 @@ export const findUserByPhone = makeSearchCache(rawFindUserByPhone, (s) => s.repl
 
 // ── 이용권 받는 사람 검색(20260924k search_voucher_recipients) ─────────────────
 // 오너 2026-09-24: 업주가 닉네임이든 실명이든 넣으면 찾는다. 후보는 '실명 → 닉네임'(예: 홍길동 → 길동이).
-// 서버 규칙: 발급 권한자(can_manage_pos)만 · 2자 이상 · 8건. 닉네임은 부분 일치, 실명·옛 닉네임은 정확 일치.
+// 서버 규칙: 발급 권한자(can_manage_pos)만 · 2자 이상 · 8건. 닉네임은 부분 일치(전 회원), 실명·옛 닉네임은 정확 일치이고
+//   **이 매장 손님(출석·고객카드·예약)만** 찾는다(20261006s1 — 남의 매장 회원의 '실명 → 닉네임' 가명 해제를 막는다).
 // 실명은 **입력과 같을 때만** 실린다 — 부분 일치로 남의 실명이 드러나지 않는다(보안 6). 선택 확인용이다.
 export interface VoucherRecipient {
   userId: string;

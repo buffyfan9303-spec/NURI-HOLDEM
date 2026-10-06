@@ -284,6 +284,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillReceiver, venueId]);
   // NICKNAME-RULES(오너 2026-09-24): 이름 경로는 닉네임(부분)·실명(정확)·옛 닉네임(정확)을 한 번에 찾는다
+  //   — 실명·옛 닉네임은 이 매장 손님만(20261006s1).
   //   (search_voucher_recipients · 발급 권한자만 · 2자 이상). 후보 줄은 '실명 → 닉네임', 저장은 닉네임만.
   const byName = useCallback((s: string) => findVoucherRecipientTargets(venueId, s), [venueId]);
   const resolveId = async () => {
@@ -696,7 +697,7 @@ ${cards}
                   ) : recvMode !== 'phone' && idInput.trim().length === 1 ? (
                     <p className="px-1 text-2xs text-ink-muted">닉네임·실명을 2자 이상 입력하세요.</p>
                   ) : idInput.trim() ? (
-                    <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다 — {recvMode === 'phone' ? '전화번호를' : '닉네임이나 실명을'} 확인하세요.</p>
+                    <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다 — {recvMode === 'phone' ? '전화번호를 확인하세요.' : '닉네임을 확인하세요(실명은 우리 매장 손님만 찾습니다).'}</p>
                   ) : null}
                 </div>
               ) : (
@@ -761,7 +762,7 @@ ${cards}
                 <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 이 매장의 업주·공동운영자 중 관리자 승인을 받은 계정만 할 수 있습니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
-              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 우리 매장 손님만 · 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
