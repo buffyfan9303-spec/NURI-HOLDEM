@@ -8,6 +8,7 @@
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { WithdrawAccountSection } from './ProfileModal';
+import { PRIVACY_EFFECTIVE_DATE } from '../../lib/legalVersion';
 
 export default function SanctionedAccountSheet() {
   const { sanctioned, endSanctioned } = useAuth();
@@ -18,7 +19,7 @@ export default function SanctionedAccountSheet() {
         <p className="text-sm font-semibold text-ink-primary">{sanctioned}</p>
         <p className="text-2xs leading-relaxed text-ink-muted">
           이용 제한 중에도 회원 탈퇴는 할 수 있습니다. 탈퇴하면 개인정보는 즉시 파기되고, 부정 재가입과 이용 제한 회피를 막기 위해
-          본인인증 연계정보(CI)를 되돌릴 수 없게 변환한 값만 따로 보관한 뒤 파기합니다 — 영구 이용 제한 중이면 탈퇴일부터 5년, 기간을 정한 정지 중이면 6개월이며, 그동안 같은 본인인증으로 다시 가입할 수 없습니다(개인정보처리방침 제3조).
+          기간을 정한 이용 정지 중의 탈퇴는 일반 탈퇴와 같습니다. 영구 이용 제한 중이면 본인인증 연계정보(CI)를 되돌릴 수 없게 변환한 값을 탈퇴일부터 5년 동안 따로 보관한 뒤 파기하며, 그동안 같은 본인인증으로 다시 가입할 수 없습니다(개인정보처리방침 제3조 · {PRIVACY_EFFECTIVE_DATE}부터).
         </p>
         <button type="button" onClick={close} className="btn-ghost w-full text-sm">로그아웃</button>
       </div>

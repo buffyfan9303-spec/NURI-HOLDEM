@@ -42,6 +42,21 @@ export const LEGAL_PREV_EFFECTIVE_ISO = '2026-06-15';
 /** 직전판(제1판) 원문 보존본 — 개인정보처리방침 제14조③ '이전 방침을 함께 게시'. scripts/gen-legal.mjs --archive 가 만든다(sitemap 에는 넣지 않는다). */
 export const LEGAL_PREV_ARCHIVE_URL = `/legal/archive/${LEGAL_PREV_EFFECTIVE_ISO}/index.html`;
 
+/** 개인정보처리방침만의 판(版) — 약관 동의 버전(LEGAL_VERSION·재동의 게이트)과 **별개**다.
+ *  처리방침의 변경은 재동의가 아니라 공지 사항이다(처리방침 제14조). 그래서 이 숫자는 재동의 게이트·DB current_legal_version() 과 묶지 않는다.
+ *  제3판(2026-10-06 리드 결정, PR #188): 영구 이용 제한(영구정지) 회원의 연계정보 변환값 5년 보관(제3조·제4조·제5조) —
+ *    새 보유기간이라 회원에게 불리한 변경으로 보고 처리방침 제14조①에 따라 시행 7일 전에 공지한다.
+ *    🔴 배포(=공지)가 늦어지면 두 날짜를 **같은 커밋에서** 함께 미룬다(공지일 + 7일 = 시행일 — legalVersion.test 가 간격을 잠근다).
+ *    코드(20261006m 의 5년 파기 규칙)가 시행일보다 먼저 적용돼도 실질 영향은 없다: 서비스 개시(2026-06-15)부터 6개월 파기와
+ *    5년 파기가 처음 갈리는 날은 2026-12-15 라 시행일 뒤다. */
+export const PRIVACY_VERSION = 3;
+export const PRIVACY_NOTICE_ISO = '2026-10-06';
+export const PRIVACY_NOTICE_DATE = '2026년 10월 6일';
+export const PRIVACY_EFFECTIVE_ISO = '2026-10-13';
+export const PRIVACY_EFFECTIVE_DATE = '2026년 10월 13일';
+/** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 제3판 공지 직전의 /legal/privacy.html. sitemap 에 넣지 않는다. */
+export const PRIVACY_PREV_ARCHIVE_URL = `/legal/archive/${PRIVACY_NOTICE_ISO}/privacy.html`;
+
 /** 기기 시간대와 무관한 KST 기준 오늘(YYYY-MM-DD).
  *  왜 필요한가: 기기가 UTC·PST 로 맞춰져 있으면 시행일이 사람마다 하루 어긋나 게이트가
  *  누구에겐 뜨고 누구에겐 안 뜬다. 서버(Asia/Seoul)와 같은 기준으로 못 박는다. */

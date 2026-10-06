@@ -79,17 +79,16 @@ describe('P1-3 처리 결과 통지 · P2-1 설정 토글', () => {
 });
 
 describe('P2-8 ② 제재 계정 본인 탈퇴 — 재가입 차단은 유지', () => {
-  it('withdraw_my_account 가 제재 상태로 막지 않고, 영구정지는 banned · 기간 안 정지는 suspended · 기간 끝난 정지는 일반 탈퇴', () => {
+  it('withdraw_my_account 가 제재 상태로 막지 않고, 영구정지만 banned · 기간 정지는 일반 탈퇴와 같다(리드 2026-10-06)', () => {
     const body = fn(M, 'withdraw_my_account');
     expect(body).not.toContain('제재 중인 계정은 탈퇴할 수 없습니다');
-    expect(body).toMatch(/when v_status = 'banned' then 'banned'/);
-    // 서버 _actor_not_sanctioned() 와 같은 판정(pr188-review P3-2)
-    expect(body).toMatch(/when v_status = 'suspended' and \(v_until is null or v_until > now\(\)\) then 'suspended'/);
+    expect(body).toMatch(/v_kind := case when v_status = 'banned' then 'banned' else 'withdrawn' end;/);
     expect(body).toMatch(/values \(v_hash, v_kind\)/);
+    expect(M, '재가입 거절 목록(verify_identity_commit)은 바꾸지 않는다').not.toMatch(/function public\.verify_identity_commit/);
   });
-  it('(P2-A 리드 결정 b) 영구정지 변환값은 5년, 그 밖은 6개월 — 기간 정지 중 탈퇴도 재가입 거절 목록에 든다', () => {
+  it('(P2-A 리드 결정 b) 영구정지 변환값은 5년, 그 밖은 6개월 — 처리방침 제3판(공지 후 7일)으로 고지', () => {
     expect(fn(M, '_purge_withdrawn_identities')).toMatch(/case when reason = 'banned' then interval '5 years' else interval '6 months' end/);
-    expect(fn(M, 'verify_identity_commit')).toMatch(/w\.reason in \('banned', 'admin_withdrawn', 'suspended'\)/);
+    expect(read('src/lib/legalHistory.ts')).toMatch(/version: PRIVACY_VERSION, effective: PRIVACY_EFFECTIVE_DATE, notice: PRIVACY_NOTICE_DATE,[\s\S]{0,200}5년 동안 보관/);
     for (const [doc, src] of [['처리방침', read('src/pages/legal/PrivacyPolicy.tsx')], ['계정 삭제 안내', read('src/pages/legal/AccountDeletion.tsx')],
       ['하단 창', read('src/components/features/LegalDocsModal.tsx')], ['이용 제한 시트', read('src/components/features/SanctionedAccountSheet.tsx')]]) {
       expect(src, `${doc}: 영구 이용 제한 5년 보관 고지가 없다`).toMatch(/영구 이용 제한[^']{0,60}5년/);

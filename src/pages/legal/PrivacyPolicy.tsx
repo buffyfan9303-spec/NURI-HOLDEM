@@ -13,8 +13,8 @@
 // 수집 항목을 늘릴 때는 §16(필요최소한 수집)을 먼저 통과해야 한다. "나중에 쓸지 몰라서" 는 근거가 아니다.
 
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
-import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
-import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { LEGAL_EFFECTIVE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_PREV_ARCHIVE_URL, PRIVACY_VERSION } from '../../lib/legalVersion';
+import { RevisionHistory } from './RevisionBlocks';
 import { CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, LOCATION_OFFICER, LOCATION_TERMS_EFFECTIVE_KO, PRIVACY_PRE_LOCATION_ARCHIVE_URL, LOCATION_TERMS_NOTICE } from '../../lib/locationTerms';
 import { OVERSEAS_CONTACT as OC } from '../../lib/overseasContacts';
 
@@ -66,13 +66,23 @@ export default function PrivacyPolicy() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {LEGAL_EFFECTIVE_DATE} · 개정 공지일: {LEGAL_NOTICE_DATE} · 직전판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
+        <p className="text-2xs text-ink-muted">제{PRIVACY_VERSION}판 시행일: {PRIVACY_EFFECTIVE_DATE} · 개정 공지일: {PRIVACY_NOTICE_DATE} · 직전판(제2판) 시행일: {LEGAL_EFFECTIVE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           NURI HOLDEM은 「개인정보 보호법」 제30조에 따라 아래와 같이 개인정보처리방침을 수립·공개합니다.
         </p>
       </div>
 
-      <RevisionNotice />
+      {/* 처리방침만의 판(lib/legalVersion PRIVACY_*) — 약관 4문서 공통 RevisionNotice 는 제2판(약관 동의 판) 안내라 여기서는 쓰지 않는다. */}
+      <div data-testid="revision-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+        <p className="text-xs font-bold text-ink-primary">개정 안내 — 본 방침 제{PRIVACY_VERSION}판은 {PRIVACY_NOTICE_DATE}에 공지하여 {PRIVACY_EFFECTIVE_DATE}부터 시행합니다.</p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          영구 이용 제한(영구정지)을 받은 회원의 연계정보 변환값을 부정 재가입 방지를 위해 5년 동안 보관하는 내용(제3조·제4조·제5조)이 새로 생겨,
+          회원에게 불리할 수 있는 변경으로 보고 시행 7일 전에 공지합니다. 시행일 전까지는 제2판({LEGAL_EFFECTIVE_DATE} 시행)이 적용됩니다
+          (<a href={PRIVACY_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="prev-edition-link">제2판 원문 보기</a>).
+          그 밖에 실제 처리에 맞춘 정정은 문서 끝의 「부칙 — 개정 이력」에서 확인하실 수 있으며, 개정 내용에 동의하지 않으시는 회원은
+          「내 정보 → 보안 → 회원 탈퇴하기」에서 언제든지 이용계약을 해지하실 수 있습니다.
+        </p>
+      </div>
 
       <Article n={1} title="개인정보의 처리 목적">
         <p>
@@ -226,7 +236,7 @@ export default function PrivacyPolicy() {
             탈퇴 후에도 다음 정보는 아래와 같이 처리합니다.
             <SubItems items={[
               '게시글·댓글·장터 글: 작성자 표시를 “탈퇴회원_(임의 문자)”로 바꾸고 닉네임·프로필 사진을 지운 뒤 내용은 남깁니다. 내용까지 지우려면 탈퇴 전에 직접 삭제하시거나 고객센터에 요청해 주세요',
-              '본인인증 연계정보(CI)를 되돌릴 수 없게 변환한 값: 부정 재가입과 이용 제한 회피를 막기 위해 탈퇴일(강제 탈퇴 포함)부터 6개월 동안 다른 정보와 분리하여 보관한 뒤 자동으로 파기합니다. 다만 영구 이용 제한(영구정지)을 받은 회원의 변환값은 부정 재가입 방지를 위해 처분일(영구 이용 제한 중 탈퇴하면 탈퇴일)부터 5년 동안 보관한 뒤 파기하고, 기간을 정한 이용 정지 중에 탈퇴하면 6개월 동안 같은 본인인증으로 다시 가입할 수 없습니다',
+              '본인인증 연계정보(CI)를 되돌릴 수 없게 변환한 값: 부정 재가입과 이용 제한 회피를 막기 위해 탈퇴일(강제 탈퇴 포함)부터 6개월 동안 다른 정보와 분리하여 보관한 뒤 자동으로 파기합니다. 다만 영구 이용 제한(영구정지)을 받은 회원의 변환값은 부정 재가입 방지를 위해 처분일(영구 이용 제한 중 탈퇴하면 탈퇴일)부터 5년 동안 보관한 뒤 파기합니다(제3판 — ' + PRIVACY_EFFECTIVE_DATE + '부터). 기간을 정한 이용 정지 중의 탈퇴는 일반 탈퇴와 같습니다',
               '본인인증 재사용 방지 기록(인증 거래 번호를 되돌릴 수 없게 변환한 값): 같은 본인인증을 다른 계정에서 다시 쓰는 것을 막기 위해 계속 보관합니다. 이 값만으로는 회원을 알아볼 수 없습니다',
               '친구 초대 기록: 추천인·피추천인의 보상 기록과 함께 연결되어 있어 계정 연결 정보만 남긴 채 보관합니다',
               '닉네임 변경 이력(이전 닉네임·바뀐 닉네임·변경 시각): 탈퇴 전 순위·대회 기록의 주인을 탈퇴 계정으로 남겨, 같은 닉네임을 새로 쓰는 다른 회원에게 기록이 넘어가거나 그 이름으로 사칭되는 것을 막기 위해 탈퇴 계정 번호에 연결한 채 보관합니다. 탈퇴할 때 쓰던 닉네임이 “탈퇴회원_(임의 문자)”로 바뀐 기록도 한 줄 남습니다. 현재 따로 정한 삭제 시점은 없습니다',
@@ -248,7 +258,7 @@ export default function PrivacyPolicy() {
       <Article n={4} title="개인정보의 파기 절차 및 파기 방법">
         <Items items={[
           '회사는 개인정보 보유기간의 경과, 처리목적 달성 등 개인정보가 불필요하게 되었을 때에는 지체 없이 해당 개인정보를 파기합니다.',
-          '파기 절차: 회원 탈퇴 시 제3조제2항의 정보는 탈퇴 처리와 함께 자동으로 즉시 파기합니다. 보유 기간을 정한 정보(본인인증 변환값 6개월 — 영구 이용 제한은 5년, 백업 사본 약 2주, 앱 오류 기록 30일 등)는 기간이 지나면 자동 작업으로 파기하며, 이 가운데 본인인증 변환값과 백업 사본은 다른 정보와 분리하여 보관합니다.',
+          '파기 절차: 회원 탈퇴 시 제3조제2항의 정보는 탈퇴 처리와 함께 자동으로 즉시 파기합니다. 보유 기간을 정한 정보(본인인증 변환값 6개월 — 영구 이용 제한은 5년(제3판), 백업 사본 약 2주, 앱 오류 기록 30일 등)는 기간이 지나면 자동 작업으로 파기하며, 이 가운데 본인인증 변환값과 백업 사본은 다른 정보와 분리하여 보관합니다.',
           '파기 방법: 전자적 파일 형태의 정보는 기록을 복구·재생할 수 없도록 삭제합니다. 게시글처럼 내용을 남기는 기록은 작성자를 알아볼 수 있는 정보(닉네임·프로필 사진)를 지웁니다. 종이에 출력된 개인정보는 분쇄기로 분쇄하거나 소각하여 파기합니다.',
           '매장 기록은 매장의 삭제 요청 또는 매장 영구 삭제에 따라 같은 방법으로 파기합니다.',
         ]} />
@@ -265,7 +275,7 @@ export default function PrivacyPolicy() {
             고객센터(ace@nuriholdem.com)로 요청하실 수 있습니다. 자세한 방법과 삭제되는 정보는{' '}
             <a href="/legal/delete-account.html" target="_blank" rel="noopener" data-testid="privacy-delete-account-link" className="text-accent-300 underline">계정 삭제 안내</a>에서 확인하실 수 있습니다.
           </>,
-          '이용 제한(정지·영구정지) 중인 계정도 탈퇴할 수 있습니다. 로그인하면 열리는 이용 제한 안내 창의 「회원 탈퇴하기」 또는 고객센터로 요청하시면 되며, 이때 부정 재가입과 이용 제한 회피를 막기 위한 연계정보(CI) 변환값은 제3조에 따라 기간 정지 중 탈퇴는 탈퇴일부터 6개월(그동안 같은 본인인증으로 재가입 불가), 영구 이용 제한 중 탈퇴는 탈퇴일부터 5년 동안 보관합니다.',
+          `이용 제한(정지·영구정지) 중인 계정도 탈퇴할 수 있습니다. 로그인하면 열리는 이용 제한 안내 창의 「회원 탈퇴하기」 또는 고객센터로 요청하시면 됩니다. 기간을 정한 이용 정지 중의 탈퇴는 일반 탈퇴와 같고, 영구 이용 제한 중 탈퇴하면 부정 재가입을 막기 위한 연계정보(CI) 변환값을 제3조에 따라 탈퇴일부터 5년 동안 보관합니다(제3판 — ${PRIVACY_EFFECTIVE_DATE}부터).`,
           '정보주체는 법정대리인이나 위임을 받은 자 등 대리인을 통하여 제1항의 권리를 행사할 수 있습니다. 이 경우 회사는 위임장 등 대리관계를 확인할 수 있는 서류를 요청할 수 있습니다.',
           '다른 법령에서 그 개인정보가 수집 대상으로 명시되어 있는 경우 등 「개인정보 보호법」이 정한 사유가 있는 때에는 삭제 또는 처리정지 요구가 제한될 수 있습니다.',
           '회사가 제1항의 요구를 거절하는 경우에는 그 사유와 이의제기 방법을 함께 알려 드립니다.',
@@ -433,7 +443,7 @@ export default function PrivacyPolicy() {
       <RevisionHistory doc="privacy" />
 
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 방침은 {LEGAL_EFFECTIVE_DATE}부터 적용됩니다. 직전판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행일 전까지 적용되었습니다.
+        본 방침 제{PRIVACY_VERSION}판은 {PRIVACY_EFFECTIVE_DATE}부터 적용됩니다. 제2판은 {LEGAL_EFFECTIVE_DATE}부터 제{PRIVACY_VERSION}판 시행일 전까지, 제1판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 제2판 시행일 전까지 적용되었습니다.
       </p>
     </div>
   );

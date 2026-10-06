@@ -13,7 +13,9 @@ import path from 'node:path';
 import {
   LEGAL_VERSION, LEGAL_EFFECTIVE_ISO, LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_ISO,
   LEGAL_PREV_EFFECTIVE_DATE, legalConsentStage, kstToday,
+  PRIVACY_VERSION, PRIVACY_EFFECTIVE_ISO, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_ISO, PRIVACY_NOTICE_DATE, PRIVACY_PREV_ARCHIVE_URL,
 } from './legalVersion';
+import { existsSync } from 'node:fs';
 import { LEGAL_HISTORY } from './legalHistory';
 
 const ROOT = path.join(__dirname, '../..');
@@ -58,12 +60,28 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
   it('개정 이력이 4문서 모두에 있고 최신 항목이 현재 버전이다', () => {
     for (const [doc, rows] of Object.entries(LEGAL_HISTORY)) {
       expect(rows.length, `${doc}: 이력이 비어 있다`).toBeGreaterThan(0);
-      expect(rows[0].version, `${doc}: 최신 이력이 현재 버전이 아니다`).toBe(LEGAL_VERSION);
-      expect(rows[0].effective).toBe(LEGAL_EFFECTIVE_DATE);
+      // 처리방침은 2026-10-06 부터 자기 판(PRIVACY_VERSION)을 따로 센다 — 처리방침 변경은 재동의가 아니라 공지다.
+      const [ver, eff] = doc === 'privacy' ? [PRIVACY_VERSION, PRIVACY_EFFECTIVE_DATE] : [LEGAL_VERSION, LEGAL_EFFECTIVE_DATE];
+      expect(rows[0].version, `${doc}: 최신 이력이 현재 버전이 아니다`).toBe(ver);
+      expect(rows[0].effective).toBe(eff);
       for (const r of rows) expect(r.changes.length, `${doc} 제${r.version}판: 변경 내용이 비었다`).toBeGreaterThan(0);
       // 버전은 내림차순(최신이 위) — 화면이 그대로 그린다.
       for (let i = 1; i < rows.length; i++) expect(rows[i - 1].version).toBeGreaterThan(rows[i].version);
     }
+  });
+
+  it('처리방침 제3판: 공지일 + 7일 이상 뒤 시행(제14조①) · 한글 표기 일치 · 제2판 원문 보존본이 있다 · 약관 동의 판은 그대로', () => {
+    const days = (Date.parse(`${PRIVACY_EFFECTIVE_ISO}T00:00:00Z`) - Date.parse(`${PRIVACY_NOTICE_ISO}T00:00:00Z`)) / 86_400_000;
+    expect(days).toBeGreaterThanOrEqual(7);
+    const ko = (d: string) => { const [, y, m, dd] = d.match(/(\d{4})년 (\d{1,2})월 (\d{1,2})일/)!; return `${y}-${m.padStart(2, '0')}-${dd.padStart(2, '0')}`; };
+    expect(ko(PRIVACY_EFFECTIVE_DATE)).toBe(PRIVACY_EFFECTIVE_ISO);
+    expect(ko(PRIVACY_NOTICE_DATE)).toBe(PRIVACY_NOTICE_ISO);
+    expect(PRIVACY_VERSION).toBe(LEGAL_HISTORY.privacy[1].version + 1);
+    expect(existsSync(path.join(ROOT, 'public' + PRIVACY_PREV_ARCHIVE_URL)), '제2판 원문 보존본이 없다').toBe(true);
+    expect(read('public' + PRIVACY_PREV_ARCHIVE_URL)).toContain('noindex');
+    expect(read('public/legal/privacy.html')).toContain(PRIVACY_PREV_ARCHIVE_URL);
+    // 재동의 게이트는 처리방침 판과 묶지 않는다(약관 동의 판은 그대로).
+    expect(LEGAL_VERSION).toBe(2);
   });
 
   it('DB의 current_legal_version() 과 LEGAL_VERSION 이 같다', () => {
