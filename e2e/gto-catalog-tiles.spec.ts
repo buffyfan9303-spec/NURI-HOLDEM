@@ -36,3 +36,76 @@ for (const c of CASES) {
     expect(all.length, '화면의 도구 종류 수가 22 가 아니다 — 타일로 옮긴 도구가 사라졌거나 숨김 도구가 나왔다').toBe(22);
   });
 }
+
+// 2026-10-06 오너 시안(gto-tiles-1006) — 카드 탭은 그 도구를, 별 탭은 즐겨찾기만(카드는 안 열린다). 기본 4개의 포인트 색은 격자 변수에서 켜진다.
+const NAMES: Record<string, string> = { spot: '누리 스팟', range: '프리플랍 레인지 차트', pushfold: '푸시 · 폴드 차트', gto: 'GTO 핸드 분석' };
+async function openTools(page: import('@playwright/test').Page, favs: string[] = []) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubLogin(page);
+  await stabilizeBackstack(page);
+  await page.addInitScript((f) => { try { if (!sessionStorage.getItem('e2e:fav-seeded')) { localStorage.setItem('nuri:fav-tools', f); sessionStorage.setItem('e2e:fav-seeded', '1'); } } catch { /* */ } }, JSON.stringify(favs));
+  await page.goto('/?tab=tools');
+  await dismissOverlays(page);
+  const feat = page.getByTestId('tools-featured');
+  await expect(feat).toBeVisible({ timeout: 20_000 });
+  return feat;
+}
+const tileOrder = (feat: import('@playwright/test').Locator) =>
+  feat.locator('button[data-testid^="tool-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')!.replace('tool-', '')));
+
+for (const k of DEF) {
+  test(`타일 탭 → '${NAMES[k]}' 도구가 열린다`, async ({ page }) => {
+    const feat = await openTools(page);
+    await feat.getByTestId(`tool-${k}`).click();
+    const dlg = page.getByRole('dialog', { name: NAMES[k] });
+    await expect(dlg, '카드를 눌렀는데 그 도구 화면이 안 열렸다').toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`#tool=${k}\\b`));
+  });
+}
+
+test('별 탭 — 카드는 안 열리고 즐겨찾기만 켜고 끈다 · 새로고침 뒤에도 남는다', async ({ page }) => {
+  const feat = await openTools(page);
+  const add = feat.getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 추가' });
+  await expect(add).toHaveAttribute('aria-pressed', 'false');
+  // 눌림 영역: 별 글리프 위·별 왼쪽 14px 은 별, 카드 가운데는 카드(도구 열기) — 둘이 서로를 가로채지 않는다
+  const hits = await page.evaluate(() => {
+    const star = document.querySelector('[data-testid="tools-featured"] button[aria-label="GTO 핸드 분석 즐겨찾기 추가"]')!;
+    const card = document.querySelector('[data-testid="tools-featured"] [data-testid="tool-gto"]')!;
+    const g = star.querySelector('svg')!.getBoundingClientRect(); const c = card.getBoundingClientRect();
+    const at = (x: number, y: number) => { const e = document.elementFromPoint(x, y); return e === star || star.contains(e) ? 'star' : e === card || card.contains(e) ? 'card' : 'other'; };
+    return [at(g.x + g.width / 2, g.y + g.height / 2), at(g.x - 14, g.y + g.height / 2), at(c.x + c.width * 0.35, c.y + c.height / 2)];
+  });
+  expect(hits, '별 글리프 · 별 왼쪽 14px · 카드 가운데').toEqual(['star', 'star', 'card']);
+  await add.click();
+  const del = feat.getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 해제' });
+  await expect(del).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('dialog'), '별을 눌렀는데 카드(도구)가 열렸다 — 별과 카드 탭이 겹친다').toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools'))).toBe('["gto"]');
+  expect(await tileOrder(feat), '즐겨찾기한 도구가 타일 맨 앞으로').toEqual(['gto', 'spot', 'range', 'pushfold']);
+  // reload() 는 앱이 걷어낸 주소(?tab=)로 홈에 떨어진다 — 같은 진입 주소로 다시 연다(저장소는 그대로).
+  await page.goto('/?tab=tools');
+  await dismissOverlays(page);
+  await expect(page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 해제' }), '기기 저장이 새로고침 뒤에 사라졌다').toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 해제' }).click();
+  await expect(page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 추가' })).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools'))).toBe('[]');
+  expect(await tileOrder(page.getByTestId('tools-featured')), '별을 끄면 기본 4개 순서로 돌아온다').toEqual(DEF);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('기본 4개 타일 아이콘 — 시안 글리프의 파랑 포인트가 켜지고 리스트 행은 한 색이다', async ({ page }) => {
+  const feat = await openTools(page);
+  // 레인지 격자 글리프: 12칸 중 2칸이 포인트 색(--icon-accent), 나머지는 선 색(currentColor) 반투명
+  const fills = await feat.getByTestId('tool-range').locator('svg rect').evaluateAll((els) => els.map((e) => getComputedStyle(e).fill));
+  expect(fills.length, '레인지 타일이 시안 격자 글리프(12칸)가 아니다').toBe(12);
+  const color = await feat.getByTestId('tool-range').locator('svg').first().evaluate((e) => getComputedStyle(e).color);
+  const accent = fills.filter((f) => f !== color);
+  expect(accent.length, `포인트 칸이 2개가 아니다(${fills.join(' / ')})`).toBe(2);
+  // 갈래를 고르면 같은 도구가 리스트 행으로 — 거기서는 포인트도 선 색 한 가지
+  await page.locator('[data-lane="explore"]').click();
+  const row = page.locator('[data-tools-lanepanel] [data-testid="tool-range"]');
+  await expect(row).toBeVisible();
+  const rowFills = await row.locator('svg rect').evaluateAll((els) => els.map((e) => getComputedStyle(e).fill));
+  const rowColor = await row.locator('svg').first().evaluate((e) => getComputedStyle(e).color);
+  expect(new Set(rowFills), '리스트 행 아이콘에 포인트 색이 새어 나왔다').toEqual(new Set([rowColor]));
+});
