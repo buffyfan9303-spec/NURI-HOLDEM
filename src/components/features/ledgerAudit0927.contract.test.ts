@@ -72,6 +72,6 @@ describe('장부 점검 2026-09-27', () => {
   });
   it('+ 라이트 4.5 미만 두 곳(마감 배지 4.0 · 인증 안내 4.4)은 한 단계 진한 토큰', () => {
     expect(src('./VenueManageTab.tsx')).toMatch(/g\.closed && <span className="text-2xs font-semibold text-ink-secondary">마감<\/span>/);
-    expect(src('./VenueVerificationCard.tsx')).toMatch(/<p className="text-2xs text-ink-secondary">포스터\(요강\)가 관리자 승인 없이/);
+    expect(src('./VenueVerificationCard.tsx')).toMatch(/<p className="text-2xs text-ink-secondary">\{paid\s/);
   });
 });

@@ -125,13 +125,23 @@ test('S-06 — 숨김 매장이면 숨김 안내가 뜨고 즉시 게시 안내�
   const row = { id: MOCK_VENUE, name: MOCK_VENUE_NAME, region: '서울', address: '서울 강남구 1', owner_id: MOCK_UID, approved: true, status: 'hidden', verification_status: 'verified', page_config: null };
   await boot(page, 1440, (p) => p.route(/\/rest\/v1\/venues\?/, (r) => (r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(isSingle(r) ? row : [row])))), 900);
   await expect(page.getByTestId('venue-hidden-band')).toBeVisible();
-  await expect(page.getByText('관리자 승인 없이 즉시 게시됩니다')).toHaveCount(0);
+  await expect(page.getByText('포스터(요강)는 관리자 승인 후 공개됩니다.')).toHaveCount(0);
 });
-test('S-06 대조 — 활성 매장은 숨김 안내 없음 · 인증 안내 유지', async ({ page }) => {
+// 10회차 실연(2026-10-06) P2 — 즉시 게시는 인증이 아니라 기간 안 프리미엄 매장만이다(서버 auto_approve_verified_poster, 20261002h).
+//   인증·비프리미엄 매장(목 기본값)에 '승인 없이' 약속이 뜨면 안 된다.
+test('S-06 대조 — 활성 매장은 숨김 안내 없음 · 인증 안내 유지(인증 ≠ 즉시 게시)', async ({ page }) => {
   test.setTimeout(90_000);
   await boot(page, 1440, undefined, 900);
-  await expect(page.getByText('포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.')).toBeVisible();
+  await expect(page.getByText('포스터(요강)는 관리자 승인 후 공개됩니다.')).toBeVisible();
+  await expect(page.getByText('관리자 승인 없이', { exact: false })).toHaveCount(0);
   await expect(page.getByTestId('venue-hidden-band')).toHaveCount(0);
+});
+test('인증 + 기간 안 프리미엄 매장 — 승인 없이 바로 공개 안내(양성 대조)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const row = { id: MOCK_VENUE, name: MOCK_VENUE_NAME, region: '서울', address: '서울 강남구 1', owner_id: MOCK_UID, approved: true, status: 'active', verification_status: 'verified', is_paid_ad: true, premium_until: null, page_config: null };
+  await boot(page, 1440, (p) => p.route(/\/rest\/v1\/venues\?/, (r) => (r.request().method() !== 'GET' ? r.fallback() : r.fulfill(json(isSingle(r) ? row : [row])))), 900);
+  await expect(page.getByText('프리미엄 매장 — 포스터(요강)가 관리자 승인 없이 바로 공개됩니다.')).toBeVisible();
+  await expect(page.getByText('포스터(요강)는 관리자 승인 후 공개됩니다.')).toHaveCount(0);
 });
 
 // S-15 — 이용권 묶음 승인 뒤 같은 손님 이용권 요청이 남으면 다음 승인에 바인 1회로 묶인다 → 남은 장수를 알린다.

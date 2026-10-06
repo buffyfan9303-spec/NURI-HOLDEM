@@ -29,7 +29,7 @@ export default function VenueVerificationCard({ venueId, showVerification = true
   }, [venueId]);
 
   if (off) return null;
-  if (loading && reserve && part === 'grade' && showVerification) return gradeSlot(null);
+  if (loading && reserve && part === 'grade' && showVerification) return gradeSlot(null, false);
   if (loading || !venue) return null;
   const status = venue.verificationStatus ?? 'unverified';
   // S-06(2026-10-01) — 숨김(status ≠ active)이면 서버 RLS 가 손님 화면의 일정·매장·로그인 안 한 TV 클락을 가린다
@@ -52,19 +52,20 @@ export default function VenueVerificationCard({ venueId, showVerification = true
   if (hidden) return hiddenBand;   // 숨김이면 '즉시 게시됩니다' 류 안내는 거짓이 된다 — 숨김 안내만.
 
   const grade: Grade = status === 'verified' ? 'verified' : status === 'pending' ? 'pending' : 'unverified';
-  return reserve && part === 'grade' ? gradeSlot(grade) : gradeCard(grade);
+  return reserve && part === 'grade' ? gradeSlot(grade, venue.isPaidAd) : gradeCard(grade, '', venue.isPaidAd);
 }
 
 type Grade = 'verified' | 'pending' | 'unverified';
 const GRADES: readonly Grade[] = ['verified', 'pending', 'unverified'];
 
 /** 등급 칸 — 세 카드를 같은 격자 칸(1/1)에 겹쳐 세워 칸 높이 = 셋 중 최대(폭마다 다르다). shown 만 보이고, null 이면 확인 중 뼈대. */
-function gradeSlot(shown: Grade | null) {
+function gradeSlot(shown: Grade | null, paid?: boolean) {
   return (
     <div className="grid" aria-busy={shown == null || undefined}>
       {GRADES.map((g) => (
         <div key={g} style={{ gridArea: '1 / 1', ...(g === shown ? null : { visibility: 'hidden' as const }) }} aria-hidden={g === shown ? undefined : true}>
-          {gradeCard(g, 'h-full')}
+          {/* 숨은 인증 카드는 더 긴 프리미엄 문구로 세워 둔다 — 확인 중 높이가 정착 높이보다 작아지지 않게. */}
+          {gradeCard(g, 'h-full', g === shown ? paid : true)}
         </div>
       ))}
       {shown == null && <span aria-hidden className="skeleton rounded-card" style={{ gridArea: '1 / 1' }} />}
@@ -73,7 +74,7 @@ function gradeSlot(shown: Grade | null) {
 }
 
 /** 등급 카드 셋 — 같은 두 줄 틀(제목 text-sm + 설명 text-2xs, 위아래 py-2.5). 칸에 늘려 세울 때(h-full)는 세로 가운데. */
-function gradeCard(g: Grade, fill = '') {
+function gradeCard(g: Grade, fill = '', paid?: boolean) {
   if (g === 'verified') {
     return (
       <div className={`flex items-center gap-2 rounded-card border border-border-default bg-surface-low px-3 py-2.5 ${fill}`}>
@@ -82,7 +83,11 @@ function gradeCard(g: Grade, fill = '') {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-ink-primary">인증 매장</p>
-          <p className="text-2xs text-ink-secondary">포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.</p>
+          {/* 즉시 게시는 인증이 아니라 **기간 안 프리미엄 매장**만이다 — 서버 auto_approve_verified_poster(20261002h, 오너 10-02 A).
+              isPaidAd 는 기간이 지나면 거짓으로 읽힌다(communityCore). 10회차 실연(2026-10-06): 인증 매장인데 '즉시 게시' 라고 약속했다. */}
+          <p className="text-2xs text-ink-secondary">{paid
+            ? '프리미엄 매장 — 포스터(요강)가 관리자 승인 없이 바로 공개됩니다.'
+            : '포스터(요강)는 관리자 승인 후 공개됩니다.'}</p>
         </div>
       </div>
     );
@@ -99,7 +104,7 @@ function gradeCard(g: Grade, fill = '') {
     <div className={`flex flex-col justify-center rounded-aura border card-aura px-3 py-2.5 ${fill}`}>
       <p className="text-sm font-bold text-ink-secondary">비인증 매장</p>
       <p className="break-keep text-2xs text-ink-secondary">
-        인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (관리자 검토 후 부여)
+        인증받으면 인증 배지 · 목록 상단 우선 노출 · 공식 결과 기록지(지류) 발급. (관리자 검토 후 부여)
       </p>
     </div>
   );
