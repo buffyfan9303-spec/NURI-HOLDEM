@@ -70,10 +70,16 @@ export function presentationY(el: HTMLElement): number {
   return p3 && p3.length === 16 ? p3[13] : 0;
 }
 
-/** 손 뗀 속도(px/s) — 최근 ~100ms 창의 샘플로 구한다. 마지막 두 점만 쓰면 떨린다 */
+/** 손 뗀 속도(px/s) — 최근 ~100ms 창의 샘플로 구한다. 마지막 두 점만 쓰면 떨린다.
+ *  releaseAt = 손 뗀 시각(touchend 의 e.timeStamp — move 샘플과 같은 시계). 손가락이 멈춰 있는 동안은 touchmove 가
+ *  오지 않으므로, 이 값이 없으면 '마지막으로 움직이던 순간의 속도' 가 남는다.
+ *  🔴 2026-10-06(PR #189 검토 P3-1): 60px 를 끌고 250ms 멈췄다 놓아도 ~500px/s 로 계산돼 닫혔다.
+ *  손 뗀 시각에 같은 위치를 한 점 더 찍어 멈춘 시간을 속도에 반영한다. */
 export interface VelSample { t: number; y: number }
-export function releaseVelocity(samples: VelSample[], windowMs = 100): number {
+export function releaseVelocity(samples: VelSample[], releaseAt?: number, windowMs = 100): number {
   if (samples.length < 2) return 0;
+  const tail = samples[samples.length - 1];
+  if (releaseAt != null && releaseAt > tail.t) samples = [...samples, { t: releaseAt, y: tail.y }];
   const last = samples[samples.length - 1];
   let i = samples.length - 2;
   while (i > 0 && last.t - samples[i].t < windowMs) i--;

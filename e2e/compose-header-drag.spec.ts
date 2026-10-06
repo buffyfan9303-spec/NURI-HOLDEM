@@ -6,7 +6,7 @@
 // 손가락은 CDP Input.dispatchTouchEvent(실제 터치 시퀀스) — Playwright click/tap 은 누름 0ms 라 제스처 부류를 못 잰다.
 // 세션은 가짜(로컬), 외부 요청은 하나도 continue 하지 않는다. 운영 쓰기 0. (부트는 write-close-confirm.spec 과 같은 문법)
 // 음성 대조: Modal.tsx 헤더의 sheetTouch 조건에서 `|| !!confirmClose` 를 빼면 ①·①b 가 실패한다.
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
@@ -207,3 +207,80 @@ for (const theme of ['dark', 'light'] as const) {
     });
   });
 }
+
+// ── P3-1(PR #189 검토, 2026-10-06): 짧게 끌고 손가락을 멈췄다 놓으면 **제자리**, 빠르게 던지면 닫힘 ─────────────
+//   종전엔 손 뗀 시각이 속도 샘플에 안 들어가(spring.ts releaseVelocity) 멈춘 시간이 무시됐다 —
+//   60px 를 끌고 250ms 쉬었다 놓아도 '마지막으로 움직이던 속도(≈500px/s)' 로 투영돼 닫혔다.
+//   끌 수 있는 면적(헤더)이 넓어져 사용자가 이 손짓을 할 가능성이 커졌다. 같은 함수를 쓰는 조회 시트(약관)도 같은 행렬.
+//   음성 대조: spring.ts 의 releaseAt 덧붙이기 한 줄을 빼면 '멈춤' 행이 실패한다.
+/** 끌기: n × step px(각 gap ms) → hold ms 정지 → 놓기. */
+async function pullHold(page: Page, x: number, y: number, n: number, step: number, gap: number, hold: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.waitForTimeout(100);
+  for (let i = 1; i <= n; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + step * i }] });
+    await page.waitForTimeout(gap);
+  }
+  if (hold) await page.waitForTimeout(hold);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+type Row = [name: string, n: number, step: number, gap: number, hold: number, closes: boolean];
+const SHORT: Row[] = [
+  ['60px 끌고 250ms 멈춤', 4, 15, 30, 250, false],
+  ['100px 끌고 300ms 멈춤', 5, 20, 30, 300, false],
+  ['80px 빠르게 던짐', 4, 20, 16, 0, true],
+];
+async function checkRow(page: Page, dlg: Locator, row: Row, at: { x: number; y: number }, label: string) {
+  const [name, n, step, gap, hold, closes] = row;
+  await pullHold(page, at.x, at.y, n, step, gap, hold);
+  if (closes) {
+    await expect(dlg, `${label} · ${name}: 던졌는데 안 닫혔다`).toHaveCount(0, { timeout: 5_000 });
+    return;
+  }
+  await page.waitForTimeout(900);
+  await expect(dlg, `${label} · ${name}: 멈췄다 놓았는데 닫혔다(손 뗀 시각이 속도에 안 들어감)`).toHaveCount(1);
+  const y = await dlg.evaluate((e) => new DOMMatrix(getComputedStyle(e).transform).m42);
+  expect(Math.abs(y), `${label} · ${name}: 제자리로 안 돌아왔다(translateY=${y})`).toBeLessThanOrEqual(1);
+}
+
+test.describe('짧게 끌고 멈췄다 놓기 — 제자리 / 던지기 — 닫힘', () => {
+  test('글쓰기 시트 — 헤더·그립', async ({ page, baseURL }) => {
+    test.setTimeout(120_000);
+    await boot(page, baseURL, 'dark');
+    let asked = 0;
+    page.on('dialog', (d) => { asked++; void d.dismiss(); });
+    for (const where of ['header', 'grip'] as const) {
+      for (const row of SHORT) {
+        if ((await sheet(page).count()) === 0) await open(page);
+        await checkRow(page, sheet(page), row, await point(page, where), `글쓰기 ${where}`);
+      }
+    }
+    expect(asked, '빈 창인데 확인을 물었다').toBe(0);
+  });
+
+  test('조회 시트(약관 · dragToClose) — 헤더·본문', async ({ page, baseURL }) => {
+    test.setTimeout(120_000);
+    await boot(page, baseURL, 'dark');
+    const dlg = page.getByRole('dialog', { name: '약관 및 정책' });
+    const openLegal = async () => {
+      const b = page.getByRole('button', { name: '이용약관', exact: true }).filter({ visible: true }).first();
+      await b.scrollIntoViewIfNeeded();
+      await b.click();
+      await expect(dlg, '약관 시트가 안 열렸다').toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    };
+    const at = (where: 'header' | 'body') => dlg.evaluate((d, w) => {
+      const el = (w === 'header' ? d.querySelector('header') : d.querySelector('[data-drag-close]')) as HTMLElement;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(w === 'header' ? r.top + r.height / 2 : r.top + 20) };
+    }, where);
+    for (const where of ['header', 'body'] as const) {
+      for (const row of SHORT) {
+        if ((await dlg.count()) === 0) await openLegal();
+        await checkRow(page, dlg, row, await at(where), `약관 ${where}`);
+      }
+    }
+  });
+});

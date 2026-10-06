@@ -316,11 +316,11 @@ export default function Modal({
     samples.current.push({ t: e.timeStamp, y });
     if (samples.current.length > 8) samples.current.shift();
   };
-  const onSheetEnd = () => {
+  const onSheetEnd = (e: React.TouchEvent) => {
     if (sheetStart.current == null) return;
     const el = contentRef.current;
     const wasDragging = dragging.current;
-    const v = releaseVelocity(samples.current);   // px/s — 아래가 양
+    const v = releaseVelocity(samples.current, e.timeStamp);   // px/s — 아래가 양. 손 뗀 시각까지 — 멈췄다 놓으면 0 에 가깝다
     resetGesture();
     if (!el) return;
     // 드래그로 확정되지 않고 끝난 손짓(탭·8px 미만)도 **제자리로 되돌린다**.
