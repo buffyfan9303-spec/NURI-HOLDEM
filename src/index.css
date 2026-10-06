@@ -978,9 +978,6 @@ video {
      ⚠ 강조 블록 전용(히어로·빠른 카드·빈 상태) — 목록 행·입력칸·칩·탭바·법정 고지에는 쓰지 않는다. 보라·청록·빛번짐·글자 그라데이션 금지(오너 2026-10-04). */
   .surface-brass { background-image: linear-gradient(135deg, rgb(var(--accent-300) / 0.22) 0%, transparent 58%); }
   html.light .surface-brass { background-image: linear-gradient(135deg, rgb(var(--accent-300) / 0.08) 0%, transparent 58%); }
-  /* GTO '자주 쓰는 도구' 타일 4칸(오너 시안 C2 '은은한 질감', 2026-10-05) — 오른쪽 위 모서리에만 옅은 황동. 사선 반짝임·빛번짐 없음. */
-  .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(var(--hero-shine) / 0.10) 0%, transparent 62%); }
-  html.light .surface-brass-tile { background-image: radial-gradient(90% 110% at 100% 0%, rgb(var(--accent-300) / 0.06) 0%, transparent 62%); }
   /* 강조 카드의 세로 면(명세 §2-3 — 홈 빠른 카드 · 내 매장 요약 카드). 위가 한 단 밝은 면(mid)에서 카드 면(low)으로.
      가장 밝은 위(#1F2225)에서 기본 글자 14.03 · 흐린 글자 5.64(AA). 라이트는 흰 → #F8F5F1(황동 .06). 배경색은 호출부가 그대로 맡는다. */
   .surface-grad { background-image: linear-gradient(180deg, rgb(var(--surface-mid)) 0%, rgb(var(--surface-low)) 100%); }
