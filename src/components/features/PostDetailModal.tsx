@@ -967,8 +967,9 @@ export default function PostDetailModal({
             마감하므로 선을 하나 더 그으면 경계가 두 번 생긴다. */}
         {!hidden && <hr className="border-t border-border-strong mt-3 max-lg:hidden" aria-hidden="true" />}
 
-        {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
-        {user?.id === post.userId && (
+        {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다).
+            숨김(관리자 숨김·임시조치) 글도 그리지 않는다 — 서버 bump_post 가 blinded 면 거절한다(audit10 P3-4). */}
+        {user?.id === post.userId && !post.blinded && (
           <div data-pd-bump className="mt-1.5 flex items-center gap-2">
             <Icon name="zap" size={16} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
             <span className="min-w-0 flex-1 text-xs leading-tight text-ink-secondary">

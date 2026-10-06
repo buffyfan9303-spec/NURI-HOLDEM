@@ -451,8 +451,11 @@ function CommunityTab({
           실측 후: 바 53.5px  = pt-1(4.25) + 버튼 h-[44px] + pb-1(4.25) + 테두리(1).
           히트 영역은 44px 를 그대로 지킨다(WCAG 2.5.5) — 줄인 것은 트레이 여백과 **시각 알약**뿐이다.
           ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신).
-          C-9(2026-09-29): 붙는 위치 = 헤더 − pt-1 + 헤더 밑줄 1px — 버튼 윗변이 헤더 밑변에 정확히 닿는다(−0.5rem 일 때 접힌 헤더가 위 5px 를 덮어 39/44px). */}
-      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.25rem+1px)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.25rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+          C-9(2026-09-29): 붙는 위치 = 헤더 − pt-1 + 헤더 밑줄 1px — 버튼 윗변이 헤더 밑변에 정확히 닿는다(−0.5rem 일 때 접힌 헤더가 위 5px 를 덮어 39/44px).
+          🔴 audit10 P2-2(2026-10-07): 바 위로 16px 를 칠하던 ::before(2026-06 '갭 비침' 덮개)를 걷었다. 붙은 상태에서는 바 윗변이
+          불투명 z-50 헤더 밑면보다 위라(겹침) 덮을 틈이 없고, 안 붙은 상태(스크롤 0)에서는 바로 위 본인인증 띠의 글자 아래 절반을 가렸다.
+          '틈 없음' 은 e2e/community-secbar-top.spec.ts 가 펼침·접힘·PC 에서 잰다. */}
+      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.25rem+1px)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.25rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1">
         {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,

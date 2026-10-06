@@ -5,7 +5,7 @@
 // 비로그인 · 읽기만 — 글 조회와 안내 RPC 를 목으로 고정한다(운영 데이터·마이그레이션 적용 여부와 무관하게 같은 판정).
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
-import { bootOwner } from './_mockOwner';
+import { bootOwner, MOCK_UID } from './_mockOwner';
 import { postRow } from './_mocks';
 
 const ID = '00000000-0000-4000-8000-0000000000d1';
@@ -82,3 +82,29 @@ test('음성 대조 — 안내가 없으면(임시조치 아님) 종전대로 �
   await expect(page.getByText('삭제되었거나 찾을 수 없는 글입니다')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('post-takedown-notice')).toHaveCount(0);
 });
+
+// audit10 P3-4(2026-10-07) — 임시조치된 **내 글** 상세에 '끌올' 이 보였다. 서버 bump_post 는 blinded 면 거절한다
+//   ('숨김 처리된 글은 끌올할 수 없어요' — 라이브 정의 2026-10-07 확인) → 화면도 숨김 글에는 끌올 줄을 그리지 않는다.
+//   양성 대조: 같은 내 글이 숨김이 아니면 끌올 줄이 있다(목 로그인 MOCK_UID = 작성자).
+for (const blinded of [true, false]) {
+  test(`${blinded ? '🔴 ' : ''}P3-4 내 글 상세 — ${blinded ? '임시조치 글에는 끌올이 없다' : '양성 대조: 숨김 아닌 내 글에는 끌올이 있다'}`, async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 390, height: 844 }, profile: { role: 'user', venue_id: null }, goto: false });
+    const row = postRow(1, {
+      id: ID, user_id: MOCK_UID, title: '내 글',
+      ...(blinded ? { blinded: true, blinded_source: 'takedown' } : {}),
+    });
+    await page.route(/\/rest\/v1\/community_posts\?/, (r) =>
+      r.request().method() === 'GET' && r.request().url().includes(`id=eq.${ID}`) ? r.fulfill(json([row])) : r.fallback());
+    await page.route(/\/rest\/v1\/rpc\/post_takedown_notice/, (r) => r.fulfill(json(blinded
+      ? { status: 'active', created_at: '2026-10-06T03:00:00Z', ends_at: '2026-11-05T03:00:00Z', expired: false, mine: true }
+      : null)));
+    await page.goto(`/?post=${ID}`);
+    if (blinded) {
+      await expect(page.getByTestId('post-takedown-notice'), '임시조치 안내가 없다 — 대상 화면이 아니다').toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+      await expect(page.locator('[data-pd-bump]'), '임시조치 글에 끌올 줄이 보인다(서버는 거절한다)').toHaveCount(0);
+    } else {
+      await expect(page.locator('[data-pd-bump]'), '숨김 아닌 내 글에 끌올 줄이 없다').toBeVisible({ timeout: 20_000 });
+    }
+  });
+}

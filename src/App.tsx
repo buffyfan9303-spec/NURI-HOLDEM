@@ -3387,9 +3387,9 @@ export default function App() {
       return;
     }
     // /rank (순위 인증 결과) → 커뮤니티 '순위' — 커뮤니티가 아직 안 떠 있으면 sessionStorage 가 도착 후 복원한다(goCommunitySection 과 같은 조리법)
-    if (link === '/rank') {
-      window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'rank' }));
-      try { sessionStorage.setItem('nuri:community-section', 'rank'); } catch { /* noop */ }
+    if (link === '/rank' || link === '/dealer') { // /dealer = 딜러 구인 지원서 도착(20261007c) → 커뮤니티 '딜러'
+      window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: link.slice(1) }));
+      try { sessionStorage.setItem('nuri:community-section', link.slice(1)); } catch { /* noop */ }
       changeTab('community');
       return;
     }
