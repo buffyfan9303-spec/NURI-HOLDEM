@@ -198,8 +198,16 @@ export async function takedownPost(postId: string, reason: string, reportId?: st
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToTakedown = (j: any): TakedownNotice | null => j ? ({
   status: j.status, createdAt: j.created_at, endsAt: j.ends_at, expired: !!j.expired, mine: !!j.mine,
-  reason: j.reason ?? undefined, objectionAt: j.objection_at ?? null,
+  exOfficio: !!j.ex_officio, reason: j.reason ?? undefined, objectionAt: j.objection_at ?? null,
 }) : null;
+
+/** 권리침해 요청 기각 — 침해로 보기 어려울 때. 글은 그대로 두고 신청인에게 사유와 함께 알린다(사유 필수).
+ *  권리침해 신고는 옛 결정 버튼(기각·삭제·처리 완료·정지)을 서버가 거절한다 — 통지 없이 닫히면 안 된다(PR #196 P2-1). */
+export async function rejectRightsRequest(reportId: string, note: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_reject_rights_request', { p_report_id: reportId, p_note: note });
+  if (error) throw gateError(error, '요청 기각에 실패했습니다');
+}
 
 /** 게시물 자리의 안내(누구나). 임시조치가 아니면 null. */
 export async function getPostTakedownNotice(postId: string): Promise<TakedownNotice | null> {
@@ -237,6 +245,8 @@ export interface TakedownEntry {
   status: 'active' | 'kept'; createdAt: string; endsAt: string;
   /** 신청인 없음 = 직권(§44의3) */
   exOfficio: boolean;
+  /** 임시조치 전에 이미 숨김(관리자 등)이었다 — '다시 게시' 해도 그 숨김으로 돌아간다(P1-1) */
+  prevBlinded: boolean;
   objectionText: string | null; objectionAt: string | null;
 }
 
@@ -251,13 +261,13 @@ export function takedownStateLabel(t: Pick<TakedownEntry, 'status' | 'endsAt'>, 
 export async function getTakedowns(): Promise<TakedownEntry[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('post_takedowns')
-    .select('id, post_id, post_title, reason, status, created_at, ends_at, requester_id, objection_text, objection_at')
+    .select('id, post_id, post_title, reason, status, created_at, ends_at, requester_id, objection_text, objection_at, prev_blinded')
     .in('status', ['active', 'kept']).order('created_at', { ascending: false }).limit(200);
   if (error) throw gateError(error, '임시조치 목록을 불러오지 못했습니다');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     id: r.id, postId: r.post_id ?? null, postTitle: r.post_title ?? null, reason: r.reason, status: r.status,
-    createdAt: r.created_at, endsAt: r.ends_at, exOfficio: r.requester_id == null,
+    createdAt: r.created_at, endsAt: r.ends_at, exOfficio: r.requester_id == null, prevBlinded: !!r.prev_blinded,
     objectionText: r.objection_text ?? null, objectionAt: r.objection_at ?? null,
   }));
 }

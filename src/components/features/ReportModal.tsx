@@ -44,15 +44,16 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
         reason: detail.trim() ? `${reason} — ${detail.trim()}` : reason,
       });
       toast.show('신고가 접수되었습니다. 관리자가 검토합니다.', 'success');
-      setReason(''); setDetail('');
-      onClose();
+      close();
     } catch (err) {
       toast.show(msgOf(err, '신고 접수에 실패했습니다'), 'error');
     } finally { setSaving(false); }
   };
+  // 취소·바깥 눌러 닫기도 입력을 비운다 — 다른 글을 신고하러 다시 열었을 때 앞 글의 소명이 남아 있지 않게
+  const close = () => { setReason(''); setDetail(''); onClose(); };
 
   return (
-    <Modal open={open} onClose={onClose} title="신고하기" maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={close} title="신고하기" maxWidth="sm" variant="sheet">
       <div className="p-4 space-y-3">
         <p className="text-xs text-ink-secondary">신고 사유를 선택해 주세요. 허위 신고 시 제재될 수 있습니다.</p>
         <div className="grid grid-cols-2 gap-1.5">
@@ -72,14 +73,22 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
             반박 내용 게재 요청은 고객센터(ace@nuriholdem.com)로 보내 주세요.
           </p>
         )}
-        <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={rights ? 5 : 3} maxLength={rights ? 1000 : 300}
-          aria-label={rights ? '침해 사실 소명' : '상세 내용'}
-          placeholder={rights ? `어떤 권리가 어떻게 침해되었는지 적어 주세요(필수, ${RIGHTS_MIN_DETAIL}자 이상)` : '상세 내용(선택)'}
-          className="input resize-none text-sm" />
+        {/* 긴 소명(최대 1000자)에 textarea 가 자라면(field-sizing, 40vh) 제출 버튼이 접힘선 아래로 갔다(#196 화면 검토 B, 390).
+            권리침해일 때는 높이를 낮게 묶고 안에서 스크롤한다 — 버튼이 늘 보인다(e2e post-takedown 이 1000자 상태로 잰다). */}
+        <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={rights ? 4 : 3} maxLength={rights ? 1000 : 300}
+          aria-label={rights ? '침해 사실 소명' : '상세 내용'} aria-describedby={rights ? 'report-rights-count' : undefined}
+          placeholder={rights ? '어떤 권리가 어떻게 침해되었는지 적어 주세요' : '상세 내용(선택)'}
+          className={['input resize-none text-sm', rights ? 'max-h-[8rem]! overflow-y-auto' : ''].join(' ')} data-testid="report-detail" />
+        {rights && (
+          <p id="report-rights-count" className="-mt-2 flex justify-between text-2xs text-ink-muted" data-testid="report-rights-count">
+            <span>{detail.trim().length < RIGHTS_MIN_DETAIL ? `필수 · ${RIGHTS_MIN_DETAIL}자 이상` : '소명 입력됨'}</span>
+            <span className="tabular-nums">{detail.length}/1000</span>
+          </p>
+        )}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
+          <button type="button" onClick={close} className="btn-ghost flex-1">취소</button>
           <button type="button" onClick={submit} disabled={saving || !reason || (rights && detail.trim().length < RIGHTS_MIN_DETAIL)}
-            className="btn-danger flex-1 disabled:opacity-60">{saving ? '접수 중…' : '신고 접수'}</button>
+            className="btn-danger flex-1 disabled:opacity-60" data-testid="report-submit">{saving ? '접수 중…' : '신고 접수'}</button>
         </div>
       </div>
     </Modal>

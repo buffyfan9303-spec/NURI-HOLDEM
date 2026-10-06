@@ -5,6 +5,8 @@
 // 비로그인 · 읽기만 — 글 조회와 안내 RPC 를 목으로 고정한다(운영 데이터·마이그레이션 적용 여부와 무관하게 같은 판정).
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
+import { bootOwner } from './_mockOwner';
+import { postRow } from './_mocks';
 
 const ID = '00000000-0000-4000-8000-0000000000d1';
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
@@ -32,6 +34,37 @@ test('🔴 ?post=<임시조치 글> — 비로그인에게 임시조치 안내·
   await expect(page.locator('[data-pd-comments]'), '임시조치 글의 댓글 면이 그려졌다').toHaveCount(0);
   await expect(page.getByText('삭제되었거나 찾을 수 없는 글입니다')).toHaveCount(0);
 });
+
+// #196 화면 검토 B — 권리침해 소명(최대 1000자)을 길게 써도 '신고 접수' 버튼이 화면 안에 있다(textarea 가 40vh 까지 자라 접힘선 아래로 밀었다).
+//   목킹 로그인(계정 없음 · 운영 쓰기 0) + 남의 글 한 건. 취소 후 다시 열면 입력이 비어 있다(P3).
+for (const width of [390, 360]) {
+  test(`권리침해 신고 시트 ${width} — 1000자 소명에서도 접수 버튼이 보이고, 다시 열면 입력이 비어 있다`, async ({ page }) => {
+    await bootOwner(page, { viewport: { width, height: 844 }, profile: { role: 'user', venue_id: null }, goto: false });
+    const row = postRow(1, { id: ID, user_id: '00000000-0000-4000-8000-0000000000aa', title: '남의 글' });
+    await page.route(/\/rest\/v1\/community_posts\?/, (r) =>
+      r.request().method() === 'GET' && r.request().url().includes(`id=eq.${ID}`) ? r.fulfill(json([row])) : r.fallback());
+    await page.goto(`/?post=${ID}`);
+    await page.locator('summary[aria-label="게시글 메뉴"]').click();
+    await page.getByRole('button', { name: '신고', exact: true }).click();
+    await page.getByTestId('report-reason-rights').click();
+    const detail = page.getByTestId('report-detail');
+    await detail.fill('가'.repeat(1000));
+    await expect(page.getByTestId('report-rights-count')).toContainText('1000/1000');
+    const submit = page.getByTestId('report-submit');
+    await expect(submit).toBeEnabled();
+    const box = await submit.boundingBox();
+    expect(box, '접수 버튼이 없다').not.toBeNull();
+    expect(box!.y + box!.height, `접수 버튼이 접힘선(844) 아래로 밀렸다 — bottom=${box!.y + box!.height}`).toBeLessThanOrEqual(844);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    // 취소 → 다시 열기: 앞 소명이 남아 있지 않다
+    await page.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(detail).toHaveCount(0);
+    await page.locator('summary[aria-label="게시글 메뉴"]').click();
+    await page.getByRole('button', { name: '신고', exact: true }).click();
+    await expect(page.getByTestId('report-reason-rights')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('report-detail')).toHaveValue('');
+  });
+}
 
 test('음성 대조 — 안내가 없으면(임시조치 아님) 종전대로 없는 글 안내', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

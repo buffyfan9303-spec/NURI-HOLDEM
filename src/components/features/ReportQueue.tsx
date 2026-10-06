@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import { getReportQueue, decideReport, takedownPost, isRightsReport } from '../../api/reports';
+import { getReportQueue, decideReport, takedownPost, rejectRightsRequest, isRightsReport } from '../../api/reports';
 import TakedownList from './TakedownList';
 import type { ReportQueueItem, ReportDecision, DecideOptions } from '../../api/reports';
 import { adminSetPostBlinded } from '../../api/community';
@@ -38,6 +38,7 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
   const [alsoDelete, setAlsoDelete] = useState(false);
   // 권리침해 임시조치(30일) — 같은 대상에 하나만 연다. 사유는 작성자·신청인 알림에 실린다(20261006t).
   const [tdOpen, setTdOpen] = useState<string | null>(null);
+  const [tdMode, setTdMode] = useState<'takedown' | 'reject'>('takedown');   // 권리침해 요청: 임시조치 또는 요청 기각
   const [tdReason, setTdReason] = useState('');
   const [tdKey, setTdKey] = useState(0);   // 임시조치 뒤 아래 목록을 다시 읽는다
 
@@ -84,10 +85,19 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
   const takedown = async (r: ReportQueueItem) => {
     if (!r.targetId || busy) return;
     const why = tdReason.trim();
-    if (why.length < 2) { toast.show('임시조치 사유를 입력해 주세요', 'error'); return; }
-    if (!window.confirm('이 글을 30일 임시조치(가림)하고 신청인과 작성자에게 알립니다. 진행할까요?')) return;
+    if (why.length < 2) { toast.show(tdMode === 'reject' ? '신청인에게 알릴 사유를 입력해 주세요' : '임시조치 사유를 입력해 주세요', 'error'); return; }
+    if (!window.confirm(tdMode === 'reject'
+      ? '권리침해 요청을 기각합니다. 글은 그대로 두고 신청인에게 사유를 알립니다. 진행할까요?'
+      : '이 글을 30일 임시조치(가림)하고 신청인과 작성자에게 알립니다. 진행할까요?')) return;
     setBusy(r.id);
     try {
+      if (tdMode === 'reject') {
+        await rejectRightsRequest(r.id, why);
+        toast.show('요청을 기각했습니다 · 신청인에게 알렸습니다', 'info');
+        setTdOpen(null);
+        load();
+        return;
+      }
       const res = await takedownPost(r.targetId, why, r.id);
       toast.show(`임시조치했습니다 · 알림 ${res.notified}건`, 'success');
       setTdOpen(null); setTdKey((k) => k + 1);
@@ -127,6 +137,12 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
         const deletable = (r.targetType === 'post' || r.targetType === 'comment') && !!r.targetId && !r.targetMissing;
         const what = r.targetType === 'comment' ? '댓글' : '글';
         const isBusy = busy === r.id;
+        // 권리침해 삭제 요청(§44의2)은 통지가 함께 가는 임시조치·요청 기각만 — 옛 버튼(블라인드·기각·삭제·정지·처리 완료)은 서버가 거절한다(PR #196 P2-1).
+        const rights = r.targetType === 'post' && isRightsReport(r.reason);
+        const openTd = (mode: 'takedown' | 'reject') => {
+          setTdMode(mode); setTdReason('');
+          setTdOpen((c) => (c === r.id && tdMode === mode ? null : r.id));
+        };
         return (
           <li key={r.id} className="rounded-aura border card-aura p-2.5 space-y-2" data-testid="report-row">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -169,53 +185,65 @@ export default function ReportQueue({ users = [], onSanction }: { users?: User[]
                 <button type="button" onClick={() => window.open(`/?post=${encodeURIComponent(r.targetId!)}`, '_blank', 'noopener')}
                   className={`${BTN} bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary`}>글 보기</button>
               )}
-              {r.targetType === 'post' && r.targetId && (
+              {r.targetType === 'post' && r.targetId && !rights && (
                 <button type="button" disabled={isBusy || blinded.has(r.id)} onClick={() => blind(r)}
                   className={`${BTN} bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25`}>
                   {blinded.has(r.id) ? '블라인드됨' : '블라인드'}
                 </button>
               )}
               {r.targetType === 'post' && r.targetId && !r.targetMissing && (
-                <button type="button" data-testid="report-takedown-open" disabled={isBusy} aria-expanded={tdOpen === r.id}
-                  onClick={() => { setTdOpen((c) => (c === r.id ? null : r.id)); setTdReason(''); }}
+                <button type="button" data-testid="report-takedown-open" disabled={isBusy} aria-expanded={tdOpen === r.id && tdMode === 'takedown'}
+                  onClick={() => openTd('takedown')}
                   className={`${BTN} bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25`}>임시조치(30일)</button>
+              )}
+              {rights && (
+                <button type="button" data-testid="report-rights-reject-open" disabled={isBusy} aria-expanded={tdOpen === r.id && tdMode === 'reject'}
+                  onClick={() => openTd('reject')}
+                  className={`${BTN} bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary`}>요청 기각</button>
               )}
               {onSanction && author && (
                 <button type="button" onClick={() => sanction(r)}
                   className={`${BTN} bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25`}>작성자 제재</button>
               )}
+              {!rights && (
               <button type="button" data-testid="report-dismiss" disabled={isBusy} onClick={() => decide(r, 'dismiss', null)}
                 className={`${BTN} bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary`}>기각</button>
-              {deletable && (
+              )}
+              {!rights && deletable && (
                 <button type="button" data-testid="report-delete" disabled={isBusy}
                   onClick={() => decide(r, 'delete', `이 ${what}을(를) 삭제합니다. 되돌릴 수 없습니다. 진행할까요?`)}
                   className={`${BTN} bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25`}>{what} 삭제</button>
               )}
-              {canSuspend && (
+              {!rights && canSuspend && (
                 <button type="button" data-testid="report-suspend-open" disabled={isBusy} aria-expanded={suspendOpen === r.id}
                   onClick={() => openSuspend(r.id)}
                   className={`${BTN} bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25`}>유저 정지</button>
               )}
+              {!rights && (
               <button type="button" data-testid="report-resolve" disabled={isBusy} onClick={() => decide(r, 'resolve', null)}
                 className={`${BTN} bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25`}>처리 완료</button>
+              )}
             </div>
 
             {tdOpen === r.id && r.targetType === 'post' && r.targetId && (
               <div className="rounded-input border border-amber-500/30 bg-amber-500/5 p-2 space-y-2" data-testid="report-takedown-panel">
-                <p className="text-2xs text-ink-secondary">글을 지우지 않고 30일 동안 가립니다. 신청인과 작성자에게 사유·기간·다시 게시 요청 방법을 알리고, 글 자리에는 임시조치 안내가 뜹니다.</p>
+                <p className="text-2xs text-ink-secondary">{tdMode === 'reject'
+                  ? '권리 침해로 보기 어려우면 글은 그대로 두고 요청을 닫습니다. 신청인에게 사유를 알립니다.'
+                  : '글을 지우지 않고 30일 동안 가립니다. 신청인과 작성자에게 사유·기간·다시 게시 요청 방법을 알리고, 글 자리에는 임시조치 안내가 뜹니다.'}</p>
                 <input type="text" value={tdReason} onChange={(e) => setTdReason(e.target.value)} maxLength={300}
-                  placeholder="임시조치 사유(신청인·작성자에게 안내됩니다)" aria-label="임시조치 사유" className="input text-xs" />
+                  placeholder={tdMode === 'reject' ? '기각 사유(신청인에게 안내됩니다)' : '임시조치 사유(신청인·작성자에게 안내됩니다)'}
+                  aria-label={tdMode === 'reject' ? '기각 사유' : '임시조치 사유'} className="input text-xs" />
                 <div className="flex justify-end gap-1.5">
                   <button type="button" onClick={() => setTdOpen(null)}
                     className={`${BTN} bg-surface-high text-ink-muted border-border-default`}>취소</button>
                   <button type="button" data-testid="report-takedown-run" disabled={isBusy || tdReason.trim().length < 2}
                     onClick={() => takedown(r)}
-                    className={`${BTN} bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35`}>임시조치 실행</button>
+                    className={`${BTN} bg-amber-500/25 text-amber-300 border-amber-500/50 hover:bg-amber-500/35`}>{tdMode === 'reject' ? '요청 기각' : '임시조치 실행'}</button>
                 </div>
               </div>
             )}
 
-            {suspendOpen === r.id && canSuspend && (
+            {suspendOpen === r.id && canSuspend && !rights && (
               <div className="rounded-input border border-danger/30 bg-danger/5 p-2 space-y-2" data-testid="report-suspend-panel">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-2xs font-semibold text-ink-secondary">정지 기간</span>

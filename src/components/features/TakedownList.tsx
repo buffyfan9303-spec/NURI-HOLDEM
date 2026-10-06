@@ -27,12 +27,13 @@ export default function TakedownList() {
     if (busy) return;
     const n = (note[t.id] ?? '').trim();
     if (action !== 'restore' && !n) { toast.show('작성자에게 알릴 사유를 입력해 주세요', 'error'); return; }
-    const what = action === 'restore' ? '다시 게시' : action === 'remove' ? '삭제(되돌릴 수 없음)' : '가림 유지';
+    const what = action === 'restore' ? (t.prevBlinded ? '임시조치 해제(관리자 숨김은 유지)' : '다시 게시')
+      : action === 'remove' ? '삭제(되돌릴 수 없음)' : '가림 유지';
     if (!window.confirm(`이 게시물을 ${what}합니다. 작성자와 신청인에게 결과를 알립니다. 진행할까요?`)) return;
     setBusy(t.id);
     try {
       await decideTakedown(t.id, action, n || undefined);
-      toast.show(`${what.replace('(되돌릴 수 없음)', '')}했습니다 · 결과를 알렸습니다`, 'success');
+      toast.show(`${what.replace(/\(.*\)$/, '')}했습니다 · 결과를 알렸습니다`, 'success');
       load();
     } catch (e) { toast.show(msgOf(e, '처리에 실패했습니다'), 'error'); }
     finally { setBusy(null); }
@@ -53,6 +54,7 @@ export default function TakedownList() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={`text-2xs px-1.5 py-0.5 rounded-badge border font-semibold ${due ? 'bg-danger/15 text-danger-light border-danger/30' : 'bg-surface-high text-ink-secondary border-border-default'}`}>{state}</span>
                 <span className="text-2xs text-ink-muted">{t.exOfficio ? '직권' : '신고 요청'} · {ymd(t.createdAt)}~{ymd(t.endsAt)}</span>
+                {t.prevBlinded && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high text-ink-secondary border border-border-default font-semibold" data-testid="takedown-prev-blinded">이전부터 관리자 숨김</span>}
                 {t.objectionAt && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">다시 게시 요청</span>}
               </div>
               <p className="text-xs font-semibold text-ink-primary line-clamp-1">{t.postTitle || '(제목 없음)'}{t.postId ? '' : ' · 작성자가 삭제한 글'}</p>
@@ -60,7 +62,7 @@ export default function TakedownList() {
               {t.objectionText && <p className="text-2xs text-ink-secondary whitespace-pre-line rounded-input bg-surface-high px-2 py-1.5">작성자 요청: {t.objectionText}</p>}
               <input type="text" value={note[t.id] ?? ''} maxLength={300} aria-label="작성자에게 알릴 사유"
                 onChange={(e) => setNote((m) => ({ ...m, [t.id]: e.target.value }))}
-                placeholder="결과 사유(삭제·가림 유지는 필수 — 작성자·신청인에게 알립니다)" className="input text-xs" />
+                placeholder="결과 사유(삭제·유지 시 필수)" className="input text-xs" />
               <div className="flex flex-wrap gap-1.5 justify-end">
                 {t.postId && (
                   <button type="button" onClick={() => window.open(`/?post=${encodeURIComponent(t.postId!)}`, '_blank', 'noopener')}
@@ -68,7 +70,7 @@ export default function TakedownList() {
                 )}
                 {t.postId && (
                   <button type="button" data-testid="takedown-restore" disabled={busy === t.id} onClick={() => decide(t, 'restore')}
-                    className={`${BTN} bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25`}>다시 게시</button>
+                    className={`${BTN} bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25`}>{t.prevBlinded ? '임시조치 해제(숨김 유지)' : '다시 게시'}</button>
                 )}
                 {t.status === 'active' && t.postId && (
                   <button type="button" data-testid="takedown-keep" disabled={busy === t.id} onClick={() => decide(t, 'keep')}

@@ -109,6 +109,8 @@ export interface CommunityPost {
 /** 권리침해 임시조치 안내(서버 post_takedown_notice) — reason·objectionAt 은 작성자 본인·운영자에게만 온다. 변환은 reports.ts */
 export interface TakedownNotice {
   status: 'active' | 'kept'; createdAt: string; endsAt: string; expired: boolean; mine: boolean;
+  /** 신청 없이 운영 정책으로(§44의3) — 화면 문구만 바뀐다. 신원은 없다 */
+  exOfficio?: boolean;
   reason?: string; objectionAt?: string | null;
 }
 

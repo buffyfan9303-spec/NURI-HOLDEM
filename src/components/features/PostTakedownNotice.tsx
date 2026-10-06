@@ -37,12 +37,17 @@ export default function PostTakedownNotice({ postId, initial, isAdmin }: { postI
     finally { setBusy(false); }
   };
 
-  const period = n ? (n.status === 'kept' ? '운영자 검토 결과 계속 가림' : n.expired ? `임시조치 기간 종료(${ymd(n.endsAt)}) — 운영자 검토 중` : `임시조치 기간: ${ymd(n.endsAt)}까지`) : null;
+  // P2-2(리드 결정): 기간이 끝나도 자동으로 풀거나 지우지 않는다 — 운영자가 게시 재개·삭제를 정해 알린다.
+  const period = n ? (n.status === 'kept' ? '운영자 검토 결과 계속 가림'
+    : n.expired ? `임시조치 기간 종료(${ymd(n.endsAt)}) — 운영자가 게시 재개·삭제를 결정해 알려 드립니다`
+    : `임시조치 기간: ${ymd(n.endsAt)}까지`) : null;
+  // 직권(§44의3)은 신청이 없었다 — '신고로' 대신 '운영 정책에 따라'(서버 알림 문구와 같다)
+  const headline = n?.exOfficio ? '운영 정책에 따라 임시조치된 게시물입니다' : '권리침해 신고로 임시조치된 게시물입니다';
   const canAsk = !!n?.mine && n.status === 'active' && !n.expired && !n.objectionAt;
 
   return (
     <div className="mt-3 space-y-2 rounded-card border border-danger/40 bg-danger/6 px-3 py-2" data-testid="post-takedown-notice" role="status">
-      <p className="inline-flex items-center gap-1 text-xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />권리침해 신고로 임시조치된 게시물입니다</p>
+      <p className="inline-flex items-center gap-1 text-xs font-bold text-danger-light" data-testid="post-takedown-headline"><Icon name="ban" size={12} className="shrink-0" />{headline}</p>
       {period && <p className="text-2xs text-ink-secondary">{period}</p>}
       {n?.mine && (
         <div className="space-y-1.5 text-2xs leading-relaxed text-ink-secondary">
