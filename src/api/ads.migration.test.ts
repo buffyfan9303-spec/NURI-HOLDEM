@@ -112,6 +112,8 @@ const DECLARED = body
 /** RPC 가 **일부러** 안 싣는 컬럼과 그 이유. 여기 없는 누락은 실패다. */
 const INTENTIONAL: Record<string, string> = {
   blinded: '서버가 where 로 이미 거른다 — 블라인드 글은 애초에 안 온다(rowToPost 가 false 로 접는 것이 맞다)',
+  // 20261006t: 숨김 출처(관리자·임시조치)는 숨김 글에만 있다 — 광고는 숨김 글을 안 실으니 null 로 접는 것이 맞다.
+  blinded_source: '숨김 글 전용 칸 — 광고 RPC 는 숨김 글을 싣지 않는다(rowToPost 가 null 로 접는다)',
   // 2026-10-01 시안 A: 게시판 목록은 post_spots 를 끼워 받아 SPOT 글을 테이블 그림으로 보인다.
   //   광고 RPC 는 아직 안 싣는다 → 키가 없으면 rowToPost 가 undefined('모름')로 두고,
   //   api/ads.ts attachSpots 가 광고 글 id 들로 post_spots 를 **한 번** 받아 채운다(임시 · 검토 보완 2026-10-01).

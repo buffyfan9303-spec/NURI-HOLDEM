@@ -1,0 +1,42 @@
+// 권리침해 임시조치 글의 링크는 '없는 글' 이 아니라 그 자리에 안내를 띄운다 (20261006t · 약관 제5조⑧ · 정보통신망법 §44의2②)
+//
+// 서버(RLS posts_select)는 임시조치 글을 남·비로그인에게 0행으로 준다. 예전 화면은 그걸 '삭제되었거나 찾을 수 없는 글'로 말해
+// 게시물 자리의 공시가 사라졌다. 이제 post_takedown_notice 안내로 자리표시를 열고, 본문·작성자·댓글은 그리지 않는다.
+// 비로그인 · 읽기만 — 글 조회와 안내 RPC 를 목으로 고정한다(운영 데이터·마이그레이션 적용 여부와 무관하게 같은 판정).
+import type { Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+
+const ID = '00000000-0000-4000-8000-0000000000d1';
+const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+async function mockTakedown(page: Page, notice: unknown) {
+  // 단건 조회(id=eq.ID)만 0행 — 목록 등 다른 조회는 그대로 흘려보낸다.
+  await page.route(/\/rest\/v1\/community_posts\?/, (r) =>
+    r.request().method() === 'GET' && r.request().url().includes(`id=eq.${ID}`) ? r.fulfill(json([])) : r.fallback());
+  await page.route(/\/rest\/v1\/rpc\/post_takedown_notice/, (r) => r.fulfill(json(notice)));
+}
+
+test('🔴 ?post=<임시조치 글> — 비로그인에게 임시조치 안내·기간이 뜨고 본문·작성자는 없다', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockTakedown(page, {
+    status: 'active', created_at: '2026-10-06T03:00:00Z', ends_at: '2026-11-05T03:00:00Z', expired: false, mine: false,
+  });
+  await page.goto(`/?post=${ID}`);
+  const notice = page.getByTestId('post-takedown-notice');
+  await expect(notice, '임시조치 글 링크인데 자리 안내가 없다').toBeVisible({ timeout: 20_000 });
+  await expect(notice).toContainText('권리침해 신고로 임시조치된 게시물입니다');
+  await expect(notice).toContainText('임시조치 기간: 2026. 11. 5.까지');
+  // 남에게는 사유·다시 게시 요청 수단이 없다(서버도 사유를 싣지 않는다)
+  await expect(notice.getByTestId('takedown-review-open')).toHaveCount(0);
+  await expect(page.locator('[data-pd-body]'), '임시조치 글의 본문 자리가 그려졌다').toHaveCount(0);
+  await expect(page.locator('[data-pd-comments]'), '임시조치 글의 댓글 면이 그려졌다').toHaveCount(0);
+  await expect(page.getByText('삭제되었거나 찾을 수 없는 글입니다')).toHaveCount(0);
+});
+
+test('음성 대조 — 안내가 없으면(임시조치 아님) 종전대로 없는 글 안내', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockTakedown(page, null);
+  await page.goto(`/?post=${ID}`);
+  await expect(page.getByText('삭제되었거나 찾을 수 없는 글입니다')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('post-takedown-notice')).toHaveCount(0);
+});

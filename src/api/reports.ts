@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { gateError } from './_gateError';
+import type { CommunityPost, TakedownNotice } from './communityCore';
 
 export type ReportTargetType = 'post' | 'comment' | 'listing' | 'live' | 'user';
 
@@ -174,4 +175,96 @@ export async function getReportQueue(): Promise<ReportQueueItem[]> {
       authorResolved: against.filter((x) => x.status === 'resolved').length,
     };
   });
+}
+
+// ── 권리침해 삭제 요청 → 임시조치(30일) → 통지 → 다시 게시 요청 → 관리자 판단 (20261006t · 약관 제5조 ⑦~⑩) ──────────
+// 가림·통지·기록은 전부 서버 RPC 한 번씩이다. 화면은 community_posts·post_takedowns 를 직접 쓰지 않는다
+//   (postTakedown.contract.test.ts 가 막는다). 알림은 거래성 안내라 광고 표지(is_ad)를 켜지 않는다.
+
+/** 신고 사유 — 정보통신망법 §44의2 삭제 요청. 게시글에서만 고를 수 있고 소명(상세)이 필수다. */
+export const RIGHTS_REASON = '권리침해(명예훼손·사생활 침해 등)';
+export const RIGHTS_MIN_DETAIL = 10;
+export const isRightsReport = (reason: string): boolean => reason.startsWith(RIGHTS_REASON);
+
+/** 관리자 임시조치(30일 가림). reportId 가 없으면 직권(§44의3) — 작성자에게만 알린다. */
+export async function takedownPost(postId: string, reason: string, reportId?: string): Promise<{ id: string; endsAt: string; notified: number }> {
+  if (IS_MOCK) return { id: 'mock', endsAt: new Date(Date.now() + 30 * 86400000).toISOString(), notified: reportId ? 2 : 1 };
+  const { data, error } = await supabase.rpc('admin_takedown_post', { p_post_id: postId, p_reason: reason, p_report_id: reportId ?? null });
+  if (error) throw gateError(error, '임시조치에 실패했습니다');
+  const j = (data ?? {}) as { id?: string; ends_at?: string; notified?: number };
+  return { id: j.id ?? '', endsAt: j.ends_at ?? '', notified: j.notified ?? 0 };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToTakedown = (j: any): TakedownNotice | null => j ? ({
+  status: j.status, createdAt: j.created_at, endsAt: j.ends_at, expired: !!j.expired, mine: !!j.mine,
+  reason: j.reason ?? undefined, objectionAt: j.objection_at ?? null,
+}) : null;
+
+/** 게시물 자리의 안내(누구나). 임시조치가 아니면 null. */
+export async function getPostTakedownNotice(postId: string): Promise<TakedownNotice | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('post_takedown_notice', { p_post_id: postId });
+  if (error) throw gateError(error, '임시조치 안내를 불러오지 못했습니다');
+  return rowToTakedown(data);
+}
+
+/**
+ * getPostById 가 RLS 0행을 받았을 때 — 임시조치 글이면 본문·작성자 없는 자리표시, 아니면 null(종전 '없는 글').
+ * 상세는 blinded + 작성자 아님 = 숨김이라 머리·본문·댓글을 그리지 않고 PostTakedownNotice 만 보인다.
+ * 안내를 못 불러오면(RPC 실패) 종전대로 null — 없는 글 안내로 떨어진다.
+ */
+export async function takedownPlaceholder(postId: string): Promise<CommunityPost | null> {
+  const { data } = await supabase.rpc('post_takedown_notice', { p_post_id: postId });
+  const takedown = rowToTakedown(data);
+  return takedown && {
+    id: postId, userId: '', userName: '', userRole: 'user', content: '', title: '',
+    createdAt: takedown.createdAt, likeCount: 0, commentCount: 0, blinded: true, blindedSource: 'takedown', takedown,
+  };
+}
+
+/** 작성자의 다시 게시 요청(이의제기) — 임시조치 기간 안에 한 번. 운영자에게 알림이 간다. */
+export async function requestTakedownReview(postId: string, text: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('request_post_takedown_review', { p_post_id: postId, p_text: text });
+  if (error) throw gateError(error, '다시 게시 요청을 보내지 못했습니다');
+}
+
+export type TakedownAction = 'restore' | 'remove' | 'keep';
+
+export interface TakedownEntry {
+  id: string; postId: string | null; postTitle: string | null; reason: string;
+  status: 'active' | 'kept'; createdAt: string; endsAt: string;
+  /** 신청인 없음 = 직권(§44의3) */
+  exOfficio: boolean;
+  objectionText: string | null; objectionAt: string | null;
+}
+
+/** 상태 문구 — 가림 중 D-n · 기간 만료(판단 필요, 자동으로 풀지 않는다) · 가림 유지 */
+export function takedownStateLabel(t: Pick<TakedownEntry, 'status' | 'endsAt'>, now = Date.now()): string {
+  if (t.status === 'kept') return '가림 유지';
+  const left = Math.ceil((new Date(t.endsAt).getTime() - now) / 86400000);
+  return left > 0 ? `임시조치 중 · D-${left}` : '기간 만료 — 판단 필요';
+}
+
+/** 관리자 목록 — 아직 판단하지 않은 임시조치(가림 중·가림 유지). 표 읽기는 RLS 가 운영자만 허용한다. */
+export async function getTakedowns(): Promise<TakedownEntry[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('post_takedowns')
+    .select('id, post_id, post_title, reason, status, created_at, ends_at, requester_id, objection_text, objection_at')
+    .in('status', ['active', 'kept']).order('created_at', { ascending: false }).limit(200);
+  if (error) throw gateError(error, '임시조치 목록을 불러오지 못했습니다');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, postId: r.post_id ?? null, postTitle: r.post_title ?? null, reason: r.reason, status: r.status,
+    createdAt: r.created_at, endsAt: r.ends_at, exOfficio: r.requester_id == null,
+    objectionText: r.objection_text ?? null, objectionAt: r.objection_at ?? null,
+  }));
+}
+
+/** 관리자 판단 — 다시 게시 · 삭제 · 가림 유지. 삭제·유지는 작성자에게 알릴 사유가 필수다. 결과는 작성자·신청인에게 알림. */
+export async function decideTakedown(id: string, action: TakedownAction, note?: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_decide_takedown', { p_takedown_id: id, p_action: action, p_note: note?.trim() || null });
+  if (error) throw gateError(error, '임시조치 처리에 실패했습니다');
 }

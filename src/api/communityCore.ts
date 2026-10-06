@@ -82,8 +82,12 @@ export interface CommunityPost {
   images?: string[];        // 첨부 이미지 URL[]
   badbeatCount?: number;    // 억까(Bad Beat) 수
   goodrunCount?: number;    // 나이스런(Good Run) 수
-  blinded?: boolean;        // 신고 누적 자동 숨김(운영자/작성자만 열람)
-  liked?: boolean;          // 현재 사용자가 좋아요했는지(post_likes 기준) — 토글 UI용
+  blinded?: boolean;        // 숨김(운영자/작성자만 열람) — 서버 RLS posts_select 가 가린다
+  /** 숨김 출처: 'admin' 관리자 블라인드 · 'takedown' 권리침해 임시조치(20261006t) · 'auto' 옛 자동 숨김 */
+  blindedSource?: string | null;
+  /** 남(비로그인 포함)이 임시조치된 글의 링크를 열었을 때의 자리표시 — 본문·작성자 없이 안내만 있다(getPostById) */
+  takedown?: TakedownNotice;
+  liked?: boolean;         // 현재 사용자가 좋아요했는지(post_likes 기준) — 토글 UI용
   /** 끌올 만료 시각(ISO). now 보다 크면 목록 상단 고정 — 판정은 isBumped() 하나로 */
   bumpedUntil?: string | null;
   /** 끌올 누적 횟수(표시용) */
@@ -100,6 +104,12 @@ export interface CommunityPost {
    * undefined = 모른다 · null = 투표 없음. 해석은 postAttachments.pollFromEmbed.
    */
   pollEmbed?: unknown | null;
+}
+
+/** 권리침해 임시조치 안내(서버 post_takedown_notice) — reason·objectionAt 은 작성자 본인·운영자에게만 온다. 변환은 reports.ts */
+export interface TakedownNotice {
+  status: 'active' | 'kept'; createdAt: string; endsAt: string; expired: boolean; mine: boolean;
+  reason?: string; objectionAt?: string | null;
 }
 
 /**
@@ -159,6 +169,7 @@ export const rowToPost = (r: any): CommunityPost => ({
   title:    r.title ?? undefined,
   images:   Array.isArray(r.images) ? r.images : undefined,
   blinded:  r.blinded ?? false,
+  blindedSource: r.blinded_source ?? null,
   // 20260830m 추가분 — 컬럼이 없던 시절 응답(캐시 스냅샷 포함)에서도 0/null 로 안전하게 접힌다
   bumpedUntil: r.bumped_until ?? null,
   bumpCount:   r.bump_count ?? 0,
@@ -181,7 +192,9 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
   //   PostgREST 가 400(22P02) 을 돌려주던 것을 요청 없이 '없는 글'(null) 로 끝낸다.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId)) return null;
   const res = await withSpotFallback((sel) => supabase.from('community_posts').select(sel).eq('id', postId).maybeSingle());
-  if (res.error || !res.data) return null;
+  if (res.error) return null;
+  // 서버가 가린 글(RLS 0행)이 권리침해 임시조치면 '없는 글' 대신 그 자리에 안내를 띄운다(약관 제5조⑧) — 지연 청크(첫 화면 예산).
+  if (!res.data) return (await import('./reports')).takedownPlaceholder(postId);
   const liked = await supabase.from('post_likes').select('post_id').eq('post_id', postId).limit(1);
   return { ...rowToPost(res.data), liked: (liked.data ?? []).length > 0 };
 }
