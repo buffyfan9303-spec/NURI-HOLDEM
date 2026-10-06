@@ -8,7 +8,7 @@
 // 측정 대상이 사라져 0건으로 통과하는 것을 막는다(데이터는 전부 목킹: 일정·클락·매장·후기).
 //
 // 수정 전 실측(base 빌드): 라이브 '진행 중 대회' vs 정렬/새로고침 390 5.53px·1440 2.97px(items-start) ·
-//   GTO 레인 머리줄 기준선 2.13px(아이콘으로 시작하는 inline-flex 제목) · 내 매장 모바일 섹션 머리줄(공용 SectionHeader)
+//   GTO 레인 머리줄 기준선 2.13px(아이콘으로 시작하는 inline-flex 제목 — '자주 쓰는 도구' 는 10-06 부터 아이콘 없는 기준선 행) · 내 매장 모바일 섹션 머리줄(공용 SectionHeader)
 //   제목 vs ⓘ·새로고침 5.44px · 매장 후기 '방문 후기' vs 평점(별 아이콘으로 시작하는 flex).
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
@@ -111,11 +111,21 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
   }
 
   for (const w of [390, 1440]) {
-    test(`④ GTO ${w} — 레인 머리줄(아이콘 제목 | N개)`, async ({ page }) => {
+    // 2026-10-06 오너 시안(PR #191): '자주 쓰는 도구' 머리줄은 아이콘 없이 제목 18 | 개수 14 | 부제 12.75 를 **기준선**에 맞춘 한 줄이다
+    //   (글자 크기가 달라 세로 중심은 원래 다르다 — 계약은 기준선 일치). items-baseline 행이라 F2(실제 기준선 퍼짐)로 잰다.
+    //   나머지 레인 머리줄(아이콘으로 시작하는 inline-flex 제목 | N개)은 종전대로 F3 로 3곳 이상.
+    test(`④ GTO ${w} — 자주 쓰는 도구(제목 | 개수 | 부제 기준선) · 레인 머리줄(아이콘 제목 | N개)`, async ({ page }) => {
       await mockAll(page);
       await open(page, w, 'tab=tools');
       await expect(page.locator('[data-tools-lanepanel]')).toBeVisible({ timeout: 15_000 });
-      const rows = await check(page, [{ kind: 'F3', title: /자주 쓰는 도구/ }], ['[data-lane-head]:has(> h2.inline-flex)']);
+      const head = page.getByTestId('tools-featured').locator('[data-lane-head]');
+      await expect(head.getByRole('heading', { name: '자주 쓰는 도구' })).toBeVisible();
+      const rows = await check(page, [{ kind: 'F2', title: /^자주 쓰는 도구$/ }], ['[data-lane-head]:has(> h2.inline-flex)']);
+      const feat = rows.filter((r) => r.kind === 'F2' && /^자주 쓰는 도구$/.test(r.title));
+      expect(feat.length, "'자주 쓰는 도구' 머리줄이 기준선 행(F2)으로 정확히 한 번 잡혀야 한다").toBe(1);
+      // 같은 줄에 개수·부제가 **둘 다** 들어와야 '세 요소 기준선 일치' 가 측정된 것이다(하나만 재고 통과하는 것 방지).
+      expect(feat[0].other, `개수·부제가 제목과 같은 줄에서 재이지 않았다: ${feat[0].other}`).toMatch(/^\d+ \/ (스팟|즐겨찾기)/); // 개수 숫자 "4" · 부제
+      expect(Math.abs(feat[0].diff), `제목·개수·부제 기준선이 어긋났다(${feat[0].diff}px)`).toBeLessThanOrEqual(1);
       expect(rows.filter((r) => r.kind === 'F3').length, '레인 머리줄이 3곳 이상 잡혀야 한다').toBeGreaterThanOrEqual(3);
     });
   }
