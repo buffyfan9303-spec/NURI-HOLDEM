@@ -184,7 +184,9 @@ create or replace function public.restrict_underage_account(p_uid uuid)
  security definer
  set search_path = public, pg_temp
 as $fn$
--- pr188-193-review P3-2: 감사 기록(activity_log)을 남기고, 다른 사유로 이미 정지 중이면 상태·기간·사유를 덮어쓰지 않는다(기록·알림만).
+-- pr188-193-review P3-2: 감사 기록(activity_log)을 남기고, 다른 사유로 이미 정지 중이면 그 사유는 덮어쓰지 않는다.
+--   재반증 P2-R1: 단 기한 있는 정지는 **무기한(suspended_until = null)으로** 바꾼다 — 그대로 두면 만료 크론(cron_unsuspend_expired)이
+--   기한 뒤 active 로 풀어 미성년 회원이 다시 이용할 수 있었다(X3).
 --   같은 회원을 하루 안에 다시 부르면(반복 인증 시도) 아무것도 하지 않는다.
 declare
   c_reason constant text := '본인인증에서 만 19세 미만으로 확인되어 이용이 제한되었습니다. 고객센터로 문의하시거나 이 화면에서 탈퇴하실 수 있습니다.';
@@ -204,15 +206,17 @@ begin
        set status = 'suspended', suspended_until = null, sanction_reason = c_reason
      where id = p_uid;
     v_changed := true;
+  else
+    update public.profiles set suspended_until = null where id = p_uid;   -- 사유는 보존, 기한만 무기한으로
   end if;
   insert into public.activity_log(actor_id, actor_name, action, target_type, target_id, target_owner_id, target_summary)
   values (null, '시스템(본인인증)', 'suspend_underage', 'profile', p_uid, p_uid,
           format('본인인증 만 19세 미만 확인 — 이전 상태 %s · 이전 사유 %s · %s', v_status, coalesce(v_reason, '없음'),
-                 case when v_changed then '무기한 정지' else '기존 정지 유지(덮어쓰지 않음)' end));
+                 case when v_changed then '무기한 정지' else '기존 사유 유지 · 기한을 무기한으로' end));
   insert into public.notifications(user_id, type, title, message, link)
   select a.id, 'system', '만 19세 미만 본인인증 — 이용 제한',
          left(coalesce(v_nick, '(닉네임 없음)'), 30) || ' 회원의 본인인증에서 만 19세 미만이 확인되었습니다'
-           || case when v_changed then '(이용 제한함)' else '(이미 다른 사유로 정지 중)' end || '. 이용계약 해지·개인정보 파기를 처리해 주세요',
+           || case when v_changed then '(이용 제한함)' else '(이미 다른 사유로 정지 중 — 기한을 무기한으로 바꿈)' end || '. 이용계약 해지·개인정보 파기를 처리해 주세요',
          '/admin'
     from public.profiles a where a.role = 'admin';
   return true;

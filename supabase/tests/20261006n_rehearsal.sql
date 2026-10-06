@@ -181,21 +181,26 @@ begin
     when others then fails := fails + 1; out := out || 'U1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
 
-  -- U3 (P3-2) 다른 사유로 기간 정지 중인 회원 → 상태·기간·사유를 덮어쓰지 않고 감사 기록(activity_log)·관리자 알림만 · 하루 안 재호출은 아무것도 안 함
+  -- U3 (P3-2 · 재반증 P2-R1) 다른 사유로 **기한 있는** 정지 중인 회원 → 사유는 보존, 기한은 무기한(null)으로 · 감사 기록·관리자 알림 ·
+  --    하루 안 재호출은 아무것도 안 함 · 기한이 지난 시각에 만료 크론(cron_unsuspend_expired)을 돌려도 **여전히 정지**
   total := total + 1;
   begin
     perform set_config('request.jwt.claims', '', true);
     update public.profiles set status = 'suspended', suspended_until = now() + interval '3 days', sanction_reason = 'ZZ 다른 사유' where id = u2;
     select count(*) into n2 from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한';
     t := 'r=' || public.restrict_underage_account(u2)::text || '/' || public.restrict_underage_account(u2)::text;
-    select status::text st, suspended_until is not null as keep_until, sanction_reason = 'ZZ 다른 사유' as keep_reason into r from public.profiles where id = u2;
-    t := t || format(' st=%s/%s/%s log=%s notif=%s', r.st, r.keep_until, r.keep_reason,
-      (select count(*) from public.activity_log where action = 'suspend_underage' and target_id = u2 and target_summary like '%기존 정지 유지%'),
+    select status::text st, suspended_until is null as forever, sanction_reason = 'ZZ 다른 사유' as keep_reason into r from public.profiles where id = u2;
+    t := t || format(' st=%s/%s/%s log=%s notif=%s', r.st, r.forever, r.keep_reason,
+      (select count(*) from public.activity_log where action = 'suspend_underage' and target_id = u2 and target_summary like '%기존 사유 유지%'),
       (select count(*) from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한') - n2 = (select count(*) from public.profiles where role::text = 'admin'));
+    -- 원래 기한(3일)이 지난 것처럼 만든 뒤 만료 크론 — 무기한이면 그대로, 기한이 남아 있었다면 active 로 풀린다
+    update public.profiles set suspended_until = suspended_until - interval '4 days' where id = u2 and suspended_until is not null;
+    perform public.cron_unsuspend_expired();
+    t := t || ' after_cron=' || (select status::text from public.profiles where id = u2);
     raise exception using errcode = 'ZZ001', message = t;
   exception
     when sqlstate 'ZZ001' then
-      if sqlerrm = 'r=true/true st=suspended/t/t log=1 notif=t' then out := out || 'U3 PASS; ';
+      if sqlerrm = 'r=true/true st=suspended/t/t log=1 notif=t after_cron=suspended' then out := out || 'U3 PASS; ';
       else fails := fails + 1; out := out || 'U3 FAIL ' || sqlerrm || '; '; end if;
     when others then fails := fails + 1; out := out || 'U3 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
