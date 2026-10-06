@@ -22,7 +22,8 @@ export const EVENT_KIND_LABEL: Record<RankEventKind, string> = {
 /** 신규 신청·승인이 가질 수 있는 유일한 구분(오너 #11). 서버 RLS·CHECK 와 같은 값이다. */
 export const VERIFIABLE_EVENT_KIND: RankEventKind = 'official';
 
-/** 국내 순위 인정 임계 — 100만원(100T)당 1점. 계산 자체는 서버(moneyin_points)에만 있다. */
+/** 국내 순위 인정 임계 — 100만원(100T)당 1점. 계산 자체는 서버(moneyin_points)에만 있다.
+ *  ⚠ §28 — 이 수치를 회원 화면 문구('100만당 1점')로 쓰지 않는다(상금 환금성 프레이밍 · 2026-10-06 약관 재검토 P2-8). 화면은 '입상 규모'로 말한다. */
 export const MONEYIN_UNIT_WON = 1_000_000;
 
 export interface RankVerification {
@@ -52,10 +53,17 @@ const mapRow = (r: any): RankVerification => ({
  * 서버 RLS 도 event_kind='official' 이외의 INSERT 를 거부하므로, 여기서 값을 열어 두면
  * 화면만 통과하고 저장에서 실패하는 어긋남이 생긴다.
  */
+/** 순위 인증 별도 동의의 판(2026-10-06 약관 재검토 P1-3 · 오너 결정 (A)). 신청 화면의 동의 문구를 바꾸면 +1 한다.
+ *  서버(20261006n)가 이 값과 가림 확인이 없는 신규 신청을 거부하고(CHECK), 동의 시각은 서버가 찍는다. */
+export const RANK_ID_CONSENT_VERSION = 1;
+
 export async function submitRankVerification(input: {
   nickname: string; eventName: string; amountWon: number; proof: File; idCard: File;
   isOverseas?: boolean;
+  /** 별도 동의(개보법 §15②·§24①) + 주민번호 뒷자리·신분증 번호 가림 확인 — 둘 다 true 여야 접수한다. */
+  idConsent: boolean; maskedConfirmed: boolean;
 }): Promise<void> {
+  if (!input.idConsent || !input.maskedConfirmed) throw new Error('신분증 사진 처리 동의와 번호 가림 확인이 필요합니다');
   if (IS_MOCK) return;
   const uid = (await currentUser())?.id;
   if (!uid) throw new Error('로그인이 필요합니다');
@@ -69,11 +77,17 @@ export async function submitRankVerification(input: {
   const proofPath = await up(input.proof, 'proof');
   const idPath = await up(input.idCard, 'idcard');
   // status 는 보내지 않는다 — RLS(rv_insert_own)가 pending 이외의 신규 행을 거부한다(자가 승인 차단).
-  const { error } = await supabase.from('rank_verifications').insert({
+  const row = {
     user_id: uid, nickname: input.nickname, event_name: input.eventName.trim(),
     amount_won: Math.round(input.amountWon), proof_url: proofPath, id_card_path: idPath,
     event_kind: VERIFIABLE_EVENT_KIND, is_overseas: input.isOverseas ?? false,
+  };
+  let { error } = await supabase.from('rank_verifications').insert({
+    ...row, id_consent_version: RANK_ID_CONSENT_VERSION, id_masked_confirmed: true,
   });
+  // 배포 순서 완충: 20261006n(동의 칸) 적용 전이면 PostgREST 가 '없는 칸'(PGRST204)으로 거부한다 — 그때만 칸 없이 다시 넣는다.
+  //   적용 뒤에는 서버 CHECK 가 동의 칸 없는 신청을 거부하므로 이 분기는 쓰이지 않는다(화면도 동의 없이는 버튼이 꺼진다).
+  if (error?.code === 'PGRST204') ({ error } = await supabase.from('rank_verifications').insert(row));
   if (error) throw new Error(error.message);
 }
 

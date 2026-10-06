@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, setMyMarketingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, setMyMarketingConsent, setMyPhoneLookup, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
 import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
@@ -672,6 +672,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           <MarketingConsentSetting onChanged={() => setConsentRev((n) => n + 1)} />
         </div>
 
+        {/* 매장 전화번호 조회 허용 — 처리방침 제9조④(2026-10-06 약관 재검토 P1-2 · 오너 결정 (C)). 서버 칸(s3) 적용 전엔 숨는다. */}
+        <PhoneLookupSetting />
+
         <div className="px-4 pt-4">
           <LegalConsentHistory key={consentRev} />
         </div>
@@ -1048,6 +1051,61 @@ function MarketingConsentSetting({ onChanged }: { onChanged: () => void }) {
         </span>
       </button>
       {result && <p role="status" data-testid="marketing-consent-result" className="mt-1.5 text-2xs leading-relaxed text-ink-muted">{result}</p>}
+    </div>
+  );
+}
+
+// ── 매장 전화번호 조회 허용 ────────────────────────────────────────────────────────
+// 승인된 매장 업주·공동 운영자가 이용권을 보낼 상대를 찾으려고 휴대전화번호 전체를 입력하면(find_user_by_phone) 그 번호로 본인인증한
+// 회원의 닉네임·인증 여부·가린 번호가 보인다(손님 명단 밖 회원 포함). 처리방침 제9조④가 이 사실과 거부 방법을 알리고, 여기가 거부 장치다.
+// 서버 칸(profiles.allow_venue_phone_lookup — store-team s3)이 없으면 user.allowVenuePhoneLookup 이 undefined 라 그리지 않는다.
+function PhoneLookupSetting() {
+  const { user, refreshProfile } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!user || user.allowVenuePhoneLookup === undefined) return null;
+  const on = user.allowVenuePhoneLookup;
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await setMyPhoneLookup(!on);
+      await refreshProfile();
+      toast.show(!on ? '매장이 전화번호로 회원님을 찾을 수 있게 했습니다' : '매장이 전화번호로 회원님을 찾을 수 없게 했습니다', 'success');
+    } catch (e) {
+      toast.show(msgOf(e, '설정 저장 실패'), 'error');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="px-4 pt-4">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        role="switch"
+        aria-checked={on}
+        aria-label="매장 전화번호 조회 허용"
+        data-testid="phone-lookup-toggle"
+        className="flex w-full items-center gap-3 rounded-aura border border-border-subtle bg-surface-high p-3 text-left disabled:opacity-40"
+      >
+        <span className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink-primary">매장 전화번호 조회 허용</p>
+          <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
+            매장이 이용권을 보낼 때 회원님의 휴대전화번호 전체를 입력하면 닉네임과 가운데를 가린 번호가 보입니다. 끄면 번호로는 찾을 수 없고 닉네임으로만 받을 수 있습니다
+          </p>
+        </span>
+        <span
+          aria-hidden
+          className={[
+            'relative w-11 h-6 rounded-full transition-colors shrink-0',
+            on ? 'bg-accent-300' : 'bg-surface-float',
+          ].join(' ')}
+        >
+          <span
+            className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+            style={{ transform: `translateX(${on ? 20 : 0}px)` }} />
+        </span>
+      </button>
     </div>
   );
 }

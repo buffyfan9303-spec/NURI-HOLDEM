@@ -90,9 +90,11 @@ describe('P2-8 ② 제재 계정 본인 탈퇴 — 재가입 차단은 유지', 
     expect(fn(M, '_purge_withdrawn_identities')).toMatch(/case when reason = 'banned' then interval '5 years' else interval '6 months' end/);
     expect(read('src/lib/legalHistory.ts')).toMatch(/version: PRIVACY_VERSION, effective: PRIVACY_EFFECTIVE_DATE, notice: PRIVACY_NOTICE_DATE,[\s\S]{0,200}5년 동안 보관/);
     for (const [doc, src] of [['처리방침', read('src/pages/legal/PrivacyPolicy.tsx')], ['계정 삭제 안내', read('src/pages/legal/AccountDeletion.tsx')],
-      ['하단 창', read('src/components/features/LegalDocsModal.tsx')], ['이용 제한 시트', read('src/components/features/SanctionedAccountSheet.tsx')]]) {
+      ['이용 제한 시트', read('src/components/features/SanctionedAccountSheet.tsx')]]) {
       expect(src, `${doc}: 영구 이용 제한 5년 보관 고지가 없다`).toMatch(/영구 이용 제한[^']{0,60}5년/);
     }
+    // 하단 창은 2026-10-06 약관 재검토 P1-1 이후 처리방침 본문을 따로 갖지 않고 PrivacyPolicy 를 그대로 그린다(위 처리방침 검사가 곧 하단 창 검사다).
+    expect(read('src/components/features/LegalDocsModal.tsx')).toMatch(/privacy: PrivacyPolicy,/);
   });
   it('20261006l 적용 절차: 엣지 함수와 같은 날 · 401 확인 · 10-09 10:30 KST 기한 · 못 맞추면 크론 중지(pr188-review P2-B)', () => {
     const head = read('supabase/migrations/20261006l_marketing_ad_gate.sql');

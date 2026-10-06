@@ -77,10 +77,9 @@ describe('개인정보처리방침 — 위치정보법 제21조의2 · 시행령
     const modal = read('src/components/features/LegalDocsModal.tsx');
     expect(pp).not.toMatch(/출석 위치 확인 — 현재 사용하지 않습니다/);
     expect(modal).not.toMatch(/출석 위치 확인\(현재 미사용\)/);
-    const p7 = modal.slice(modal.indexOf('7-1. 개인위치정보의 처리'), modal.indexOf('8. 안전성 확보 조치'));
-    for (const k of ['처리 목적:', '처리 항목:', '보유기간:', '이용·제공사실 확인자료:', '파기 절차 및 방법:', '제3자 제공:', '8세 이하', '위치정보관리책임자: ${BIZ.locationOfficer} / 연락처 ${BIZ.locationOfficerContact} · 전화 ${BIZ.locationOfficerPhone}', '${CONSENT_NATURE}', '${CHECKIN_SCOPE}이 처리되지 않으며, ${CHECKIN_ALT_PATH}']) {
-      expect(p7, k).toContain(k);
-    }
+    // 2026-10-06 약관 재검토 P1-1: 하단 창은 처리방침 본문을 따로 갖지 않고 PrivacyPolicy(위 ⑤가 검사한 ⑨)를 그대로 그린다.
+    expect(modal).not.toContain('7-1. 개인위치정보의 처리');
+    expect(modal).toMatch(/privacy: PrivacyPolicy,/);
   });
   it('⑦ 위치정보 동의는 "기능 이용 시 필요한 항목" — 그 매장 직접 출석만 안 되고 같은 혜택의 직원 처리·다른 이용 제한 없음(개인정보 보호법 제22조⑤ 취지)', () => {
     expect(pp).toMatch(/기능 이용 시 필요한 항목\(위치 — \$\{CONSENT_NATURE\}\):[^`]*\$\{CHECKIN_SCOPE\}만 직접 할 수 없을 뿐, \$\{CHECKIN_ALT_PATH\}\(같은 혜택\)[^`]*그 밖의 서비스 이용에는 제한이 없습니다/);

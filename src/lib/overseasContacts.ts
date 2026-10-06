@@ -1,5 +1,5 @@
 // src/lib/overseasContacts.ts — 국외 이전받는 자의 개인정보 문의 연락처(개인정보 보호법 §28의8②3 · 시행령 §31①2).
-// 처리방침 두 벌(PrivacyPolicy 표 · LegalDocsModal 본문)이 같은 값을 쓰도록 한 곳에 둔다.
+// 처리방침(PrivacyPolicy 표)이 쓰는 값을 한 곳에 둔다. 하단 창은 2026-10-06(약관 재검토 P1-1)부터 같은 PrivacyPolicy 를 그린다(두 벌 해소).
 // 출처: 각 사 공식 개인정보처리방침의 문의처 문장 — 2026-10-06 WebFetch 로 확인(legal.md P2-2).
 //   Vercel  https://vercel.com/legal/privacy-policy  "please contact us at privacy@vercel.com"
 //   Cloudflare https://www.cloudflare.com/privacypolicy/  "please contact us at privacyquestions@cloudflare.com" (권리 요청은 sar@cloudflare.com)

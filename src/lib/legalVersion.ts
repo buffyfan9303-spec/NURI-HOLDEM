@@ -58,6 +58,21 @@ export const PRIVACY_EFFECTIVE_DATE = '2026년 11월 5일';
 /** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 제3판 공지 직전의 /legal/privacy.html. sitemap 에 넣지 않는다. */
 export const PRIVACY_PREV_ARCHIVE_URL = `/legal/archive/${PRIVACY_NOTICE_ISO}/privacy.html`;
 
+/** 매장 운영자 이용약관(개인정보 처리위탁 포함 — src/pages/legal/OwnerTerms.tsx)의 판. 회원 약관 판(LEGAL_VERSION)과 별개이며
+ *  업주·공동 운영자에게만 적용된다(2026-10-06 약관 재검토 P1-5). 동의 기록은 서버 owner_terms_consents(20261006n) · lib/ownerTerms.ts.
+ *  🔴 시행일은 배포일로 맞춘다(리드 결정). 업주 개별 동의로 효력이 생기는 신설 문서라 공지 기간이 없다(기존 업주는 내 매장 동의 게이트). */
+export const OWNER_TERMS_VERSION = 1;
+export const OWNER_TERMS_EFFECTIVE_DATE = '2026년 10월 8일';
+
+/** 이용약관 제3판 — **공지 예정(초안)** 상태다(2026-10-06 약관 재검토 P2-2 · 리드 지시). 본문 초안은 src/lib/termsNextDraft.ts.
+ *  활동 포인트 조항(제10조의2: 회수·탈퇴 시 소멸 등)이 회원에게 불리할 수 있어 공지 30일 + 재동의 게이트가 필요하다.
+ *  🔴 공지일·시행일은 **리드가 정한다** — 정하기 전에는 null 로 두고 LEGAL_VERSION(2)·DB current_legal_version() 을 올리지 않는다
+ *     (legalVersion.test 가 잠근다). 시행 전환 = 이 두 값을 채우고(시행일 ≥ 공지일 + 30일) 초안을 TermsOfService 에 옮긴 뒤
+ *     LEGAL_VERSION·LEGAL_EFFECTIVE_*·legalHistory·current_legal_version() 을 같은 커밋에서 올린다. */
+export const TERMS_NEXT: { version: number; noticeIso: string | null; effectiveIso: string | null } = {
+  version: 3, noticeIso: null, effectiveIso: null,
+};
+
 /** 기기 시간대와 무관한 KST 기준 오늘(YYYY-MM-DD).
  *  왜 필요한가: 기기가 UTC·PST 로 맞춰져 있으면 시행일이 사람마다 하루 어긋나 게이트가
  *  누구에겐 뜨고 누구에겐 안 뜬다. 서버(Asia/Seoul)와 같은 기준으로 못 박는다. */
