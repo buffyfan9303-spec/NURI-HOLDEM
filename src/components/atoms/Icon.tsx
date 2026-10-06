@@ -127,13 +127,14 @@ const PATHS: Partial<Record<IconName, ReactElement>> = {
   // ── GTO 도구 타일 글리프(2026-10-06 오너 시안 '자주 쓰는 도구', 자체 제작) ─────────────
   //   선은 currentColor(회청), 포인트만 --icon-accent(파랑). 변수가 없는 자리(도구 리스트 행)에서는 currentColor 한 색으로 떨어진다.
   //   ⚠ 겹친 카드는 mask/clipPath(id) 대신 **뒤 카드의 보이는 선만** 그렸다 — 탭 keep-alive 로 display:none 인 판의 id 참조가 끊기는 부류를 피한다.
-  'spot-cards': <><path d="M7.85 17.3 L6.85 17.51 L6.32 17.46 L5.83 17.25 L5.43 16.9 L5.15 16.45 L2.92 6.77 L2.96 6.24 L3.17 5.75 L3.52 5.35 L3.98 5.07 L9.69 3.73 L10.22 3.7 L10.74 3.83 L11.19 4.11 L11.53 4.52" /><rect x="10.2" y="6.3" width="9.4" height="13.2" rx="1.7" transform="rotate(9 14.9 12.9)" /><path d={SPADE_D} transform="translate(14.9 13.1) rotate(9) scale(.34) translate(-12 -11.5)" style={ACCENT_FILL} /></>,
+  //   크기: 2026-10-06 검토 P3 — 카드 두 장의 높이를 다른 세 글리프(약 19/24)에 맞추고 스페이드를 키웠다(0.34→0.44 · 0.36→0.46).
+  'spot-cards': <><path d="M7.28 18.12 L6.13 18.37 L5.53 18.31 L4.96 18.07 L4.5 17.66 L4.18 17.15 L1.62 6.02 L1.66 5.41 L1.9 4.84 L2.3 4.38 L2.83 4.06 L9.4 2.52 L10.01 2.48 L10.61 2.63 L11.13 2.96 L11.52 3.43" /><rect x="9.99" y="5.48" width="10.81" height="15.18" rx="1.95" transform="rotate(9 15.39 13.06)" /><path d={SPADE_D} transform="translate(15.39 13.29) rotate(9) scale(.44) translate(-12 -11.5)" style={ACCENT_FILL} /></>,
   'range-grid': <>{[0, 1, 2].flatMap((r) => [0, 1, 2, 3].map((c) => {
     const hot = (r === 0 && c === 3) || (r === 2 && c === 1);
     return <rect key={`${r}${c}`} x={2.35 + c * 5.1} y={4.9 + r * 5.1} width="4" height="4" rx=".9" style={hot ? ACCENT_FILL : DIM_FILL} />;
   }))}</>,
   'push-fold': <><path d="M12 2.2 15.6 6.6H8.4Z" style={ACCENT_SOLID} /><path d="M12 6.6v4.6" style={ACCENT_STROKE} /><path d="M12 11.2c0 2.8-4.2 2.4-5.4 5.7M12 11.2c0 2.8 4.2 2.4 5.4 5.7" /><circle cx="5.4" cy="19" r="2.4" /><circle cx="18.6" cy="19" r="2.4" /></>,
-  'hand-scan': <><path d="M17.5 11V4.5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h5.5" /><path d={SPADE_D} transform="translate(10.75 11.3) scale(.36) translate(-12 -11.5)" fill="currentColor" stroke="none" /><circle cx="16.6" cy="17" r="3.4" style={ACCENT_STROKE} /><path d="m19.1 19.5 2.5 2.5" style={ACCENT_STROKE} /></>,
+  'hand-scan': <><path d="M17.5 11V4.5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h5.5" /><path d={SPADE_D} transform="translate(10.75 10.9) scale(.46) translate(-12 -11.5)" fill="currentColor" stroke="none" /><circle cx="16.6" cy="17" r="3.4" style={ACCENT_STROKE} /><path d="m19.1 19.5 2.5 2.5" style={ACCENT_STROKE} /></>,
   // ── 리디자인 스파인 공통 글리프(자체 제작) ────────────────────────────────
   // 2026-09-24 — 여기 있던 comment·eye·bookmark·flame·target·wallet·gift·check-double·map-pin·log-out 과 위 trophy 는 지웠다.
   //   아래 Icon() 은 LUCIDE 를 PATHS 보다 먼저 보므로 같은 이름이 LUCIDE 에 있으면 이 칸은 **한 번도 그려지지 않는다**(죽은 바이트).
