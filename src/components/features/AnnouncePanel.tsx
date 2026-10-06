@@ -53,6 +53,8 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
           (2026-09-07 실측: 표준 15.94 가 27곳, 이 줄만 18.99). 크기별 행간은 한 값이어야 리듬이 산다. */}
       <p className="text-2xs text-ink-muted">새 대회는 승인되면 자동으로 알림이 가요</p>
       <p data-testid="announce-ad-notice" className="text-2xs text-ink-muted">푸시는 마케팅 수신 동의자에게만 (광고)로 전송돼요 · 오후 9시~오전 8시 제외(알림함에는 팔로워 모두에게 남아요)</p>
+      {/* audit10 시각 P3-6(2026-10-07) — 카드는 대시보드 카드 열 폭(VenueManageTab), 입력칸만 읽기 폭(960px · B1 W-2)에서 멈춘다. */}
+      <div className="max-w-[960px] space-y-2.5">
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={loadError ? load : send} disabled={busy || (!loadError && (remaining === 0 || status.followers === 0))}
@@ -61,6 +63,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
           : status.followers === 0 ? '아직 팔로워가 없습니다' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
           : <span className="inline-flex items-center gap-1.5"><Icon name="send" size={15} className="shrink-0" />{`${status.followers}명에게 발송 · ${remaining}회 남음`}</span>}
       </button>
+      </div>
     </section>
   );
 }

@@ -6,7 +6,7 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, splitMismatch, SNAPSHOT_SINCE, cardUnit, wonToMan, type LedgerBuyin , ledgerCounts, rowToBuyin } from './ledger';
+import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, splitMismatch, SNAPSHOT_SINCE, cardUnit, wonToMan, wonAmount, type LedgerBuyin , ledgerCounts, rowToBuyin } from './ledger';
 import { settlementReport } from '../lib/ledgerSettlement';
 import { ledgerMoney } from './ledger';
 import { readFileSync } from 'node:fs';
@@ -222,6 +222,14 @@ describe('경계값', () => {
     expect(wonToMan(100_000)).toBe('10');
     expect(wonToMan(77_000)).toBe('7.7');
     expect(wonToMan(0)).toBe('0');
+  });
+
+  it('wonAmount — 1만 미만은 원 단위(audit10 P3-3: 1,600원이 0.16만원으로 뜨던 자리)', () => {
+    expect(wonAmount(1_600)).toEqual(['1,600', '원']);
+    expect(wonAmount(9_999)).toEqual(['9,999', '원']);
+    expect(wonAmount(10_000)).toEqual(['1', '만원']);
+    expect(wonAmount(77_000)).toEqual(['7.7', '만원']);
+    expect(wonAmount(0)).toEqual(['0', '만원']);
   });
 });
 

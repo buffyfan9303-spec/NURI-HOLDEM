@@ -6,7 +6,7 @@ import { getDealerShifts, addDealerShift, removeDealerShift, type DealerShift } 
 import { usePayRules } from '../../api/payrollRules';
 import { belowMinWage, hoursText, laborSummary, shiftHoursNote, shiftMinutes, weekStartOf } from '../../lib/staffPay';
 import { kstToday } from '../../lib/kst';
-import { wonToMan } from '../../api/ledger';
+import { wonAmount } from '../../api/ledger';
 import Icon from '../atoms/Icon';
 import { msgOf } from '../../lib/dbError';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -109,7 +109,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
         {/* 급여 명세 */}
         {!loadErr && !pay.err && payroll.length > 0 && (
           <div className="rounded-input border border-accent-400/30 bg-accent-300/5 p-2.5">
-            <p className="mb-1 text-2xs font-bold text-accent-300">이번 달 급여 명세 · 합계 {wonToMan(totalPay)}만원</p>
+            <p className="mb-1 text-2xs font-bold text-accent-300">이번 달 급여 명세 · 합계 {wonAmount(totalPay).join('')}</p>
             <ul className="space-y-1">
               {payroll.map((p) => (
                 <li key={p.name} className="flex items-center justify-between text-2xs">
