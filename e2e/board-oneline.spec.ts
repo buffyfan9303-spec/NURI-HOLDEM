@@ -279,16 +279,26 @@ for (const w of [1440, 1024]) {
     const y0 = await page.evaluate(() => scrollY);
     for (let i = 0; i < n; i++) {
       const chip = rail.locator('button').nth(i);
-      // 칩이 레일 안에 온전히 들어올 때까지 레일 위에서 휠(아래로)
+      // 칩이 레일 안에 온전히 들어올 때까지 레일 위에서 휠(아래로).
+      //   온전함의 허용 오차 1.5px = 제품이 '레일 끝'으로 보는 오차(CommunityTab wheel: scrollLeft >= max - 1)보다 조금 크다.
+      //   scrollWidth 는 정수로 반올림돼 소수 폭 칩이 끝에서 0.5px 넘게 잘려 보일 수 있다(CI 1024·글 24건 목에서 실제로 났다).
+      //   그때 레일이 끝이면 휠을 더 보내지 않는다 — 보내면 제품 설계대로 페이지가 내려가 칩이 화면 밖으로 가 누름이 빗나간다.
       for (let k = 0; k < 20; k++) {
-        const inside = await chip.evaluate((c) => { const r = c.getBoundingClientRect(); const p = c.parentElement!.getBoundingClientRect(); return r.left >= p.left - 0.5 && r.right <= p.right + 0.5; });
-        if (inside) break;
+        const st = await chip.evaluate((c) => {
+          const r = c.getBoundingClientRect(); const rail = c.parentElement!; const p = rail.getBoundingClientRect();
+          return { inside: r.left >= p.left - 1.5 && r.right <= p.right + 1.5, atEnd: rail.scrollLeft >= rail.scrollWidth - rail.clientWidth - 1 };
+        });
+        if (st.inside || st.atEnd) break;
         await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
         await page.mouse.wheel(0, 60);
         await page.waitForTimeout(80);
       }
-      const b = (await chip.boundingBox())!;
-      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      // 누르는 자리 = 칩과 레일이 겹치는 부분의 가운데(잘림 0.x px 이 있어도 보이는 쪽을 누른다)
+      const pt = await chip.evaluate((c) => {
+        const r = c.getBoundingClientRect(); const p = c.parentElement!.getBoundingClientRect();
+        return { x: (Math.max(r.left, p.left) + Math.min(r.right, p.right)) / 2, y: r.top + r.height / 2 };
+      });
+      await page.mouse.click(pt.x, pt.y);
       await expect(chip, `${i}번째 칩을 꺼내 누르지 못했다`).toHaveAttribute('aria-pressed', 'true');
     }
     expect(await page.evaluate(() => scrollY), '레일을 휠로 밀 수 있는 동안 페이지가 세로로 움직였다').toBe(y0);
