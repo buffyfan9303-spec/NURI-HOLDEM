@@ -56,6 +56,9 @@ export interface User {
   /** 랭킹 프로필 공개 동의(선택). null = 아직 물어본 적 없음(기존 회원·소셜 가입) → 기본 비공개.
    *  false(거부)와 null(미응답)을 구분해야 나중에 재요청 안내를 거부자에게 다시 띄우지 않는다. */
   publicRankingConsent?: boolean | null;
+  /** 매장이 휴대전화번호 전체로 나를 찾는 것(find_user_by_phone) 허용 여부 — 처리방침 제9조④(2026-10-06 약관 재검토 P1-2 · 오너 결정 (C)).
+   *  **undefined = 서버에 칸이 아직 없다**(store-team s3 적용 전) — 그때는 내 정보 → 보안의 토글을 숨긴다. */
+  allowVenuePhoneLookup?: boolean;
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -118,6 +121,7 @@ function rowToUser(row: any): User {
     shadowbanned:   row.shadowbanned === true,
     // ?? null 로 받는다 — undefined 로 뭉개면 '미응답'과 '컬럼 없음'이 구분되지 않는다.
     publicRankingConsent: row.public_ranking_consent ?? null,
+    allowVenuePhoneLookup: 'allow_venue_phone_lookup' in row ? row.allow_venue_phone_lookup !== false : undefined,
   };
 }
 
@@ -813,6 +817,26 @@ export async function getMyLegalConsents(limit = 20): Promise<LegalConsentRecord
 export async function setMyPublicRankingConsent(on: boolean | null): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('set_my_public_ranking_consent', { p_on: on });
+  if (error) throw new Error(error.message);
+}
+
+// ── 마케팅 정보 수신 동의(선택) — 가입 후 설정에서 켜고 끄는 경로(2026-10-06 법령 점검 P2-1) ─────────
+/** 필수 동의·약관 판 번호는 건드리지 않는다(record_my_legal_consent 와 다르다). 서버가 시각을 찍고 legal_consents 에
+ *  'settings' 이력을 남기며, 처리 결과 통지(정보통신망법 §50⑦)는 서버 트리거가 알림함에 남긴다(20261006l). */
+export async function setMyMarketingConsent(on: boolean): Promise<string> {
+  if (IS_MOCK) return new Date().toISOString();
+  const { data, error } = await supabase.rpc('set_my_marketing_consent', { p_on: on });
+  if (error) throw new Error(error.message);
+  return String(data);
+}
+
+// ── 매장 전화번호 조회 허용(처리방침 제9조④ · 오너 결정 (C)) ─────────────────────────────────────
+/** 서버 RPC 이름 — store-team 20261006s3(PR #187)이 만든다. 이름·인자가 바뀌면 **여기 한 곳**만 고친다.
+ *  p_allow = true 허용 / false 거부. 거부하면 find_user_by_phone 이 이 회원을 돌려주지 않는다(서버 판정). */
+export const PHONE_LOOKUP_RPC = 'set_my_phone_lookup';
+export async function setMyPhoneLookup(allow: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc(PHONE_LOOKUP_RPC, { p_allow: allow });
   if (error) throw new Error(error.message);
 }
 

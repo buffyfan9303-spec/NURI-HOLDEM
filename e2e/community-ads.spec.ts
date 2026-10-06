@@ -335,7 +335,7 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
       id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 2,
+      agreed_to_terms: true, consented_legal_version: 3,
     })));
     // 🔴 쓰기는 여기서 끊고 페이로드만 기록한다 — 운영 DB 에 나가지 않는다.
     await page.route(/\/rest\/v1\/community_ads/, (r) => {
@@ -409,7 +409,7 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
       id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 2,
+      agreed_to_terms: true, consented_legal_version: 3,
     })));
     await page.route(/\/rest\/v1\/community_ads/, (r) => {
       if (r.request().method() === 'GET') return r.fulfill(json(adRows));

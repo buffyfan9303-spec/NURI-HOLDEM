@@ -8,6 +8,8 @@
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { bootOwner, openMyStore, MOCK_VENUE } from './_mockOwner';
+// 위치 약관 제3판 시행일 = 정식 오픈일(2026-10-06 오너 결정) — 날짜를 스펙에 박지 않고 단일 소스에서 읽는다.
+import { LEGAL_DEPLOY_DATE } from '../src/lib/legalDeploy';
 
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const single = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
@@ -64,7 +66,7 @@ test('🔴 O1 업주 1440 — 좌표가 있으면 켜고 끈다(RPC 저장 → �
   await expect(sw).toHaveAttribute('aria-checked', 'false');
   await expect(sw).toBeEnabled();
   await expect(page.getByTestId('checkin-geo-required-state')).toHaveText('꺼짐 — 손님에게 위치를 묻지 않습니다');
-  await expect(sec).toContainText('2026년 11월 5일부터');
+  await expect(sec).toContainText(`${LEGAL_DEPLOY_DATE}부터`);
   await expect(sec).toContainText('스스로 출석할 수 없습니다(QR 스캔·매장 페이지 출석 버튼·앱 카메라)');
   await expect(sec).toContainText('대시보드 「출석·QR 명단」에서 출석 요청을 승인해 주세요');
   await expect(page.getByTestId('checkin-geo-required-owner-only'), '대표인데 대표 전용 안내가 떴다').toHaveCount(0);

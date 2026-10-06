@@ -23,9 +23,12 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateMyConsent } from '../../api/auth';
-import { LEGAL_EFFECTIVE_DATE, legalConsentStage } from '../../lib/legalVersion';
+import { legalConsentStage, legalRequiredSinceIso } from '../../lib/legalVersion';
+import { koDate } from '../../lib/legalDeploy';
 import { saveLocationConsent } from '../../lib/locationConsent';
 import { msgOf } from '../../lib/dbError';
+import { marketingConsentNotice } from '../../lib/marketingConsent';
+import ConsentSummary from './ConsentSummary';
 
 // 위치 동의 칸은 소셜 가입의 첫 동의에서만 보인다 — 이 게이트는 첫 화면 번들에 실리므로 칸은 지연 로드한다(번들 예산).
 const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
@@ -48,6 +51,8 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
   // App.tsx 는 '최초 동의 미이행'만 판정해 open 으로 넘긴다(그 파일은 다른 웨이브가 잡고 있어
   // 손대지 않는다). 재동의 판정은 여기서 프로필을 직접 읽어 한다.
   const stage = user ? legalConsentStage(user.consentedLegalVersion) : 'ok';
+  // 차단 사유가 된 판의 시행일 — 제2판 미동의자는 2026-09-29, 제2판 동의자는 제3판 시행일(legalDeploy TERMS_V3_EFFECTIVE_ISO)부터.
+  const sinceIso = user ? legalRequiredSinceIso(user.consentedLegalVersion) : null;
 
   const mode: GateMode | null = useMemo(() => {
     if (open) return 'initial';
@@ -111,8 +116,9 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
       await refreshProfile();
       // 이미 로그인된 세션이라 바로 적는다. 실패해도 가입 동의는 끝났다 — 출석 때 시트가 다시 묻는다.
       if (mode === 'initial' && locOk) await saveLocationConsent(true).catch(() => {});
-      // 「정보통신망법」 §50⑦ — 수신 동의·철회의 처리 결과를 이용자에게 알려야 한다.
-      if (reconsent && wasMarketing && !marketing) toast.show('마케팅 정보 수신 동의가 철회되었습니다', 'success');
+      // 「정보통신망법」 §50⑦·시행령 §62의2 — 수신 동의·철회의 처리 결과(전송자·날짜·결과)를 알린다.
+      //   값이 바뀐 경우만(첫 동의 게이트에서 새로 켠 경우 포함). 같은 통지가 서버 트리거로 알림함에도 남는다(20261006l).
+      if (wasMarketing !== marketing) toast.show(marketingConsentNotice(marketing), 'success');
       else toast.show('동의가 완료되었습니다', 'success');
     } catch (err) {
       toast.show(msgOf(err, '저장에 실패했습니다'), 'error');
@@ -134,7 +140,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-ink-secondary leading-relaxed">
-              개정 약관이 {LEGAL_EFFECTIVE_DATE}부터 시행되었습니다. 계속 이용하시려면 개정된 내용에 동의해 주세요.
+              개정 약관이 {sinceIso ? koDate(sinceIso) : ''}부터 시행되었습니다. 계속 이용하시려면 개정된 내용에 동의해 주세요.
             </p>
             <p className="text-2xs text-ink-muted leading-relaxed">
               무엇이 바뀌었는지는 각 문서 끝의 「부칙 — 개정 이력」에서 확인하실 수 있습니다.
@@ -168,6 +174,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           {/* 오너 #12 — 순위표의 '자주 가는 매장' 표기 동의(선택). 미동의여도 순위·닉네임은 그대로. */}
           <ConsentRow checked={pubRank}   onChange={(v) => { setPubRank(v); setPubRankTouched(true); }}
                       label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)" />
+          <ConsentSummary />
         </div>
 
         {mode === 'initial' && <Suspense fallback={null}><SignupLocationConsent checked={locOk} onChange={setLocOk} /></Suspense>}

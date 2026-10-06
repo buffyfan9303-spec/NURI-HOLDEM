@@ -194,7 +194,7 @@ export async function stubLogin(page: Page, over: Record<string, unknown> = {}):
     status: 'active', suspended_until: null, sanction_reason: null,
     // ⚠ 현재 약관 버전(src/lib/legalVersion.ts LEGAL_VERSION)으로 둔다 — null 이면 재동의 게이트가
     //   모든 화면 위에 뜨고, 그걸 걷어내는 dismissOverlays 가 검사하려던 딥링크 모달까지 함께 닫는다.
-    agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 2,
+    agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3,
     joined_at: '2026-01-01T00:00:00Z', last_seen_at: null, name_changed_at: null,
     activity_points: 10, badges: [], staff_title: null, ci_hash: null, verified_at: null, real_name: null,
     ...over,

@@ -22,6 +22,9 @@ import { relativeTime } from '../../lib/relativeTime';
 //  id 매핑: all / pokerGear(용품) / item(아이템·신규) / etc(기타).
 //  item은 신규 카테고리 → 데이터 없으면 빈 결과만 반환(런타임 오류 없음).
 //  기존 gameMoney 데이터는 어느 탭에도 안 잡히나, '아이템'으로 마이그레이션은 Stage 2 글쓰기에서 처리.
+/** 전자상거래법 §20①·§20의2① 통신판매중개자 고지 — 장터 목록과 매물 상세(공유 링크로 바로 열림)가 **같은 문장**을 쓴다(약관 재검토 P2-7). */
+const BROKER_NOTICE = '본 장터의 거래는 회원 간 직거래이며, 엔에이치홀딩스는 통신판매중개자로서 거래의 당사자가 아닙니다. 상품·거래정보 및 거래에 대한 책임은 판매 회원에게 있습니다.';
+
 const CATEGORIES: { id: ListingCategory | 'all'; label: string }[] = [
   { id: 'all',       label: '전체'   },
   { id: 'pokerGear', label: '용품'   },
@@ -148,8 +151,7 @@ function MarketplaceTab({
 
       {/* 전자상거래법 §20 통신판매중개자 개별고지 — 거래 전 상시 노출(LAW-8) */}
       <p data-testid="broker-notice" className="rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-2xs leading-relaxed text-ink-muted">
-        본 장터의 거래는 회원 간 직거래이며, 엔에이치홀딩스는 통신판매중개자로서 거래의 당사자가 아닙니다.
-        상품·거래정보 및 거래에 대한 책임은 판매 회원에게 있습니다.
+        {BROKER_NOTICE}
       </p>
 
       {/* ── 액션 바 (검색 + 글쓰기) ────────────────────────────────── */}
@@ -455,7 +457,7 @@ function SearchIcon({ className = '' }: { className?: string }) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- 장터 상수/유틸을 외부와 공유(기존 구조 유지)
-export { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime };
+export { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime, BROKER_NOTICE };
 
 // (A2) 장터 탭 memo — App 무관 재렌더 차단. props는 App에서 안정화(marketNotices·handleMarketCreate 등).
 export default memo(MarketplaceTab);

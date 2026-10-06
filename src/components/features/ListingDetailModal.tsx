@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import type { ListingStatus, MarketplaceListing, ListingLikeState } from '../../api/marketplace';
 import { updateListingStatus, getListingLikeState, toggleListingLike, nextLikeState, incrementListingView } from '../../api/marketplace';
-import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
+import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime, BROKER_NOTICE } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
@@ -246,6 +246,8 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           <p className="mt-2 rounded-input bg-amber-500/8 px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
           </p>
+          {/* 전자상거래법 §20①·§20의2① — 공유 링크로 상세가 바로 열리면 목록 위 고지를 못 본다. 연락 버튼 전에 같은 문장(약관 재검토 P2-7). */}
+          <p data-testid="listing-broker-notice" className="mt-2 text-left text-2xs leading-relaxed text-ink-muted">{BROKER_NOTICE}</p>
         </section>
       </div>
 

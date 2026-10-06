@@ -23,7 +23,7 @@ const me = {
 const meProfile = {
   id: UID, name: '읽는사람이름', nickname: '읽는사람', email: 'reader@example.com', role: 'user', approved: false, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 2,
+  agreed_to_terms: true, consented_legal_version: 3,
 };
 const TITLE = '메뉴 경합 점검용 글';
 const post = {

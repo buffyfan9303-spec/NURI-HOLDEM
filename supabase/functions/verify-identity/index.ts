@@ -32,5 +32,11 @@ Deno.serve((req: Request) => handle(req, {
     const { data, error } = await admin.rpc('verify_identity_commit', p);
     return { data, error };
   },
+  // 2026-10-06 P2-6 — 만 19세 미만 확인 시 이용 제한 + 관리자 알림(20261006n restrict_underage_account · service_role 전용).
+  async restrictUnderage(userId) {
+    const admin = createClient(SUPABASE_URL!, SERVICE!);
+    const { error } = await admin.rpc('restrict_underage_account', { p_uid: userId });
+    return { error };
+  },
   log: (...a) => console.error(...a),
 }));

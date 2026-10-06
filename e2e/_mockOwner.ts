@@ -17,6 +17,7 @@
 //   스텁이 200 을 돌려주면 가드가 무력화된 것을 통과로 착각한다.
 import type { Page, Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
+import { OWNER_TERMS_VERSION } from '../src/lib/legalDeploy';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 /** supabase-js v2 의 세션 키 — 앱이 로드되기 전에 심으면 정상 로그인으로 부팅한다. */
@@ -84,7 +85,7 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     venue_id: MOCK_VENUE, activity_points: 0, created_at: FAKE_SESSION.user.created_at,
     // 2026-09-28 — 개정 약관 시행일(LEGAL_EFFECTIVE_ISO 2026-09-29)부터 구버전 동의자는 '개정 약관 동의' 차단 게이트를 본다.
     //   이 칸이 없으면 시행일 이후 **모든 목킹 업주 스펙**이 게이트에 막혀 '내 매장' 을 못 찾는다(자정 넘김 스펙에서 실측).
-    consented_legal_version: 2,
+    consented_legal_version: 3,
     ...opts.profile,
   }));
   const venueRow = {
@@ -142,6 +143,10 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     ? r.fulfill({ status: 200, headers: { 'content-range': '*/0', 'access-control-expose-headers': 'content-range' }, body: '' })
     : r.fallback()));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
+  // 매장 운영자 이용약관 동의(20261006n · OwnerTermsGate) — 목킹 업주는 **현재 판에 이미 동의한** 업주로 부팅한다.
+  //   안 걸면 스펙의 포괄 GET 라우트가 [] 를 줘 판 0 → 동의 게이트가 내 매장을 덮는다(pr188-193-review P2-2 · CI).
+  //   게이트 자체를 시험하는 스펙(legal2-1006)은 extra 로 덮어쓴다(나중 등록이 이긴다).
+  await page.route(/\/rest\/v1\/owner_terms_consents\?/, restGet([{ terms_version: OWNER_TERMS_VERSION }]));
   // 서버 시각(읽기 RPC server_now = select now()). 안 걸면 _fixtures 가드가 POST 를 끊어 serverTimeKnown 이 거짓으로 남고
   //   PC 워치독·장부 백업 전진이 DB 에 레벨을 쓰지 않는다(2026-09-29 CI: C2·recheck2 #7).
   //   서버와 기기 시계가 같은 매장 = 오프셋 **정확히 0** 이어야 한다. 그래서 '함수 없음'(PGRST202)으로 답한다 —
