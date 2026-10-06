@@ -597,12 +597,12 @@ export async function createDealerPost(input: {
   });
   if (error) throw gateError(error, '등록에 실패했습니다');
 }
+// 작성자 본인·운영자 삭제 모두 이 RPC 하나(20261007d). 직접 UPDATE 는 작성자에게 42501 이었고, 읽기 정책을 넓혀 고치면
+// 작성자가 운영자 삭제를 되돌릴 수 있었다(PR #202 검토 R1~R3). 거절 사유(권한 없음·이미 삭제됨)는 서버 문장(P0001)이 그대로 토스트된다.
 export async function deleteDealerPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  await mustAffect(supabase
-    .from('dealer_posts')
-    .update({ deleted: true, deleted_at: new Date().toISOString() })
-    .eq('id', id));
+  const { error } = await supabase.rpc('delete_dealer_post', { p_id: id });
+  if (error) throw gateError(error, '삭제에 실패했습니다');
 }
 
 // ── 구인 지원서 ───────────────────────────────────────────────────────────────
