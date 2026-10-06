@@ -24,15 +24,18 @@ import { rememberSignupLocationConsent, flushSignupLocationConsent } from '../..
 import { authMsgOf } from '../../lib/authError';
 import { marketingConsentNotice } from '../../lib/marketingConsent';
 import ConsentSummary from './ConsentSummary';
+import OwnerTerms from '../../pages/legal/OwnerTerms';
+import { rememberSignupOwnerTerms, flushSignupOwnerTerms } from '../../lib/ownerTerms';
 
 type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
-type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
+type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing' | 'owner-terms';
 
 const LEGAL_TITLES: Record<LegalDoc, string> = {
   'terms':          '서비스 이용약관',
   'privacy':        '개인정보처리방침',
   'anti-gambling':  '사행성 배제 및 건전 이용 공지',
   'marketing':      '마케팅 정보 수신 동의 [선택]',
+  'owner-terms':    '매장 운영자 이용약관',
 };
 
 const MODE_LABEL: Record<Mode, string> = {
@@ -95,6 +98,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
         {shown === 'privacy'       && <PrivacyPolicy />}
         {shown === 'anti-gambling' && <LegalNotice />}
         {shown === 'marketing'     && <MarketingConsent />}
+        {shown === 'owner-terms'   && <OwnerTerms />}
       </div>
       {/* 하단 닫기 버튼 — Modal 본문이 스크롤러라 sticky 로 바닥에 붙인다 */}
       <div className="sticky bottom-0 border-t border-border-subtle bg-surface-mid px-4 py-3">
@@ -784,6 +788,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
   const { c, allRequired, allChecked, set, toggleAll } = useConsent();
   // 위치정보 이용 동의(선택) — 필수·전체 동의와 분리된 별도 체크(위치정보법 §18). 세션이 생긴 뒤 적는다(afterSignupLocation).
   const [locOk, setLocOk] = useState(false);
+  const [ownerOk, setOwnerOk] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -791,6 +796,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
     if (!c.terms)        return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
+    if (!ownerOk)        return toast.show('매장 운영자 이용약관에 동의해 주세요.', 'error');
     if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
     if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
     if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
@@ -807,6 +813,8 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
         venueName, region, address, phone, businessNumber: bizNum,
       });
       if (locOk) await afterSignupLocation(mail.value);
+      rememberSignupOwnerTerms(mail.value);
+      try { await flushSignupOwnerTerms(mail.value); } catch { /* 다음 로그인 때 다시 — 못 적으면 내 매장 게이트가 묻는다 */ }
       toast.show('매장 운영자 가입 신청이 완료되었습니다. 로그인 후 휴대폰 본인인증과 관리자 승인을 거치면 포스터를 올릴 수 있습니다.', 'success');
       // 정보통신망법 §50⑦ — 가입 때 마케팅 수신에 동의했으면 처리 결과(전송자·날짜·결과)를 화면에 알린다. 알림함 기록은 서버 트리거(20261006l).
       if (c.marketing) toast.show(marketingConsentNotice(true), 'success');
@@ -866,11 +874,19 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
           set={set} toggleAll={toggleAll}
           onView={setLegalDoc}
         />
+        {/* 매장 운영자 이용약관(개인정보 처리위탁 포함) — 업주만 받는 필수 동의(P1-5). 전체 동의(회원 약관)와 분리한다 —
+            회원 약관과 다른 계약이라 한 번에 묶어 체크되면 '읽고 동의했다'가 약해진다. 세션이 생긴 뒤 서버에 적는다(lib/ownerTerms). */}
+        <div className="pl-1" data-testid="owner-terms-consent">
+          <CheckRow onView={setLegalDoc}
+            checked={ownerOk} onChange={setOwnerOk}
+            required label="매장 운영자 이용약관(손님·직원 개인정보 처리위탁 포함)에 동의합니다. (개인정보보호법 §26)" doc="owner-terms"
+          />
+        </div>
         <SignupLocationConsent checked={locOk} onChange={setLocOk} />
 
         <button
           type="submit"
-          disabled={loading || !allRequired || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
+          disabled={loading || !allRequired || !ownerOk || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
           className="btn-primary w-full mt-3 disabled:opacity-60"
           data-testid="auth-owner-submit"
         >

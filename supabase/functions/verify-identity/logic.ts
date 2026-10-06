@@ -49,6 +49,8 @@ export interface Deps {
   /** GET api.portone.io/identity-verifications/{id}{qs} */
   lookup(id: string, qs?: string): Promise<Response>;
   commit(p: CommitParams): Promise<{ data: { ok?: boolean; code?: string } | null; error: unknown }>;
+  /** restrict_underage_account(uid) — 만 19세 미만 확인 시 이용 제한 + 관리자 알림(P2-6). 없으면 건너뛴다(구 배선). */
+  restrictUnderage?(userId: string): Promise<{ error: unknown }>;
   log(...a: unknown[]): void;
 }
 
@@ -133,6 +135,16 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     // 만 19세 게이트(청소년보호법·게임산업법) — fail-closed: 생년 미확인(age null) 시에도 거부(우회 차단).
     const birth: string | null = vc.birthDate ?? null;
     const age = ageFrom(birth);
+    // 2026-10-06 약관 재검토 P2-6(리드 결정): 만 19세 미만이 **확인되면**(생년 미확인 null 은 확인이 아니라 제외) 인증 거절에 더해
+    //   계정을 이용 제한(무기한 정지)하고 관리자에게 알린다 — 약관 제9조⑤·처리방침 제12조③의 '해지·파기'를 실행할 근거를 남긴다.
+    //   서버 함수 restrict_underage_account(20261006n · service_role 전용)가 한 트랜잭션으로 한다. 실패해도 응답은 같은 403(로그만).
+    //   생년월일 원문은 넘기지 않는다(저장하지 않는다는 처리방침 그대로) — 회원 번호만.
+    if (age !== null && age < 19) {
+      try {
+        const r = await deps.restrictUnderage?.(uid);
+        if (r && r.error) deps.log('[verify-identity] restrict_underage_account 실패', r.error);
+      } catch (e) { deps.log('[verify-identity] restrict_underage_account 예외', e); }
+    }
     if (age === null || age < 19) return json({ error: '만 19세 이상만 이용할 수 있습니다. (생년월일 확인 불가 시 가입 제한)' }, 403);
 
     // CI 원문은 DB 함수(verify_identity_commit) 트랜잭션 안에서 HMAC 해시로만 저장된다.

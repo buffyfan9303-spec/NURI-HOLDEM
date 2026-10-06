@@ -27,7 +27,7 @@ function fakeSession(uid: string, email: string) {
 const profile = (id: string, role: string, nickname: string) => ({
   id, name: `${nickname}이름`, nickname, email: `${nickname}@example.com`, role, approved: true, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 2,
+  agreed_to_terms: true, consented_legal_version: 3,
 });
 const sched = (id: string, extra: Record<string, unknown>) => ({
   id, title: '그룹 토너', venue_id: 'g', pub_name: '그룹', region: '서울', date: TOMORROW, start_time: '19:00', duration: '',

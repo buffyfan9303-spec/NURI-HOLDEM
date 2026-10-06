@@ -57,6 +57,7 @@ import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
 import SlidingPill from '../atoms/SlidingPill';
 import { msgOf } from '../../lib/dbError';
 import { requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
+import VenueShareNote from './VenueShareNote';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -520,6 +521,8 @@ export default function VenuePage({
             <KakaoActionButton kakao={kakao} />
             </div>
           </div>
+          {/* 처리방침 제9조② — 출석 화면의 매장 제공 고지(pr188-193-review P2-3) */}
+          <VenueShareNote kind="checkin" />
           <CoachMark id="venue-checkin">출석하면 점수 적립 · 전적 인정 · 방문 후기가 열립니다</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">

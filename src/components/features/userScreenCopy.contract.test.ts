@@ -39,7 +39,8 @@ describe('유저 화면 부연설명 제거 계약', () => {
 
   it('법적 고지·경고는 그대로다 — 부연 제거가 여기까지 번지면 안 된다', () => {
     expect(read('EventPage.tsx')).toContain('한 번 연 카드는 되돌릴 수 없습니다');       // 되돌릴 수 없음 경고
-    expect(read('ScheduleDetailModal.tsx')).toContain('휴대전화번호는 매장에 전달되지 않습니다'); // 개인정보 고지
+    // 개인정보 고지 — 2026-10-06 약관 재검토 P1-2: 손님 명단(가린 번호)까지 사실대로 적은 문구로 바뀌었다
+    expect(read('ScheduleDetailModal.tsx')).toContain('가운데를 가린 휴대전화번호(예: 010-****-1234)가 보입니다. 휴대전화번호 전체는 전달되지 않습니다');
     expect(read('MyVoucherSheet.tsx')).toContain('지갑으로 돌아옵니다');               // 승인 전 취소 결과
   });
 });

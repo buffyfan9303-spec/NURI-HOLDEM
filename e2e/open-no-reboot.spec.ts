@@ -129,6 +129,8 @@ const UNREACHABLE: Record<string, string> = {
   CustomerDashboardPage: '로그인 필요(내 정보/이용권 지갑). 목킹 세션(a11y-modal 3종)을 이 스펙에 들이면 다른 축이 섞인다 — 별도 행으로 올릴 때 같이 넣는다.',
   MyVoucherSheet: '로그인 필요(헤더 [이용권·출석] 버튼이 비로그인에서 안 뜬다 — 실측).',
   SanctionedAccountSheet: '정지·영구정지 계정의 세션 위조가 필요하다(사용자 동작으로 여는 화면이 아니라 로그인 응답이 연다). 열림·로그아웃은 e2e/legal-1006.spec.ts 가 본다(2026-10-06).',
+  VenueShareNote: '오버레이가 아니라 출석 요청·참가 신청 시트 안의 한 줄 고지(지연 청크) — 그 시트를 여는 경로가 검사 대상이다(2026-10-06 pr188-193-review P2-3).',
+  OwnerTermsGate: '승인 업주 세션 + 동의 기록 없음(owner_terms_consents · 20261006n 적용 뒤)이 있어야 내 매장 진입이 연다 — 사용자 탭이 아니라 서버 판정이 여는 게이트(2026-10-06 약관 재검토 P1-5). 진입·동의는 e2e/legal2-1006.spec.ts 가 본다.',
   VenueManageTab: '업주·직원 역할 필요 — 비로그인에서는 내 매장 탭이 없다.',
   AdminTab: '관리자 역할 필요 — 비로그인에서는 탭 자체가 없다.',
   MarketplaceTab: '커뮤니티 탭 안의 하위 탭이라 진입이 2단계 — 탭 행과 중복된다.',

@@ -193,6 +193,8 @@ const shellDeferred     = () => import('./components/features/shellDeferred');
 const VerifyGateSheet   = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.VerifyGateSheet })));
 // 정지·영구정지 계정의 '탈퇴만 가능' 안내(2026-10-06 P2-8 ②) — 그런 계정으로 로그인했을 때만 받는다(user=null 이라 막을 화면이 없다).
 const SanctionedAccountSheet = lazyWithReload(() => import('./components/features/SanctionedAccountSheet'));
+const OwnerTermsGate       = lazyWithReload(() => import('./components/features/OwnerTermsGate'));
+const VenueShareNote       = lazyWithReload(() => import('./components/features/VenueShareNote'));
 const StaffInviteBanner = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.StaffInviteBanner })));
 const LevelUpWatcher    = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.LevelUpWatcher })));
 // 쪽지·알림 패널도 같은 청크다 — 닫혀 있을 땐 아무것도 그리지 않는다(render=false).
@@ -1394,6 +1396,15 @@ export default function App() {
   // 가입 때 체크한 위치 동의(선택)를 그 계정의 첫 로그인에 적는다 — 가입 직후 세션이 없던 경우(확인 메일)의 이어 받기.
   //   남겨 둔 것이 없으면 localStorage 한 번 읽고 끝난다(요청 0). src/lib/locationConsent.ts flushSignupLocationConsent
   useEffect(() => { if (user?.email) void flushSignupLocationConsent(user.email); }, [user?.email]);
+  // 매장 운영자 가입 때 받은 매장 운영자 이용약관 동의(P1-5)도 같은 방식으로 적는다. 남긴 게 있을 때만 모듈을 불러온다(첫 화면 번들 0).
+  //   키 이름은 src/lib/ownerTerms.ts PENDING_KEY 와 같다(ownerTerms.contract.test 가 잠근다).
+  useEffect(() => {
+    const email = user?.email;
+    if (!email) return;
+    let pending = false;
+    try { pending = localStorage.getItem('nuri:signup-owner-terms') !== null; } catch { /* 저장소 차단 — 내 매장 게이트가 묻는다 */ }
+    if (pending) void import('./lib/ownerTerms').then((m) => m.flushSignupOwnerTerms(email)).catch(() => {});
+  }, [user?.email]);
 
   // 17-5 오프라인·재연결 — 홀덤펍은 지하 매장이 많다: 단절이 예외가 아니라 일상 조건.
   // 캐시 퍼스트(Phase 6) 덕에 화면은 살아 있으므로, 배너로 상태만 알리고
@@ -4871,6 +4882,7 @@ export default function App() {
                   className="w-full rounded-input border border-border-default px-3 py-2 text-xs text-ink-secondary hover:text-ink-primary">아무 게임이나 (매장이 배정)</button>
               </div>
               <button type="button" onClick={() => setBuyinPick(null)} className="w-full pt-1 text-2xs text-ink-muted">취소</button>
+              <Suspense fallback={null}><VenueShareNote kind="buyin" className="pt-1" /></Suspense>
             </div>
           </div>
         );
@@ -4899,6 +4911,8 @@ export default function App() {
                     .catch((e) => { if (uidRef.current === forUid) toast.show(msgOf(e, '출석 요청을 보내지 못했습니다'), 'error'); });
                 }}
                 className="btn-ghost min-h-[44px] w-full border border-border-default text-sm">출석 요청 보내기</button>
+              {/* 처리방침 제9조② — 출석·출석 요청 화면의 매장 제공 고지(pr188-193-review P2-3). 첫 화면 번들 밖(지연). */}
+              <Suspense fallback={null}><VenueShareNote kind="request" /></Suspense>
             </div>
           </Modal>
         );
@@ -5138,6 +5152,10 @@ export default function App() {
       {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
       <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />
       {sanctioned && <Suspense fallback={null}><SanctionedAccountSheet /></Suspense>}
+      {/* 매장 운영자 이용약관(개인정보 처리위탁) 동의 게이트 — 승인된 업주·공동 운영자가 내 매장을 열 때만(P1-5). 동의 안 하면 홈으로. */}
+      {user?.role === 'venue_owner' && user.approved && activeTab === 'my-store' && (
+        <Suspense fallback={null}><OwnerTermsGate onLeave={() => changeTab('home')} /></Suspense>
+      )}
 
       {/* ↑ 맨 위로 — 600px 이상 스크롤 시 표시(우하단 플로팅) */}
       <ScrollTopButton />

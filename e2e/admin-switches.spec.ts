@@ -56,7 +56,7 @@ async function bootSwitches(page: Page, opts: Opts = {}) {
     ? r.fulfill(json({
       id: UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 2,
+      agreed_to_terms: true, consented_legal_version: 3,
     }))
     : r.fallback()));
 

@@ -24,10 +24,13 @@
 //   비교하면 타임존·표기 흔들림으로 게이트가 오작동한다. 개정할 때마다 +1 하고,
 //   legalHistory.ts 에 한 줄, DB current_legal_version() 에 같은 숫자를 남긴다(테스트가 셋을 맞댄다).
 
-/** 현재(개정판) 약관 버전. 개정 시 +1 하고 legalHistory.ts 의 LEGAL_HISTORY 에 항목을 추가한다. */
-export const LEGAL_VERSION = 2;
+/** 현재 약관 동의 판(= 이용약관의 판). 개정 시 +1 하고 legalHistory.ts 의 terms 이력 · 아래 CONSENT_GATES · DB current_legal_version() 을 같이 올린다.
+ *  제3판(2026-10-06 리드 결정, 약관 재검토 P2-2 활동 포인트): 공지·시행일은 legalDeploy.ts TERMS_V3_*(배포일 기준) 한 곳. */
+export const LEGAL_VERSION = 3;
 
-/** 개정판 시행일(KST, ISO) — 이 날부터 재동의 게이트가 '차단'으로 바뀐다. */
+/** 제2판(2026-09-29, 약관 4문서 공통 개정) 시행일(KST, ISO). 이 날부터 제1판 동의자는 재동의 게이트가 '차단'이다.
+ *  ⚠ 이 상수들(LEGAL_EFFECTIVE_* · LEGAL_NOTICE_*)은 **제2판 공통 개정**의 날짜다 — 처리방침·서약·마케팅 문서와 개정 이력이 함께 쓴다.
+ *    제3판(이용약관만)의 날짜는 legalDeploy.ts TERMS_V3_* 다. 여기를 제3판 날짜로 바꾸면 다른 문서의 이력이 거짓이 된다. */
 export const LEGAL_EFFECTIVE_ISO = '2026-09-29';
 /** 화면 표기용 시행일. */
 export const LEGAL_EFFECTIVE_DATE = '2026년 9월 29일';
@@ -45,18 +48,21 @@ export const LEGAL_PREV_ARCHIVE_URL = `/legal/archive/${LEGAL_PREV_EFFECTIVE_ISO
 /** 개인정보처리방침만의 판(版) — 약관 동의 버전(LEGAL_VERSION·재동의 게이트)과 **별개**다.
  *  처리방침의 변경은 재동의가 아니라 공지 사항이다(처리방침 제14조). 그래서 이 숫자는 재동의 게이트·DB current_legal_version() 과 묶지 않는다.
  *  제3판(2026-10-06 리드 결정, PR #188): 영구 이용 제한(영구정지) 회원의 연계정보 변환값 5년 보관(제3조·제4조·제5조) —
- *    보유기간 연장은 처리방침 제14조② '정보주체의 권리에 중대한 영향을 미치는 변경'으로 보고 시행 30일 전에 공지한다
- *    (리드 결정 2026-10-06 — 위치기반서비스 이용약관 제3판 시행일과 같은 날).
- *    🔴 배포(=공지)가 늦어지면 두 날짜를 **같은 커밋에서** 함께 미룬다(공지일 + 30일 이상 = 시행일 — legalVersion.test 가 간격을 잠근다).
+ *    🔴 2026-10-06 오너 결정: "시행은 모든 약관상 목요일부터" — 공지일 = 시행일 = 정식 오픈일(legalDeploy LEGAL_DEPLOY_ISO), 30일 간격 없음.
+ *    약관 재검토(legal-full-1006)의 처리방침 변경도 같은 판에 합쳤다. 공지일 = 배포일, 시행일 = +30일(legalDeploy.ts 한 곳 —
+ *    처음엔 위치 약관 제3판과 같은 11-05 였으나 배포일 기준으로 바뀌었다. legalVersion.test 가 30일 간격을 잠근다).
  *    코드(20261006m 의 5년 파기 규칙)가 시행일보다 먼저 적용돼도 실질 영향은 없다: 서비스 개시(2026-06-15)부터 6개월 파기와
  *    5년 파기가 처음 갈리는 날은 2026-12-15 라 시행일 뒤다. */
 export const PRIVACY_VERSION = 3;
-export const PRIVACY_NOTICE_ISO = '2026-10-06';
-export const PRIVACY_NOTICE_DATE = '2026년 10월 6일';
-export const PRIVACY_EFFECTIVE_ISO = '2026-11-05';
-export const PRIVACY_EFFECTIVE_DATE = '2026년 11월 5일';
-/** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 제3판 공지 직전의 /legal/privacy.html. sitemap 에 넣지 않는다. */
-export const PRIVACY_PREV_ARCHIVE_URL = `/legal/archive/${PRIVACY_NOTICE_ISO}/privacy.html`;
+// 2026-10-06 리드 결정 ④ — 공지일·시행일은 배포일 기준 한 곳(src/lib/legalDeploy.ts LEGAL_DEPLOY_ISO)에서 계산한다. 여기서 손으로 고치지 마라.
+export {
+  PRIVACY_V3_NOTICE_ISO as PRIVACY_NOTICE_ISO, PRIVACY_V3_NOTICE_DATE as PRIVACY_NOTICE_DATE,
+  PRIVACY_V3_EFFECTIVE_ISO as PRIVACY_EFFECTIVE_ISO, PRIVACY_V3_EFFECTIVE_DATE as PRIVACY_EFFECTIVE_DATE,
+} from './legalDeploy';
+import { TERMS_V3_EFFECTIVE_ISO } from './legalDeploy';
+/** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 2026-10-06 에 뜬 제3판 공지 직전의 /legal/privacy.html.
+ *  경로의 날짜는 **보존본을 뜬 날**이다(공지일이 배포일로 옮겨져도 파일은 그대로). sitemap 에 넣지 않는다. */
+export const PRIVACY_PREV_ARCHIVE_URL = '/legal/archive/2026-10-06/privacy.html';
 
 /** 기기 시간대와 무관한 KST 기준 오늘(YYYY-MM-DD).
  *  왜 필요한가: 기기가 UTC·PST 로 맞춰져 있으면 시행일이 사람마다 하루 어긋나 게이트가
@@ -75,11 +81,29 @@ export function kstToday(now: Date = new Date()): string {
  * '동의 없는 이용'이 된다. 그래서 3-state 다.
  */
 export type LegalConsentStage = 'ok' | 'notice' | 'required';
+
+/** 판별 시행일 — [판, 시행일]. 그 판보다 낮은 판에 동의한 회원은 **그 판의 시행일부터** 차단된다(그 전에는 notice: 차단 없음).
+ *  판마다 따로 두는 이유: 한 날짜로 비교하면 판을 올리는 순간 시행 전인데도 전원이 차단되거나(시행일 전 공지 기간이 있을 때),
+ *  거꾸로 제1판 동의자가 풀린다. 제3판은 2026-10-06 오너 결정으로 공지일 = 시행일 = 배포일이라 배포일부터 제2판 동의자도 차단된다. */
+const CONSENT_GATES: readonly (readonly [number, string])[] = [
+  [2, LEGAL_EFFECTIVE_ISO],
+  [3, TERMS_V3_EFFECTIVE_ISO],
+];
+
+/** 이 회원을 차단하는 판의 시행일(ISO) — 없으면 null(차단 안 함). 게이트 문구가 '언제부터 시행'을 고를 때도 쓴다. */
+export function legalRequiredSinceIso(consentedVersion: number | null | undefined, now: Date = new Date()): string | null {
+  const v = typeof consentedVersion === 'number' ? consentedVersion : 0;
+  const today = kstToday(now);
+  let since: string | null = null;
+  for (const [ver, iso] of CONSENT_GATES) if (v < ver && today >= iso) since = iso;
+  return since;
+}
+
 export function legalConsentStage(
   consentedVersion: number | null | undefined,
   now: Date = new Date(),
 ): LegalConsentStage {
   const v = typeof consentedVersion === 'number' ? consentedVersion : 0;
   if (v >= LEGAL_VERSION) return 'ok';
-  return kstToday(now) >= LEGAL_EFFECTIVE_ISO ? 'required' : 'notice';
+  return legalRequiredSinceIso(v, now) ? 'required' : 'notice';
 }

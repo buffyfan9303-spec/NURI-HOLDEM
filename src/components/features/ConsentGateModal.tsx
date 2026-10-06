@@ -23,7 +23,8 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateMyConsent } from '../../api/auth';
-import { LEGAL_EFFECTIVE_DATE, legalConsentStage } from '../../lib/legalVersion';
+import { legalConsentStage, legalRequiredSinceIso } from '../../lib/legalVersion';
+import { koDate } from '../../lib/legalDeploy';
 import { saveLocationConsent } from '../../lib/locationConsent';
 import { msgOf } from '../../lib/dbError';
 import { marketingConsentNotice } from '../../lib/marketingConsent';
@@ -50,6 +51,8 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
   // App.tsx 는 '최초 동의 미이행'만 판정해 open 으로 넘긴다(그 파일은 다른 웨이브가 잡고 있어
   // 손대지 않는다). 재동의 판정은 여기서 프로필을 직접 읽어 한다.
   const stage = user ? legalConsentStage(user.consentedLegalVersion) : 'ok';
+  // 차단 사유가 된 판의 시행일 — 제2판 미동의자는 2026-09-29, 제2판 동의자는 제3판 시행일(legalDeploy TERMS_V3_EFFECTIVE_ISO)부터.
+  const sinceIso = user ? legalRequiredSinceIso(user.consentedLegalVersion) : null;
 
   const mode: GateMode | null = useMemo(() => {
     if (open) return 'initial';
@@ -137,7 +140,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-ink-secondary leading-relaxed">
-              개정 약관이 {LEGAL_EFFECTIVE_DATE}부터 시행되었습니다. 계속 이용하시려면 개정된 내용에 동의해 주세요.
+              개정 약관이 {sinceIso ? koDate(sinceIso) : ''}부터 시행되었습니다. 계속 이용하시려면 개정된 내용에 동의해 주세요.
             </p>
             <p className="text-2xs text-ink-muted leading-relaxed">
               무엇이 바뀌었는지는 각 문서 끝의 「부칙 — 개정 이력」에서 확인하실 수 있습니다.

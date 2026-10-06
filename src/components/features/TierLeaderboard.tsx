@@ -65,8 +65,9 @@ const BOARD_LABEL: Record<Board, string> = {
   badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회 입상만 인정. 해외 대회도 포함하며, 관리자가 승인한 건에 한해 100만당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
-  verify: '대회 입상 증빙 2장(입상 증빙·신분증)을 올려 관리자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만당 1점입니다.',
+  // §28(2026-10-06 약관 재검토 P2-8): 상금 금액 단위로 점수를 말하는 문구는 환금성 프레이밍이라 쓰지 않는다 — 계산은 서버 그대로, 문구만 '입상 규모'.
+  domestic: '대회 입상만 인정. 해외 대회도 포함하며, 관리자가 승인한 건에 한해 입상 규모에 따라 점수를 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  verify: '대회 입상 증빙 2장(입상 증빙·신분증)을 올려 관리자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 입상 규모에 따라 점수가 매겨집니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 배지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받습니다.',
   moneyin: '전국 대회 입상 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
@@ -483,6 +484,9 @@ export default function TierLeaderboard() {
     { event: '', amount: '', overseas: false });
   const [vProof, setVProof] = useState<File | null>(null);
   const [vIdCard, setVIdCard] = useState<File | null>(null);
+  // P1-3(오너 결정 (A)) — 신분증 사진은 별도 동의 + 번호 가림 확인 두 체크가 모두 있어야 접수한다(개보법 §15②·§24①·§24의2).
+  const [vConsent, setVConsent] = useState(false);
+  const [vMasked, setVMasked] = useState(false);
   const [vBusy, setVBusy] = useState(false);
   // 행 닉네임 앞 장착 마크 — equippedMark 없는 행 타입(주간 리그 등)도 안전.
   // 만료·강등된 마크는 서버(get_activity_leaderboard)가 이미 null 로 지워서 준다.
@@ -506,7 +510,7 @@ export default function TierLeaderboard() {
   };
   const submitVerify = async () => {
     if (!user || vBusy) return;
-    if (!vForm.event.trim() || !vForm.amount || !vProof || !vIdCard) return;
+    if (!vForm.event.trim() || !vForm.amount || !vProof || !vIdCard || !vConsent || !vMasked) return;
     setVBusy(true);
     try {
       await submitRankVerification({
@@ -514,8 +518,9 @@ export default function TierLeaderboard() {
         eventName: vForm.event, amountWon: Number(vForm.amount.replace(/[^\d]/g, '')) || 0,
         proof: vProof, idCard: vIdCard,
         isOverseas: vForm.overseas,
+        idConsent: vConsent, maskedConfirmed: vMasked,
       });
-      setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null);
+      setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null); setVConsent(false); setVMasked(false);
       // 실패를 삼키면 myVerifs 가 null 로 남아 렌더 게이트(myVerifs && length > 0)가 이력 블록을 통째로 지운다 —
       // 방금 접수한 신청이 화면에서 사라져 회원이 신분증을 다시 올려 중복 신청한다.
       setMyVerifs(null); clearErr('verifs');
@@ -1053,20 +1058,42 @@ export default function TierLeaderboard() {
                     onChange={(e) => setVForm((f) => ({ ...f, overseas: e.target.checked }))} />
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 입상 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 합니다'}</span>
+                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 입상 증빙 {vProof ? '✓ 첨부됨' : '이름·대회명·순위가 보여야 합니다'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVProof(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vIdCard ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>2. 신분증 {vIdCard ? '✓ 첨부됨' : '이름·주민번호 앞자리만 보이게 가리고 촬영'}</span>
+                  <span className={vIdCard ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>2. 신분증 {vIdCard ? '✓ 첨부됨' : '이름·생년월일만 보이게, 번호·주소는 가리고 촬영'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVIdCard(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
-                <button type="button" disabled={vBusy || !vForm.event.trim() || !vForm.amount || !vProof || !vIdCard}
+                {/* P1-3 별도 동의(개보법 §15②: 목적·항목·보유기간·거부권 · §24①: 고유식별정보는 다른 동의와 따로) +
+                    번호 가림 필수 확인(§24의2 — 주민등록번호 뒷자리를 회사가 받지 않는다). 둘 다 켜야 '인증 요청'이 열린다.
+                    문구를 바꾸면 rankverify.ts RANK_ID_CONSENT_VERSION 을 올린다(서버가 판을 기록한다 — 20261006n). */}
+                <div data-testid="rank-id-consent" className="space-y-1 rounded-input border border-border-default bg-surface-base/50 px-2.5 py-2 text-2xs leading-relaxed">
+                  <p className="font-bold text-ink-secondary">신분증 사진 처리 안내 (순위 인증 전용 · 별도 동의)</p>
+                  <ul className="space-y-0.5 text-ink-muted">
+                    <li>· 목적: 입상자 본인 확인</li>
+                    <li>· 항목: 신분증 사진, 입상 증빙 사진, 대회명·입상 상금·해외 여부</li>
+                    <li>· 보유: 신분증 사진은 승인·반려 즉시 삭제, 30일 안에 심사되지 않으면 자동 반려·삭제. 증빙과 신청 정보는 탈퇴 때까지(국내 순위 근거)</li>
+                    <li>· 동의하지 않으셔도 됩니다. 이 경우 순위 인증만 신청할 수 없고 다른 이용에는 제한이 없습니다</li>
+                  </ul>
+                  <label className="flex min-h-[44px] cursor-pointer items-start gap-2 pt-1">
+                    <input type="checkbox" checked={vConsent} onChange={(e) => setVConsent(e.target.checked)}
+                      data-testid="rank-id-consent-agree" className="mt-0.5 h-4 w-4 shrink-0 accent-current text-accent-300" />
+                    <span className="text-ink-secondary"><b className="text-danger mr-1">[필수]</b>순위 인증을 위한 신분증 사진 처리에 동의합니다</span>
+                  </label>
+                  <label className="flex min-h-[44px] cursor-pointer items-start gap-2">
+                    <input type="checkbox" checked={vMasked} onChange={(e) => setVMasked(e.target.checked)}
+                      data-testid="rank-id-masked" className="mt-0.5 h-4 w-4 shrink-0 accent-current text-accent-300" />
+                    <span className="text-ink-secondary"><b className="text-danger mr-1">[필수]</b>주민등록번호 뒷자리·운전면허번호·여권번호와 주소를 가린 사진입니다 <span className="text-ink-muted">(가려지지 않은 사진은 반려 후 즉시 삭제)</span></span>
+                  </label>
+                </div>
+                <button type="button" disabled={vBusy || !vForm.event.trim() || !vForm.amount || !vProof || !vIdCard || !vConsent || !vMasked}
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 관리자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 입상 규모에 따라 국내 순위에 합산됩니다. 대회 여부는 증빙을 보고 관리자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {/* 신청 이력 조회 실패 — '이력 없음' 으로 위장하면 신분증을 다시 올려 중복 신청한다(UI-08-3·4) */}

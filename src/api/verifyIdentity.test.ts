@@ -118,6 +118,25 @@ describe('verify-identity — 기존 게이트는 그대로', () => {
     }
   });
 
+  // 2026-10-06 약관 재검토 P2-6(리드) — 만 19세 미만이 '확인'되면 이용 제한 + 관리자 알림 RPC. 생년 미확인·성인은 부르지 않는다.
+  //   음성 대조: logic.ts 의 `if (age !== null && age < 19)` 분기를 지우면 첫 단언이, `age !== null &&` 를 지우면 둘째가 빨개진다.
+  it('만 19세 미만 확인 → restrict_underage_account(uid) 1회 · 생년 미확인·성인은 0회 · RPC 실패해도 같은 403', async () => {
+    const young = new Date(); young.setUTCFullYear(young.getUTCFullYear() - 18);
+    const calls: string[] = [];
+    const mk = (birthDate: string | null, fail = false) => world({
+      lookup: async () => resp(200, { status: 'VERIFIED', verifiedCustomer: { ci: 'CI', birthDate } }),
+      restrictUnderage: async (u) => { calls.push(u); return { error: fail ? new Error('x') : null }; },
+    });
+    expect((await run(mk(young.toISOString().slice(0, 10)))).status).toBe(403);
+    expect(calls).toEqual(['u1']);
+    expect((await run(mk(null))).status).toBe(403);
+    expect((await run(mk('1990-01-01'))).status).toBe(200);
+    expect(calls).toEqual(['u1']);
+    const wf = mk(young.toISOString().slice(0, 10), true);
+    expect((await run(wf)).status).toBe(403);
+    expect(JSON.stringify(wf.logs)).toContain('restrict_underage_account 실패');
+  });
+
   it('dup·reused·tombstoned 안내는 그대로', async () => {
     const st = async (code: string) => (await run(world({ commit: async () => ({ data: { ok: false, code }, error: null }) }))).status;
     expect(await st('dup')).toBe(409);

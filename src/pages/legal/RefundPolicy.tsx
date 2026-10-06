@@ -1,8 +1,8 @@
 // src/pages/legal/RefundPolicy.tsx
 // 취소·환불 정책 — 「전자상거래 등에서의 소비자보호에 관한 법률」 §17 청약철회 기준.
 // PG(토스페이먼츠 등) 가맹 심사가 '환불 정책이 적힌 공개 URL' 을 요구해(2026-09-03) 정적 발행 대상에 넣었다:
-// scripts/gen-legal.mjs → /legal/refund.html. 본문은 LegalDocsModal 의 REFUND(앱 안 모달)와 같은 사실을 담는다 —
-// 금액·기간·귀책 기준을 바꿀 때는 두 곳을 같이 고친다(legalConsistency.test 가 핵심 문구를 잠근다).
+// scripts/gen-legal.mjs → /legal/refund.html. 하단 '약관 및 정책' 창도 2026-10-06(약관 재검토 P1-1·P2-9)부터 이 컴포넌트를
+// 그대로 그린다 — 환불 정책 원본은 여기 하나다(legalConsistency.test 가 두 벌 재발을 잠근다).
 //
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다.
 import { LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
