@@ -77,7 +77,7 @@ export default function PrivacyPolicy() {
         <p className="text-xs font-bold text-ink-primary">개정 안내 — 본 방침 제{PRIVACY_VERSION}판은 {PRIVACY_NOTICE_DATE}에 공지하여 {PRIVACY_EFFECTIVE_DATE}부터 시행합니다.</p>
         <p className="text-2xs text-ink-muted leading-relaxed">
           영구 이용 제한(영구정지)을 받은 회원의 연계정보 변환값을 부정 재가입 방지를 위해 5년 동안 보관하는 내용(제3조·제4조·제5조)이 새로 생겨,
-          회원에게 불리할 수 있는 변경으로 보고 시행 7일 전에 공지합니다. 시행일 전까지는 제2판({LEGAL_EFFECTIVE_DATE} 시행)이 적용됩니다
+          정보주체의 권리에 중대한 영향을 미치는 변경으로 보고 시행 30일 전에 공지합니다(제14조제2항). 시행일 전까지는 제2판({LEGAL_EFFECTIVE_DATE} 시행)이 적용됩니다
           (<a href={PRIVACY_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="prev-edition-link">제2판 원문 보기</a>).
           그 밖에 실제 처리에 맞춘 정정은 문서 끝의 「부칙 — 개정 이력」에서 확인하실 수 있으며, 개정 내용에 동의하지 않으시는 회원은
           「내 정보 → 보안 → 회원 탈퇴하기」에서 언제든지 이용계약을 해지하실 수 있습니다.

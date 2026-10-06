@@ -86,7 +86,7 @@ describe('P2-8 ② 제재 계정 본인 탈퇴 — 재가입 차단은 유지', 
     expect(body).toMatch(/values \(v_hash, v_kind\)/);
     expect(M, '재가입 거절 목록(verify_identity_commit)은 바꾸지 않는다').not.toMatch(/function public\.verify_identity_commit/);
   });
-  it('(P2-A 리드 결정 b) 영구정지 변환값은 5년, 그 밖은 6개월 — 처리방침 제3판(공지 후 7일)으로 고지', () => {
+  it('(P2-A 리드 결정 b) 영구정지 변환값은 5년, 그 밖은 6개월 — 처리방침 제3판(공지 후 30일)으로 고지', () => {
     expect(fn(M, '_purge_withdrawn_identities')).toMatch(/case when reason = 'banned' then interval '5 years' else interval '6 months' end/);
     expect(read('src/lib/legalHistory.ts')).toMatch(/version: PRIVACY_VERSION, effective: PRIVACY_EFFECTIVE_DATE, notice: PRIVACY_NOTICE_DATE,[\s\S]{0,200}5년 동안 보관/);
     for (const [doc, src] of [['처리방침', read('src/pages/legal/PrivacyPolicy.tsx')], ['계정 삭제 안내', read('src/pages/legal/AccountDeletion.tsx')],

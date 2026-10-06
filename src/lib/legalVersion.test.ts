@@ -70,9 +70,9 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
     }
   });
 
-  it('처리방침 제3판: 공지일 + 7일 이상 뒤 시행(제14조①) · 한글 표기 일치 · 제2판 원문 보존본이 있다 · 약관 동의 판은 그대로', () => {
+  it('처리방침 제3판: 공지일 + 30일 이상 뒤 시행(제14조② 중대한 변경) · 한글 표기 일치 · 제2판 원문 보존본이 있다 · 약관 동의 판은 그대로', () => {
     const days = (Date.parse(`${PRIVACY_EFFECTIVE_ISO}T00:00:00Z`) - Date.parse(`${PRIVACY_NOTICE_ISO}T00:00:00Z`)) / 86_400_000;
-    expect(days).toBeGreaterThanOrEqual(7);
+    expect(days).toBeGreaterThanOrEqual(30);
     const ko = (d: string) => { const [, y, m, dd] = d.match(/(\d{4})년 (\d{1,2})월 (\d{1,2})일/)!; return `${y}-${m.padStart(2, '0')}-${dd.padStart(2, '0')}`; };
     expect(ko(PRIVACY_EFFECTIVE_DATE)).toBe(PRIVACY_EFFECTIVE_ISO);
     expect(ko(PRIVACY_NOTICE_DATE)).toBe(PRIVACY_NOTICE_ISO);
