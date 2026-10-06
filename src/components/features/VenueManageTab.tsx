@@ -387,12 +387,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [lockPx, setLockPx] = useState<number | null>(null);
   /** 예약 올림(ratchet) 감시를 끊는다 — 해제·언마운트 때. */
   const ratchetOff = useRef<(() => void) | null>(null);
+  /** 누른 순간 '안쪽 높이 − 판 높이' — 안쪽 첫·끝 자식의 음수 여백(설정 하위탭 줄 -my-[7px])이 판 밖으로 겹쳐(margin collapse)
+   *  안쪽 상자가 판보다 커 보이는 몫. 올림은 이만큼 빼고 비교한다(아래 lockPane). */
+  const ratchetSlack = useRef(0);
   /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
   const lockPane = useCallback(() => {
     const p = secPanelRef.current;
     const inner = secInnerRef.current;
     const h = p?.getBoundingClientRect().height;
     if (!p || !h || h <= 0) return;
+    // 🔴 2026-10-06 store-p3-1006 독립 검토(P3) — 매장 설정(하위탭 줄 -my-[7px])에서 누르면 안쪽이 판보다 7px 커서, 감시를 거는 즉시
+    //   첫 콜백이 예약을 h+7 로 올렸다(1440 매장 설정→직원 관리 5/5 '+7 뒤 감소'). 누른 순간의 차이를 기준선으로 빼고 비교한다 —
+    //   새 판의 안쪽이 차이가 더 작으면 올림이 그만큼 덜 될 뿐 판은 제 내용 높이로 그려지므로 줄어드는 일은 없다.
+    ratchetSlack.current = Math.max(0, (inner?.getBoundingClientRect().height ?? h) - h);
     // 🔴 2026-10-06 store-p3-1006 — 예약은 **DOM 만** 가진다(React style 로 넘기지 않는다). 올림도 **누른 순간부터** 건다.
     //   종전엔 올림이 커밋 뒤 이펙트에서야 시작됐고, 커밋 때 React 가 style 의 minHeight 를 누른 순간 값(lockPx)으로 다시 썼다.
     //   그래서 로딩 중인 대시보드를 누르면(1272) 커밋 전에 떠나는 판이 늦은 카드 데이터로 1314 까지 자란 뒤, 커밋에서 새 판이
@@ -403,7 +410,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       let on = true;
       const ro = new ResizeObserver(() => {
         if (!on) return; // PR #100 — 해제 뒤 올림이 남아 영구 바닥이 되면 안 된다
-        const ih = inner.getBoundingClientRect().height;
+        const ih = inner.getBoundingClientRect().height - ratchetSlack.current;
         if (ih > (parseFloat(p.style.minHeight) || 0)) p.style.minHeight = `${Math.ceil(ih)}px`;
       });
       ro.observe(inner);
