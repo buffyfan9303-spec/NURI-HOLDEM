@@ -572,19 +572,23 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   오늘 적은 높이만 예약한다. 옛 숫자 형식(날짜 없음)은 '오늘 것이 아님'으로 읽는다.
   const liveKey = `nuri:dash-live-h:${venueId}`;
   const liveRef = useRef<HTMLElement>(null);
-  const liveReserveH = useMemo(() => {
-    if (!loading) return 0;
+  // audit10 ⑨(2026-10-07) — 같은 기억에 '클락이 켜져 있었나'(c)도 싣는다. 확인 중엔 아래 격자의 '대회 클락' 카드를 그 기억대로 세운다 —
+  //   종전엔 확인 중 늘 보이다가 클락 응답이 오면 사라져 옆 카드들이 한 칸씩 왼쪽으로 밀렸다(1440 0.10 · 1024 0.057, 목 업주 클락 진행 중 직접 진입).
+  const liveMemo = useMemo(() => {
+    if (!loading) return { h: 0, c: false };
     try {
-      const v = JSON.parse(localStorage.getItem(liveKey) || 'null') as { h?: unknown; d?: unknown } | null;
-      return v && v.d === d ? Number(v.h) || 0 : 0;
-    } catch { return 0; }
+      const v = JSON.parse(localStorage.getItem(liveKey) || 'null') as { h?: unknown; d?: unknown; c?: unknown } | null;
+      return v && v.d === d ? { h: Number(v.h) || 0, c: v.c === true } : { h: 0, c: false };
+    } catch { return { h: 0, c: false }; }
   }, [loading, liveKey, d]);
+  const liveReserveH = liveMemo.h;
+  const clockCardHidden = loading ? liveMemo.c : clockActive;
   useLayoutEffect(() => {
     if (loading || !active) return; // 숨은 판(keep-alive)의 높이 0 을 '위젯 없음'으로 적지 않는다
     const h = liveWidget ? Math.round(liveRef.current?.getBoundingClientRect().height ?? 0) : 0;
     if (liveWidget && h === 0) return;
-    try { if (h > 0) localStorage.setItem(liveKey, JSON.stringify({ h, d })); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
-  }, [loading, active, liveWidget, liveKey, d, activeClocks.length, pendingReqs.length]);
+    try { if (h > 0) localStorage.setItem(liveKey, JSON.stringify({ h, d, c: clockActive })); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
+  }, [loading, active, liveWidget, liveKey, d, activeClocks.length, pendingReqs.length, clockActive]);
 
   // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
   //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
@@ -1576,7 +1580,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             옆 '대회 클락'·'전주 대비'는 99px 라 PC 첫 줄 아래 72px 빈 홈이 생겼다. 그 상태(확인 중·실패·데이터 없음)에서만 두 이웃을
             줄 높이로 늘리고 본문을 세로 가운데 둔다 — 셋 다 빈 안내라 줄이 고르게 선다. 데이터가 오면 이웃은 제 높이로 돌아가지만
             줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
-        <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
+        <DashCard more show={moreShown && caps.ledger && !clockCardHidden} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>

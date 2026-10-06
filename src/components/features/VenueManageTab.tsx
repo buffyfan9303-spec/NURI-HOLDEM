@@ -18,6 +18,7 @@ import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUser
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
+import { kstToday } from '../../lib/kst';
 import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
 import { splitLedgerName } from '../../lib/rankingGame';
@@ -1471,7 +1472,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
                   <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
-                  {manageOk && <div className="mt-5" style={{ maxWidth: READ_W }}><AnnouncePanelM venueId={venueId} /></div>}
+                  {/* audit10 시각 P3-6(2026-10-07) — 대시보드 카드 열과 같은 폭. READ_W(960) 상한을 걸어 1440 에서 이 카드만 오른쪽 끝이 ~210px 짧았다(폼 판 상한은 설정 하위탭 몫). */}
+                  {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {/* S6-2(2026-09-19): 지역 Suspense 경계 — 이게 없으면 이 셋(캘린더·파트너 매장·이벤트 신청)은
                     첫 방문 시 lazy 청크를 기다리는 동안 **여기가 아니라 App.tsx 최상위 폴백**이 잡혀
@@ -1643,15 +1645,27 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
   //   사용자가 섹션·단계·하위탭을 고름)** 때 접는다. 높이 전환(①)은 프레임마다 이동이 쌓여 여전히 CLS 이고, 본문 대기를 바 응답까지
   //   묶기(③)는 권한이 늦은 순서에서 그대로 정착 순간에 튄다 — 둘 다 이동을 입력 밖에 남긴다. B 에 바가 오면 같은 자리에 들어선다.
   const barRef = useRef<HTMLDivElement>(null);
-  const [hold, setHold] = useState<{ venueId: string; nav: string; h: number } | null>(null);
+  // audit10 ⑨(2026-10-07) — 첫 진입(새로고침·직접 진입)에도 같은 자리를 잡는다: 클락 응답이 오기 전엔 바가 없다가 서는 순간
+  //   아래 셸(레일·대시보드) 전체가 46px 밀렸다(목 업주 클락 진행 중 · 1440 0.027 · 1024 0.038). 응답 전엔 켜져 있는지 모르므로
+  //   대시보드 라이브 카드와 같은 조리법 — **이 기기에서 오늘 이 매장의 바 높이**를 기억해 그만큼 붙잡는다(첫 방문·상태가 바뀐 날은 한 번 움직인다).
+  const memoKey = `nuri:livebar-h:${venueId}`;
+  const [hold, setHold] = useState<{ venueId: string; nav: string; h: number } | null>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(memoKey) || 'null') as { h?: unknown; d?: unknown } | null;
+      const h = v && v.d === kstToday() ? Number(v.h) || 0 : 0;
+      return h > 0 ? { venueId, nav: navKey, h } : null;
+    } catch { return null; }
+  });
+  const [fetched, setFetched] = useState(false);
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
-    getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
+    const a = getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
       .catch(() => { if (!stale()) setClocks([]); });
-    getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
       .catch(() => { if (!stale()) setPending(0); });
+    void Promise.all([a, b]).then(() => { if (!stale()) setFetched(true); });
   }, [venueId, biz]);
   // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
   const prevVenue = useRef(venueId);
@@ -1661,7 +1675,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     const h = barRef.current?.offsetHeight ?? 0;
     setHold(h > 0 ? { venueId, nav: navKey, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
-    setClocks([]); setPending(0);
+    setClocks([]); setPending(0); setFetched(false);
   }, [venueId]);
   useEffect(() => { if (active) reload(); }, [active, reload]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
@@ -1675,6 +1689,12 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
   const shown = !!main || pending > 0;
   // 바가 한 번 들어서면 붙잡기는 끝이다 — 나중에 그 바가 사라질 때는 종전대로 접힌다.
   useEffect(() => { if (shown) setHold(null); }, [shown]);
+  // 응답이 온 뒤의 바 높이를 오늘 날짜로 적는다(없으면 지운다) — 위 첫 진입 자리 잡기의 기억.
+  useLayoutEffect(() => {
+    if (!fetched || !active) return;
+    const h = shown ? barRef.current?.offsetHeight ?? 0 : 0;
+    try { if (h > 0) localStorage.setItem(memoKey, JSON.stringify({ h, d: kstToday() })); else if (!shown) localStorage.removeItem(memoKey); } catch { /* 차단 환경 — 자리만 못 잡는다 */ }
+  }, [fetched, active, shown, memoKey, clocks.length, pending]);
   if (!shown) return hold?.venueId === venueId && hold.nav === navKey ? <div aria-hidden data-livebar-hold="" style={{ height: hold.h }} /> : null;
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
@@ -2959,7 +2979,7 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
     </Suspense>
   );
   const items: { id: string; label: string; node: ReactNode }[] = [
-    { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
+    { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} active={active} /> },
     { id: 'schedule', label: '딜러 출근 스케줄',            node: schedIn },
     { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <LazyBox><StaffWageManagerL venueId={venueId} /></LazyBox> },
     { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <LazyBox><StaffSettlementL venueId={venueId} active={active} /></LazyBox> },
@@ -2985,7 +3005,7 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
   );
 }
 
-function StaffManager({ venueId }: { venueId: string }) {
+function StaffManager({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const toast = useToast();
   // 킬스위치(2026-08-29) — 이용권이 꺼진 동안 '이용권내역 권한' 토글은 아무 화면도 열지 못한다.
   // 부여된 권한(vouch)은 서버에 그대로 남는다 — 다시 켜면 이 줄이 원래대로 돌아온다.
@@ -3034,6 +3054,30 @@ function StaffManager({ venueId }: { venueId: string }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [tick, venueId]);
+  // audit10 P3-1(2026-10-07) — 직원이 초대를 수락해도 이 목록은 마운트 때 한 번만 읽어(keep-alive) 새로고침 전까지
+  //   '대기중 초대 · 수락 대기' · '구성원 (0)' 으로 남았다. 판이 **다시 보일 때**와 창이 다시 보일 때 조용히(뼈대 없이) 다시 읽는다.
+  //   초대 수락은 다른 사람의 기기에서 일어나 이 화면에 신호가 없다 — 재방문 시점이 업주가 확인하러 오는 순간이다.
+  const [quietTick, setQuietTick] = useState(0);
+  const wasActive = useRef(active);
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId;   // 매장 전환 중 늦게 온 앞 매장 응답을 버린다(아래 reqVenue 와 비교)
+  useEffect(() => { if (active && !wasActive.current) setQuietTick((t) => t + 1); wasActive.current = active; }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    const onVis = () => { if (document.visibilityState === 'visible') setQuietTick((t) => t + 1); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [active]);
+  useEffect(() => {
+    if (quietTick === 0) return;
+    let alive = true;
+    const reqVenue = venueId;
+    Promise.all([getMyVenueStaff(reqVenue), getMyVenueInvites(reqVenue)])
+      .then(([s, i]) => { if (!alive || venueNow.current !== reqVenue) return; setStaff(s); setInvites(i); setListError(null); try { localStorage.setItem(rowsKey, `${s.length}|${i.length}`); } catch { /* noop */ } })
+      .catch(() => { /* 조용한 재조회 실패는 지금 목록을 그대로 둔다(첫 조회 실패만 오류 카드) */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quietTick]);
   // 권한 조회 두 개는 각자 실패한다 — Promise.all 에 같이 넣으면 한 조회의 실패가 나머지까지 빈 화면으로 만든다(S01 과 같은 뿌리).
   useEffect(() => {
     let alive = true;

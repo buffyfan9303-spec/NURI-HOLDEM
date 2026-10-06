@@ -1,7 +1,7 @@
 // src/components/features/NuriPosLedger.tsx
 import { Fold } from '../atoms/Fold';
 import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
-import { useIsDesktop, useIsMdUp } from '../../lib/responsive';
+import { useIsDesktop, useIsMdUp, useIsXl } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
@@ -1170,10 +1170,12 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   const cellAt = (name: string, e: number) => binByKey.get(`${name}\u0000${e}`) ?? null;
   const countOf = (name: string) => countByName.get(name) ?? 0;
   const maxEntryOf = (name: string) => maxEntryByName.get(name) ?? 0;
-  // 바인 컬럼 수 — PC는 10 고정(폭 축소로 한 화면에), 모바일은 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화)
+  // 바인 컬럼 수 — 넓은 PC(xl≥1280)는 10 고정(한 화면에 다 들어간다), 그 아래는 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화).
+  //   audit10 ⑩(2026-10-07) — 종전 기준 lg(1024)는 10칸이 판보다 78px 넓어(목 업주 756 vs 834) 9·10바인 칸이 총바인 고정 열 밑에 반쯤 잘렸다.
   const isDesktopLedger = useIsDesktop();
+  const tenBinCols = useIsXl();
   const globalMaxEntry = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
-  const binCols = (isDesktopLedger || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
+  const binCols = (tenBinCols || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
 
   // 정렬 — 100명+ 명단에서 빨리 찾기: 등록순(기본)/이름순/바인 많은 순
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'bins'>('recent');
