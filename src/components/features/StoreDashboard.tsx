@@ -1580,7 +1580,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
-          {loading ? <Skeleton /> : !clockActive || !lvl ? (
+          {loading ? <EmptySkeleton /> : !clockActive || !lvl ? (
             <p className="py-3 text-center text-2xs text-ink-muted">실행 중인 클락이 없습니다.</p>
           ) : lvl.kind === 'break' ? (
             <div className="py-2 text-center">
@@ -1671,7 +1671,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             "예약이 없다"는 거짓 안심을 준다). */}
         <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {resCountsErr ? '—' : totalRes}</span>}>
-          {loading ? <Skeleton /> : upcoming.length === 0 ? (
+          {loading ? <EmptySkeleton /> : upcoming.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
           ) : (
             <ul className="space-y-1">
@@ -1698,7 +1698,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                이용권 대상은 이용권 화면의 '받는 손님' 으로 역할이 갈린다. */}
         <DashCard show={caps.ledger} title="고객·단골" onClick={() => setRegOpen(true)}
           badge={<span className="text-2xs font-bold text-ink-muted">전체 보기</span>}>
-          {loading ? <Skeleton /> : topRegulars.length === 0 ? (
+          {loading ? <EmptySkeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
           ) : (
             <ul className="space-y-1">
@@ -1731,7 +1731,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         {/* 오늘 출근 */}
         <DashCard more show={moreShown && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{workedStaff.length}/{shifts.length} 출근</span>}>
-          {loading ? <Skeleton /> : shiftErr ? (
+          {loading ? <EmptySkeleton /> : shiftErr ? (
             <p className="py-3 text-center text-2xs text-danger-light">출근 기록을 불러오지 못했습니다.</p>
           ) : shifts.length === 0 && !shiftErr ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
@@ -1749,7 +1749,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         {/* 인건비 요약(이번 달) */}
         <DashCard more show={moreShown && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
-          {loading ? <Skeleton /> : (laborHours === 0 && !laborErr) ? (
+          {loading ? <EmptySkeleton /> : (laborHours === 0 && !laborErr) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
           ) : (
             <div className="space-y-1.5">
@@ -1771,7 +1771,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         {/* 매장이용권(사용 이용권) */}
         <DashCard more show={moreShown && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
           badge={<span className="text-2xs font-bold text-ink-muted">전송·관리 →</span>}>
-          {loading ? <Skeleton /> : (
+          {/* 2026-10-06 store-p3-1006 — 확인 중에도 **같은 틀**(칸 4개 + 설명)을 보이지 않게 세우고 뼈대를 덮는다.
+              뼈대(h-12)만 두면 정착 때 카드가 틀 높이로 자라 아래 줄이 밀렸다(첫 로드 판 성장). */}
+          <ReserveWhile loading={loading}>
             <>
               {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
                   오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
@@ -1794,7 +1796,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               {(!!rangeErr || !!sentErr) && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
               <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 실제로 보낸 이용권 장수(전송 취소 제외) · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
             </>
-          )}
+          </ReserveWhile>
         </DashCard>
 
         {/* 🎂 생일 단골(7일 내) — 고객·단골의 고객정보에서 생일 등록 시 자동 표시 */}
@@ -1821,7 +1823,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         {/* 손님 유형 비중(오늘) */}
         <DashCard more show={moreShown && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{playerTotal}명</span>}>
-          {loading ? <Skeleton /> : playerTotal === 0 ? (
+          {loading ? <EmptySkeleton /> : playerTotal === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
           ) : (
             <ul className="space-y-1">
@@ -1957,6 +1959,24 @@ function fitLastCard(g: HTMLDivElement | null) {
   const ro = new ResizeObserver(fit);
   ro.observe(g);
   return () => ro.disconnect();
+}
+
+/** 카드 본문 확인 중 뼈대 — 정착 뒤 가장 흔한 모양(빈 안내 한 줄 `py-3 text-2xs` = 12+16+12 = 40px)과 **같은 높이**.
+ *  2026-10-06 store-p3-1006: 종전 기본 h-12(48)라 빈 매장 첫 로드에서 카드가 104→96 으로 줄어 아래 줄이 올라왔다(1440 rAF 실측).
+ *  데이터가 있는 카드는 내용 길이만큼 자란다 — 그 높이는 확인 전엔 알 수 없다. */
+function EmptySkeleton() {
+  return <Skeleton className="h-10" />;
+}
+
+/** 확인 중에도 정착 뒤와 **같은 틀**을 보이지 않게 세우고 그 위를 뼈대로 덮는다 — 틀 높이가 값과 무관한 본문(숫자 칸 격자)용. */
+function ReserveWhile({ loading, children }: { loading: boolean; children: ReactNode }) {
+  if (!loading) return <>{children}</>;
+  return (
+    <div className="relative" aria-busy="true">
+      <div aria-hidden style={{ visibility: 'hidden' }}>{children}</div>
+      <span aria-hidden className="skeleton absolute inset-0 rounded-input" />
+    </div>
+  );
 }
 
 function DashCard({ title, badge, onClick, children, show = true, more, stretch = false, center = false }: {

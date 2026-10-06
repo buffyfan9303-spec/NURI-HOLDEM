@@ -1461,7 +1461,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
-                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" /></div>}
+                  {isOwner && <div className="mb-3 empty:hidden"><VenueVerificationCard venueId={venueId} showVerification part="grade" reserve /></div>}
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
