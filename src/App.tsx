@@ -1157,7 +1157,12 @@ export default function App() {
    *  ⚠ 사용자가 그 사이에 다른 탭을 직접 누르면 기억을 버린다 — 손으로 고른 것을 되돌리면 안 된다.
    *  ⚠ 8초가 지나도 안 생기면 포기한다(권한이 정말 없는 경우 — 그때는 홈이 맞다). */
   const pendingDeepTab = useRef<TabId | null>(null);
-  if (pendingDeepTab.current === null) {
+  // 🔴 부팅 때 **한 번만** 채운다(10회차 verifier P3 · 2026-10-07). 예전엔 `current === null` 만 봐서 렌더마다 다시 돌았다 —
+  //   새로고침 부팅의 navigation type 'reload' 는 그 페이지가 사는 동안 유지되고, 사용자가 다른 탭을 눌러 changeTab 이 기억을 비운 뒤
+  //   다음 렌더에서(rememberTab effect 가 sessionStorage 를 지우기 전) 'my-store' 가 되살아나, 이후 탭 목록이 바뀌면([tabs] effect) 내 매장으로 끌려갔다.
+  const pendingDeepInit = useRef(false);
+  if (!pendingDeepInit.current) {
+    pendingDeepInit.current = true;
     try {
       const sp0 = new URLSearchParams(window.location.search);
       const t0 = sp0.get('tab');

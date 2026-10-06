@@ -1,15 +1,17 @@
 // 10회차 점검(audit10-visual-dummy-1006 · audit10-function-1006) 내 매장 결함 회귀 게이트. 전부 목킹 — 운영 쓰기 0.
 //   ⑧ 내 매장에서 새로고침 → 내 매장 유지(다른 진입은 종전대로 홈)
+//   ⑧b 새로고침 기억(pendingDeepTab)은 부팅 한 번만 — 다른 탭을 고른 뒤 권한 재확인이 탭 목록을 바꿔도 내 매장으로 끌려가지 않는다
 //   ⑨ 내 매장 직접 진입 CLS — 셸 폭 1152→1440(1440) · '대회 클락' 카드 빠짐(격자 한 칸 이동) · 라이브 바 끼어듦(46px)
 //   ⑩ 1024 장부 — 쓰지 않은 바인 칸까지 10칸을 깔아 9·10바인 칸이 총바인 고정 열 밑에 잘렸다(1280 은 10칸 그대로)
 //   ⑤ 대시보드 '팔로워에게 알림 보내기' 카드가 1440 에서 카드 열보다 ~210px 짧았다(READ_W 상한)
 //   ⑥ 직원이 초대를 수락해도 업주 '직원 관리'가 새로고침 전까지 '수락 대기'
 //   F18 순위 1~3위 저장 페이로드 · 서버 거절(42501)은 성공으로 삼키지 않는다
 // 음성 대조: origin/main eb3af5da 빌드에서 ⑧·⑨·⑩(1024)·⑤·⑥ FAIL, 수정 빌드에서 PASS(F18 은 기존 동작 고정 — 둘 다 PASS).
+//   ⑧b 는 57099448 빌드(App.tsx 렌더마다 재초기화)에서 FAIL(마지막 단언 '내 매장으로 끌려갔다'), useRef 가드 빌드에서 PASS.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/store-r10-1007.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { bootOwner, openMyStore, FAKE_SESSION, STORAGE_KEY, MOCK_UID, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 
 test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
@@ -41,6 +43,48 @@ test('⑧ 1440 내 매장에서 새로고침하면 내 매장에 머문다 · �
   await page.goto('/');
   await page.waitForTimeout(2500);
   await expect(myStorePane(page), '새로고침이 아닌 진입인데 내 매장으로 갔다').toBeHidden();
+});
+
+// ── ⑧b 새로고침 기억은 부팅 한 번뿐 ────────────────────────────────────────────────────────────
+//   새로고침 부팅의 pendingDeepTab 은 렌더마다 다시 채워졌다(navigation type 'reload' 는 그 페이지가 사는 동안 유지된다).
+//   사용자가 다른 탭을 누르면 changeTab 이 비우지만, 다음 렌더에 sessionStorage 의 'my-store' 로 다시 채웠고 —
+//   그 뒤 [tabs] effect 가 권한 재확인(탭 목록 변경)을 만나 사용자를 내 매장으로 끌고 갔다.
+test('⑧b 새로고침 → 다른 탭을 고른 뒤 권한 재확인이 탭 목록을 바꿔도 내 매장으로 끌려가지 않는다', async ({ page }) => {
+  test.setTimeout(90_000);
+  let role = 'venue_owner';
+  let profileGets = 0;
+  await bootOwner(page, {
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/profiles\?/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        profileGets += 1;
+        return r.fulfill(json({
+          id: MOCK_UID, name: '업주', nickname: '업주', role, approved: true, status: 'active',
+          venue_id: MOCK_VENUE, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: 3,
+        }));
+      });
+    },
+  });
+  await openMyStore(page);
+  await expect(myStorePane(page), '내 매장(전제)').toBeVisible({ timeout: 20_000 });
+  await page.reload();
+  await expect(myStorePane(page), '새로고침 뒤 내 매장(전제)').toBeVisible({ timeout: 20_000 });
+  // 사용자가 직접 다른 탭을 고른다
+  await page.getByRole('tab', { name: '일정 탐색', exact: true }).first().click();
+  await expect(myStorePane(page), '다른 탭을 눌렀는데 내 매장이 그대로다(전제)').toBeHidden({ timeout: 10_000 });
+  // 권한 재확인이 두 번 — 역할 상실(내 매장 탭 사라짐) → 복구(탭 다시 생김). 다른 탭·토큰 갱신의 인증 이벤트가 같은 경로를 탄다.
+  const refetch = async (next: string) => {
+    role = next;
+    const before = profileGets;
+    // 다른 탭에서 온 인증 이벤트와 같은 경로(GoTrue BroadcastChannel → onAuthStateChange → 프로필 재조회)
+    await page.evaluate(([k, session]) => { const ch = new BroadcastChannel(k); ch.postMessage({ event: 'SIGNED_IN', session }); ch.close(); }, [STORAGE_KEY, FAKE_SESSION] as const);
+    await expect.poll(() => profileGets, { message: '프로필 재조회가 안 일어났다(전제)', timeout: 10_000 }).toBeGreaterThan(before);
+    await page.waitForTimeout(600);
+  };
+  await refetch('user');
+  await refetch('venue_owner');
+  await page.waitForTimeout(800);
+  await expect(myStorePane(page), '사용자가 고른 탭을 두고 내 매장으로 끌려갔다(새로고침 기억이 렌더마다 되살아남)').toBeHidden();
 });
 
 // ── ⑨ 직접 진입 CLS ──────────────────────────────────────────────────────────────────────────
