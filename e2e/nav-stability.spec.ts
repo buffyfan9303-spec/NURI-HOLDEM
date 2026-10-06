@@ -248,7 +248,7 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
   // ── ④ 오버레이 위 오버레이 ─────────────────────────────────────────────
   test('오버레이 위 오버레이 — back 은 한 겹만 벗긴다', async ({ page }) => {
     const opened = await openVenue(page);
-    test.skip(!opened, '공개 매장이 없어 이 검사는 성립하지 않는다(데이터 조건부)');
+    expect(opened, '공개 매장이 하나도 없다 — 오픈 초기화 뒤에도 로티아레나 1곳은 남는다(예전엔 skip 이라 조용히 꺼졌다)').toBeTruthy();
     await page.waitForTimeout(900);
     const venueScreen = await currentScreen(page);
     expect(venueScreen, '매장 페이지가 안 열렸다').toContain('매장 페이지');
@@ -365,7 +365,7 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
     await tap(page, pts, 'live'); await page.waitForTimeout(600);
     await tap(page, pts, 'home'); await page.waitForTimeout(600);
     const opened = await openVenue(page);
-    test.skip(!opened, '공개 매장이 없어 이 검사는 성립하지 않는다(데이터 조건부)');
+    expect(opened, '공개 매장이 하나도 없다 — 오픈 초기화 뒤에도 로티아레나 1곳은 남는다(예전엔 skip 이라 조용히 꺼졌다)').toBeTruthy();
     await page.waitForTimeout(900);
     expect(await currentScreen(page), '매장 페이지가 안 열렸다').toContain('매장 페이지');
     await tap(page, pts, 'community'); // 탭 이동 = 오버레이 닫힘 + 탭 전환

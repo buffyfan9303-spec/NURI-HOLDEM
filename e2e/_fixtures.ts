@@ -9,6 +9,12 @@
 // 노드 쪽 쓰기(restAs)는 e2e/_session.ts 가 같은 규칙으로 막는다.
 import { test as base, expect } from '@playwright/test';
 import { PROD_REF, WRITES_ALLOWED } from './_session';
+import { PROD_EMPTY, prodEmpty } from './_prodEmpty';
+import { eventLiveResponse } from './_mocks';
+
+/** E2E_EVENT_LIVE=1 — 이벤트가 **공개 중인** 운영(2026-10-08 12:00 KST 로티아레나 출석 이벤트 공개 뒤)을 흉내 낸다.
+ *  event_campaigns·event_board 읽기를 live 한 건으로 고정한다(스펙이 page.route 로 따로 목킹하면 그쪽이 이긴다). */
+const EVENT_LIVE = process.env.E2E_EVENT_LIVE === '1';
 
 /** 읽기 전용 RPC — 라이브 pg_proc 에서 provolatile in ('s','i') 이고 anon/authenticated 실행 가능한 것(2026-09-05 실측)
  *  + 정의를 직접 읽어 쓰기가 없음을 확인한 VOLATILE 3종(venue_today_games·venue_announce_status·client_error_rate_ok).
@@ -105,7 +111,7 @@ export const test = base.extend({
   },
   context: async ({ context }, run, testInfo) => {
     const blocked: string[] = [];
-    await context.route(SUPABASE_API, (route) => {
+    await context.route(SUPABASE_API, async (route) => {
       const req = route.request();
       // home_banners 는 **스펙이 따로 목킹하지 않으면 빈 목록**으로 준다 — 기본값이 라이브면 안 된다.
       //   2026-09-15 사고: 오너가 운영에 등록한 배너 1건의 link_url 이 `/?event=rotiarena-attend` 였고,
@@ -121,7 +127,18 @@ export const test = base.extend({
       if (/\/rest\/v1\/home_banners\?/.test(req.url())) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
       }
-      if (isAllowedRequest(req.method(), req.url())) return route.continue();
+      if (EVENT_LIVE && (req.method() === 'GET' || req.method() === 'POST')) {
+        const live = eventLiveResponse(req.url());
+        if (live !== null) {
+          const single = (req.headers()['accept'] ?? '').includes('pgrst.object');
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(single && Array.isArray(live) ? live[0] : live) }).catch(() => { /* 테스트 종료 후 도착 */ });
+        }
+      }
+      if (isAllowedRequest(req.method(), req.url())) {
+        // E2E_PROD_EMPTY=1 — 오픈 초기화(2026-10-08) 뒤의 운영을 흉내 낸다(비운 표·로티아레나 한 곳). 자세한 것은 _prodEmpty.ts.
+        if (PROD_EMPTY && await prodEmpty(route)) return;
+        return route.continue();
+      }
       blocked.push(`${req.method()} ${req.url().replace(/^https:\/\/[a-z0-9]+\.supabase\.co/, '')}`);
       return route.abort('blockedbyclient');
     });

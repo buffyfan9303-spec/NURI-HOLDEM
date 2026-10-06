@@ -1,5 +1,6 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
+import { mockEvent, mockEventBoard } from './_mocks';
 
 // [DS] MO-1 — 성능 회귀 게이트: CPU 4× 스로틀 + 375×812(갤럭시 A17 ≈ Pixel 5 + 2× → 4×는 안전 마진).
 // 첫 도입은 '기록 + 느슨한 상한'(현 상태 회귀 방지) — MO-2~9 진행하며 임계를 조인다(§20.6).
@@ -210,8 +211,13 @@ function scheduleDrift(p: PerfBag): number {
 // 케이스 3종. '첫 방문' 은 지난 사실이 없어 예약할 근거가 없다 — 그건 기록만 하고 게이트로 걸지 않는다.
 //   (근거 없이 항상 예약하면 이벤트가 없는 대다수 유저에게 영구 빈칸이 생긴다.)
 type HomeCase = { label: string; seen: boolean | null; gate: boolean; route: (p: Page) => Promise<void> };
+// 이벤트는 mockEvent 로 고정하고 보드 응답만 1.2s 늦춘다(운영 이벤트 유무와 무관하게 '이벤트 있음' 케이스가 성립한다).
 const delayEvent = async (page: Page) => {
-  await page.route(EVENT_RPC, async (r) => { await new Promise((f) => setTimeout(f, 1200)); await r.continue(); });
+  await mockEvent(page);
+  await page.route(EVENT_RPC, async (r) => {
+    await new Promise((f) => setTimeout(f, 1200));
+    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockEventBoard()) }).catch(() => { /* 테스트 종료 후 도착 */ });
+  });
 };
 const noEvent = async (page: Page) => {
   await page.route(EVENT_RPC, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: 'null' }));
@@ -242,7 +248,7 @@ for (const c of HOME_CASES) {
     if (c.route === delayEvent) {
       // 배너(광고)만 센다 — 같은 자리의 '메뉴 한 줄'은 이벤트가 없어도 늘 있어서 텍스트로는 구분되지 않는다(§4).
       const hasEvent = await page.getByTestId('home-event-banner').count();
-      test.skip(hasEvent === 0, '진행 중인 이벤트가 없다 — 이벤트 있음 케이스는 잴 수 없다');
+      expect(hasEvent, '이벤트 배너가 없다 — mockEvent 가 안 먹었다(예전엔 skip 이라 이 케이스가 조용히 꺼졌다)').toBeGreaterThan(0);
     }
     const p = await readPerf(page);
     const drift = scheduleDrift(p);

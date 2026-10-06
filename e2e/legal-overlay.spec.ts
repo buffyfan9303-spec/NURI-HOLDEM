@@ -11,6 +11,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { SUPABASE_URL, ANON_KEY, stabilizeBackstack, stubLogin } from './_session';
+import { mockGroup, MOCK_GROUP_ID, mockSchedule, MOCK_SCHEDULE_ID } from './_mocks';
 
 const BIZ = '525-20-02937';
 
@@ -120,7 +121,8 @@ for (const vp of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
 
     test('🔴 매장 페이지(?v= 딥링크 첫 화면)', async ({ page }) => {
       const vid = await anyId('venues?select=id&approved=eq.true&status=eq.active&kind=eq.venue&limit=1');
-      test.skip(!vid, '공개 매장이 없어 판단 불가(데이터 부재)');
+      // 오픈 초기화 뒤에도 로티아레나 1곳은 남는다 — 매장이 하나도 없으면 데이터 부재가 아니라 **실패**다(예전엔 skip).
+      expect(vid, '공개 매장이 하나도 없다 — 로티아레나가 사라졌거나 조회가 깨졌다').toBeTruthy();
       await stabilizeBackstack(page);
       await page.goto(`/?v=${vid}`);
       await expect(page.getByRole('dialog', { name: /매장 페이지/ })).toBeVisible({ timeout: 15_000 });
@@ -130,10 +132,10 @@ for (const vp of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
     });
 
     test('🔴 그룹 페이지', async ({ page }) => {
-      const gid = await anyId('venues?select=id&approved=eq.true&status=eq.active&kind=neq.venue&limit=1');
-      test.skip(!gid, '공개 그룹이 없어 판단 불가(데이터 부재)');
+      // 그룹은 목으로 고정 — 오픈 초기화 뒤 운영 그룹이 0개여도 같은 판정(예전엔 skip).
+      await mockGroup(page);
       await stabilizeBackstack(page);
-      await page.goto(`/?v=${gid}`);
+      await page.goto(`/?v=${MOCK_GROUP_ID}`);
       await expect(page.getByRole('dialog', { name: /그룹 페이지/ })).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(800);
       await expectLegal(page, '그룹 페이지');
@@ -160,10 +162,10 @@ for (const vp of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
     });
 
     test('🔴 일정 상세(?s=)', async ({ page }) => {
-      const sid = await anyId('schedules?select=id&approved=eq.true&order=date.desc&limit=1');
-      test.skip(!sid, '공개 일정이 없어 판단 불가(데이터 부재)');
+      // 일정 한 건은 목으로 고정 — 운영 일정이 비어도 같은 판정(예전엔 skip).
+      await mockSchedule(page);
       await stabilizeBackstack(page);
-      await page.goto(`/?s=${sid}`);
+      await page.goto(`/?s=${MOCK_SCHEDULE_ID}`);
       await expect(page.locator('[data-sched-tabbar]')).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(800);
       await expectLegal(page, '일정 상세');

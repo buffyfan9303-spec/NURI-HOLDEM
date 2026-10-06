@@ -18,7 +18,7 @@
 //
 // 이 파일이 못 보는 것
 //   · 실기기 손가락 누름(:active transform) — pill-press.spec 이 CDP 터치로 본다.
-//   · 운영 DB 데이터 길이에 의존한다(게시판·랭킹 본문 높이). 전제 조건이 안 되면 skip 이 아니라 **실패**로 알린다.
+//   · 게시판 본문 높이는 mockPosts 로 고정한다(운영 글이 비어도 같은 판정 — 오픈 초기화 대비). 랭킹은 운영 데이터를 읽는다. 전제 조건이 안 되면 skip 이 아니라 **실패**로 알린다.
 //
 // 음성 대조: CommunityTab.tsx 의 첫 방문 분기를 `?? 0` 으로 되돌리면 1 이 실패한다.
 //            D8 블록(`if (d < -1) {`)을 `if (false && d < -1) {` 로 끄면 3 의 Y=130 이 실패한다.
@@ -28,6 +28,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays } from './_session';
+import { mockPosts } from './_mocks';
 
 const RANK_LABELS = ['활동 순위', '입상', '명예의 전당', '국내 순위', '순위 인증', '상점'];
 
@@ -72,6 +73,8 @@ async function clickAndTimeline(page: Page, secId: string): Promise<{ raf: Probe
 }
 
 async function openCommunity(page: Page): Promise<void> {
+  // 게시판 문서가 y 까지 내려갈 만큼 길어야 한다(전제 조건 단언) — 운영 글 수에 기대지 않고 24건으로 고정한다(오픈 초기화 뒤 0건).
+  await mockPosts(page);
   await stabilizeBackstack(page);
   await page.goto('/');
   // 모바일은 하단 탭바 button, PC(lg↑)는 GNB 의 role=tab — 둘 중 보이는 쪽을 누른다.
