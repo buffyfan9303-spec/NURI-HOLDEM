@@ -1,8 +1,19 @@
 select set_config('lock_timeout', '3s', true);
 select set_config('statement_timeout', '60s', true);
 -- ⏳ 미적용(store-team 2026-10-06). 적용 판단·실행은 nuri-lead(nuri-migration 절차). 위 두 줄을 떼지 말 것.
---   짝: 엣지 함수 supabase/functions/storage-purge/index.ts — **이 마이그레이션보다 먼저 배포**해도 되고 나중이어도 된다
---   (큐는 쌓이기만 하고, 함수가 없으면 크론 호출이 404 로 끝나 attempts 도 안 오른다 → 배포 뒤 다음 10분 회차에 처리).
+-- 🔴 적용 순서(pr187-review P2-A — 바꾸지 말 것). 이 마이그레이션 뒤로는 탈퇴해도 avatars 메타 행이 남아(공개 버킷)
+--    엣지 함수가 지울 때까지 프로필 사진 URL 이 열린다. 엣지가 없거나 401 이면 큐가 영원히 안 줄고 아무도 모른다. 그래서:
+--   1) 엣지 함수 supabase/functions/storage-purge 를 **먼저** 배포한다: `supabase functions deploy storage-purge`
+--      (verify_jwt 는 기본값 true 그대로 — 크론이 공개 anon JWT 를 동봉해 통과한다. 게이트는 verify_jwt 가 아니라 x-nuri-cron-secret)
+--   2) 시크릿 없는 POST 가 401 인지 확인한다: `curl -i -X POST -H "Authorization: Bearer <anon>" <url>/functions/v1/storage-purge` → 401
+--   3) 이 파일을 적용한다(`git show <커밋>:<경로>` 로 뜬 **LF 본문** — CRLF 로 적용하면 20261006m 게이트 md5 가 어긋난다, P3-7).
+--   4) 시험 계정 1개(프로필 사진 업로드한)를 탈퇴시키고 10분 회차 뒤 확인: 그 회원의 큐 행 done_at 이 채워지고
+--      Storage 목록(avatars·verifications 의 '<uid>/' 폴더)이 0개. 결과를 이 머리말 '✅ 적용 완료' 줄에 남긴다.
+--   관측(10회 소진·401 반복 — 둘 다 큐에 '안 끝난 행'으로 남는다):
+--     select count(*) filter (where attempts >= 10) as exhausted,
+--            count(*) filter (where done_at is null and created_at < now() - interval '30 minutes') as stale
+--       from public.storage_purge_queue;      -- 둘 다 0 이어야 정상. stale>0·attempts=0 이면 엣지 401/미배포다.
+--     엣지 로그: '[storage-purge] unauthorized' = 시크릿 불일치, '[storage-purge] exhausted' = 10회 실패 행 수.
 -- 리허설: supabase/tests/20261006s2_rehearsal.sql (node rehearse-geo.mjs <이 파일> <리허설 파일>, 통째 롤백)
 --
 -- 20261006s2 — 기술 보안 점검 tech.md#P2-2: 탈퇴해도 신분증·프로필 사진 **파일**이 지워지지 않는다
@@ -260,6 +271,8 @@ end $self$;
 notify pgrst, 'reload schema';
 
 -- ROLLBACK(엣지 함수는 그대로 둬도 무해 — 큐가 비면 크론이 부르지 않는다)
+-- 🔴 먼저 md5(pg_get_functiondef('public.withdraw_my_account()'::regprocedure)) = '570a3eb5aa675e0baf61781abc4c0281'(s2 직후)인지 본다.
+--    다르면 20261006m(제재 계정 탈퇴) 등이 그 위에 얹힌 것이다 — 아래를 그대로 하면 그 변경이 조용히 사라지니 그것부터 되돌린다(P3-2).
 -- select cron.unschedule('storage-purge');
 -- 탈퇴 두 함수: 위 ② 의 `perform public._enqueue_user_storage_purge(...)` 를 라이브 출발점 두 줄
 --   `perform set_config('storage.allow_delete_query', 'true', true);`

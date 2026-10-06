@@ -112,6 +112,7 @@ begin
   else fails := fails + 1; out := out || format('P3 FAIL rows=%s how=%s; ', n, s); end if;
 
   -- P4 내 고객 닉네임 검색 — 전화 마스킹이 실린다(20260925h 유지)
+  --   ⚠ s1 단독(=s1+s2) 기준이다. 20261006s3 뒤에는 닉네임으로 찾은 행의 전화가 null 이라 P4 FAIL 이 정상(s3 리허설 N1 이 정본).
   total := total + 1;
   select count(*), bool_and(r.phone_masked is not null) = bool_and(p.phone is not null) into n, b
     from public.search_voucher_recipients(vv, t_nick) r join public.profiles p on p.id = r.user_id where r.user_id = tg;

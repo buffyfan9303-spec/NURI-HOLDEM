@@ -23,6 +23,13 @@ describe('storage-purge 엣지 함수 — 크론만 부른다', () => {
     }
     expect(fn).toContain("rpc('get_push_shared_secret')");
   });
+
+  it('큐의 bucket 은 avatars·verifications 화이트리스트를 거쳐서만 지운다 · 10회 소진을 로그로 남긴다(pr187-review P3-3·P3-5)', () => {
+    expect(fn).toContain("const BUCKETS = new Set(['avatars', 'verifications'])");
+    expect(serve).toContain('if (BUCKETS.has(r.bucket_id)) byBucket.set(');
+    expect(serve).toMatch(/console\.error\('\[storage-purge\] exhausted'/);
+    expect(serve).toMatch(/console\.warn\('\[storage-purge\] unauthorized'/);
+  });
 });
 
 describe('20261006s2 — 탈퇴가 저장소 파일을 큐에 넣는다', () => {

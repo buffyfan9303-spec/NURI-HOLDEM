@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findVoucherRecipientTargets, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, venueVoucherReasonStats, voucherReasonKey, voucherStatsRange, voucherReasonTable, reasonStatBalanced, type VoucherReasonStat, type VoucherStatsRange, VOUCHER_REASONS, voucherReasonLabel, voucherHolderLabel, type VoucherReason } from '../../api/vouchers';
+import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findVoucherRecipientTargets, findUserByPhone, isFullMobile, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, venueVoucherReasonStats, voucherReasonKey, voucherStatsRange, voucherReasonTable, reasonStatBalanced, type VoucherReasonStat, type VoucherStatsRange, VOUCHER_REASONS, voucherReasonLabel, voucherHolderLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { loadVenueVoucherPanel, loadVenueVoucherReasonRange } from '../../lib/venueVoucherLoad';
 import { CHIP_HIT } from './gto/chip'; // 알약 한 기준: 보이는 32 · 누름 44(2026-09-24 리드 결정)
@@ -290,22 +290,25 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const resolveId = async () => {
     const q = idInput.trim();
     if (!q) return;
+    if (recvMode === 'phone' && !isFullMobile(`010${q}`)) { toast.show('010 뒤 8자리를 모두 입력하세요', 'error'); return; }
     if (recvMode !== 'phone' && q.length < 2) { toast.show('닉네임·실명은 2자 이상 입력하세요', 'error'); return; }
-    const finder = recvMode === 'phone' ? findUserByPhone : byName;
     try {
-      const f = await finder(q);
+      const f = await (recvMode === 'phone' ? findUserByPhone(`010${q}`) : byName(q));
       if (!f.length) { toast.show(recvMode === 'phone' ? '해당 전화번호의 회원이 없습니다' : '해당 닉네임·실명의 회원이 없습니다', 'error'); setCands([]); return; }
       if (f.length === 1) pickRecv(f[0]); else setCands(f);
     } catch (e) { toast.show(msgOf(e, '조회 실패'), 'error'); }
   };
   // 입력 시 라이브 자동완성 — 장부 바인 검색과 동일 UX(디바운스 280ms). 닉네임·전화 경로 공용.
+  //   전화 경로는 '010' 고정 + 뒤 8자리가 **다 찼을 때만** 한 번 부른다(20261006s3 — 서버는 010+8자리만 받고,
+  //   결과 있는 조회를 매장 하루 1만 회까지 센다. 9·10자리 자동완성 조회는 없앴다).
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if ((recvMode !== 'id' && recvMode !== 'phone') || recvUserId) return;
     const q = idInput.trim();
     setCandErr('');
     if (!q) { setCands([]); return; }
-    const finder = recvMode === 'phone' ? findUserByPhone : byName;
+    if (recvMode === 'phone' && !isFullMobile(`010${q}`)) { setCands([]); setActiveIdx(-1); return; }
+    const finder = recvMode === 'phone' ? (s: string) => findUserByPhone(`010${s}`) : byName;
     if (searchTimer.current) clearTimeout(searchTimer.current);
     let alive = true;   // N04-A: 타이머는 취소되지만 이미 나간 요청의 응답은 취소되지 않는다 — 다음 입력의 후보를 앞 응답이 덮지 않게
     searchTimer.current = setTimeout(() => { finder(q).then((f) => { if (!alive) return; setCands(f); setActiveIdx(-1); }).catch((e) => { if (!alive) return; setCands([]); setActiveIdx(-1); setCandErr(msgOf(e, '회원 검색에 실패했습니다')); }); }, 280);
@@ -660,7 +663,14 @@ ${cards}
                     </div>
                   )}
                   <div className="flex gap-1.5">
-                    <input value={idInput} onChange={(e) => setIdInput(e.target.value)} autoFocus
+                    {recvMode === 'phone' ? <span data-testid="recv-phone-prefix" className="shrink-0 self-center text-sm font-semibold tabular-nums text-ink-secondary">010 -</span> : null}
+                    <input value={idInput} autoFocus
+                      onChange={(e) => {
+                        if (recvMode !== 'phone') { setIdInput(e.target.value); return; }
+                        // 숫자만, 뒤 8자리. '010-1234-5678' 을 통째로 붙여 넣어도 뒤 8자리로 받는다.
+                        const d = e.target.value.replace(/\D/g, '');
+                        setIdInput(d.length === 11 && d.startsWith('010') ? d.slice(3) : d.slice(0, 8));
+                      }}
                       role="combobox" aria-expanded={cands.length > 0} aria-autocomplete="list"
                       onKeyDown={(e) => {
                         // ⚠ 한글 조합 중의 확정 Enter 가 여기 들어오면, 화살표로 고르지도 않은 후보에게
@@ -672,7 +682,8 @@ ${cards}
                         else if (e.key === 'Escape') { setCands([]); setActiveIdx(-1); }
                       }}
                       inputMode={recvMode === 'phone' ? 'numeric' : 'text'}
-                      placeholder={recvMode === 'phone' ? '전화번호 입력 · 자동완성 (↑/↓·Enter)' : '닉네임·실명 입력 · 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm max-md:h-[44px]" />
+                      aria-label={recvMode === 'phone' ? '휴대전화번호 010 뒤 8자리' : undefined}
+                      placeholder={recvMode === 'phone' ? '뒤 8자리 (예: 12345678)' : '닉네임·실명 입력 · 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm max-md:h-[44px]" />
                     <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary max-md:h-[44px]">취소</button>
                   </div>
                   {cands.length > 0 ? (
@@ -685,6 +696,7 @@ ${cards}
                               className={`flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left ${unverified ? 'cursor-not-allowed opacity-60' : i === activeIdx ? 'bg-surface-high' : 'hover:bg-surface-high'}`}>
                               <Icon name="user" size={12} className="shrink-0 text-ink-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.label ?? c.display}</span>
+                              {c.nameMasked ? <span data-testid="cand-name" className="shrink-0 text-2xs text-ink-secondary">{c.nameMasked}</span> : null}
                               {c.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
                               {unverified && <span className="shrink-0 rounded-sm bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 전송 불가</span>}
                             </button>
@@ -693,9 +705,11 @@ ${cards}
                       })}
                     </ul>
                   ) : candErr ? (
-                    <p role="alert" className="px-1 text-2xs text-danger-light">{candErr}</p>
+                    <p role="alert" data-testid="recv-cand-err" className="px-1 text-2xs text-danger-light">{candErr}</p>
                   ) : recvMode !== 'phone' && idInput.trim().length === 1 ? (
                     <p className="px-1 text-2xs text-ink-muted">닉네임·실명을 2자 이상 입력하세요.</p>
+                  ) : recvMode === 'phone' && idInput && !isFullMobile(`010${idInput}`) ? (
+                    <p className="px-1 text-2xs text-ink-muted">010 뒤 8자리를 모두 입력하면 찾습니다.</p>
                   ) : idInput.trim() ? (
                     <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다 — {recvMode === 'phone' ? '전화번호를 확인하세요.' : '닉네임을 확인하세요(실명은 우리 매장 손님만 찾습니다).'}</p>
                   ) : null}
