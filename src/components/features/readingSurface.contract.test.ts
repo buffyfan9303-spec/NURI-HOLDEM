@@ -128,7 +128,8 @@ describe('UI-03 · 아우라 구분선', () => {
     expect(POST).toMatch(/grid-cols-2[^"]*min-\[360px\]:flex[^"]*lg:hidden/);
     expect(POST, '반응 줄에 바깥 칸(테두리·면)이 되살아났다').not.toMatch(/className="[^"]*border border-border-strong bg-surface-low p-1 min-\[\d+px\]:flex/);
     // 권한 조건이 두 벌로 복사되지 않았다 — 각 조건이 소스에 한 번씩만 있다.
-    expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제 셋').toBe(3);
+    //   20261006t: 관리자 직권 임시조치(약관 제5조⑩)가 넷째 동작으로 들어왔다 — 여전히 각각 한 번씩이다.
+    expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제·임시조치 넷').toBe(4);
     expect(POST).toMatch(/aria-label="게시글 메뉴"/);
   });
   it('입력창·표·focus ring-3 은 손대지 않는다 — .input 정의는 그대로다', () => {
