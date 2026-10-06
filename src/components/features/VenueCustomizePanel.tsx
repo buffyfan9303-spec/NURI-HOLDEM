@@ -464,7 +464,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                     <span className={['text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{boardLabel(m, cfg)}</span>
                     {isCustomBoard(m) && <span className="rounded-badge bg-surface-high px-1 py-0.5 text-[9px] font-bold text-ink-secondary">커스텀</span>}
                   </span>
-                  <span className="mt-1 block text-2xs leading-snug text-ink-muted">{boardDesc(m, cfg)}</span>
+                  <span className="mt-1 block text-2xs text-ink-muted">{boardDesc(m, cfg)}</span>
                 </button>
               );
             })}

@@ -72,7 +72,7 @@ export default function ClockAdsManager({ venueId, venueName, onClose }: { venue
     <Modal open onClose={onClose} title="클락 슬라이드 광고" maxWidth="lg">
       <div className="space-y-3 p-4">
         {/* §28 안내 — 관리 화면에 늘 보인다. */}
-        <p data-testid="clk-ads-notice" className="rounded-input border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-relaxed text-ink-secondary">{CLOCK_AD_NOTICE}</p>
+        <p data-testid="clk-ads-notice" className="rounded-input border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-ink-secondary">{CLOCK_AD_NOTICE}</p>
         <p className="text-2xs text-ink-muted">
           TV 왼쪽 칸에서 시상·추가 페이지 다음에 <b>10초</b>씩(고정) 한 바퀴에 하나씩 순서대로 나갑니다. 이미지는 정확히 <b>{CLOCK_AD_W}×{CLOCK_AD_H}</b> · 500KB 이하 · webp/jpg/png.
         </p>

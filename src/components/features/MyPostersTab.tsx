@@ -166,7 +166,7 @@ function PendingApprovalView() {
       </div>
       <div>
         <h2 className="text-base font-bold text-amber-400">관리자 승인 대기 중</h2>
-        <p className="text-xs text-ink-muted mt-1 leading-relaxed">매장 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
+        <p className="text-xs text-ink-muted mt-1">매장 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
       </div>
       <div className="text-2xs text-ink-muted px-4 py-2 rounded-input bg-surface-high">승인되면 게임을 등록할 수 있습니다</div>
     </div>
@@ -300,17 +300,17 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, m
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
-            {schedule.isPremium && <span className="rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">TOP</span>}
+            {schedule.isPremium && <span className="rounded-badge bg-accent-300 px-1 text-2xs font-bold text-white">TOP</span>}
             {!schedule.approved && (schedule.rejectedAt
-              ? <span className="rounded-badge bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">반려</span>
-              : <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인 대기</span>)}
-            <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
+              ? <span className="rounded-badge bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1 text-2xs font-semibold">반려</span>
+              : <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 text-2xs font-semibold">승인 대기</span>)}
+            <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 text-2xs font-semibold">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
           <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 참가비 {schedule.buyIn.amount.toLocaleString()}</p>
           {/* 반려 사유 — 포스터가 사라지는 대신 여기 남는다. 다음 행동(수정→재제출)까지 같이 적는다. */}
           {schedule.rejectedAt && (
-            <p className="mt-1 rounded-input border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-2xs leading-relaxed text-rose-400">
+            <p className="mt-1 rounded-input border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-2xs text-rose-400">
               반려 사유: {schedule.rejectReason?.trim() || '사유가 기록되지 않았습니다'}
               <br /><span className="text-ink-secondary">수정 후 저장하면 다시 승인 요청되어 대기열로 올라갑니다(프리미엄 매장도 관리자 승인 후 공개).</span>
             </p>
@@ -377,7 +377,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, m
       {confirming && (
         <div className="border-t border-danger/30 bg-danger/10 px-3 py-2.5 space-y-2">
           <p className="flex items-center gap-1 text-xs font-bold text-danger-light"><Icon name="alert" size={13} className="shrink-0" />‘{schedule.title}’ 게임을 삭제합니다 — 되돌릴 수 없습니다</p>
-          <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-secondary">
+          <ul className="space-y-0.5 text-2xs text-ink-secondary">
             {/* 되돌릴 수 없는 행위의 확인창은 **모르는 숫자를 말하지 않는다**.
                 예전엔 조회 실패가 그대로 '0명'이 되어, 실제 예약자가 있는 포스터를 '아무도 없다'고
                 안심시키며 지우게 했다(CASCADE 로 예약 영구 소멸). */}
@@ -546,7 +546,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
       {/* 예약자 삭제 확인 — 버튼과 다른 줄(다른 좌표)에 펼친다. 삭제해도 손님에게 알림이 가지 않으므로 그 사실을 적는다. */}
       <Fold open={ask}>
         <div className="flex items-center gap-2 border-t border-danger/30 bg-danger/10 px-2.5 py-2">
-          <p className="flex-1 min-w-0 text-2xs leading-relaxed text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다. 손님에게 알림은 가지 않습니다</p>
+          <p className="flex-1 min-w-0 text-2xs text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다. 손님에게 알림은 가지 않습니다</p>
           <button type="button" onClick={() => setAsk(false)} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-semibold text-ink-secondary active:opacity-80">취소</button>
           <button type="button" onClick={() => { setAsk(false); onDelete(); }} className="shrink-0 rounded-input border border-danger/50 bg-danger/20 px-2 py-1 text-2xs font-bold text-danger-light active:opacity-80">삭제</button>
         </div>

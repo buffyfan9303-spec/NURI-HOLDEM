@@ -235,7 +235,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
                   {list.slice(0, 3).map((s) => {
                     const t = s.checkIn || s.startHm ? `${s.checkIn || s.startHm || ''}${s.checkOut ? `~${s.checkOut}` : ''}` : '';
                     return (
-                      <span key={s.name} className="text-2xs leading-tight px-1 rounded-sm bg-accent-300/20 text-accent-100 truncate">
+                      <span key={s.name} className="text-2xs px-1 rounded-sm bg-accent-300/20 text-accent-100 truncate">
                         {s.name}{t ? ` ${t}` : ''}
                       </span>
                     );

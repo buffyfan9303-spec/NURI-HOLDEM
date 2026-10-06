@@ -366,7 +366,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           {/* '기록이 없어서 0' 과 '실제로 0원' 은 다른 상태다 — 숫자(0도 사실이다)는 그대로 두고 이유만 한 줄 덧붙인다.
               실패는 위쪽 LoadErrorCard 가 따로 말하므로, 여기서 셋이 서로 헷갈리지 않는다. */}
           {m.total === 0 && (
-            <p className="flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
+            <p className="flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-2 text-2xs text-ink-secondary">
               <Icon name="info" size={12} className="mt-px shrink-0 text-ink-muted" />
               <span>
                 {excludeTypes.size > 0 && buyins.length > 0
@@ -510,7 +510,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                 <Mini label="아웃" value={`${clockAgg.eliminations}`} />
                 <Mini label="얼리(칩단위)" value={`${clockAgg.earlies}`} tone="amber" />
               </div>
-              <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
+              <p className="text-2xs text-ink-muted mt-1.5">
                 마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바인({m.buyinCount.toLocaleString()}회 · 엔트리 {m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
@@ -701,7 +701,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       </div>
 
       {/* 인사이트 */}
-      <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
+      <p className="text-2xs text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5">
         {multi
           ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}{josa(best.avgEntry.toFixed(1), '으로')} 가장 활발합니다.</>
           : <>아직 한 요일({DOW[best.w]})만 집계됐습니다.</>}
@@ -716,9 +716,9 @@ function DowHilite({ tone, cap, w, a, b }: { tone: 'emerald' | 'rose'; cap: stri
   return (
     <div className={['rounded-card border p-2.5', ring].join(' ')}>
       <p className="text-2xs text-ink-muted">{cap}</p>
-      <p className={['text-lg font-extrabold leading-tight', head].join(' ')}>{DOW[w]}요일</p>
-      <p className="text-[11px] text-ink-primary mt-0.5 leading-tight tabular-nums">{a}</p>
-      <p className="text-2xs text-ink-muted mt-0.5 leading-tight tabular-nums">{b}</p>
+      <p className={['text-lg font-extrabold', head].join(' ')}>{DOW[w]}요일</p>
+      <p className="text-2xs text-ink-primary mt-0.5 tabular-nums">{a}</p>
+      <p className="text-2xs text-ink-muted mt-0.5 tabular-nums">{b}</p>
     </div>
   );
 }
@@ -745,7 +745,7 @@ function StatCard({ label, value, unit, valueTitle, sub, icon, danger, emerald, 
   return (
     <div className="flex min-h-21 flex-col rounded-aura border card-aura p-2.5">
       <div className="flex items-start justify-between gap-1">
-        <p data-testid={testId} className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
+        <p data-testid={testId} className="text-xs font-medium text-ink-secondary">{label}</p>
         <StatIcon name={icon} className="shrink-0 text-ink-muted" />
       </div>
       {/* sm 미만은 한 단계 작게(17px) — 2열 카드 안폭 124px(360) 에 '149,957,958' 이 19px 로는 127px 라
@@ -753,12 +753,12 @@ function StatCard({ label, value, unit, valueTitle, sub, icon, danger, emerald, 
       {/* data-testid: e2e 가 이 값을 **클래스가 아니라 이름으로** 찾게 한다.
           종전엔 `p.text-lg` 로 찾았는데, 좁은 폭 대응으로 `text-base sm:text-lg` 가 되자
           모바일 하네스에서 0개가 됐다(게이트가 거짓 실패). 글자 크기는 앞으로도 바뀐다. */}
-      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg sm:leading-7', c].join(' ')} title={valueTitle}>{value}{unit && <span className="ml-[3px] text-[0.72em] font-bold leading-none">{unit}</span>}</p>
+      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg sm:leading-6.5', c].join(' ')} title={valueTitle}>{value}{unit && <span className="ml-[3px] text-[0.72em] font-bold leading-none">{unit}</span>}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
           긴 문구는 호출부에서 짧게 쓴다 — truncate 는 잘림 방지 안전망이지 해법이 아니다. */}
-      <p className="mt-1 truncate text-[11px] leading-tight tabular-nums text-ink-muted" title={sub || undefined}>{sub || '\u00A0'}</p>
+      <p className="mt-1 truncate text-2xs tabular-nums text-ink-muted" title={sub || undefined}>{sub || '\u00A0'}</p>
     </div>
   );
 }
@@ -778,10 +778,10 @@ const MINI_TONE: Record<MiniTone, string> = {
 function Mini({ label, value, hint, tone = 'default' }: { label: string; value: string; hint?: string; tone?: MiniTone }) {
   return (
     <div className="rounded-input border border-border-default bg-surface-high px-2 py-2">
-      <p className="truncate text-[11px] leading-tight text-ink-muted" title={label}>{label}</p>
+      <p className="truncate text-2xs text-ink-muted" title={label}>{label}</p>
       <p data-testid="mini-value" className={['mt-1 text-base font-bold leading-none tabular-nums', MINI_TONE[tone]].join(' ')}>{value}</p>
       {/* 2026-09-25 #7 — /70 은 라이트 2.7:1 · 다크 3.2:1 로 AA 미달이었다(10px 글자라 완화 기준도 없다). */}
-      {hint && <p className="mt-1 text-[10px] leading-tight text-ink-muted">{hint}</p>}
+      {hint && <p className="mt-1 text-2xs text-ink-muted">{hint}</p>}
     </div>
   );
 }
@@ -991,7 +991,7 @@ ${rpt.actions.length
         /* 표본 부족 — 가짜 진단을 만들지 않는다. 무엇이 얼마나 더 필요한지만 말한다. */
         <div className="rounded-input border border-amber-400/30 bg-amber-400/6 p-3">
           <p className="flex items-center gap-1.5 text-xs font-bold text-amber-300"><Icon name="alert" size={13} className="shrink-0" />판단할 데이터가 부족합니다</p>
-          <p className="mt-1 text-2xs text-ink-secondary leading-relaxed break-keep">{rpt.sales}</p>
+          <p className="mt-1 text-2xs text-ink-secondary break-keep">{rpt.sales}</p>
           <p className="mt-1.5 text-2xs text-ink-muted break-keep">
             진단을 만들려면 <b className="text-ink-secondary">바인 {MIN_BUYINS}회 · 영업 {MIN_DAYS}일</b> 이상이 필요합니다.
           </p>
@@ -1014,14 +1014,14 @@ function ReportCard({ tone, title, body, actions }: { tone: 'emerald' | 'rose' |
   return (
     <div className="rounded-input bg-surface-low/80 border border-border-default p-3">
       <p className={['flex items-center gap-1.5 text-xs font-bold mb-1.5', head].join(' ')}><Icon name={mark} size={13} className="shrink-0" />{title}</p>
-      {body && <p className="text-2xs text-ink-secondary leading-relaxed">{body}</p>}
+      {body && <p className="text-2xs text-ink-secondary">{body}</p>}
       {actions && (actions.length === 0 ? (
         /* 근거가 약하면 제안 대신 그 사실을 적는다 — 빈 칸을 메우려고 일반론을 만들지 않는다. */
-        <p className="text-2xs text-ink-muted leading-relaxed break-keep">근거가 충분한 제안이 아직 없습니다</p>
+        <p className="text-2xs text-ink-muted break-keep">근거가 충분한 제안이 아직 없습니다</p>
       ) : (
         <ul className="space-y-2">
           {actions.map((a, i) => (
-            <li key={i} className="flex gap-1.5 text-2xs text-ink-secondary leading-relaxed">
+            <li key={i} className="flex gap-1.5 text-2xs text-ink-secondary">
               <span className="text-amber-400 shrink-0" aria-hidden>•</span>
               <span className="min-w-0 break-keep">
                 {a.text}

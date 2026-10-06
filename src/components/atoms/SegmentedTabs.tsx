@@ -40,11 +40,15 @@ export default function SegmentedTabs<T extends string>({
             className={[
               hitUp ? 'tap-44' : 'relative',
               // min-w-[44px]: 두 글자 라벨(쪽지·알림·전체)은 루트 16px 에서 폭 40.75px 라 가로 누름면이 44 아래였다(2026-10-04).
-              'shrink-0 min-w-[44px] rounded-[6px] leading-none transition-colors duration-(--dur-fast) focus:outline-hidden',
+              'shrink-0 min-w-[44px] rounded-[6px] transition-colors duration-(--dur-fast) focus:outline-hidden',
               grow ? 'flex-1' : '',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab). 굵기는 위 줄의 font-bold 가 이긴다.
-              // sm 은 보이는 높이 28(t-tab 13 + 위아래 7.5) — G9 '작은 토글 28'(명세 §1-2). 종전 py-1.5 는 25px 였다.
-              size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-[7.5px] t-tab',
+              // sm 은 보이는 높이 28 — G9 '작은 토글 28'(명세 §1-2). 종전 py-1.5 는 25px 였다.
+              // 2026-10-06(store-p3-1006, 리드 승인) — 행간은 t-tab/t-nav 정본(18 · 22)을 그대로 쓴다. 종전엔 leading-none 이
+              //   그걸 이겨 같은 13px 탭 글자가 여기만 13, 다른 탭은 18 이었다(e2e/store-rhythm). 상자 높이는 패딩으로 맞춰 그대로다:
+              //   sm 13+7.5×2 = 18+5.5+4.5 = 28 · md 15+8×2 = 22+4+5 = 31. 위·아래를 0.5px 비대칭으로 둔 것은 글자 기준선을 종전과
+              //   **같은 픽셀**(sm 18.5 · md 20)에 두려고다 — 대칭(5/5·4.5/4.5)이면 반 픽셀 반올림으로 기준선이 ∓0.5 움직였다(실측).
+              size === 'md' ? 'px-3 pt-[4px] pb-[5px] t-nav' : 'px-2.5 pt-[5.5px] pb-[4.5px] t-tab',
               // §T1 탭 굵기 규격: 비활성 600(t-* 기본) / 활성 700
               on ? (quiet ? 'font-bold text-accent-200' : 'font-bold text-white') : 'text-ink-secondary hover:text-ink-primary',
             ].join(' ')}

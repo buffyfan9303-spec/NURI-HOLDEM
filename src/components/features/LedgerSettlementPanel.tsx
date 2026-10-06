@@ -193,7 +193,7 @@ function Report({ r, ticket }: { r: SettlementReport; ticket: TicketCheck | 'sta
           같은 날짜인데 장부 정산바와 여기 숫자가 다를 수 있다. 둘이 다른 이유를 화면에 밝혀 둔다 —
           숫자가 갈리는 것보다, 갈리는 이유를 모르는 것이 더 위험하다. */}
       {/* 감사 S-3(2026-10-02) — 3줄 → 한 문장. 뜻(장부 화면의 정산 제외는 여기 안 들어가 정산바와 다를 수 있다)은 그대로. */}
-      <p className="text-2xs leading-relaxed text-ink-muted">
+      <p className="text-2xs text-ink-muted">
         <b className="text-ink-secondary">그날 장부 바인 전부</b> 기준 · ‘정산 제외’ 미반영이라 정산바와 다를 수 있어요
       </p>
 
@@ -404,7 +404,7 @@ function TicketCheckCard({ tc }: { tc: TicketCheck | 'staffOld' | 'error' | null
           )}
         </>
       )}
-      <p className="mt-2.5 text-2xs leading-relaxed text-ink-muted">
+      <p className="mt-2.5 text-2xs text-ink-muted">
         장부 티켓 = 장부에 이용권으로 받았다고 적은 장수(바인 + 애드온, 가불 제외). 들어온 이용권 = 이 날짜에 이 매장에서 실제로 사용된 이용권(승인 대기 포함).
         손님은 이름으로 맞춰요 — 장부에 다른 이름으로 적었으면 따로 보일 수 있어요.
       </p>
@@ -443,7 +443,7 @@ function Card({ title, icon, note, children }: { title: string; icon: IconName; 
         <h3 className="text-sm font-bold text-ink-primary">{title}</h3>
       </div>
       {children}
-      {note && <p className="mt-2.5 text-2xs leading-relaxed text-ink-muted">{note}</p>}
+      {note && <p className="mt-2.5 text-2xs text-ink-muted">{note}</p>}
     </section>
   );
 }
