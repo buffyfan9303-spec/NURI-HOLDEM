@@ -120,6 +120,18 @@ export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dra
   return false;
 }
 
+/**
+ * 시트를 손으로 끌어 닫을 수 없는 가로폭 — **그립을 숨기는 경계와 같은 값**이다(P3-2, 2026-10-06).
+ *   sheet: 640(Tailwind sm). 그립(`sm:hidden`)이 사라지는 폭에서 시트가 가운데 대화상자로 바뀌므로 드래그도 끈다.
+ *          예전엔 1024 로 막아 640~1023 에서 그립은 없는데 헤더를 끌면 닫혔다.
+ *   page : 1024(그립 `lg:hidden`). 그 밖: 항상 허용(center 는 애초에 끌지 않는다).
+ * 모바일(390)은 어느 쪽이든 허용이라 동작이 같다.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function dragBlockedAtWidth(variant: NonNullable<ModalProps['variant']>, width: number): boolean {
+  return width >= (variant === 'sheet' ? 640 : 1024);
+}
+
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
   dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true, layer = 'default', confirmClose,
@@ -270,7 +282,7 @@ export default function Modal({
   //   그립(touch-none)에서는 됐지만 본문에서는 시트가 0.85px 만 움직였다(drag-close.spec). 터치 이벤트는 네이티브
   //   스크롤 중에도 계속 온다 — 예전 구현이 터치였던 이유. Apple 의 원칙(1:1·속도 이어받기·투영·중단)은 그대로다.
   const onSheetStart = (e: React.TouchEvent) => {
-    if (window.innerWidth >= 1024) return;
+    if (dragBlockedAtWidth(variant, window.innerWidth)) return;
     const t = e.target as Element | null;
     // 입력 컨트롤 위에서 시작한 손짓은 닫기가 아니다 — 쓰던 내용이 날아가는 유일한 경로를 막는다.
     if (t?.closest?.(EDITABLE_SEL)) return;
