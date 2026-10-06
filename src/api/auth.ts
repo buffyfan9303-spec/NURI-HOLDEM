@@ -816,6 +816,16 @@ export async function setMyPublicRankingConsent(on: boolean | null): Promise<voi
   if (error) throw new Error(error.message);
 }
 
+// ── 마케팅 정보 수신 동의(선택) — 가입 후 설정에서 켜고 끄는 경로(2026-10-06 법령 점검 P2-1) ─────────
+/** 필수 동의·약관 판 번호는 건드리지 않는다(record_my_legal_consent 와 다르다). 서버가 시각을 찍고 legal_consents 에
+ *  'settings' 이력을 남기며, 처리 결과 통지(정보통신망법 §50⑦)는 서버 트리거가 알림함에 남긴다(20261006l). */
+export async function setMyMarketingConsent(on: boolean): Promise<string> {
+  if (IS_MOCK) return new Date().toISOString();
+  const { data, error } = await supabase.rpc('set_my_marketing_consent', { p_on: on });
+  if (error) throw new Error(error.message);
+  return String(data);
+}
+
 // 순위 입력 자동완성용 전 회원 검색(searchMembersForRanking → RPC search_members_for_ranking)은 2026-09-11 에 지웠다.
 // 마지막 소비자였던 장부 손님 검색이 매장 범위 RPC(search_registered_players, 20260911h)로 옮겨가 사용처가 0이 됐고,
 // 범위 제한이 목적인 커밋에 '매장과 무관한 전 회원 실명 부분 일치' 헬퍼를 남겨 두면 그대로 되살아난다.

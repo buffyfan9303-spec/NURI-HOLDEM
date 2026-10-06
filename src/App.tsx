@@ -191,6 +191,8 @@ const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGa
 //   전부 **한 청크**(shellDeferred)로 묶는다 — 따로 떼면 작은 청크 4개가 압축을 못 받아 JS 전체가 +3.8KB 늘었다(실측).
 const shellDeferred     = () => import('./components/features/shellDeferred');
 const VerifyGateSheet   = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.VerifyGateSheet })));
+// 정지·영구정지 계정의 '탈퇴만 가능' 안내(2026-10-06 P2-8 ②) — 그런 계정으로 로그인했을 때만 받는다(user=null 이라 막을 화면이 없다).
+const SanctionedAccountSheet = lazyWithReload(() => import('./components/features/SanctionedAccountSheet'));
 const StaffInviteBanner = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.StaffInviteBanner })));
 const LevelUpWatcher    = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.LevelUpWatcher })));
 // 쪽지·알림 패널도 같은 청크다 — 닫혀 있을 땐 아무것도 그리지 않는다(render=false).
@@ -1050,7 +1052,7 @@ const snapScroll = () => ({ y: window.scrollY, headerH: (document.querySelector(
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
 export default function App() {
-  const { user, isAdmin, isOwner, loading: authLoading, refreshProfile } = useAuth();
+  const { user, isAdmin, isOwner, loading: authLoading, refreshProfile, sanctioned } = useAuth();
   const toast = useToast();
   /** 지금 로그인한 사람의 id — **늦게 도착한 이전 계정 응답을 버리기 위한 대조값**이다(N01 · R3-01).
    *  ⚠ 렌더 본문에서 **동기로** 갱신한다. 예전엔 알림 이펙트 안에서 채워서, 그보다 먼저 선언된 이펙트(QR 딥링크)의
@@ -3389,6 +3391,8 @@ export default function App() {
     if (link === '/support') { openSupport(); return; }
     // /wallet (🎟 이용권 도착) → 내 지갑(이용권 대시보드) 바로 열기
     if (link === '/wallet') { setMeTab('dashboard'); setVoucherWalletOpen(true); return; } // 초기 탭 명시 — 보안 탭 진입 뒤 stale 방지
+    // /me/security (마케팅 수신 동의·철회 처리 결과 알림 · 주간 소식 메일의 수신거부 링크 ?nl=) → 내 정보 → 보안(마케팅 정보 수신 토글)
+    if (link === '/me/security') { setMeTab('security'); setVoucherWalletOpen(true); return; }
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
     if (link === '/') { changeTab('home'); return; }
     // 위 규칙에 안 걸리고 link 가 비어 있는 경우 — 게시글·댓글 연결 알림(qna·comment·mention)은 원래 특정 대상을 가리키는데,
@@ -5133,6 +5137,7 @@ export default function App() {
 
       {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
       <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />
+      {sanctioned && <Suspense fallback={null}><SanctionedAccountSheet /></Suspense>}
 
       {/* ↑ 맨 위로 — 600px 이상 스크롤 시 표시(우하단 플로팅) */}
       <ScrollTopButton />

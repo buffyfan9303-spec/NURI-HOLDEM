@@ -1352,6 +1352,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 변경·취소 및 대회 진행 안내</li>
             <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지. 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
             <li>· 휴대전화번호는 매장에 전달되지 않습니다</li>
+            {/* 개보법 §17②5 — 동의를 거부할 권리와 거부에 따른 불이익(2026-10-06 법령 점검 P2-6) */}
+            <li data-testid="reserve-refuse-right">· 제공에 동의하지 않으실 수 있습니다. 이 경우 앱으로는 예약할 수 없고, 매장에 직접 문의해 참가하실 수 있습니다</li>
           </ul>
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
             아래 <b className="text-ink-secondary">예약하기</b>를 누르면 위 제공에 동의하는 것으로 봅니다.{' '}

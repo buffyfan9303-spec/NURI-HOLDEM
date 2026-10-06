@@ -9,12 +9,49 @@ import { AGE_HELPLINE, BIZ_EXTRA, BIZ_REQUIRED } from '../components/features/Bu
 import * as BRAND from '../../supabase/functions/_shared/email/brand.gen.ts';
 import { C, LOGO_H, LOGO_URL, LOGO_W, SITE, SUPPORT_URL } from '../../supabase/functions/_shared/email/layout.ts';
 import { supportReplyEmail } from '../../supabase/functions/_shared/email/supportReply.ts';
+import { isAdQuietHoursKst, MARKETING_SETTINGS_URL, UNSUBSCRIBE_MAILTO, weeklyDigestEmail } from '../../supabase/functions/_shared/email/weeklyDigest.ts';
 import { AUTH_TEMPLATES, OTP_EXPIRY_SEC, REQUIRED_VARS } from '../../supabase/templates/auth/templates.ts';
 
 const ROOT = join(__dirname, '..', '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf-8').replace(/\r\n/g, '\n');
 const support = supportReplyEmail({ nickname: 'n', category: '기타', title: 't', answer: 'a', answeredAt: '2026-09-30T00:00:00Z', isUpdate: false });
-const ALL: [string, string][] = [...Object.entries(AUTH_TEMPLATES).map(([k, t]) => [k, t.html] as [string, string]), ['support-reply', support.html]];
+const digest = weeklyDigestEmail({ nickname: '<b>닉</b>', vname: '<a href="x">펍</a>', vn: 2, n: 3 });
+const ALL: [string, string][] = [...Object.entries(AUTH_TEMPLATES).map(([k, t]) => [k, t.html] as [string, string]), ['support-reply', support.html], ['weekly-digest', digest.html]];
+
+// 2026-10-06 법령 점검 P1-1(security-1006/legal.md) — 주간 소식 이메일은 광고성 정보다(마케팅 동의서 제2조가 스스로 분류).
+describe('④ 광고성 정보 표기(정보통신망법 §50③④)', () => {
+  it('제목이 (광고) 로 시작하고 사용자 값을 싣지 않는다', () => {
+    expect(digest.subject.startsWith('(광고) ')).toBe(true);
+    expect(digest.subject).not.toMatch(/닉|펍/);
+  });
+  it('본문에 전송자 명칭·전화·이메일과 로그인 없이 되는 수신거부 방법이 있다', () => {
+    const name = BIZ_REQUIRED.find(([k]) => k === '상호')![1];
+    const tel = BIZ_REQUIRED.find(([k]) => k === '전화번호')![1];
+    expect(digest.html).toContain(`전송자: ${name}`);
+    expect(digest.html).toContain(tel);
+    expect(digest.html).toContain(`href="${UNSUBSCRIBE_MAILTO}"`);
+    expect(UNSUBSCRIBE_MAILTO.startsWith('mailto:ace@nuriholdem.com?subject=')).toBe(true);
+    expect(digest.html).toContain(`href="${MARKETING_SETTINGS_URL}"`);
+    expect(new URL(MARKETING_SETTINGS_URL).searchParams.get('nl')).toBe('/me/security');
+    expect(read('src/App.tsx')).toContain("if (link === '/me/security')");
+    expect(digest.html).toContain('마케팅 정보 수신에 동의하신 회원');
+  });
+  it('매장명·닉네임은 이스케이프된다', () => {
+    expect(digest.html).not.toContain('<a href="x">');
+    expect(digest.html).toContain('&lt;b&gt;닉&lt;/b&gt;');
+  });
+  it('야간(21~08시 KST)에는 보내지 않는다 — 경계는 DB _ad_quiet_hours 와 같다', () => {
+    const at = (hm: string) => new Date(`2026-10-09T${hm}:00+09:00`);
+    expect(['07:59', '08:00', '10:30', '20:59', '21:00'].map((t) => isAdQuietHoursKst(at(t)))).toEqual([true, false, false, false, true]);
+  });
+  it('엣지 함수가 이 모듈로 제목·본문·야간 판정을 만든다(옛 인라인 템플릿 금지)', () => {
+    const fn = read('supabase/functions/weekly-email-digest/index.ts');
+    expect(fn).toContain("from '../_shared/email/weeklyDigest.ts'");
+    expect(fn).toContain('if (isAdQuietHoursKst())');
+    expect(fn).toContain("'List-Unsubscribe'");
+    expect(fn).not.toContain('[NURI HOLDEM] 이번 주 팔로우 매장 대회');
+  });
+});
 
 describe('① 하단 법정 고지 = BusinessFooter', () => {
   it('brand.gen.ts 가 BusinessFooter 의 현재 값과 같다(주소·전화가 바뀌면 재생성)', () => {

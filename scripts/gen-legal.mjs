@@ -189,6 +189,10 @@ const CSS = [
   // 5열 이상 표(개인정보 국외 이전 6열)는 520 에서 '목적' 칸이 62px 로 줄당 2~3자였다(재점검 1회차 L1-9). 640 = 360 실측 줄당 최소 3자 · 표 높이 1785→1194px.
   //   :has() 미지원 브라우저는 종전 520 그대로 — 표는 이미 .scrollx 안에서 가로 스크롤된다.
   ".doc table:has(tr > :nth-child(5)){min-width:640px}",
+  // 2026-10-06: 국외 이전 표에 7번째 '연락처' 열(개보법 §28의8②3)을 더하면서 같은 기준(줄당 최소 3자)을 지키도록 넓힌다.
+  //   연락처는 주소(이메일·URL)라 띄어쓰기가 없어 아무 데서나 끊게 한다(칸을 늘려 표를 밀지 않게).
+  ".doc table:has(tr > :nth-child(7)){min-width:780px}",
+  ".doc td:nth-child(7){overflow-wrap:anywhere;word-break:break-all}",
   ".doc th,.doc td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}",
   ".doc th{color:var(--ink);font-weight:600;background:var(--panel);white-space:nowrap}",
   ".doc td{color:var(--sub)}",

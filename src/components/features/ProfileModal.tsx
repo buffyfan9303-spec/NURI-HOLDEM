@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, setMyMarketingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
 import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
@@ -34,6 +34,7 @@ import { getMyLocationConsent } from '../../api/locationPrivacy';
 import { warm, takeWarm, dropWarm } from '../../lib/warmFetch';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
+import { marketingConsentNotice } from '../../lib/marketingConsent';
 import { coverImage, PROFILE_COVERS, COVER_LABEL, type ProfileCover } from '../../lib/profileCover';
 
 interface ProfilePanelsProps {
@@ -105,6 +106,8 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     //   바로 열 때(본인인증 안내 등) 그 사이 바뀐 동의 상태 대신 옛 값이 그려지고 다시 받지도 않았다(B2 후속 · 독립 검토 ④-b).
     return () => { dropWarm(`legal-consents:${uid}`); dropWarm(`location-consent:${uid}`); };
   }, [open, uid]); // eslint-disable-line react-hooks/exhaustive-deps -- 여는 순간 한 번(탭 이동마다 다시 받지 않는다)
+
+  const [consentRev, setConsentRev] = useState(0); // 마케팅 동의를 바꾸면 동의 이력을 다시 받는다
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
   // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
@@ -663,8 +666,14 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         {/* 개인정보 열람권(개인정보보호법 §35) — 오너 결정 2026-09-19, "내 정보 > 보안에 붙여라".
             getMyLegalConsents 는 만들어져 있었는데 호출부가 없었다. API 가 주는 것(버전·시각·동의 항목)만
             그대로 보여준다 — 제도 설명·법 문구는 화면에 새로 쓰지 않는다. */}
+        {/* 마케팅 정보 수신 동의(선택) 켜기·끄기 — 처리방침 제8조④ '서비스 내 설정에서 철회'(2026-10-06 법령 점검 P2-1).
+            바꾸면 아래 동의 이력을 다시 받는다(key) — 방금 남긴 'settings' 이력이 바로 보이게. */}
         <div className="px-4 pt-4">
-          <LegalConsentHistory />
+          <MarketingConsentSetting onChanged={() => setConsentRev((n) => n + 1)} />
+        </div>
+
+        <div className="px-4 pt-4">
+          <LegalConsentHistory key={consentRev} />
         </div>
 
         {/* 위치정보 이용 동의·철회·이용 내역 열람(위치정보법 제24조) — LOCATION-READY 2026-09-26 */}
@@ -982,6 +991,67 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, cov
   );
 }
 
+// ── 마케팅 정보 수신 동의(선택) ───────────────────────────────────────────────────
+// 정보통신망법 §50②⑥(철회 후 전송 금지·쉬운 철회) · 개보법 §37 · 처리방침 제8조④ — 가입 뒤에도 앱 안에서 켜고 끈다.
+// 서버 set_my_marketing_consent 가 필수 동의·판 번호를 건드리지 않고 이력('settings')을 남기며, 처리 결과 통지는
+// 서버 트리거가 알림함에, 같은 세 요소(전송자·날짜·결과)를 화면(토스트 + 아래 줄)에 보인다.
+function MarketingConsentSetting({ onChanged }: { onChanged: () => void }) {
+  const { user, refreshProfile } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  if (!user) return null;
+  const on = user.agreedToMarketing === true;
+  const toggle = async () => {
+    if (busy) return;
+    const next = !on;
+    setBusy(true);
+    try {
+      await setMyMarketingConsent(next);
+      await refreshProfile();
+      const msg = marketingConsentNotice(next);
+      setResult(msg);
+      toast.show(msg, 'success');
+      onChanged();
+    } catch (e) {
+      toast.show(msgOf(e, '설정 저장 실패'), 'error');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        role="switch"
+        aria-checked={on}
+        aria-label="마케팅 정보 수신 동의"
+        data-testid="marketing-consent-toggle"
+        className="flex w-full items-center gap-3 rounded-aura border border-border-subtle bg-surface-high p-3 text-left disabled:opacity-40"
+      >
+        <span className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink-primary">마케팅 정보 수신 <span className="font-normal text-ink-muted">(선택)</span></p>
+          <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
+            팔로우 매장 공지·새 포스터·주간 소식을 (광고) 푸시·이메일로 받습니다. 꺼도 알림함과 예약·순위 같은 필수 안내는 그대로 옵니다
+          </p>
+        </span>
+        <span
+          aria-hidden
+          className={[
+            'relative w-11 h-6 rounded-full transition-colors shrink-0',
+            on ? 'bg-accent-300' : 'bg-surface-float',
+          ].join(' ')}
+        >
+          <span
+            className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+            style={{ transform: `translateX(${on ? 20 : 0}px)` }} />
+        </span>
+      </button>
+      {result && <p role="status" data-testid="marketing-consent-result" className="mt-1.5 text-2xs leading-relaxed text-ink-muted">{result}</p>}
+    </div>
+  );
+}
+
 // ── 푸시 알림 설정 ─────────────────────────────────────────────────────────────
 
 function PushNotificationSetting() {
@@ -1021,7 +1091,7 @@ function PushNotificationSetting() {
           <p className="text-sm font-semibold text-ink-primary">푸시 알림</p>
           <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
             {supported
-              ? '댓글·승인·팔로우 매장 새 포스터를 브라우저 알림으로 받습니다'
+              ? '댓글·승인 등 알림을 브라우저 알림으로 받습니다 · 팔로우 매장 소식은 마케팅 정보 수신에 동의한 경우에만'
               : '이 브라우저는 푸시 알림을 지원하지 않습니다'}
           </p>
         </span>
@@ -1123,7 +1193,8 @@ function LogoutSection({ onDone }: { onDone: () => void }) {
 // ── 회원 탈퇴 ─────────────────────────────────────────────────────────────────
 // 개인정보(실명·전화·CI·생년월일 등)를 파기하고 계정을 폐쇄. 복구 불가.
 // 본인 확인 = 현재 비밀번호 입력(재인증). 매장 대표는 서버가 거부(매장 정리 먼저).
-function WithdrawAccountSection() {
+// 정지·영구정지 계정의 안내 시트(SanctionedAccountSheet)도 이 절차를 그대로 쓴다(2026-10-06 P2-8 ②).
+export function WithdrawAccountSection() {
   const { logout } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);

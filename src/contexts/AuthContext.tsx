@@ -28,6 +28,11 @@ interface AuthContextValue {
   changePassword: (currentPw: string, newPw: string) => Promise<void>;
   /** 서버에서 내 프로필 다시 불러오기 (승인 상태 변경 반영 등) */
   refreshProfile: () => Promise<void>;
+  /** 정지·영구정지 계정으로 로그인했을 때의 안내 문장. 이때 user 는 null(다른 기능은 그대로 막힌다)이지만
+   *  세션은 남겨 **회원 탈퇴만** 할 수 있게 한다(2026-10-06 오너 "계정 탈퇴도 만들어" · legal.md P2-8 ②). */
+  sanctioned: string | null;
+  /** 제재 안내를 닫고 세션을 끝낸다(로그아웃). */
+  endSanctioned: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -48,6 +53,7 @@ const keepIfSame = (prev: User | null, next: User | null): User | null => (sameU
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sanctioned, setSanctioned] = useState<string | null>(null);
 
   // 프로필을 세팅하고, 하루 1회 접속 활동 점수(+1)를 적립해 점수를 반영한다.
   // 제재 상태면 **왜 못 들어가는지**를 문장으로 돌려준다(2026-09-07). 아니면 null.
@@ -87,7 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sanction = profile ? sanctionMessage(profile) : null;
     if (sanction) {
       genRef.current = withSignedOut(genRef.current);   // 진행 중인 조회도 함께 끊는다
-      apiSignOut().catch(() => {});
+      // 2026-10-06(P2-8 ②): 정지·영구정지는 세션을 남기고 탈퇴 안내 시트만 연다(user=null 이라 다른 기능은 막힌 채).
+      //   서버 withdraw_my_account 가 제재 계정 탈퇴를 받고, 재가입 차단용 CI 변환값을 reason='banned' 로 남긴다(20261006m).
+      //   이미 탈퇴한 계정은 할 일이 없으니 종전대로 바로 끝낸다.
+      if (profile!.status === 'withdrawn') apiSignOut().catch(() => {});
+      else setSanctioned(sanction);
       setUser(null);
       setLoading(false);
       return sanction;   // 로그인 경로가 이 문장을 그대로 사용자에게 보여준다
@@ -105,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //   '로딩 끝 · 사용자 없음' 커밋이 한 번 생기고, 그 커밋의 effect 가 로그인된 사람을 비로그인으로 확정했다 —
     //   로그인된 손님의 `?checkin=` 에 로그인 창, 로딩 중 누른 GTO 도구가 로그인 창으로(e2e/auth-boot-gap.spec.ts G1·G3).
     //   여기서 풀므로 **어느 경로가 계정을 확정하든**(부팅 조회·onAuthStateChange·login) 로딩이 user 와 함께 풀린다.
+    setSanctioned(null);
     startTransition(() => { setUser((prev) => keepIfSame(prev, profile)); setLoading(false); });
     if (!profile) return null;
 
@@ -166,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ⚠ A04: 세대를 먼저 올린다. 이미 날아간 조회들이 여기서 전부 무효가 된다.
         genRef.current = withSignedOut(genRef.current);
         setUser(null);
+        setSanctioned(null);
         // 🔴 2026-09-26: 부팅 중 SIGNED_OUT(만료 세션의 갱신 거부)이면 위 부팅 조회 응답은 세대가 달라 버려진다.
         //   여기서 풀지 않으면 로딩이 **영원히** 참이라 QR·알림 링크·도구 대기 의도가 전부 멈췄다(auth-boot-gap G4).
         setLoading(false);
@@ -212,6 +224,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await apiSignOut();
   }, []);
 
+  const endSanctioned = useCallback(async () => {
+    setSanctioned(null);
+    await apiSignOut();
+  }, []);
+
   // ── 프로필 수정 / 비밀번호 변경 ──────────────────────────────────────────────
   const updateProfile = useCallback(async (patch: ProfilePatch) => {
     const captured = stamp();
@@ -244,7 +261,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateProfile,
     changePassword,
     refreshProfile,
-  }), [user, loading, login, logout, updateProfile, changePassword, refreshProfile]);
+    sanctioned,
+    endSanctioned,
+  }), [user, loading, login, logout, updateProfile, changePassword, refreshProfile, sanctioned, endSanctioned]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

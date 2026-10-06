@@ -22,6 +22,8 @@ import MarketingConsent from '../../pages/legal/MarketingConsent';
 import SignupLocationConsent from './SignupLocationConsent';
 import { rememberSignupLocationConsent, flushSignupLocationConsent } from '../../lib/locationConsent';
 import { authMsgOf } from '../../lib/authError';
+import { marketingConsentNotice } from '../../lib/marketingConsent';
+import ConsentSummary from './ConsentSummary';
 
 type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
 type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
@@ -220,6 +222,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
           label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)"
           doc="privacy"
         />
+        <ConsentSummary />
       </div>
     </div>
   );
@@ -706,6 +709,8 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
       });
       if (locOk) await afterSignupLocation(mail.value);
       toast.show('가입 완료! 로그인 후 휴대폰 본인인증을 진행해 주세요.', 'success');
+      // 정보통신망법 §50⑦ — 가입 때 마케팅 수신에 동의했으면 처리 결과(전송자·날짜·결과)를 화면에 알린다. 알림함 기록은 서버 트리거(20261006l).
+      if (c.marketing) toast.show(marketingConsentNotice(true), 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(authMsgOf(err, '가입 중 오류가 발생했습니다.'), 'error');
@@ -803,6 +808,8 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
       });
       if (locOk) await afterSignupLocation(mail.value);
       toast.show('매장 운영자 가입 신청이 완료되었습니다. 로그인 후 휴대폰 본인인증과 관리자 승인을 거치면 포스터를 올릴 수 있습니다.', 'success');
+      // 정보통신망법 §50⑦ — 가입 때 마케팅 수신에 동의했으면 처리 결과(전송자·날짜·결과)를 화면에 알린다. 알림함 기록은 서버 트리거(20261006l).
+      if (c.marketing) toast.show(marketingConsentNotice(true), 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(authMsgOf(err, '가입 중 오류가 발생했습니다.'), 'error');

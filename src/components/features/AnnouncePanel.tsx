@@ -1,5 +1,7 @@
 // src/components/features/AnnouncePanel.tsx
 // 운영자 마케팅 푸시 — 우리 매장을 팔로우한 손님에게 커스텀 알림(푸시) 발송. 하루 3회 제한.
+// 2026-10-06 법령 점검 P1-2(정보통신망법 §50): 알림함에는 팔로워 전원에게 남고, **푸시는 마케팅 수신 동의자에게만**
+//   '(광고)' 표시로 08~21시에만 나간다(서버 push_on_notification · 20261006l). 업주가 그 차이를 알고 보내도록 안내한다.
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getVenueAnnounceStatus, sendVenueAnnouncement, type AnnounceStatus } from '../../api/announcements';
@@ -31,7 +33,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const send = async () => {
     if (busy) return;
     if (!title.trim() || !message.trim()) { toast.show('제목과 내용을 입력하세요', 'error'); return; }
-    if (!window.confirm(`팔로워 ${status.followers}명에게 알림을 보내시겠습니까?`)) return;
+    if (!window.confirm(`팔로워 ${status.followers}명의 알림함에 남깁니다. 푸시는 마케팅 수신에 동의한 회원에게만 (광고) 표시로 보내며, 오후 9시~오전 8시에는 푸시하지 않습니다. 보내시겠습니까?`)) return;
     setBusy(true);
     try {
       const n = await sendVenueAnnouncement(venueId, title.trim(), message.trim());
@@ -50,6 +52,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
       {/* leading-relaxed(1.625)를 따로 걸면 같은 11.69px 글자가 화면에서 18.99 / 15.94 두 행간으로 갈린다
           (2026-09-07 실측: 표준 15.94 가 27곳, 이 줄만 18.99). 크기별 행간은 한 값이어야 리듬이 산다. */}
       <p className="text-2xs text-ink-muted">새 대회는 승인되면 자동으로 알림이 가요</p>
+      <p data-testid="announce-ad-notice" className="text-2xs text-ink-muted">푸시는 마케팅 수신 동의자에게만 (광고)로 전송돼요 · 오후 9시~오전 8시 제외(알림함에는 팔로워 모두에게 남아요)</p>
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={loadError ? load : send} disabled={busy || (!loadError && (remaining === 0 || status.followers === 0))}

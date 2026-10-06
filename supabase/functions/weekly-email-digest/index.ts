@@ -4,7 +4,11 @@
 // 2026-09-02 보안: 이전엔 공개 anon Bearer 만으로 열려 있어 인터넷 어디서든 전 회원 발송을 트리거할 수 있었다.
 //   send-push 와 같은 시크릿(get_push_shared_secret, service_role 전용 RPC)을 대조한다 — 부재·불일치 전부 401(fail-closed).
 // 키는 secret_settings(RLS 잠김·service_role 전용)에서 읽는다 — 코드에 하드코딩 금지.
+// 2026-10-06 법령 점검 P1-1(정보통신망법 §50): 수신자 = 마케팅 동의자(서버 weekly_email_digest_rows, 20261006l) ·
+//   제목 '(광고)' · 본문에 전송자 명칭·연락처·수신거부 방법 · 21~08시 KST 발송 금지 — 문구·판정은 _shared/email/weeklyDigest.ts
+//   (vitest src/lib/emailTemplates.test.ts 가 직접 import 해 잠근다).
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { isAdQuietHoursKst, UNSUBSCRIBE_MAILTO, weeklyDigestEmail } from '../_shared/email/weeklyDigest.ts';
 
 let expectedSecret = '';
 // deno-lint-ignore no-explicit-any
@@ -45,7 +49,8 @@ Deno.serve(async (req: Request) => {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      // List-Unsubscribe: 메일 앱의 '구독 취소' 버튼 — 로그인 없이 고객센터로 수신거부 메일을 보낸다.
+      body: JSON.stringify({ from, to: [to], subject, html, headers: { 'List-Unsubscribe': `<${UNSUBSCRIBE_MAILTO}>` } }),
     });
     const body = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, body };
@@ -55,50 +60,25 @@ Deno.serve(async (req: Request) => {
 
   // 수동 테스트 — 2026-09-04 nuriholdem.com 도메인 인증 완료(DKIM·SPF·MX). 이제 임의 수신자에게 도달한다.
   if (typeof payload.test_to === 'string' && payload.test_to) {
-    const r = await send(
-      payload.test_to,
-      '[NURI HOLDEM] 이메일 다이제스트 발송 테스트',
-      digestHtml('테스트', '로티아레나', 1, 3),
-    );
+    const t = weeklyDigestEmail({ nickname: '테스트', vname: '로티아레나', vn: 1, n: 3 });
+    const r = await send(payload.test_to, t.subject, t.html);
     return json({ mode: 'test', ...r }, r.ok ? 200 : 502);
   }
 
-  // 정기 발송 — 대상 집계는 SQL(서비스 롤 전용 RPC)로
+  // §50③ 야간(21~08시 KST) 광고성 정보 전송 금지 — 크론(금 10:30)이 늦게 돌거나 수동으로 불려도 밤에는 보내지 않는다.
+  if (isAdQuietHoursKst()) return json({ mode: 'digest', skipped: 'quiet-hours' });
+  // 정기 발송 — 대상 집계는 SQL(서비스 롤 전용 RPC, 마케팅 동의자만)로
   const { data: rows, error } = await admin.rpc('weekly_email_digest_rows');
   if (error) { console.error('[weekly-email-digest] weekly_email_digest_rows', error); return json({ error: '대상 집계 실패' }, 500); }
   let sent = 0, failed = 0;
   for (const row of rows ?? []) {
-    const r = await send(
-      row.email,
-      `[NURI HOLDEM] 이번 주 팔로우 매장 대회 ${row.n}개`,
-      digestHtml(row.nickname ?? '회원', row.vname, row.vn, row.n),
-    );
+    const m = weeklyDigestEmail({ nickname: row.nickname, vname: row.vname, vn: row.vn, n: row.n });
+    const r = await send(row.email, m.subject, m.html);
     if (r.ok) sent++; else failed++;
     await new Promise((res) => setTimeout(res, 600)); // Resend 무료 플랜 레이트(2/s) 여유
   }
   return json({ mode: 'digest', candidates: rows?.length ?? 0, sent, failed });
 });
-
-/** HTML 이스케이프 — 매장명·닉네임은 **사용자가 정하는 값**이라 그대로 넣으면 메일 본문에 마크업이 주입된다.
- *  (업주가 매장 이름에 <a href=...> 를 넣으면 전 구독자에게 그 링크가 발송된다 — 2026-09-04 리뷰 지적) */
-function esc(v: unknown): string {
-  return String(v ?? '').replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
-  ));
-}
-
-function digestHtml(nickRaw: string, vnameRaw: string, vn: number, n: number): string {
-  const nick = esc(nickRaw);
-  const vname = esc(vnameRaw);
-  const more = vn > 1 ? ` 외 ${vn - 1}곳` : '';
-  return `<div style="font-family:'Apple SD Gothic Neo',Pretendard,sans-serif;max-width:480px;margin:0 auto;background:#0b0c10;color:#e8e9ed;border-radius:14px;padding:28px">
-  <p style="font-size:12px;letter-spacing:2px;color:#8b94e8;margin:0 0 6px">NURI HOLDEM</p>
-  <h1 style="font-size:20px;margin:0 0 14px">📅 ${nick}님, 이번 주 대회 ${n}개가 기다려요</h1>
-  <p style="font-size:14px;line-height:1.7;color:#b9bdcd;margin:0 0 20px">팔로우하신 <b style="color:#e8e9ed">${vname}${more}</b>에서 오늘부터 7일 안에 <b style="color:#ffd100">${n}개 대회</b>가 열려요. 자리가 차기 전에 미리 예약하세요!</p>
-  <a href="https://www.nuriholdem.com/" style="display:block;text-align:center;background:#5e6ad2;color:#fff;text-decoration:none;font-weight:700;font-size:15px;border-radius:10px;padding:14px">일정 보며 예약하기</a>
-  <p style="font-size:11px;color:#6b7080;margin:18px 0 0">이 메일은 매장 팔로우 회원에게 주 1회 발송됩니다. 앱 프로필에서 팔로우를 해제하면 받지 않아요.</p>
-</div>`;
-}
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });

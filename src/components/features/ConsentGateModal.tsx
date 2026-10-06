@@ -26,6 +26,8 @@ import { updateMyConsent } from '../../api/auth';
 import { LEGAL_EFFECTIVE_DATE, legalConsentStage } from '../../lib/legalVersion';
 import { saveLocationConsent } from '../../lib/locationConsent';
 import { msgOf } from '../../lib/dbError';
+import { marketingConsentNotice } from '../../lib/marketingConsent';
+import ConsentSummary from './ConsentSummary';
 
 // 위치 동의 칸은 소셜 가입의 첫 동의에서만 보인다 — 이 게이트는 첫 화면 번들에 실리므로 칸은 지연 로드한다(번들 예산).
 const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
@@ -111,8 +113,9 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
       await refreshProfile();
       // 이미 로그인된 세션이라 바로 적는다. 실패해도 가입 동의는 끝났다 — 출석 때 시트가 다시 묻는다.
       if (mode === 'initial' && locOk) await saveLocationConsent(true).catch(() => {});
-      // 「정보통신망법」 §50⑦ — 수신 동의·철회의 처리 결과를 이용자에게 알려야 한다.
-      if (reconsent && wasMarketing && !marketing) toast.show('마케팅 정보 수신 동의가 철회되었습니다', 'success');
+      // 「정보통신망법」 §50⑦·시행령 §62의2 — 수신 동의·철회의 처리 결과(전송자·날짜·결과)를 알린다.
+      //   값이 바뀐 경우만(첫 동의 게이트에서 새로 켠 경우 포함). 같은 통지가 서버 트리거로 알림함에도 남는다(20261006l).
+      if (wasMarketing !== marketing) toast.show(marketingConsentNotice(marketing), 'success');
       else toast.show('동의가 완료되었습니다', 'success');
     } catch (err) {
       toast.show(msgOf(err, '저장에 실패했습니다'), 'error');
@@ -168,6 +171,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           {/* 오너 #12 — 순위표의 '자주 가는 매장' 표기 동의(선택). 미동의여도 순위·닉네임은 그대로. */}
           <ConsentRow checked={pubRank}   onChange={(v) => { setPubRank(v); setPubRankTouched(true); }}
                       label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)" />
+          <ConsentSummary />
         </div>
 
         {mode === 'initial' && <Suspense fallback={null}><SignupLocationConsent checked={locOk} onChange={setLocOk} /></Suspense>}

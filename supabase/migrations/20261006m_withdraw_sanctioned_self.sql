@@ -1,0 +1,76 @@
+select set_config('lock_timeout', '3s', true);
+select set_config('statement_timeout', '60s', true);
+-- 20261006m — 이용 제한(정지·영구정지) 중인 회원의 본인 탈퇴 허용 · home-team 2026-10-06
+-- ⏳ 미적용(작성·라이브 롤백 리허설만). 적용은 리드가 한다 — 적용 후 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다.
+--
+-- 요구: 오너 2026-10-06 "계정 탈퇴도 만들어" → security-1006/legal.md P2-8 초안 ②(리드 결정).
+--   개인정보 보호법 §36(삭제)·§37(처리정지) — 제재 중이라는 이유만으로 탈퇴(파기 요구)를 막을 근거가 약하다.
+--   제재 회피 재가입은 CI 변환값으로 계속 막는다: verify_identity_commit 은 withdrawn_identities.reason 이
+--   'banned'·'admin_withdrawn' 인 CI 만 거절한다('withdrawn' 은 표시만). 그래서 제재 계정 탈퇴는 reason='banned'
+--   (tombstone_banned_ci 가 영구정지 때 쓰는 값과 같다)로 남기고, 일반 탈퇴는 종전대로 'withdrawn'.
+--   보관 기간은 기존 _purge_withdrawn_identities(6개월, created_at 기준)를 그대로 따른다 — 처리방침 제3조 '탈퇴일부터 6개월'.
+-- 기준: **20261006s2(PR #187, 탈퇴 파일 큐) 적용 후** withdraw_my_account 정의 — 첫 분기와 CI 행 reason 만 바꿨다.
+--   적용 순서(리드 결정): 20261006s1 → 20261006s2 → 20261006l → 20261006m. s2 의 큐 넣기 호출을 지우지 않는다.
+--   admin_withdraw_user 는 건드리지 않는다(s2 정의 그대로).
+--
+-- legal.md P2-4(탈퇴 후 profiles.name 잔존): 고치지 않는다 — 라이브 BEFORE 트리거 profiles_nickname_rules 가
+--   모든 INSERT/UPDATE 에서 name := nickname 으로 맞추므로 탈퇴(nickname='탈퇴회원_…')와 함께 name 도 바뀐다.
+--   리허설 W1·W3(본인·관리자 탈퇴)이 name 을 직접 단언해 이 사실을 잠근다.
+--
+-- 리허설: Documents/누리홀덤_영상분석_0930/security-1006/legal-fix/20261006m_rehearsal.sql (rehearse-geo.mjs 로 롤백 전용)
+
+-- 출발점 게이트: s2 적용 후 정의(2026-10-06 롤백 리허설에서 s1+s2 를 얹고 잰 md5(pg_get_functiondef)).
+--   s2 없이 이 파일만 적용하면 큐 넣기가 사라지거나 다른 변경을 덮는다 — 그래서 멈춘다.
+do $gate$
+begin
+  if md5(pg_get_functiondef('public.withdraw_my_account()'::regprocedure)) is distinct from '570a3eb5aa675e0baf61781abc4c0281' then
+    raise exception '20261006m 게이트: withdraw_my_account 가 20261006s2 적용 후 정의와 다르다 — s2 를 먼저 적용하거나 라이브 정의를 다시 떠서 합쳐라';
+  end if;
+end $gate$;
+
+create or replace function public.withdraw_my_account()
+ returns void
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+declare v_uid uuid := auth.uid(); v_suffix text; v_status text; v_hash text; v_anon_email text;
+begin
+  if v_uid is null then raise exception '로그인이 필요합니다'; end if;
+  select status, ci_hash into v_status, v_hash from public.profiles where id = v_uid;
+  -- 20261006m: 제재(정지·영구정지) 중에도 본인 탈퇴를 받는다. 대신 CI 변환값을 'banned' 로 남겨 재가입을 계속 막는다(아래).
+  if v_status = 'withdrawn' then
+    raise exception '이미 탈퇴한 계정입니다';
+  end if;
+  if exists (select 1 from public.venues where owner_id = v_uid) then
+    raise exception '매장 대표는 매장을 먼저 정리(삭제 또는 대표 양도)한 뒤 탈퇴할 수 있습니다';
+  end if;
+  if v_hash is not null then
+    insert into public.withdrawn_identities(ci_hash, reason)
+    values (v_hash, case when v_status in ('banned', 'suspended') then 'banned' else 'withdrawn' end)
+    on conflict (ci_hash) do update set reason = excluded.reason, created_at = now();
+  end if;
+  v_suffix := substr(replace(v_uid::text, '-', ''), 1, 12);
+  v_anon_email := 'withdrawn_' || v_suffix || '@deleted.invalid';
+  update public.profiles set
+    status='withdrawn', nickname='탈퇴회원_'||v_suffix, email=v_anon_email,
+    real_name=null, phone=null, ci_hash=null, verified_at=null,
+    birth_date=null, gender=null, carrier=null,
+    venue_id=null, sanction_reason='본인 탈퇴', avatar_url=null
+  where id = v_uid;
+  delete from public.venue_staff  where user_id = v_uid;
+  delete from public.venue_owners where user_id = v_uid;
+  update auth.users set email = v_anon_email, phone = null, raw_user_meta_data = '{}'::jsonb
+  where id = v_uid;
+  delete from auth.identities where user_id = v_uid;
+  delete from auth.sessions where user_id = v_uid;
+  delete from auth.refresh_tokens where user_id = v_uid::text;
+  delete from auth.one_time_tokens where user_id = v_uid;
+  delete from public.push_subscriptions where user_id = v_uid;
+  perform public._purge_private_records(v_uid);  -- 20260925d
+  -- 20261006s2: SQL 로 storage.objects 를 지우면 파일이 버킷에 고아로 남는다(Supabase 공식 문서) → 큐에 넣고
+  --   storage-purge 엣지 함수가 Storage API 로 지운다. 프로필 사진(avatars)에 순위 인증 신분증·증빙(verifications)까지.
+  perform public._enqueue_user_storage_purge(v_uid, 'withdraw_self');
+end $function$;
+revoke all on function public.withdraw_my_account() from public, anon;
+grant execute on function public.withdraw_my_account() to authenticated, service_role;
