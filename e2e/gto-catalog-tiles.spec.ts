@@ -82,16 +82,66 @@ test('별 탭 — 카드는 안 열리고 즐겨찾기만 켜고 끈다 · 새�
   await expect(del).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('dialog'), '별을 눌렀는데 카드(도구)가 열렸다 — 별과 카드 탭이 겹친다').toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools'))).toBe('["gto"]');
-  expect(await tileOrder(feat), '즐겨찾기한 도구가 타일 맨 앞으로').toEqual(['gto', 'spot', 'range', 'pushfold']);
+  // 2026-10-06 M10-01: 별을 켜는 순간 타일 자리는 그대로(손가락 아래에 다른 도구의 별이 오면 안 된다) — 앞으로 오는 건 다음 진입 때.
+  expect(await tileOrder(feat), '별을 켰더니 화면의 타일이 순간이동했다').toEqual(DEF);
   // reload() 는 앱이 걷어낸 주소(?tab=)로 홈에 떨어진다 — 같은 진입 주소로 다시 연다(저장소는 그대로).
   await page.goto('/?tab=tools');
   await dismissOverlays(page);
   await expect(page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 해제' }), '기기 저장이 새로고침 뒤에 사라졌다').toHaveAttribute('aria-pressed', 'true');
+  expect(await tileOrder(page.getByTestId('tools-featured')), '다시 들어오면 즐겨찾기한 도구가 타일 맨 앞으로').toEqual(['gto', 'spot', 'range', 'pushfold']);
   await page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 해제' }).click();
   await expect(page.getByTestId('tools-featured').getByRole('button', { name: 'GTO 핸드 분석 즐겨찾기 추가' })).toHaveAttribute('aria-pressed', 'false');
   expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools'))).toBe('[]');
-  expect(await tileOrder(page.getByTestId('tools-featured')), '별을 끄면 기본 4개 순서로 돌아온다').toEqual(DEF);
+  expect(await tileOrder(page.getByTestId('tools-featured')), '별을 꺼도 화면의 타일 자리는 그대로').toEqual(['gto', 'spot', 'range', 'pushfold']);
+  await page.goto('/?tab=tools');
+  await dismissOverlays(page);
+  expect(await tileOrder(page.getByTestId('tools-featured')), '다시 들어오면 기본 4개 순서로 돌아온다').toEqual(DEF);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+// 🔴 2026-10-06 M10-01 — 별을 누르면 그 타일이 첫 칸으로 순간이동해 손가락 아래에 **다른 도구의 별**이 왔다. 연달아 누르면 엉뚱한 도구가 즐겨찾기됐다.
+//   같은 자리를 CDP 터치(100ms+ 누름)로 두 번 누른다: 같은 도구가 켜졌다 꺼져야 한다(저장 '[]'·자리 불변). 목록 행도 같은 증상이라 함께 본다.
+async function tapStarTwice(page: import('@playwright/test').Page, star: import('@playwright/test').Locator) {
+  await star.evaluate((el) => el.scrollIntoView({ block: 'center' })); // 하단 내비 뒤로 가려지지 않게 가운데로
+  await page.waitForTimeout(300);
+  const g = (await star.locator('svg').boundingBox())!;
+  const x = g.x + g.width / 2, y = g.y + g.height / 2;
+  await touchAt(page, x, y);
+  await page.waitForTimeout(500);
+  await touchAt(page, x, y);
+  await page.waitForTimeout(500);
+}
+const starOf = (page: import('@playwright/test').Page, k: string) => page.getByTestId(`tool-${k}`).locator('xpath=../button[@aria-pressed]');
+test('별 같은 자리 연달아 두 번 터치 — 타일: 같은 도구가 켜졌다 꺼지고 자리는 안 움직인다', async ({ page }) => {
+  const feat = await openTools(page);
+  await tapStarTwice(page, starOf(page, 'pushfold'));
+  expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools')), '두 번째 터치가 다른 도구의 별을 눌렀다').toBe('[]');
+  expect(await tileOrder(feat)).toEqual(DEF);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+test('별 같은 자리 연달아 두 번 터치 — 리스트 행: 같은 도구가 켜졌다 꺼지고 행은 안 움직인다', async ({ page }) => {
+  const feat = await openTools(page);
+  const rows = () => page.locator('[data-tools-lanepanel] button[data-testid^="tool-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  const before = await rows();
+  expect(before).toContain('tool-icm');
+  await tapStarTwice(page, starOf(page, 'icm'));
+  expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools')), '두 번째 터치가 다른 행의 별을 눌렀다').toBe('[]');
+  expect(await rows(), '별을 누르는 동안 행이 움직였다').toEqual(before);
+  expect(await tileOrder(feat)).toEqual(DEF);
+});
+test('별을 한 번 켠 뒤에도 행·타일 자리는 그대로이고 별만 켜진다', async ({ page }) => {
+  const feat = await openTools(page);
+  const rows = () => page.locator('[data-tools-lanepanel] button[data-testid^="tool-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  const before = await rows();
+  const star = starOf(page, 'icm');
+  await star.evaluate((el) => el.scrollIntoView({ block: 'center' })); // 하단 내비 뒤로 가려지지 않게 가운데로
+  await page.waitForTimeout(300); // 스크롤 정착 뒤에 좌표를 잰다(정착 전 좌표로 누르면 빗나간다)
+  const g = (await star.locator('svg').boundingBox())!;
+  await touchAt(page, g.x + g.width / 2, g.y + g.height / 2);
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  expect(await rows()).toEqual(before);
+  expect(await tileOrder(feat)).toEqual(DEF);
+  expect(await page.evaluate(() => localStorage.getItem('nuri:fav-tools'))).toBe('["icm"]');
 });
 
 test('기본 4개 타일 아이콘 — 시안 글리프의 파랑 포인트가 켜지고 리스트 행은 한 색이다', async ({ page }) => {
