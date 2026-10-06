@@ -1,12 +1,12 @@
 // 2026-10-07 번들 감축 PR A ③ — lucide 아이콘을 '첫 화면 핵심(Icon.tsx)' 과 '나중 청크(iconsExtra.ts)' 로 나눈 계약.
 // 첫 화면 파일이 나중 청크 아이콘을 쓰면 그 아이콘은 빈 칸으로 떴다가 채워진다(깜빡임) — 그걸 소스에서 막는다.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Icon, { type IconName } from './Icon';
 import { loadIconsExtra } from './iconsExtraLoader';
-import { entryGraph, iconNames, namesIn } from './iconEntryGraph';
+import { entryGraph, iconNames, namesIn, staticImports } from './iconEntryGraph';
 
 const ROOT = join(__dirname, '../../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
@@ -48,6 +48,38 @@ describe('아이콘 핵심/나중 분리', () => {
 
   it('lazy 화면은 아이콘 청크를 같이 기다린다', () => {
     expect(read('src/lib/lazyWithReload.ts')).toMatch(/Promise\.all\(\[factory\(\), loadIconsExtra\(\)/);
+  });
+
+  // PR #205 verifier P3 — 원시 React.lazy 는 아이콘 청크를 안 기다린다(GroupPosterSection → PosterFormModal 'clipboard' 가 빈 칸으로 열렸다).
+  //   원시 lazy 로 여는 화면(과 그 화면만의 정적 그래프)은 나중 청크 아이콘을 쓰지 않거나, lazyWithReload 로 바꿔야 한다.
+  it('원시 lazy() 로 여는 화면은 나중 청크 아이콘을 쓰지 않는다', () => {
+    const entry = entryGraph(ROOT);
+    const names = iconNames(ROOT);
+    const srcFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+      d.isDirectory() ? srcFiles(join(dir, d.name)) : /\.tsx?$/.test(d.name) && !/\.test\.tsx?$/.test(d.name) ? [join(dir, d.name)] : []);
+    const lazyTargets: [string, string][] = [];
+    for (const f of srcFiles(join(ROOT, 'src'))) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/\blazy\(\s*(?:async\s*)?\(\)\s*=>\s*import\(\s*['"](\.[^'"]+)['"]/g)) {
+        const t = staticImports(f, `import x from '${m[1]}';`)[0];
+        if (t) lazyTargets.push([f.slice(ROOT.length), t]);
+      }
+    }
+    expect(lazyTargets.length, '원시 lazy 호출을 하나도 못 찾았다(스캔 고장)').toBeGreaterThan(2);
+    const bad: string[] = [];
+    for (const [from, t] of lazyTargets) {
+      const seen = new Set<string>();
+      const stack = [t];
+      while (stack.length) {
+        const f = stack.pop()!;
+        if (seen.has(f) || entry.has(f)) continue;
+        seen.add(f);
+        const src = readFileSync(f, 'utf8');
+        // 아이콘을 다루는 파일만(Icon 컴포넌트·IconName 타입) — 'filter' 같은 CSS 문자열 오탐을 뺀다(실측: 클락 sceneKit.ts)
+        if (/\bIcon(Name)?\b/.test(src)) for (const n of namesIn(src, names)) if (EXTRA.has(n)) bad.push(`${from} → ${f.slice(ROOT.length)}: '${n}'`);
+        stack.push(...staticImports(f, src));
+      }
+    }
+    expect(bad, '이 화면을 lazyWithReload 로 열거나 아이콘을 Icon.tsx 핵심으로 옮겨라').toEqual([]);
   });
 
   it('모든 IconName 이 (청크를 받은 뒤) 실제 도형을 그린다 — 분리로 사라진 아이콘 0', async () => {
