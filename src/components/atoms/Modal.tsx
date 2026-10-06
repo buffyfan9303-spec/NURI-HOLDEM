@@ -365,6 +365,11 @@ export default function Modal({
     ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
     : {};
   const dragHandlers = bodyDrag ? sheetTouch : {};
+  // 헤더 행을 그립으로 쓰는가(sheet 전용). compact(게시글) · bodyDrag(조회 시트) · confirmClose(작성 중 확인이 있는 시트).
+  //  🔴 2026-10-06 오너: "글쓰기 시트를 내리려면 맨 위 흰 줄까지 가야만 된다 — 조금 공간을 내려줘."
+  //   작성 시트에 헤더 드래그를 안 붙인 이유는 '쓰던 글이 스와이프 한 번에 날아간다' 였는데, confirmClose 가 있는 시트는
+  //   onSheetEnd 가 **던지기 전에** 묻는다(취소 = 제자리). 그래서 그 이유가 성립하지 않는다 — 확인이 없는 작성 시트는 종전 그대로다.
+  const headerDrag = variant === 'sheet' && dismissible && (compact || bodyDrag || !!confirmClose);
   // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
   //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
   //   첫 포커스·트랩·복원이 전부 죽었다(2026-09-10 e2e 실측). render 가 오르는 커밋에서 다시 돈다.
@@ -553,7 +558,7 @@ export default function Modal({
             className={['relative flex items-center justify-between border-b border-border-strong',
               compact ? 'px-3 py-1' : 'px-4 py-3',
               // 드래그가 켜진 헤더는 브라우저 기본 제스처에 뺏기지 않게 한다(그립과 같은 처방).
-              variant === 'sheet' && dismissible && (compact || bodyDrag) ? 'touch-none' : ''].join(' ')}
+              headerDrag ? 'touch-none' : ''].join(' ')}
             /* 헤더 행 전체가 그립이다 — 그립 블록과 **같은 핸들러**를 쓴다.
                (닫기 버튼 위에서 시작한 손짓도 8px 미만이면 드래그로 확정되지 않아 클릭이 그대로 간다.)
                🔴 2026-09-21 오너 요청 — 예전엔 `compact` 시트에서만 붙어 있었다. 그래서
@@ -563,9 +568,11 @@ export default function Modal({
                  `dragToClose` 가 꺼져 있다. 거기까지 헤더로 닫히면 쓰던 값이 스와이프 한 번에 날아간다.
                  `compact || bodyDrag` 라야 ① 게시글 상세(compact)는 그대로 ② 조회 시트는 새로 켜짐
                  ③ 작성 시트는 여전히 헤더로 안 닫힘 — 셋이 동시에 맞는다.
+                 ④ 2026-10-06: 단 confirmClose 가 있는 작성 시트(글쓰기)는 헤더도 그립이다 — 위 headerDrag 주석
+                   (던지기 전에 확인을 묻는다 · e2e/compose-header-drag.spec.ts).
                ⚠ `data-drag-close` 는 **본문 div 에만** 둔다. 헤더에도 붙이면
                  e2e/drag-close.spec.ts 의 `toHaveCount(1)` 이 2 가 되어 지금 통과하는 게이트가 깨진다. */
-            {...(variant === 'sheet' && (compact || bodyDrag) ? sheetTouch : {})}
+            {...(headerDrag ? sheetTouch : {})}
           >
             {compact && variant === 'sheet' && dismissible && (
               <div aria-hidden className="absolute left-1/2 top-1 h-1 w-10 -translate-x-1/2 rounded-full bg-border-strong sm:hidden" />
