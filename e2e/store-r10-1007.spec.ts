@@ -2,12 +2,15 @@
 //   ⑧ 내 매장에서 새로고침 → 내 매장 유지(다른 진입은 종전대로 홈)
 //   ⑧b 새로고침 기억(pendingDeepTab)은 부팅 한 번만 — 다른 탭을 고른 뒤 권한 재확인이 탭 목록을 바꿔도 내 매장으로 끌려가지 않는다
 //   ⑨ 내 매장 직접 진입 CLS — 셸 폭 1152→1440(1440) · '대회 클락' 카드 빠짐(격자 한 칸 이동) · 라이브 바 끼어듦(46px)
+//   ⑨c 클락이 끝난 날 라이브 바 빈 자리(기억)가 메뉴를 옮겼다 돌아올 때 다시 생긴다(design-review P2-1)
+//   ⑨d·⑨e 권한 없는 `?tab=my-store`(≥1440)에서 셸 폭이 출렁인다 · 낡은 기기 힌트는 한 번만(design-review P2-2)
 //   ⑩ 1024 장부 — 쓰지 않은 바인 칸까지 10칸을 깔아 9·10바인 칸이 총바인 고정 열 밑에 잘렸다(1280 은 10칸 그대로)
 //   ⑤ 대시보드 '팔로워에게 알림 보내기' 카드가 1440 에서 카드 열보다 ~210px 짧았다(READ_W 상한)
 //   ⑥ 직원이 초대를 수락해도 업주 '직원 관리'가 새로고침 전까지 '수락 대기'
 //   F18 순위 1~3위 저장 페이로드 · 서버 거절(42501)은 성공으로 삼키지 않는다
 // 음성 대조: origin/main eb3af5da 빌드에서 ⑧·⑨·⑩(1024)·⑤·⑥ FAIL, 수정 빌드에서 PASS(F18 은 기존 동작 고정 — 둘 다 PASS).
 //   ⑧b 는 57099448 빌드(App.tsx 렌더마다 재초기화)에서 FAIL(마지막 단언 '내 매장으로 끌려갔다'), useRef 가드 빌드에서 PASS.
+//   ⑨c·⑨d·⑨e 는 e24bdee8 빌드에서 FAIL(빈 자리 1개 · 셸 1152→1434→1152 · 힌트 키 없음), 수정 빌드에서 PASS.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/store-r10-1007.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
@@ -117,6 +120,82 @@ for (const w of [1440, 1024]) {
     expect(sum, `직접 진입 레이아웃 이동 ${sum.toFixed(4)} — ${shifts.map((s) => s.src).join(' | ')}`).toBeLessThan(0.05);
   });
 }
+
+// ── ⑨c 라이브 바 기억=있음·지금=없음 (PR #203 design-review P2-1) ─────────────────────────────────
+//   같은 날 클락이 돌 때 들어갔다 나오고, 클락이 끝난 뒤 다시 들어오면 기억한 높이(34px)로 빈 자리를 붙잡는다(여기까지는 설계).
+//   그 뒤 사용자가 다른 메뉴로 갔다가 처음 판(대시보드)으로 돌아오면 빈 자리가 **다시** 생겨 레일·본문이 46px 오르내렸다.
+test('⑨c 1440 클락이 끝난 날 — 메뉴를 옮겼다 돌아오면 라이브 바 빈 자리가 다시 생기지 않는다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const st = { clock: true };
+  await bootOwner(page, {
+    viewport: { width: 1440, height: 900 }, goto: false,
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/clock_states/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        return r.fulfill(json(st.clock ? (single(r) ? RUNNING_CLOCK : [RUNNING_CLOCK]) : (single(r) ? null : [])));
+      });
+    },
+  });
+  await page.goto('/?tab=my-store');
+  await expect(page.getByTestId('live-widget'), '라이브 운영 현황(전제)').toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(2000);
+  st.clock = false;   // 그 사이 클락이 끝났다
+  await page.goto('/?tab=my-store');
+  await expect(myStorePane(page), '내 매장(전제)').toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(3000);
+  const secNav = (name: string) => page.locator('[data-mystore-secbar]').getByRole('button', { name, exact: true }).evaluate((b) => (b as HTMLElement).click());
+  await secNav('직원 관리');
+  await page.waitForTimeout(1200);
+  await secNav('대시보드');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('[data-livebar-hold]'), '처음 판으로 돌아오자 라이브 바 빈 자리가 다시 생겼다').toHaveCount(0);
+});
+
+// ── ⑨d 셸 폭 — 권한 없는 사람의 `?tab=my-store` (PR #203 design-review P2-2) ────────────────────
+//   역할 확인 없이 첫 렌더부터 셸 폭 상한을 풀어, 익명이 ≥1440 에서 바로가기로 들어오면 셸이 1152→1434→1152 로 출렁였다.
+const SHELL_PROBE = () => {
+  const w = window as unknown as { __shellW: number[] };
+  w.__shellW = [];
+  const tick = () => {
+    const el = document.querySelector<HTMLElement>('div.relative.z-1.min-h-screen');
+    const v = el ? Math.round(el.getBoundingClientRect().width) : -1;
+    if (v > 0 && w.__shellW[w.__shellW.length - 1] !== v) w.__shellW.push(v);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+const shellWidths = (page: Page) => page.evaluate(() => (window as unknown as { __shellW: number[] }).__shellW);
+const SHELL_HINT = 'nuri:store-shell';
+
+test('⑨d 1440 익명이 ?tab=my-store 로 들어와도 셸 폭이 한 번도 바뀌지 않는다', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(SHELL_PROBE);
+  await page.goto('/?tab=my-store');
+  await page.waitForTimeout(4000);
+  const ws = await shellWidths(page);
+  console.log('[⑨d anon]', JSON.stringify(ws));
+  expect(ws.length, `셸 폭이 바뀌었다 ${ws.join('→')}`).toBe(1);
+});
+
+test('⑨e 1440 기기 힌트가 남았는데 업주가 아닌 계정 — 출렁임은 한 번뿐이고 힌트가 지워진다', async ({ page }) => {
+  test.setTimeout(90_000);
+  // 이 기기에서 업주가 쓰던 힌트가 남은 채 다른(손님) 계정 세션으로 부팅한다 — 첫 부팅에만 심는다.
+  await page.addInitScript((k) => { try { if (!sessionStorage.getItem('e2e-hint-once')) { sessionStorage.setItem('e2e-hint-once', '1'); localStorage.setItem(k, '1'); } } catch { /* noop */ } }, SHELL_HINT);
+  await page.addInitScript(SHELL_PROBE);
+  await bootOwner(page, { viewport: { width: 1440, height: 900 }, goto: false, profile: { role: 'user', venue_id: null } });
+  await page.goto('/?tab=my-store');
+  await page.waitForTimeout(4000);
+  const first = await shellWidths(page);
+  const hint = await page.evaluate((k) => localStorage.getItem(k), SHELL_HINT);
+  console.log('[⑨e 첫 부팅]', JSON.stringify(first), 'hint=', hint);
+  expect(hint, '업주가 아닌 계정이 확정됐는데 힌트가 남았다').toBeNull();
+  await page.goto('/?tab=my-store');
+  await page.waitForTimeout(4000);
+  const second = await shellWidths(page);
+  console.log('[⑨e 다음 부팅]', JSON.stringify(second));
+  expect(second.length, `힌트를 지운 뒤에도 셸 폭이 바뀌었다 ${second.join('→')}`).toBe(1);
+});
 
 // ── ⑩ 1024 장부 바인 칸 ──────────────────────────────────────────────────────────────────────
 const sessRow: R = {

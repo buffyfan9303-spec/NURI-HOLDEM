@@ -2851,8 +2851,14 @@ export default function App() {
   // audit10 ⑨(2026-10-07) — ≥1440 내 매장은 셸·판 폭 상한을 푼다(VenueManageTab useUncapAncestors · F-2 결정). 그 훅은 판이 **마운트된 뒤**에야 돌아
   //   새로고침·직접 진입에서 이미 그려진 1152px 셸(헤더·사이드바)이 1440 으로 벌어졌다(CLS 0.18 · 1440 목 업주 5회 중 3회).
   //   같은 조건을 셸이 첫 렌더부터 적용한다 — 훅은 이미 풀린 칸을 건너뛴다(maxWidth 'none' 이면 continue).
+  //   PR #203 P2-2 — 역할 확인 전에 푸는 것은 **이 기기의 마지막 확정 계정이 내 매장을 가진 경우**(힌트)만이다. 힌트 없이 풀면
+  //   익명·손님의 `?tab=my-store`(PWA 바로가기)에서 셸이 1152→1434→1152 로 출렁였다(CLS 0.195). 힌트가 낡았으면 한 번 출렁이고 지워진다.
   const isWideShell = useIsWide();
-  const storeUncap = activeTab === 'my-store' && isWideShell;
+  const [storeHint] = useState(() => { try { return localStorage.getItem('nuri:store-shell') === '1'; } catch { return false; } });
+  useEffect(() => {
+    if (!authLoading) try { if (hasStoreTabs) localStorage.setItem('nuri:store-shell', '1'); else localStorage.removeItem('nuri:store-shell'); } catch { /* 차단 환경 — 힌트 없이 역할 확정 뒤 푼다 */ }
+  }, [authLoading, hasStoreTabs]);
+  const storeUncap = activeTab === 'my-store' && isWideShell && (hasStoreTabs || (authLoading && storeHint));
 
   // 위 가드가 홈으로 되돌린 **뒤에라도** 권한이 도착해 그 탭이 생기면 딥링크 의도를 한 번 살린다.
   //   (근거는 pendingDeepTab 선언부 주석 — 실측된 회귀다.)

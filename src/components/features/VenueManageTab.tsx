@@ -1689,6 +1689,8 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
   const shown = !!main || pending > 0;
   // 바가 한 번 들어서면 붙잡기는 끝이다 — 나중에 그 바가 사라질 때는 종전대로 접힌다.
   useEffect(() => { if (shown) setHold(null); }, [shown]);
+  // 사용자가 판을 옮기면 붙잡기도 끝이다 — 남겨 두면 그 판으로 돌아올 때마다 빈 자리가 다시 생겨 레일이 46px 오르내렸다(PR #203 P2-1).
+  useEffect(() => { setHold((h) => (h && h.nav !== navKey ? null : h)); }, [navKey]);
   // 응답이 온 뒤의 바 높이를 오늘 날짜로 적는다(없으면 지운다) — 위 첫 진입 자리 잡기의 기억.
   useLayoutEffect(() => {
     if (!fetched || !active) return;
