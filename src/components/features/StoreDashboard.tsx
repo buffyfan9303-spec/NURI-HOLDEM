@@ -10,7 +10,7 @@ import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
-  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, getDowAvgBuyins, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, getDowAvgBuyins, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, wonAmount, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest, voucherShortOf,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
@@ -1755,14 +1755,14 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <div className="space-y-1.5">
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
-                <Stat label="총 인건비" value={laborErr ? '—' : wonToMan(laborTotal)} unit={laborErr ? '' : '만원'} gold />
+                <Stat label="총 인건비" value={laborErr ? '—' : wonAmount(laborTotal)[0]} unit={laborErr ? '' : wonAmount(laborTotal)[1]} gold />
                 <Stat label="총 근무" value={dealerErr ? '—' : hoursValue(labor.netMin)} unit={dealerErr ? '' : '시간'} />
               </div>
               {wageErr && <p className="text-2xs text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
               {dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
               {shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
               {!laborErr && dealerPay > 0 && (
-                <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonToMan(laborTotal - dealerPay)}만 · 딜러 {wonToMan(dealerPay)}만</p>
+                <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonShort(laborTotal - dealerPay)} · 딜러 {wonShort(dealerPay)}</p>
               )}
             </div>
           )}
@@ -2022,6 +2022,9 @@ function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
 }
 
 // `gold` 는 금액 칸 표식으로 남는다 — 2026-10-04 오너 결정으로 금액은 본문 색(금색은 순위·성취 전용)이라 색을 바꾸지 않는다.
+/** 줄글 속 금액 — 1만 이상은 'N만', 1만 미만은 'N원'(wonAmount). */
+const wonShort = (won: number) => { const [v, u] = wonAmount(won); return u === '원' ? `${v}원` : `${v}만`; };
+
 function Stat({ label, value, unit, danger }: { label: string; value: string; unit?: string; gold?: boolean; danger?: boolean }) {
   return (
     <div>

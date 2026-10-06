@@ -470,7 +470,8 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
   const [shiftErr, setShiftErr] = useState<string | null>(null);
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
-  const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
+  // 이름과 닉네임이 같으면 한 번만 — 빈 상태 안내가 '(내 이름: A / A)' 로 두 번 찍혔다(audit10 P3-5).
+  const myNames = [...new Set([user?.name, user?.nickname].filter(Boolean) as string[])];
   // 'Xh' 는 급여 표와 같은 식(R3-03). 설정 읽기는 서버가 장부 관리자에게만 연다(vpr_select = can_manage_pos) —
   //   일반 직원은 행이 안 보여 기본값(전부 끔)으로 센다. 휴게 자동 공제를 켠 매장이면 그 직원에게만 휴게 전 시간이 보인다.
   const { rules } = usePayRules(venueId);
