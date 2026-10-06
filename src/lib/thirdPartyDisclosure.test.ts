@@ -44,7 +44,9 @@ describe('예약 시 매장 제공 고지 (LEGAL-4)', () => {
     // 과다 고지도 위법 소지다(전자상거래법 §21①1). 매장에 넘기지 않는 항목을 넘긴다고 적지 않는다.
     const sendsPhone = /interface OwnerReservation[\s\S]*?\bphone\b/.test(RESERVATIONS);
     expect(sendsPhone, '예약 응답에 전화번호가 생겼다. 고지 문안을 함께 고쳐야 한다').toBe(false);
-    expect(article9, '전화번호를 제공하지 않는다는 명시가 사라졌다')
-      .toContain('휴대전화번호를 매장에 제공하지 않습니다');
+    // 2026-10-06 약관 재검토 P1-2: 손님 명단의 가린 번호·번호 전체 입력 조회(find_user_by_phone)가 있어 '전체'를 제공하지 않는다가 사실이다.
+    expect(article9, '전화번호 전체를 제공하지 않는다는 명시가 사라졌다')
+      .toContain('휴대전화번호 전체를 매장에 제공하지 않습니다');
+    expect(article9, '가린 번호·번호 조회를 고지하지 않는다(과소 고지)').toContain('가운데를 가린 번호');
   });
 });

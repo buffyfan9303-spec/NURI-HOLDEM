@@ -31,6 +31,7 @@ import { useBackClose } from '../../lib/backstack';
 import { isStaleResponse } from '../../lib/staleResponse';
 import { msgOf } from '../../lib/dbError';
 import { checkinFailureAction, requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
+import VenueShareNote from './VenueShareNote';
 
 export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, onBuyin }: {
   open: boolean;
@@ -190,6 +191,8 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
                 </p>
               </li>
             </ul>
+            {/* 처리방침 제9조② — 앱 카메라 출석·바인 요청 화면의 매장 제공 고지(pr188-193-review P2-3) */}
+            <VenueShareNote kind="qr" className="mt-1.5" />
             <button type="button" disabled={busy}
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있어요', 'error'); return; } setScanOpen(true); }}
               className="btn-primary mt-2.5 min-h-[44px] w-full text-sm disabled:opacity-50">
@@ -234,6 +237,8 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
 
           <VenueVoucherCounts rows={held === null ? null : byVenue} error={held === null ? heldErr : null}
             onRetry={reloadHeld} onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })} />
+          {/* 처리방침 제9조② — 이용권 수령 화면의 매장 제공 고지(pr188-193-review P2-3) */}
+          <VenueShareNote kind="voucher" className="px-1" />
 
           {/* ── 매장이용권 지갑 — 대시보드와 같은 정본(킬스위치 OFF 면 스스로 아무것도 그리지 않는다) ──
               본인인증 CTA 는 시트 안에서 끝낼 수 없으니 내 정보로 넘긴다.

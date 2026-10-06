@@ -436,6 +436,7 @@ export default function ToolsPanel() {
     // 계속 관찰한다 — 판이 다시 보일 때마다 숨은 동안 도착한 딥링크를 연다. 미리 받기는 처음 한 번만.
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
+      setLayoutFavs(favsRef.current); // 탭 재진입 — 숨은 동안 바뀐 즐겨찾기를 배치에 반영(같은 참조면 리렌더 없음)
       const k = deepLink.current;
       if (k) { deepLink.current = null; setActive(k); }
       if (preloaded) return;
@@ -509,9 +510,15 @@ export default function ToolsPanel() {
       toast.show(`즐겨찾기는 최대 ${FAV_MAX}개입니다. 가장 오래된 '${droppedName}'${josa(droppedName, '을')} 뺐습니다.`, 'info');
     }
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
+    favsRef.current = next;
     setFavs(next);
   };
-  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
+  // 🔴 2026-10-06 M10-01: 별을 누르는 순간 타일·행의 **자리**가 바뀌면 손가락 아래에 다른 도구의 별이 와 엉뚱한 도구가 켜졌다(첫 칸 순간이동).
+  //   그래서 화면의 배치(타일 4칸·'즐겨찾기 더'·카탈로그에서 뺄 도구)는 layoutFavs 로 **고정**하고, 별 켜짐(favs)만 바로 반영한다.
+  //   고정은 이 판이 다시 보일 때(탭 재진입·마운트) 풀려 새 즐겨찾기가 앞으로 온다 — 아래 IntersectionObserver.
+  const favsRef = useRef(favs);
+  const [layoutFavs, setLayoutFavs] = useState(favs);
+  const favTools = layoutFavs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();

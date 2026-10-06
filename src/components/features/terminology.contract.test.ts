@@ -31,8 +31,7 @@ const BANNED: { re: RegExp; canon: string }[] = [
 /** 예외 — file 은 features/ 기준 상대 경로, phrase 가 그 파일에서 허용되는 정확한 표기. */
 const ALLOW: { file: RegExp; phrase: RegExp; why: string }[] = [
   { file: /^BusinessFooter\.tsx$/, phrase: /토너먼트/, why: '법적 고지문(국민체육진흥법 마인드 스포츠) — 오너 지시로도 코드에서 빼지 않는 읽기 전용 문구' },
-  { file: /^LegalDocsModal\.tsx$/, phrase: /체크인|랭킹/, why: '개인정보처리방침 원문 — 법적 문서는 이 커밋의 편집 범위 밖(읽기 전용)' },
-  { file: /^(AuthModal|ConsentGateModal)\.tsx$/, phrase: /랭킹 프로필 공개/, why: '선택 동의 라벨 — src/pages/legal/PrivacyPolicy.tsx 의 "랭킹 프로필 공개 동의" 와 글자가 같아야 하는 동의 문구(법적 문서 쪽을 함께 바꿀 때 같이 바꾼다)' },
+  { file: /^(AuthModal|ConsentGateModal|ConsentSummary)\.tsx$/, phrase: /랭킹 프로필 공개/, why: '선택 동의 라벨 — src/pages/legal/PrivacyPolicy.tsx 의 "랭킹 프로필 공개 동의" 와 글자가 같아야 하는 동의 문구(법적 문서 쪽을 함께 바꿀 때 같이 바꾼다)' },
   { file: /^gto\/(NuriSpotPanel|SpotDetails)\.tsx$/, phrase: /토너먼트/, why: '2026-09-24 오너 지시(G2) — NURI SPOT 의 게임 종류 표기는 "토너먼트 / 캐시". 포커 게임 형식 이름이지 대회 일정(상품)이 아니다. 저장값 mtt 는 그대로' },
   { file: /^gto\/TdaRulesTool\.tsx$/, phrase: /토너먼트 디렉터/, why: 'TDA(Tournament Directors Association) 고유 직함 — 규칙 원문 출처 표기' },
   { file: /^VenueManageTab\.tsx$/, phrase: /토너먼트 디렉터/, why: '인쇄 양식의 TD SIGN 칸 — TDA 고유 직함' },

@@ -14,6 +14,8 @@ import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSet
 import CommentThread from './CommentThread';
 import { DETAIL_CARD_AURA, DETAIL_CARD_AURA_CLASS } from '../../lib/detailCardAura';
 import ReportModal from './ReportModal';
+import PostTakedownNotice from './PostTakedownNotice';
+import { takedownPost } from '../../api/reports';
 import { parseAttachments } from '../../lib/hand';
 import HandReplayer from './HandReplayer';
 import { renderMentions } from '../../lib/mentions';
@@ -682,6 +684,15 @@ export default function PostDetailModal({
             if (onDelete && (user?.role === 'admin' || user?.id === post.userId)) {
               acts.push({ key: 'delete', label: '삭제', strong: true, onClick: () => { if (confirm('이 게시글을 삭제하시겠습니까?')) onDelete(post.id); } });
             }
+            // 직권 임시조치(약관 제5조⑩ · 정보통신망법 §44의3) — 권리 침해가 명백한 글을 요청 없이 30일 가린다. 작성자에게 알림이 간다.
+            if (user?.role === 'admin' && post.blindedSource !== 'takedown') {
+              acts.push({ key: 'takedown', label: '임시조치', onClick: async () => {
+                const why = window.prompt('권리 침해가 명백한 글을 30일 임시조치(가림)합니다. 작성자에게 알릴 사유를 입력해 주세요.')?.trim();
+                if (!why) return;
+                try { await takedownPost(post.id, why); toast.show('임시조치했습니다 · 작성자에게 알렸습니다', 'success'); onClose(); }
+                catch (e) { toast.show(msgOf(e, '임시조치에 실패했습니다'), 'error'); }
+              } });
+            }
             // 쓸 수 있는 동작이 하나도 없으면(비로그인·남의 글) 메뉴 버튼 자체를 안 그린다 —
             // 열어도 빈 판이 나오는 버튼은 소음이다(끌올 주석과 같은 원칙).
             if (acts.length === 0) return null;
@@ -734,7 +745,9 @@ export default function PostDetailModal({
         {!hidden && <hr className="border-t border-border-strong" aria-hidden="true" />}
 
         {/* 관리자 숨김 안내(오너 10-02: 신고만으로는 숨기지 않는다) — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
-        {post.blinded && (
+        {/* 권리침해 임시조치(20261006t)는 관리자 숨김과 다른 안내 — 누구에게나(작성자 본인 포함) 같은 문구 + 기간, 작성자에겐 이의제기 */}
+        {post.blindedSource === 'takedown' && <PostTakedownNotice postId={post.id} initial={post.takedown} isAdmin={user?.role === 'admin'} />}
+        {post.blinded && post.blindedSource !== 'takedown' && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/6 px-3 py-2">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />운영자가 숨김 처리한 게시글입니다</span>
             {user?.role === 'admin' && (

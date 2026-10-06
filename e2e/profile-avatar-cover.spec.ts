@@ -16,7 +16,7 @@ const json = (b: unknown) => ({ status: 200, contentType: 'application/json', bo
 const SHOT = process.env.PAC_SHOT_DIR;
 /** stubLogin 의 기본 프로필과 같은 값(PATCH 응답 = 저장된 행) */
 const BASE = { id: '00000000-0000-4000-8000-0000000000f1', email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true,
-  status: 'active', agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 2, activity_points: 10, badges: [], avatar_color: '#8B5CF6', avatar_url: null };
+  status: 'active', agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3, activity_points: 10, badges: [], avatar_color: '#8B5CF6', avatar_url: null };
 
 async function boot(page: Page, scheme: 'dark' | 'light', w: number, over: Record<string, unknown> = {}) {
   await page.setViewportSize({ width: w, height: 800 });

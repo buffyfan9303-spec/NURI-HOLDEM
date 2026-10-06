@@ -5,20 +5,23 @@
 //
 // 제3판(2026-10-04 오너 결정 (다)): 위치 확인을 켠 매장에서는 동의하지 않거나 위치를 확인하지 못하면 QR 출석이 되지 않는다.
 //   동의하지 않는 이용자에게 불리할 수 있는 변경이라 이용약관 제16조제2항("회원에게 불리한 변경의 경우에는 적용일 30일 전부터
-//   서비스 내에 공지")과 개인정보처리방침 제14조제2항(중대한 변경 30일 전)을 따른다 → 공지일 + 31일 = 시행일.
+//   서비스 내에 공지")과 개인정보처리방침 제14조제2항(중대한 변경 30일 전)을 따랐다(원래 공지일 + 31일 = 시행일 — 아래 오너 결정으로 바뀜).
 //   🔴 공지(marketplace_notices)가 공지일보다 늦게 올라가면 **세 곳을 같은 커밋에서** 미룬다:
 //      ① 아래 두 날짜 ② supabase/migrations/20261004d_*.sql 의 _checkin_geo_required_from() ③ 그 마이그레이션 적용.
 //      (locationTerms.contract.test.ts 가 ①·②가 같은지와 30일 간격을 잠근다.)
+//   🔴 2026-10-06 오너 결정: "시행은 모든 약관상 목요일부터" — 제3판 시행일을 정식 오픈일(lib/legalDeploy.ts LEGAL_DEPLOY_ISO = 2026-10-08)로
+//      당겼다. 공지는 2026-10-05 에 이미 했다(공지일 ≤ 시행일). 서버 거부 시작 시각은 20261006o 가 같은 날로 맞춘다.
 import { BIZ_REQUIRED } from '../components/features/BusinessFooter';
+import { LEGAL_DEPLOY_ISO, LEGAL_DEPLOY_DATE } from './legalDeploy';
 
 /** 위치기반서비스 이용약관 판(版). 동의 기록(location_consents.terms_version)과 서버 check_in 의 `terms_version >= N` 이 같은 값이다. */
 export const LOCATION_TERMS_VERSION = 3;
 /** 제3판 공지일(사전 고지 시작일). */
 export const LOCATION_TERMS_NOTICE = '2026-10-05';
 /** 제3판 시행일 = 위치 확인 출석 매장에서 동의·위치가 없으면 QR 출석을 거부하기 시작하는 날(KST 0시). */
-export const LOCATION_TERMS_EFFECTIVE = '2026-11-05';
+export const LOCATION_TERMS_EFFECTIVE = LEGAL_DEPLOY_ISO;
 /** 화면 문구용(한국어 날짜). */
-export const LOCATION_TERMS_EFFECTIVE_KO = '2026년 11월 5일';
+export const LOCATION_TERMS_EFFECTIVE_KO = LEGAL_DEPLOY_DATE;
 /** 직전판(제2판) 시행일과 원문 보존본 — 처리방침 제14조③ '이전 방침을 함께 게시'와 같은 원칙. */
 export const LOCATION_TERMS_PREV_EFFECTIVE = '2026-09-26';
 export const LOCATION_TERMS_PREV_ARCHIVE_URL = `/legal/archive/${LOCATION_TERMS_PREV_EFFECTIVE}/location.html`;

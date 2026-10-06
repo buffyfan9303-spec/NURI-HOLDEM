@@ -9,6 +9,7 @@ import { useToast } from '../atoms/Toast';
 import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
+import VenueShareNote from './VenueShareNote';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText, prizeParts, buyInText, liveBadge } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
@@ -1112,6 +1113,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       .finally(() => setSending(false));
   };
   return (
+    <>
     <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/5 p-2.5">
       {/* QR 은 비동기로 만들어진다 — 오기 전에도, 만들기에 실패해도 72×72 자리를 잡아 둔다. 안 그러면 도착 순간 글 칸이 84px
           좁아져 '꾹 눌러 참가 신청' 줄이 다시 감기며 20px 밀렸고(재점검 1회차 L1-1), 실패 때 자리를 지우면 버튼이 85px 튄다(하-1). */}
@@ -1140,6 +1142,9 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
         </HoldToConfirmButton>
       </div>
     </div>
+    {/* 처리방침 제9조② — 참가 신청 화면의 매장 제공 고지(pr188-193-review P2-3). 박스(72px 고정) 밖 형제라 박스 높이는 그대로. */}
+    <VenueShareNote kind="buyin" className="px-1" />
+    </>
   );
 }
 
@@ -1348,10 +1353,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           </p>
           <ul className="mt-1 space-y-0.5 text-2xs leading-relaxed text-ink-muted">
             <li>· 전달 항목: 닉네임, 이름(실명 · 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 출석 여부</li>
-            <li>· 받는 곳: {sched.pubName || '이 대회를 여는 매장'}의 운영주체(업주·매장 운영자)</li>
-            <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 변경·취소 및 대회 진행 안내</li>
-            <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지. 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
-            <li>· 휴대전화번호는 매장에 전달되지 않습니다</li>
+            <li>· 받는 곳: {sched.pubName || '이 대회를 여는 매장'}의 운영주체(업주·공동 운영자와 매장이 장부 권한을 준 직원)</li>
+            <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 장부 기록·매장 이용권 전송, 변경·취소 및 대회 진행 안내</li>
+            {/* 2026-10-06 약관 재검토 P1-2 — 예약하면 _venue_customer_ids(손님 명단)에 들어가 search_registered_players 가
+                매장(장부 권한 직원 포함)에 실명·방문 수·가린 번호를 돌려준다. 예전 문구('휴대전화번호는 전달되지 않습니다')는 사실보다 좁았다. */}
+            <li data-testid="reserve-customer-list">· 예약하면 이 매장의 손님 명단에 들어가, 매장이 닉네임·이름으로 찾을 때 이름과 방문 횟수, 가운데를 가린 휴대전화번호(예: 010-****-1234)가 보입니다. 휴대전화번호 전체는 전달되지 않습니다</li>
+            <li>· 보유 기간: 예약 정보는 대회 종료 후 분쟁 대응에 필요한 기간까지(예약을 취소하면 매장 명단에서 곧바로 지워집니다). 손님 명단 연결은 매장 기록으로 남고, 탈퇴하면 이름·번호가 지워집니다</li>
+            {/* 개보법 §17②5 — 동의를 거부할 권리와 거부에 따른 불이익(2026-10-06 법령 점검 P2-6) */}
+            <li data-testid="reserve-refuse-right">· 제공에 동의하지 않으실 수 있습니다. 이 경우 앱으로는 예약할 수 없고, 매장에 직접 문의해 참가하실 수 있습니다</li>
           </ul>
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
             아래 <b className="text-ink-secondary">예약하기</b>를 누르면 위 제공에 동의하는 것으로 봅니다.{' '}

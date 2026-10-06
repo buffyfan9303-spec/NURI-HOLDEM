@@ -88,4 +88,33 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
       expect(inApp, `React 렌더에 '${cls}' 가 더는 없다 — App.tsx 가 바뀌었으니 index.html 셸도 갱신할 것`).toBe(true);
     }
   });
+
+  // 2026-10-06 9·10회차 모션 보고: 셸에 앱 루트 래퍼(max-w-6xl)가 없어 1440 에서 셸 헤더가 전체 폭이었다 —
+  //   교체 순간 로고 x16→x158(142px) 점프, 라이트 헤더 바탕 #F2F5FA→#FFFFFF. JS 만 막아(테마 인라인 스크립트는 돈다) 셸을 재고 React 와 비교.
+  for (const [w, theme] of [[1440, 'light'], [1440, 'dark'], [1024, 'light'], [390, 'light']] as const) {
+    test(`🔴 셸 헤더 = React 헤더 — 로고·헤더 자리와 바탕(${w} ${theme})`, async ({ browser }) => {
+      const measure = async (shell: boolean) => {
+        const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
+        await ctx.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* 무시 */ } }, theme);
+        if (shell) await ctx.route(/\/assets\/[^?]+\.js(\?|$)/, (r) => r.abort());
+        const p = await ctx.newPage();
+        await p.goto('/');
+        if (!shell) await p.waitForSelector('button[aria-label^="알림"]', { timeout: 15_000 });
+        const m = await p.evaluate((sh) => {
+          const h = document.querySelector(sh ? '#root > div[aria-hidden="true"] header' : '[data-stack-header]')!;
+          const logo = [...h.querySelectorAll('[role="img"][aria-label="NURI HOLDEM"]')].find((e) => e.getBoundingClientRect().width > 0)!;
+          const r = (e: Element) => { const b = e.getBoundingClientRect(); return [b.left, b.width].map((v) => Math.round(v * 10) / 10); };
+          const before = getComputedStyle(h, '::before');
+          return { header: r(h), logo: r(logo), bg: before.content !== 'none' ? before.backgroundColor : getComputedStyle(h).backgroundColor };
+        }, shell);
+        await ctx.close();
+        return m;
+      };
+      const s = await measure(true);
+      const a = await measure(false);
+      expect(s.logo[0], `로고 x 셸 ${s.logo[0]} → React ${a.logo[0]}`).toBeCloseTo(a.logo[0], 0);
+      expect(s.header, '헤더 x·폭').toEqual(a.header);
+      expect(s.bg, '헤더 바탕').toBe(a.bg);
+    });
+  }
 });

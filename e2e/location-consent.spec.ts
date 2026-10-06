@@ -13,6 +13,8 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
+// 위치 약관 제3판 시행일 = 정식 오픈일(2026-10-06 오너 결정) — 날짜를 스펙에 박지 않고 단일 소스에서 읽는다.
+import { LEGAL_DEPLOY_DATE } from '../src/lib/legalDeploy';
 
 const VENUE = '11111111-2222-3333-4444-555555555555';
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
@@ -70,7 +72,7 @@ test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이
   expect(calls.checkIn, '동의를 묻기 전에 check_in 이 나갔다').toEqual([]);
   // 제3판(20261004d): 동의는 선택이지만 시행일부터 위치 확인 출석 매장의 QR 출석은 동의가 필요 — 대체 경로와 함께 말한다.
   await expect(page.getByTestId('location-consent-nature')).toHaveText('선택 동의 — 위치 확인 출석 매장의 출석에만 필요');
-  await expect(sheet).toContainText('2026년 11월 5일부터 위치 확인 출석 매장에서는 동의하지 않으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않으며');
+  await expect(sheet).toContainText(`${LEGAL_DEPLOY_DATE}부터 위치 확인 출석 매장에서는 동의하지 않으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않으며`);
   await expect(sheet).toContainText('매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다');
   await expect(sheet).not.toContainText('동의하지 않아도 출석할 수 있습니다');
   await expect(page.getByTestId('location-consent-required'), '시행일 전인데 필수 매장 안내가 떴다').toHaveCount(0);
@@ -201,7 +203,7 @@ test('🔴 L7 로그인 안 된 딥링크 — 로그인 → 로그인 시트 퇴
   const user = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'verify@example.test', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
   await page.route(/\/auth\/v1\/token\?grant_type=password/, (r) => r.fulfill(json({ access_token: token, refresh_token: 'stub', token_type: 'bearer', expires_in: 3600, expires_at: exp, user })));
   await page.route(/\/auth\/v1\/user(\?|$)/, (r) => r.fulfill(json(user)));
-  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: 2, activity_points: 10, badges: [] })));
+  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: 3, activity_points: 10, badges: [] })));
   await page.route(/\/rest\/v1\/rpc\/claim_daily_login_point/, (r) => r.fulfill(json(10)));
 
   await page.goto(`/?checkin=${VENUE}`);
