@@ -64,12 +64,12 @@ export function isAllowedRequest(method: string, url: string, writesAllowed = WR
   return writesAllowed && ref !== PROD_REF;
 }
 
-/** 목 profiles 응답에 consented_legal_version 키가 **아예 없으면** 현재 버전(2)을 채운다. 명시한 null 은 그대로 둔다. */
+/** 목 profiles 응답에 consented_legal_version 키가 **아예 없으면** 현재 버전(3 — src/lib/legalVersion.ts LEGAL_VERSION)을 채운다. 명시한 null 은 그대로 둔다. */
 function withLegalConsent(body: string): string {
   try {
     const add = (o: unknown) => {
       if (o && typeof o === 'object' && !Array.isArray(o) && 'id' in o && !('consented_legal_version' in o)) {
-        (o as Record<string, unknown>).consented_legal_version = 2;
+        (o as Record<string, unknown>).consented_legal_version = 3;
       }
     };
     const v = JSON.parse(body);

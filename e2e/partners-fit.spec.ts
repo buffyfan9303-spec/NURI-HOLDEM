@@ -34,7 +34,7 @@ async function openPartners(page: Page) {
   // 포괄 목킹을 먼저 — 나중에 건 것이 이긴다(역순).
   await page.route(/\/rest\/v1\//, (r) => r.fulfill(json([])));
   await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(FAKE.user)));
-  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active', venue_id: VENUE, activity_points: 0, created_at: FAKE.user.created_at, agreed_to_terms: true, consented_legal_version: 2 })));
+  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active', venue_id: VENUE, activity_points: 0, created_at: FAKE.user.created_at, agreed_to_terms: true, consented_legal_version: 3 })));
   await page.route(/\/rest\/v1\/venues\?/, (r) => r.fulfill(json([{ id: VENUE, name: '테스트 라운지', region: '서울', address: '서울 1', owner_id: UID, approved: true, status: 'active', verification_status: 'verified', is_paid_ad: false, display_order: 1, follower_count: 0 }])));
   await page.route(/\/rest\/v1\/rpc\/(can_access_ledger|can_manage_pos|can_manage_venue|can_view_vouchers|can_manage_venue_staff|can_manage_venue_schedules)/, (r) => r.fulfill(json(true)));
   await page.route(/\/rest\/v1\/venue_match_posts\?/, (r) => {

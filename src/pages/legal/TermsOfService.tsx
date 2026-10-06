@@ -22,14 +22,14 @@
 // 번호·취지를 유지한 채 '보강'만 했고, 신설 조항은 제8조 이후에 붙였다 — 기존 동의의 동일성 보존.
 
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
-import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
-import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
-import { TERMS_SUPPLEMENT_EFFECTIVE_DATE } from '../../lib/legalDeploy';
+import { LEGAL_EFFECTIVE_DATE, LEGAL_PREV_EFFECTIVE_DATE, LEGAL_PREV_ARCHIVE_URL } from '../../lib/legalVersion';
+import { RevisionHistory } from './RevisionBlocks';
+import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V2_ARCHIVE_URL } from '../../lib/legalDeploy';
 
-function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+function Article({ n, title, children }: { n: number | string; title: string; children: React.ReactNode }) {
   return (
     <section className="mb-5">
-      <h3 className="text-sm font-bold text-accent-300 mb-2">제{n}조 ({title})</h3>
+      <h3 className="text-sm font-bold text-accent-300 mb-2">{typeof n === 'number' ? <>제{n}조</> : `제${n}`} ({title})</h3>
       <div className="space-y-1.5 text-xs text-ink-secondary leading-relaxed">{children}</div>
     </section>
   );
@@ -72,13 +72,27 @@ export default function TermsOfService() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {LEGAL_EFFECTIVE_DATE} · 개정 공지일: {LEGAL_NOTICE_DATE} · 직전판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
+        <p className="text-2xs text-ink-muted">시행일: {TERMS_V3_EFFECTIVE_DATE}(제3판) · 직전판(제2판) 시행일: {LEGAL_EFFECTIVE_DATE} · 제1판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           본 약관은 NURI HOLDEM 서비스 이용에 관한 기본적인 사항을 규정합니다.
         </p>
       </div>
 
-      <RevisionNotice />
+      {/* 2026-10-06 오너 결정 — 제3판(활동 포인트)은 정식 오픈일(legalDeploy LEGAL_DEPLOY_ISO)에 공지·시행한다.
+          이미 가입한 회원에게는 시행일부터 재동의 게이트로 명시 동의를 받는다(제16조제3항 단서 — 동의 간주를 쓰지 않는다).
+          4문서 공통 RevisionNotice(제2판 시행 중이라고 말한다)는 이 문서에서 뺐다 — 제3판이 시행 중이라 사실과 달라진다. */}
+      <div data-testid="terms-v3-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+        <p className="text-xs font-bold text-ink-primary">개정 안내 — 제3판을 {TERMS_V3_EFFECTIVE_DATE} 정식 오픈과 함께 시행합니다</p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          활동 포인트를 얻는 방법·쓰는 곳·돌려받는 경우·유효기간·회수·탈퇴 시 처리를 정한 제10조의2를 신설하고, 제2조제6호·제10조제1항·제16조제3항을 고쳤습니다.
+          무엇이 바뀌었는지는 문서 끝의 「부칙 · 개정 이력」에 있습니다.
+        </p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          이미 가입하신 회원께는 {TERMS_V3_EFFECTIVE_DATE}부터 서비스 화면에서 개정 약관에 대한 동의를 다시 여쭈며, 동의하지 않은 채 이용을 계속하신 것만으로 동의한 것으로 보지 않습니다.
+          동의하지 않으시면 「내 정보 → 보안 → 회원 탈퇴하기」에서 이용계약을 해지하실 수 있습니다.
+          {' '}(<a href={TERMS_V2_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="terms-v2-archive-link">제2판 원문 보기</a> · <a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="prev-edition-link">제1판 보기</a>)
+        </p>
+      </div>
 
       {/* 2026-10-06 오너 결정 — 제2판 보완(새 조항)은 정식 오픈일(legalDeploy.ts LEGAL_DEPLOY_ISO)과 함께 시행. */}
       <div data-testid="terms-supplement-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
@@ -106,7 +120,7 @@ export default function TermsOfService() {
           '"회원"이란 일반 개인 및 매장 운영자로서 회사에 개인정보를 제공하여 회원등록을 한 자를 말합니다.',
           '"매장"(홀덤펍)이란 서비스에 등록된 사업장 및 그 운영주체를 말하며, 회사와는 별개의 독립한 사업자입니다.',
           '"게시물"이란 회원이 서비스에 게시·등록한 글, 사진, 영상, 댓글, 후기, 포스터 등 일체의 정보를 말합니다.',
-          '"활동점수"란 회원의 서비스 내 활동 기록을 나타내기 위하여 회사가 부여하는 비(非)금전 표시값을 말하며, 재산적 가치를 갖지 않습니다.',
+          '"활동점수"(서비스 화면의 "활동 포인트")란 회원의 서비스 내 활동에 따라 회사가 무상으로 부여하는 비(非)금전 표시값으로, 활동 기록의 표시와 제10조의2에 따른 서비스 내 기능 이용에 쓰이며 재산적 가치를 갖지 않습니다.',
           '"매장 이용권"이란 매장이 손님에게 무상으로 발행하는 비(非)금전 표시값을 말하며, 재산적 가치를 갖지 않습니다.',
           '"유료서비스"란 회사가 매장 또는 회원에게 유상으로 제공하는 노출 강화·광고 상품과 매장 운영 도구 이용료를 말합니다. 현재 유상으로 제공하는 상품은 없으며, 유상 제공을 시작하기 전에 가격·내용·환불 기준을 서비스 내에 공지합니다.',
         ]} />
@@ -250,11 +264,31 @@ export default function TermsOfService() {
             → 회사가 재매입하지 않는다는 점을 약관에 못박아 '業' 요건 자체를 성립시키지 않는다.
             선불전자지급수단(전자금융거래법 §2 14호) 부정도 같이 둔다 — 대가를 받고 발행하지 않으므로. */}
         <Items items={[
-          '활동점수와 매장 이용권은 회원의 활동 기록을 표시하기 위한 비(非)금전 표시값이며, 재산적 가치, 재산권 또는 회사·매장에 대한 채권을 발생시키지 않습니다.',
+          '활동점수와 매장 이용권은 회원의 활동 기록을 표시하거나 서비스 내 기능에 쓰기 위한 비(非)금전 표시값이며, 재산적 가치, 재산권 또는 회사·매장에 대한 채권을 발생시키지 않습니다.',
           '활동점수와 매장 이용권은 금전으로 교환(환전)할 수 없고, 회원 간 양도·매매·대여·담보 제공의 대상이 되지 않습니다. 회사는 이를 매입하거나 다시 사들이지 않으며, 그 매입을 알선하지도 않습니다(「게임산업진흥에 관한 법률」 제32조제1항제7호).',
           '활동점수와 매장 이용권은 대가를 받고 발행되지 않으므로 「전자금융거래법」상 선불전자지급수단에 해당하지 않으며, 환급·정산의 대상이 아닙니다.',
           '회원이 제2항을 위반하여 표시값을 거래하거나 거래를 시도한 경우 회사는 해당 표시값을 회수하고 계정의 이용을 정지할 수 있습니다.',
           '유료서비스의 결제 취소 및 환불은 「전자상거래 등에서의 소비자보호에 관한 법률」과 회사의 취소·환불 정책에 따릅니다.',
+        ]} />
+      </Article>
+
+      <Article n="10조의2" title="활동 포인트">
+        {/* 약관 재검토 P2-2(약관규제법 §3①·§5②) — 화면의 '활동 포인트'를 쓰는 재화로서 적는다. 2026-10-06 라이브 정의로 확인한 실제 동작:
+            적립 = claim_daily_login_point·_apply_checkin·award_post_points·award_comment_points·claim_mission·이벤트 보너스·admin_grant_points(사유 기록)
+            사용 = shop_skus(외치기·끌올·꾸미기·AI 스팟 코칭) → profiles.spent_points 만 늘린다(activity_points·등급은 그대로, my_point_balance = 누적 − 사용)
+            반환 = _spot_ai_refund(AI 실패 자동) · admin_refund_purchase(산 기능도 회수) · 회수 = admin_grant_points 음수(0 아래로 안 내려감)
+            유효기간·소멸 배치 없음(cron 0건) · 탈퇴 = _purge_private_records 가 구매·지급 기록과 꾸미기 보유를 지우고 계정은 되살릴 수 없다.
+            시행: 정식 오픈일(legalDeploy TERMS_V3_EFFECTIVE = 배포일)에 공지·시행, 기존 회원은 그날부터 재동의 게이트로 명시 동의(2026-10-06 오너 결정).
+            §28 — 이 조의 문구에 환금성 단어를 쓰지 않는다(금전으로 '바꿀 수 없다'로 쓴다). */}
+        <Items items={[
+          '회원은 접속, 매장 출석, 게시글·댓글 작성, 미션, 이벤트 참여 등 회사가 정한 활동과 기준에 따라 활동 포인트를 무상으로 받습니다.',
+          '회원은 활동 포인트를 회사가 정한 서비스 내 기능(외치기, 글 끌올, 꾸미기(마크·프로필 카드 프레임·닉네임 색·단골 시즌 뱃지), AI 스팟 코칭 등)에 쓸 수 있습니다. 기능별 필요 포인트와 이용 기간은 이용 화면에 표시하며, 포인트를 써도 누적 활동점수와 그에 따른 등급은 줄지 않습니다.',
+          '활동 포인트는 금전이나 매장 이용권으로 바꿀 수 없고, 다른 회원에게 넘기거나 사고팔 수 없습니다(제10조제2항).',
+          '포인트를 쓴 기능이 회사 사정으로 제공되지 않으면 쓴 포인트를 돌려드립니다. AI 스팟 코칭 결과를 만들지 못한 경우에는 자동으로 돌려드립니다.',
+          '활동 포인트에는 유효기간이 없어, 이용계약이 유지되는 동안 소멸하지 않습니다.',
+          '회사는 본 약관이나 관련 법령을 위반하여 얻은 포인트를 회수할 수 있고, 그 포인트로 얻은 기능(꾸미기 등)도 함께 회수할 수 있습니다. 회수한 경우 그 사실과 사유를 알리며, 회원은 제6조제4항에 따라 이의를 제기할 수 있습니다.',
+          '회원이 탈퇴하면 남은 활동 포인트와 포인트로 얻은 기능(영구 소장 꾸미기 포함)은 소멸하며, 다시 가입하더라도 되살릴 수 없습니다.',
+          '회사는 기능별 필요 포인트와 포인트로 쓸 수 있는 기능을 바꿀 수 있으며, 바꾸기 7일 전에 서비스 내에 공지합니다. 이미 얻은 기능(영구 소장 꾸미기 등)에는 영향을 주지 않습니다.',
         ]} />
       </Article>
 
@@ -353,7 +387,7 @@ export default function TermsOfService() {
         <Items items={[
           '본 약관은 서비스 화면에 게시하거나 회원에게 통지함으로써 그 효력이 발생합니다.',
           '회사는 관련 법령을 위반하지 아니하는 범위에서 본 약관을 변경할 수 있으며, 변경 시 적용일자와 변경 사유를 명시하여 적용일 7일 전부터, 회원에게 불리한 변경의 경우에는 적용일 30일 전부터 서비스 내에 공지합니다.',
-          '회원은 변경된 약관에 동의하지 아니하는 경우 적용일 전까지 이용계약을 해지할 수 있습니다. 회사가 제2항의 공지를 하면서 적용일까지 거부의 의사를 표시하지 아니하면 동의한 것으로 본다는 뜻을 명확히 고지하였음에도 회원이 거부의 의사를 표시하지 아니한 경우에는 변경에 동의한 것으로 봅니다.',
+          '회원은 변경된 약관에 동의하지 아니하는 경우 적용일 전까지 이용계약을 해지할 수 있습니다. 회사가 제2항의 공지를 하면서 적용일까지 거부의 의사를 표시하지 아니하면 동의한 것으로 본다는 뜻을 명확히 고지하였음에도 회원이 거부의 의사를 표시하지 아니한 경우에는 변경에 동의한 것으로 봅니다. 다만 회원에게 불리한 변경에는 이 동의 간주를 적용하지 않으며, 회사는 적용일부터 서비스 화면에서 변경된 약관에 대한 동의를 다시 받습니다.',
           '본 약관의 일부 조항이 무효로 되더라도 나머지 조항의 효력에는 영향을 미치지 않습니다.',
           '본 약관과 서비스 이용에 관하여는 대한민국 법령을 적용합니다.',
           '서비스 이용과 관련하여 분쟁이 발생한 경우 회사와 회원은 성실히 협의하여 해결하며, 협의가 이루어지지 아니한 경우 「민사소송법」이 정한 관할 법원에 소를 제기합니다. 회원은 한국소비자원 또는 소비자분쟁조정위원회에 분쟁의 조정을 신청할 수도 있습니다.',
@@ -363,7 +397,7 @@ export default function TermsOfService() {
       <RevisionHistory doc="terms" />
 
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 약관은 {LEGAL_EFFECTIVE_DATE}부터 시행됩니다. 직전판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행일 전까지 적용되었습니다.
+        본 약관 제3판은 {TERMS_V3_EFFECTIVE_DATE}부터 시행됩니다. 제2판은 {LEGAL_EFFECTIVE_DATE}부터, 제1판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 각각 다음 판의 시행일 전까지 적용되었습니다.
       </p>
     </div>
   );

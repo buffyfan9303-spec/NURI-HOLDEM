@@ -24,10 +24,13 @@
 //   비교하면 타임존·표기 흔들림으로 게이트가 오작동한다. 개정할 때마다 +1 하고,
 //   legalHistory.ts 에 한 줄, DB current_legal_version() 에 같은 숫자를 남긴다(테스트가 셋을 맞댄다).
 
-/** 현재(개정판) 약관 버전. 개정 시 +1 하고 legalHistory.ts 의 LEGAL_HISTORY 에 항목을 추가한다. */
-export const LEGAL_VERSION = 2;
+/** 현재 약관 동의 판(= 이용약관의 판). 개정 시 +1 하고 legalHistory.ts 의 terms 이력 · 아래 CONSENT_GATES · DB current_legal_version() 을 같이 올린다.
+ *  제3판(2026-10-06 리드 결정, 약관 재검토 P2-2 활동 포인트): 공지·시행일은 legalDeploy.ts TERMS_V3_*(배포일 기준) 한 곳. */
+export const LEGAL_VERSION = 3;
 
-/** 개정판 시행일(KST, ISO) — 이 날부터 재동의 게이트가 '차단'으로 바뀐다. */
+/** 제2판(2026-09-29, 약관 4문서 공통 개정) 시행일(KST, ISO). 이 날부터 제1판 동의자는 재동의 게이트가 '차단'이다.
+ *  ⚠ 이 상수들(LEGAL_EFFECTIVE_* · LEGAL_NOTICE_*)은 **제2판 공통 개정**의 날짜다 — 처리방침·서약·마케팅 문서와 개정 이력이 함께 쓴다.
+ *    제3판(이용약관만)의 날짜는 legalDeploy.ts TERMS_V3_* 다. 여기를 제3판 날짜로 바꾸면 다른 문서의 이력이 거짓이 된다. */
 export const LEGAL_EFFECTIVE_ISO = '2026-09-29';
 /** 화면 표기용 시행일. */
 export const LEGAL_EFFECTIVE_DATE = '2026년 9월 29일';
@@ -56,6 +59,7 @@ export {
   PRIVACY_V3_NOTICE_ISO as PRIVACY_NOTICE_ISO, PRIVACY_V3_NOTICE_DATE as PRIVACY_NOTICE_DATE,
   PRIVACY_V3_EFFECTIVE_ISO as PRIVACY_EFFECTIVE_ISO, PRIVACY_V3_EFFECTIVE_DATE as PRIVACY_EFFECTIVE_DATE,
 } from './legalDeploy';
+import { TERMS_V3_EFFECTIVE_ISO } from './legalDeploy';
 /** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 2026-10-06 에 뜬 제3판 공지 직전의 /legal/privacy.html.
  *  경로의 날짜는 **보존본을 뜬 날**이다(공지일이 배포일로 옮겨져도 파일은 그대로). sitemap 에 넣지 않는다. */
 export const PRIVACY_PREV_ARCHIVE_URL = '/legal/archive/2026-10-06/privacy.html';
@@ -77,11 +81,29 @@ export function kstToday(now: Date = new Date()): string {
  * '동의 없는 이용'이 된다. 그래서 3-state 다.
  */
 export type LegalConsentStage = 'ok' | 'notice' | 'required';
+
+/** 판별 시행일 — [판, 시행일]. 그 판보다 낮은 판에 동의한 회원은 **그 판의 시행일부터** 차단된다(그 전에는 notice: 차단 없음).
+ *  판마다 따로 두는 이유: 한 날짜로 비교하면 판을 올리는 순간 시행 전인데도 전원이 차단되거나(시행일 전 공지 기간이 있을 때),
+ *  거꾸로 제1판 동의자가 풀린다. 제3판은 2026-10-06 오너 결정으로 공지일 = 시행일 = 배포일이라 배포일부터 제2판 동의자도 차단된다. */
+const CONSENT_GATES: readonly (readonly [number, string])[] = [
+  [2, LEGAL_EFFECTIVE_ISO],
+  [3, TERMS_V3_EFFECTIVE_ISO],
+];
+
+/** 이 회원을 차단하는 판의 시행일(ISO) — 없으면 null(차단 안 함). 게이트 문구가 '언제부터 시행'을 고를 때도 쓴다. */
+export function legalRequiredSinceIso(consentedVersion: number | null | undefined, now: Date = new Date()): string | null {
+  const v = typeof consentedVersion === 'number' ? consentedVersion : 0;
+  const today = kstToday(now);
+  let since: string | null = null;
+  for (const [ver, iso] of CONSENT_GATES) if (v < ver && today >= iso) since = iso;
+  return since;
+}
+
 export function legalConsentStage(
   consentedVersion: number | null | undefined,
   now: Date = new Date(),
 ): LegalConsentStage {
   const v = typeof consentedVersion === 'number' ? consentedVersion : 0;
   if (v >= LEGAL_VERSION) return 'ok';
-  return kstToday(now) >= LEGAL_EFFECTIVE_ISO ? 'required' : 'notice';
+  return legalRequiredSinceIso(v, now) ? 'required' : 'notice';
 }

@@ -18,7 +18,7 @@ const SESSION = {
   user: { id: UID, aud: 'authenticated', role: 'authenticated', email: 'rc1@example.com', app_metadata: { provider: 'email' }, user_metadata: { name: 'RC1' }, created_at: '2026-01-01T00:00:00Z' },
 };
 const PROFILE = { id: UID, name: 'RC1', nickname: 'RC1', role: 'user', approved: true, status: 'active', activity_points: 0,
-  agreed_to_terms: true, consented_legal_version: 2, created_at: '2026-01-01T00:00:00Z' };
+  agreed_to_terms: true, consented_legal_version: 3, created_at: '2026-01-01T00:00:00Z' };
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 
 /** 포괄 목킹을 먼저, 개별 목킹을 뒤에(나중에 등록한 route 가 먼저 돈다). */

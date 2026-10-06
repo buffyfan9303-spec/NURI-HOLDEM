@@ -52,7 +52,7 @@ async function boot(page: Page, g: { x1: ReturnType<typeof gate>; send: ReturnTy
   await page.route(/\/auth\/v1\/user/, (r) => r.fulfill(json(FAKE.user)));
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: 'E2E', nickname: 'E2E', role: 'user', status: 'active', activity_points: 0, created_at: FAKE.user.created_at,
-    agreed_to_terms: true, consented_legal_version: 2,
+    agreed_to_terms: true, consented_legal_version: 3,
   })));
   await page.route(/\/rest\/v1\/rpc\/get_public_profiles/, (r) => r.fulfill(json([
     { id: X1, nickname: '상대X1', name: '상대X1', avatar_color: null },

@@ -26,7 +26,7 @@ const FAKE = {
 };
 const PROFILE = {
   id: UID, name: '검증이름', nickname: '검증개설자', email: 'gb@example.com', role: 'user', approved: true, status: 'active',
-  venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', agreed_to_terms: true, consented_legal_version: 2,
+  venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', agreed_to_terms: true, consented_legal_version: 3,
 };
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 const member = (id: string, userId: string, role: 'manager' | 'member', name: string) => ({
