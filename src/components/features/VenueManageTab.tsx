@@ -16,7 +16,7 @@ import { useVenueScope } from '../../lib/useVenueScope';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
@@ -291,6 +291,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [memberVenueId, setMemberVenueId] = useState<string | null>(null);
   // 알림 딥링크의 매장 전환(deepVenueId)이 '목록이 아직 안 옴' 과 '목록이 빔' 을 가르는 데 쓴다
   const [memberVenuesLoaded, setMemberVenuesLoaded] = useState(false);
+  /** 목록을 **성공적으로** 받은 계정 uid — 실패면 null. 대표 업주 판정(primaryOwner)이 남의 목록·실패를 '대표 아님'으로 읽지 않게. */
+  const [memberVenuesOf, setMemberVenuesOf] = useState<string | null>(null);
   const [adminVenuesLoaded, setAdminVenuesLoaded] = useState(false);
   // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
   const venueId: string | null = isAdmin ? adminVenueId
@@ -474,19 +476,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   공동운영자(venue_owners)일 수 있어 탭은 보이고 실행에서만 '대표 업주만' 으로 거절됐다 → 대표 업주가 **아님이 확인되면** 탭을 뺀다.
   // 🔴 FULL-RECHECK-2/C #3(2026-09-26) — 예전 판정은 getMyVenue()(owner_id = 나, limit 1)였다. 소유 매장이 0개인 공동운영자는
   //   null(모름)이 되어 탭이 **보였고**, 매장이 둘인 대표 업주는 다른 매장이 잡혀 false 가 될 수 있었다(limit 1).
-  //   이제 이 매장의 사장 목록(list_venue_owners)에서 **내 줄의 is_primary** 로 정한다. 확인될 때(true)만 보인다 —
-  //   조회 실패·로딩 중에는 숨긴다(되돌릴 수 없는 매장 삭제 버튼이라 fail-closed; 다시 들어오면 재조회된다).
-  const [primaryOwner, setPrimaryOwner] = useState<boolean | null>(null);
+  // 🔴 10회차 실연(2026-10-06) — 그다음 판정(list_venue_owners 의 내 줄 is_primary)은 **venue_owners 행이 있는 대표만** 잡았다.
+  //   실매장 6곳 중 5곳은 대표가 venues.owner_id 로만 연결돼 행이 없어 false → 대표인데 '위험 구역'이 숨고 위치 확인 스위치가 잠겼다.
+  //   이제 서버 판정을 그대로 쓴다: my_member_venues 의 relation='owner' = `venues.owner_id = 나 ∧ _venue_owner_ok`
+  //   (set_venue_checkin_geo_required·kill_venue 가 보는 바로 그 조건). 공동 운영자는 'coowner', 직원은 'staff' 라 새로 열리는 것 없음.
+  //   목록을 못 받았거나 다른 계정의 목록이면 null(모름) — 위험 구역·스위치는 숨긴다(fail-closed).
   const myUid = user?.id;
-  useEffect(() => {
-    if (!isOwner || !venueId || !myUid) { setPrimaryOwner(null); return; }
-    let alive = true;
-    setPrimaryOwner(null);
-    listVenueOwners(venueId)
-      .then((rows) => { if (alive) setPrimaryOwner(rows.some((r) => r.userId === myUid && r.isPrimary)); })
-      .catch(() => { if (alive) setPrimaryOwner(null); });
-    return () => { alive = false; };
-  }, [isOwner, venueId, myUid]);
+  const primaryOwner: boolean | null = (!isOwner || !venueId || !myUid || memberVenuesOf !== myUid) ? null
+    : memberVenues.some((v) => v.id === venueId && v.relation === 'owner');
   const canSettingsTab = useCallback((t: SettingsTab) => (
     t === 'danger' ? (isOwner && !!venueId && primaryOwner === true) : staffOk
   ), [isOwner, venueId, staffOk, primaryOwner]);
@@ -815,10 +812,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 소속 매장 목록(전환기용) — 계정이 바뀌면 고른 매장도 버린다(다른 계정의 매장 id 가 남지 않게).
   const myUidForVenues = user?.id;
   useEffect(() => {
-    setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false);
+    setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false); setMemberVenuesOf(null);
     if (isAdmin || !myUidForVenues) return;
     let alive = true;
-    listMyMemberVenues().then((vs) => { if (alive) setMemberVenues(vs); }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ })
+    listMyMemberVenues().then((vs) => { if (alive) { setMemberVenues(vs); setMemberVenuesOf(myUidForVenues); } }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ })
       .finally(() => { if (alive) setMemberVenuesLoaded(true); });
     return () => { alive = false; };
   }, [isAdmin, myUidForVenues]);

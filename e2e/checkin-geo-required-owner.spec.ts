@@ -15,14 +15,21 @@ const json = (b: unknown) => ({ status: 200, contentType: 'application/json', bo
 const single = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
 const SHOT = process.env.LOC_SHOT_DIR;
 
-async function boot(page: Page, st: { lat: number | null; lng: number | null; on: boolean }, { primary = true } = {}) {
+// who: 'primary' = 대표 업주(목 기본값) · 'primaryNoRow' = 대표 업주인데 venue_owners 행이 없다(실매장 6곳 중 5곳 — 10회차 실연 2026-10-06)
+//   · 'coowner' = 승인 공동 운영자. 대표 판정의 정본은 my_member_venues 의 relation 이다(사장 목록 is_primary 가 아니다).
+async function boot(page: Page, st: { lat: number | null; lng: number | null; on: boolean }, { who = 'primary' as 'primary' | 'primaryNoRow' | 'coowner' } = {}) {
   const rpc: Record<string, unknown>[] = [];
   let reads = 0;
   await bootOwner(page, {
     appSettings: { checkin_geo_enabled: 'on' },
     extra: async (p) => {
-      // 대표 여부(list_venue_owners 의 내 줄 is_primary) — false 면 공동 운영자처럼 스위치가 잠긴다(F1)
-      if (!primary) await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([{ user_id: '00000000-0000-4000-8000-0000000000ee', nickname: '업주', name: '업주', is_primary: false, status: 'approved' }])));
+      // 대표 여부 — 공동 운영자면 스위치가 잠긴다(F1, 서버도 거부).
+      if (who === 'coowner') {
+        await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([{ user_id: '00000000-0000-4000-8000-0000000000ee', nickname: '업주', name: '업주', is_primary: false, status: 'approved' }])));
+        await p.route(/\/rest\/v1\/rpc\/my_member_venues/, (r) => r.fulfill(json([{ id: MOCK_VENUE, name: '테스트 홀덤펍', relation: 'coowner' }])));
+      }
+      // 실매장 모양: 대표는 venues.owner_id 로만 연결되고 사장 목록에 자기 줄이 없다.
+      if (who === 'primaryNoRow') await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([])));
       // getVenueCheckinSpot — venues.select('lat, lng, address, checkin_geo_required')
       await p.route(/\/rest\/v1\/venues\?.*checkin_geo_required/, (r) => {
         if (r.request().method() !== 'GET') return r.fallback();
@@ -87,6 +94,21 @@ test('🔴 O1 업주 1440 — 좌표가 있으면 켜고 끈다(RPC 저장 → �
   expect(rpc).toEqual([{ p_venue_id: MOCK_VENUE, p_on: true }, { p_venue_id: MOCK_VENUE, p_on: false }]);
 });
 
+// 10회차 실연(2026-10-06) P2 — 실매장 6곳 중 5곳은 대표가 venue_owners 행 없이 venues.owner_id 로만 연결된다.
+//   예전 판정(list_venue_owners 의 내 줄 is_primary)은 이 대표를 '대표 아님'으로 읽어 스위치를 잠그고 위험 구역을 숨겼다.
+//   서버(set_venue_checkin_geo_required · kill_venue)는 venues.owner_id 로 통과시키므로 화면만 막힌 상태였다.
+test('🔴 O1b 대표 업주인데 사장 목록에 자기 줄이 없다 — 스위치가 열리고 위험 구역이 보인다', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { rpc } = await boot(page, { lat: 37.5, lng: 127.0, on: false }, { who: 'primaryNoRow' });
+  const sw = page.getByTestId('checkin-geo-required-switch');
+  await expect(sw, '대표 업주인데 스위치가 잠겼다').toBeEnabled();
+  await expect(page.getByTestId('checkin-geo-required-owner-only'), '대표인데 대표 전용 안내가 떴다').toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: '매장 설정 하위탭' }).getByRole('tab', { name: '위험 구역' }), '대표 업주에게 위험 구역이 없다').toHaveCount(1);
+  await sw.click();
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  expect(rpc).toEqual([{ p_venue_id: MOCK_VENUE, p_on: true }]);
+});
+
 test('🔴 O2 업주 1440 — 출석 위치(좌표)가 없으면 켤 수 없다', async ({ page }) => {
   test.setTimeout(120_000);
   const { rpc, sec } = await boot(page, { lat: null, lng: null, on: false });
@@ -98,7 +120,9 @@ test('🔴 O2 업주 1440 — 출석 위치(좌표)가 없으면 켤 수 없다'
 
 test('🔴 O3 대표가 아닌 운영자(공동 운영자) — 스위치가 잠기고 "대표 업주만" 안내(F1, 서버도 거부)', async ({ page }) => {
   test.setTimeout(120_000);
-  const { rpc } = await boot(page, { lat: 37.5, lng: 127.0, on: false }, { primary: false });
+  const { rpc } = await boot(page, { lat: 37.5, lng: 127.0, on: false }, { who: 'coowner' });
+  // 위험 구역(kill_venue — 서버는 대표 업주만)도 공동 운영자에게 열리지 않는다
+  await expect(page.getByRole('tablist', { name: '매장 설정 하위탭' }).getByRole('tab', { name: '위험 구역' })).toHaveCount(0);
   const sw = page.getByTestId('checkin-geo-required-switch');
   await expect(sw).toBeDisabled();
   await expect(page.getByTestId('checkin-geo-required-owner-only')).toHaveText('위치 확인 출석은 대표 업주만 켜고 끌 수 있습니다.');

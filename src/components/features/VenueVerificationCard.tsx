@@ -51,7 +51,11 @@ export default function VenueVerificationCard({ venueId, showVerification = true
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-ink-primary">인증 매장</p>
-          <p className="text-2xs text-ink-secondary">포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.</p>
+          {/* 즉시 게시는 인증이 아니라 **기간 안 프리미엄 매장**만이다 — 서버 auto_approve_verified_poster(20261002h, 오너 10-02 A).
+              isPaidAd 는 기간이 지나면 거짓으로 읽힌다(communityCore). 10회차 실연(2026-10-06): 인증 매장인데 '즉시 게시' 라고 약속했다. */}
+          <p className="text-2xs text-ink-secondary">{venue.isPaidAd
+            ? '프리미엄 매장 — 포스터(요강)가 관리자 승인 없이 바로 공개됩니다.'
+            : '포스터(요강)는 관리자 승인 후 공개됩니다.'}</p>
         </div>
       </div>
     );
@@ -72,7 +76,7 @@ export default function VenueVerificationCard({ venueId, showVerification = true
       {/* 12.75px 설명문의 행간 정본은 t-desc(19.13 = 1.5배) 하나다 — leading-relaxed 는 20.72 라
           같은 크기 설명문이 두 리듬으로 갈렸다(SectionHeader 가 이미 같은 이유로 t-desc 로 통일돼 있다). */}
       <p className="t-desc break-keep text-ink-secondary">
-        인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (관리자 검토 후 부여)
+        인증받으면 인증 배지 · 목록 상단 우선 노출 · 공식 결과 기록지(지류) 발급. (관리자 검토 후 부여)
       </p>
     </div>
   );
