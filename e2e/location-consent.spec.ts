@@ -203,7 +203,7 @@ test('🔴 L7 로그인 안 된 딥링크 — 로그인 → 로그인 시트 퇴
   const user = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'verify@example.test', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
   await page.route(/\/auth\/v1\/token\?grant_type=password/, (r) => r.fulfill(json({ access_token: token, refresh_token: 'stub', token_type: 'bearer', expires_in: 3600, expires_at: exp, user })));
   await page.route(/\/auth\/v1\/user(\?|$)/, (r) => r.fulfill(json(user)));
-  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: 2, activity_points: 10, badges: [] })));
+  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: 3, activity_points: 10, badges: [] })));
   await page.route(/\/rest\/v1\/rpc\/claim_daily_login_point/, (r) => r.fulfill(json(10)));
 
   await page.goto(`/?checkin=${VENUE}`);

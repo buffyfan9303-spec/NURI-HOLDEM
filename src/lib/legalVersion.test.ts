@@ -15,8 +15,9 @@ import {
   LEGAL_PREV_EFFECTIVE_DATE, legalConsentStage, kstToday,
   PRIVACY_VERSION, PRIVACY_EFFECTIVE_ISO, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_ISO, PRIVACY_NOTICE_DATE, PRIVACY_PREV_ARCHIVE_URL,
 } from './legalVersion';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { LEGAL_HISTORY } from './legalHistory';
+import { TERMS_V3_EFFECTIVE_DATE } from './legalDeploy';
 
 const ROOT = path.join(__dirname, '../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8');
@@ -61,7 +62,9 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
     for (const [doc, rows] of Object.entries(LEGAL_HISTORY)) {
       expect(rows.length, `${doc}: 이력이 비어 있다`).toBeGreaterThan(0);
       // 처리방침은 2026-10-06 부터 자기 판(PRIVACY_VERSION)을 따로 센다 — 처리방침 변경은 재동의가 아니라 공지다.
-      const [ver, eff] = doc === 'privacy' ? [PRIVACY_VERSION, PRIVACY_EFFECTIVE_DATE] : [LEGAL_VERSION, LEGAL_EFFECTIVE_DATE];
+      // 약관 동의 판(LEGAL_VERSION)은 이용약관의 판이다(제3판은 이용약관만 바뀌었다). 서약·마케팅 문서는 제2판(공통 개정)이 최신이다.
+      const [ver, eff] = doc === 'privacy' ? [PRIVACY_VERSION, PRIVACY_EFFECTIVE_DATE]
+        : doc === 'terms' ? [LEGAL_VERSION, TERMS_V3_EFFECTIVE_DATE] : [2, LEGAL_EFFECTIVE_DATE];
       expect(rows[0].version, `${doc}: 최신 이력이 현재 버전이 아니다`).toBe(ver);
       expect(rows[0].effective).toBe(eff);
       for (const r of rows) expect(r.changes.length, `${doc} 제${r.version}판: 변경 내용이 비었다`).toBeGreaterThan(0);
@@ -81,13 +84,16 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
     expect(existsSync(path.join(ROOT, 'public' + PRIVACY_PREV_ARCHIVE_URL)), '제2판 원문 보존본이 없다').toBe(true);
     expect(read('public' + PRIVACY_PREV_ARCHIVE_URL)).toContain('noindex');
     expect(read('public/legal/privacy.html')).toContain(PRIVACY_PREV_ARCHIVE_URL);
-    // 재동의 게이트는 처리방침 판과 묶지 않는다(약관 동의 판은 그대로).
-    expect(LEGAL_VERSION).toBe(2);
+    // 재동의 게이트는 처리방침 판과 묶지 않는다 — 약관 동의 판은 이용약관의 판을 따른다.
+    expect(LEGAL_VERSION).toBe(LEGAL_HISTORY.terms[0].version);
   });
 
   it('DB의 current_legal_version() 과 LEGAL_VERSION 이 같다', () => {
     // 어긋나면 재동의 게이트가 닫히지 않는다(동의해도 낮은 버전이 기록돼 다시 뜬다).
-    const sql = read('supabase/migrations/20260830m_legal_consent_versioning.sql');
+    // 가장 나중(파일명 순) 마이그레이션의 정의가 라이브 값이다(20260830m → 20261006o 제3판).
+    const defs = readdirSync(path.join(ROOT, 'supabase/migrations')).sort()
+      .map((n) => read(`supabase/migrations/${n}`)).filter((t) => /create or replace function public\.current_legal_version/.test(t));
+    const sql = defs[defs.length - 1] ?? '';
     const m = sql.match(/create or replace function public\.current_legal_version[\s\S]*?\$fn\$\s*select\s+(\d+)\s*\$fn\$/);
     expect(m, 'current_legal_version() 정의를 찾지 못했다').toBeTruthy();
     expect(Number(m![1])).toBe(LEGAL_VERSION);

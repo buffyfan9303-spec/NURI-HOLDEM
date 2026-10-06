@@ -5,7 +5,7 @@
 // 이력 본문까지 **첫 화면 임계 경로**에 실린다(실측 +3.0KB gz). 버전·시행일(작다)과 이력(크다)을 분리한다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_VERSION } from './legalVersion';
 import { LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_NOTICE, LOCATION_TERMS_VERSION, PRIVACY_PRE_LOCATION_ARCHIVE_URL } from './locationTerms';
-import { TERMS_SUPPLEMENT_EFFECTIVE_DATE } from './legalDeploy';
+import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_NOTICE_DATE, TERMS_V3_EFFECTIVE_DATE } from './legalDeploy';
 export type LegalDocKey = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
 
 export interface LegalRevision {
@@ -21,6 +21,16 @@ export interface LegalRevision {
 /** 문서별 개정 이력 — 최신이 위. 각 문서의 '부칙' 절이 이 데이터를 그대로 렌더한다. */
 export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
   terms: [
+    {
+      // 약관 재검토 P2-2 · 2026-10-06 오너 결정(정식 오픈일에 공지·시행). 날짜는 legalDeploy TERMS_V3_*(배포일) 한 곳.
+      version: 3, effective: TERMS_V3_EFFECTIVE_DATE, notice: TERMS_V3_NOTICE_DATE,
+      changes: [
+        '제10조의2(활동 포인트)를 신설했습니다. 활동 포인트를 얻는 방법(접속·매장 출석·게시글·댓글·미션·이벤트 등)과 쓰는 곳(외치기·글 끌올·꾸미기·AI 스팟 코칭 등), 포인트를 써도 누적 활동점수와 등급은 줄지 않는다는 점, 금전·매장 이용권으로 바꾸거나 넘길 수 없다는 점, 회사 사정으로 기능을 못 쓴 경우의 반환, 유효기간이 없다는 점(제1항~제5항)과 부정하게 얻은 포인트와 그것으로 얻은 기능의 회수(제6항), 탈퇴 시 소멸(제7항), 필요 포인트와 기능을 바꿀 때의 7일 전 공지(제8항)를 정했습니다. 적립·사용·반환·회수·탈퇴 시 소멸은 서비스가 이미 이렇게 동작하고 있던 것을 약관에 적은 것이고, 유효기간은 지금처럼 두지 않습니다.',
+        '제2조제6호의 활동점수 정의를 서비스 화면의 "활동 포인트"와 같게 고치고, 제10조제1항에 활동점수가 서비스 내 기능에도 쓰인다는 점을 더했습니다.',
+        '제16조제3항에 단서를 더해, 회원에게 불리한 변경에는 "거부 의사가 없으면 동의한 것으로 본다"를 적용하지 않고 적용일부터 서비스 화면에서 동의를 다시 받도록 했습니다.',
+        `${TERMS_V3_EFFECTIVE_DATE} 정식 오픈과 함께 시행합니다. 이미 가입한 회원에게는 시행일부터 서비스 화면에서 개정 약관에 대한 동의를 다시 받으며(제16조제3항 단서), 동의하지 않은 채 계속 이용한 것만으로 동의한 것으로 보지 않습니다. 동의하지 않는 회원은 이용계약을 해지할 수 있습니다.`,
+      ],
+    },
     {
       version: 2, effective: LEGAL_EFFECTIVE_DATE, notice: LEGAL_NOTICE_DATE,
       changes: [

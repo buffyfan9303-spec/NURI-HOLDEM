@@ -22,7 +22,7 @@ const USER = { id: UID, aud: 'authenticated', role: 'authenticated', email: EMAI
   identities: [{ id: UID, provider: 'email' }], created_at: new Date().toISOString() };
 const SESSION = { access_token: TOKEN, refresh_token: 'e2e-signup', token_type: 'bearer', expires_in: 3600, expires_at: exp, user: USER };
 const PROFILE = { id: UID, email: EMAIL, name: '위치가입', nickname: '위치가입', role: 'user', approved: true, status: 'active',
-  agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 2, activity_points: 0, badges: [], avatar_color: '#6B7280', avatar_url: null };
+  agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3, activity_points: 0, badges: [], avatar_color: '#6B7280', avatar_url: null };
 
 type Calls = { signup: Record<string, unknown>[]; setConsent: Record<string, unknown>[] };
 async function setup(page: Page, w: number, scheme: 'dark' | 'light'): Promise<Calls> {

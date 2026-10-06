@@ -2,14 +2,12 @@
 // 실행: npx vitest run src/pages/legal/legal2-1006.contract.test.ts
 // 음성 대조(실행 기록은 PR 본문): ① TierLeaderboard 버튼 disabled 식에서 `|| !vMasked` 를 지우면 P1-3 가 빨개진다
 //   ② PrivacyPolicy 제9조에 옛 문장 '회사는 회원의 휴대전화번호를 매장에 제공하지 않습니다.' 를 되살리면 P1-2 가 빨개진다
-//   ③ legalDeploy TERMS_NEXT.noticeIso 만 채우고 LEGAL_VERSION 을 그대로 두면 P2-2 가 빨개진다.
+//   ③ (P2-2 제3판은 시행 전환됐다 — 계약은 src/pages/legal/legal3-1006.contract.test.ts)
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { LEGAL_VERSION } from '../../lib/legalVersion';
-import { TERMS_NEXT, OWNER_TERMS_VERSION, LEGAL_DEPLOY_ISO, TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO, PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO, OWNER_TERMS_EFFECTIVE_DATE } from '../../lib/legalDeploy';
+import { OWNER_TERMS_VERSION, LEGAL_DEPLOY_ISO, TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO, PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO, OWNER_TERMS_EFFECTIVE_DATE } from '../../lib/legalDeploy';
 import { LOCATION_TERMS_EFFECTIVE } from '../../lib/locationTerms';
-import { ARTICLE_10_2, CHANGES } from '../../lib/termsNextDraft';
 
 const ROOT = path.join(__dirname, '../../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8');
@@ -94,25 +92,6 @@ describe('P1-5 매장 운영자 이용약관(처리위탁)', () => {
     expect((m.match(/set search_path = public, pg_temp/g) ?? []).length).toBe(5);
     expect(m).toContain("to_regclass('public.storage_purge_queue') is null");
     expect(m.split('\n')[0]).toBe("select set_config('lock_timeout', '3s', true);");
-  });
-});
-
-describe('P2-2 약관 제3판 — 공지 예정(초안)만, 시행 전환 금지', () => {
-  it('공지일·시행일이 정해지기 전에는 회원 약관 판이 2 그대로다', () => {
-    if (TERMS_NEXT.noticeIso === null || TERMS_NEXT.effectiveIso === null) {
-      expect(TERMS_NEXT.noticeIso).toBeNull();
-      expect(TERMS_NEXT.effectiveIso).toBeNull();
-      expect(LEGAL_VERSION, '제3판 날짜 없이 판을 올렸다').toBe(2);
-    } else {
-      const days = (Date.parse(TERMS_NEXT.effectiveIso) - Date.parse(TERMS_NEXT.noticeIso)) / 86_400_000;
-      expect(days, '불리한 변경(회수·소멸)은 30일 이상 공지').toBeGreaterThanOrEqual(30);
-    }
-  });
-  it('초안이 회수·소멸·반환·7일 공지를 담고, 아직 화면 약관에 들어가지 않았다', () => {
-    expect(ARTICLE_10_2).toHaveLength(6);
-    expect(ARTICLE_10_2.join(' ')).toMatch(/회수할 수 있습니다[\s\S]*소멸하며[\s\S]*7일 전에 공지/);
-    expect(CHANGES.join(' ')).toContain('30일 전에 공지');
-    expect(read('src/pages/legal/TermsOfService.tsx')).not.toContain('termsNextDraft');
   });
 });
 
