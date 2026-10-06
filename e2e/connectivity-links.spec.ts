@@ -17,6 +17,7 @@ import type { Page, Route } from '@playwright/test';
 import { stubLogin, dismissOverlays, stabilizeBackstack } from './_session';
 import { bootOwner, MOCK_DAY, MOCK_UID } from './_mockOwner';
 import { mockSchedules } from './_schedules';
+import { mockPosts, mockVenues } from './_mocks';
 
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 const POST_ID = '7e57c0de-0000-4000-8000-00000000c0a1';
@@ -154,7 +155,8 @@ test.describe('② 탭 → 다른 탭 → 뒤로가기: 떠난 자리로', () =>
   const goTab = (page: Page, t: string) => page.evaluate((tab) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: tab })), t);
   for (const [from, to] of [['home', 'live'], ['community', 'tools']] as const) {
     test(`🔴 ${from} → ${to} → back`, async ({ page }) => {
-      await mockSchedules(page); await stabilizeBackstack(page);
+      await mockSchedules(page); await mockPosts(page); await mockVenues(page); // 운영 글·매장이 0건이어도 긴 목록 — 스크롤 전제(y0>150)가 서도록
+      await stabilizeBackstack(page);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/'); await dismissOverlays(page);
       await page.waitForSelector('[data-tab="home"]', { timeout: 20_000 });

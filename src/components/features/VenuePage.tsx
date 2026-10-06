@@ -535,7 +535,7 @@ export default function VenuePage({
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div data-venue-tabbar className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
-          <div className="relative grid grid-cols-5 lg:flex">
+          <div role="tablist" aria-label="매장 상세 탭" className="relative grid grid-cols-5 lg:flex">
             <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
             {orderedTabs.map((t) => {
               const active = tab === t;
@@ -931,7 +931,7 @@ function VenueCommunitySection({ venueId, canManage, board }: { venueId: string;
     <div className="space-y-2.5">
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
         {(['chat', 'board'] as const).map((t) => (
-          <button key={t} type="button" onClick={() => setSub(t)}
+          <button key={t} type="button" onClick={() => setSub(t)} aria-pressed={sub === t}
             className={['hit flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
               sub === t ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
             {t === 'chat' ? '실시간 채팅' : '게시판'}
@@ -1227,7 +1227,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       {metrics.length > 1 ? (
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
           {metrics.map((id) => (
-            <button key={id} type="button" onClick={() => setMetric(id)}
+            <button key={id} type="button" onClick={() => setMetric(id)} aria-pressed={cur === id}
               className={['hit flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
                 cur === id ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {boardLabel(id, cfg)}

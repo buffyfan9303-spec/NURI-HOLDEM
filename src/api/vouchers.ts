@@ -73,13 +73,16 @@ export interface PlayHistory { venueId: string; venueName: string | null; buyinC
  *  label = 후보 목록에만 보이는 한 줄(예: '홍길동 → 길동이'). 없으면 display. */
 export interface TransferTarget {
   id: string; display: string; verified?: boolean; label?: string;
-  /** 가린 전화(010-****-5678) — 서버(20260925h)가 내 매장 손님 행에만 싣는다. null 이면 화면은 아무것도 그리지 않는다. */
+  /** 가린 전화(010-****-5678). 20261006s3 부터 닉네임 검색은 늘 null — 번호 조회(find_user_by_phone)·실명으로 찾은 내 손님 행에만 있다.
+   *  null 이면 화면은 아무것도 그리지 않는다. */
   phoneMasked?: string | null;
+  /** 가린 실명(김*혜) — 번호 조회(find_user_by_phone, 20261006s3)에만. 실명 전체는 어떤 RPC 도 주지 않는다. */
+  nameMasked?: string | null;
 }
-/** RPC 행 → 후보. phone_masked 는 빈 문자열도 null 로(화면이 빈 칸을 차지하지 않게). */
+/** RPC 행 → 후보. phone_masked·name_masked 는 빈 문자열도 null 로(화면이 빈 칸을 차지하지 않게). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const toTransferTarget = (r: any): TransferTarget =>
-  ({ id: r.id, display: r.display, verified: r.verified ?? undefined, phoneMasked: r.phone_masked || null });
+  ({ id: r.id, display: r.display, verified: r.verified ?? undefined, phoneMasked: r.phone_masked || null, nameMasked: r.name_masked || null });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(r: any): Voucher {
@@ -420,10 +423,14 @@ async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[
   if (error) throw new Error(error.message);
   return (data ?? []).map(toTransferTarget);
 }
+/** 번호 조회 하루 상한(20261006s3 — 매장 단위 KST 1만 회) 초과. 서버는 PT429(HTTP 429)로 거절한다. */
+export const PHONE_LOOKUP_LIMIT_MSG = '오늘 조회 한도를 넘었습니다. 내일 다시 시도해 주세요';
+/** 서버(20261006s3)가 받는 유일한 형식 — '010' + 숫자 8자리. 그 밖은 22023 이다. */
+export const isFullMobile = (s: string): boolean => /^010\d{8}$/.test(s);
 async function rawFindUserByPhone(phone: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_by_phone', { p_phone: phone });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(error.code === 'PT429' ? PHONE_LOOKUP_LIMIT_MSG : error.message);
   return (data ?? []).map(toTransferTarget);
 }
 
@@ -434,7 +441,8 @@ export const findUserByPhone = makeSearchCache(rawFindUserByPhone, (s) => s.repl
 
 // ── 이용권 받는 사람 검색(20260924k search_voucher_recipients) ─────────────────
 // 오너 2026-09-24: 업주가 닉네임이든 실명이든 넣으면 찾는다. 후보는 '실명 → 닉네임'(예: 홍길동 → 길동이).
-// 서버 규칙: 발급 권한자(can_manage_pos)만 · 2자 이상 · 8건. 닉네임은 부분 일치, 실명·옛 닉네임은 정확 일치.
+// 서버 규칙: 발급 권한자(can_manage_pos)만 · 2자 이상 · 8건. 닉네임은 부분 일치(전 회원), 실명·옛 닉네임은 정확 일치이고
+//   **이 매장 손님(출석·고객카드·예약)만** 찾는다(20261006s1 — 남의 매장 회원의 '실명 → 닉네임' 가명 해제를 막는다).
 // 실명은 **입력과 같을 때만** 실린다 — 부분 일치로 남의 실명이 드러나지 않는다(보안 6). 선택 확인용이다.
 export interface VoucherRecipient {
   userId: string;
@@ -444,7 +452,7 @@ export interface VoucherRecipient {
   verified: boolean;
   /** 무엇으로 찾았나 — 'old_nickname' 이면 입력은 옛 닉네임이고 nickname 이 지금 닉네임이다 */
   matched: 'nickname' | 'real_name' | 'old_nickname' | 'partial';
-  /** 가린 전화 — 이 매장 손님 행에만(20260925h). 그 밖은 null */
+  /** 가린 전화 — 실명 정확 일치로 찾은 이 매장 손님 행에만(20261006s3 — 닉네임·옛 닉네임으로 찾으면 내 손님이어도 null) */
   phoneMasked?: string | null;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

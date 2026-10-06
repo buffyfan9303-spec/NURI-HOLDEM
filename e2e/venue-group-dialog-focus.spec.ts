@@ -10,6 +10,7 @@
 // nuri-lead 가 프로덕션 빌드(4173)에서 돌린다.
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays, SUPABASE_URL, ANON_KEY } from './_session';
+import { mockGroup, MOCK_GROUP_ID } from './_mocks';
 
 async function anyVenueId(): Promise<string | null> {
   const res = await fetch(
@@ -20,20 +21,10 @@ async function anyVenueId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-/** 매장이 아닌 커뮤니티 그룹(딜러팀·동호회·유튜버) 하나 — GroupPage 로 열린다. */
-async function anyGroupId(): Promise<string | null> {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/venues?select=id&status=eq.active&kind=neq.venue&limit=1`,
-    { headers: { apikey: ANON_KEY } },
-  );
-  const rows = (await res.json()) as { id: string }[];
-  return rows[0]?.id ?? null;
-}
-
 test.describe('매장/그룹 상세 오버레이 — focus 계약(U06)', () => {
   test('🔴 매장 페이지가 열리면 focus 가 다이얼로그 안으로 들어간다(배경에 남지 않는다)', async ({ page }) => {
     const vid = await anyVenueId();
-    test.skip(!vid, '공개 매장이 없어 판단 불가(데이터 부재)');
+    expect(vid, '공개 매장이 하나도 없다 — 오픈 초기화 뒤에도 로티아레나 1곳은 남는다(예전엔 skip 이라 조용히 꺼졌다)').toBeTruthy();
 
     await stabilizeBackstack(page);
     await page.goto(`/?v=${vid}`);
@@ -63,7 +54,7 @@ test.describe('매장/그룹 상세 오버레이 — focus 계약(U06)', () => {
 
   test('🔴 ESC 로 매장 페이지를 닫으면 focus 가 BODY 가 아니라 열기 전 요소로 돌아간다', async ({ page }) => {
     const vid = await anyVenueId();
-    test.skip(!vid, '공개 매장이 없어 판단 불가(데이터 부재)');
+    expect(vid, '공개 매장이 하나도 없다 — 오픈 초기화 뒤에도 로티아레나 1곳은 남는다(예전엔 skip 이라 조용히 꺼졌다)').toBeTruthy();
 
     await stabilizeBackstack(page);
     await page.goto('/');
@@ -91,11 +82,10 @@ test.describe('매장/그룹 상세 오버레이 — focus 계약(U06)', () => {
   });
 
   test('🔴 그룹 페이지는 매장 페이지와 같은 dialog 계약을 쓴다(role·aria-modal·focus 진입)', async ({ page }) => {
-    const gid = await anyGroupId();
-    test.skip(!gid, '공개 커뮤니티 그룹이 없어 판단 불가(데이터 부재)');
-
+    // 그룹은 목으로 고정 — 오픈 초기화 뒤 운영 그룹이 0개여도 같은 판정(예전엔 skip).
+    await mockGroup(page);
     await stabilizeBackstack(page);
-    await page.goto(`/?v=${gid}`);
+    await page.goto(`/?v=${MOCK_GROUP_ID}`);
     // GroupPage 는 role="dialog" 가 예전엔 아예 없었다 — 있어야 getByRole 로 잡힌다.
     const dlg = page.getByRole('dialog');
     await expect(dlg).toBeVisible({ timeout: 15_000 });

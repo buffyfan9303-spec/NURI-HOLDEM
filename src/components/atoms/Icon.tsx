@@ -57,7 +57,7 @@ import {
   // ICON-3(2026-08-30) 이모지 전수 점검 소탕분
   Command,
   // GTO 탭 도구 카탈로그(2026-09-03, 오너 "아이콘팩에서 최대한 잘 맞는 걸로") — ToolsPanel TOOLS/LANES 전용
-  Grid3x3, ArrowUpFromLine, Swords, Dumbbell, Brain, BookA, BookX, ScanSearch, GitCompare, Percent,
+  ArrowUpFromLine, Swords, Dumbbell, Brain, BookA, BookX, GitCompare, Percent,
   ShieldCheck, Handshake, Sigma, Layers, Gauge, PiggyBank, TrendingUpDown, Coins, ListOrdered,
   ChartPie, Hourglass, Table, GraduationCap, Microscope, Calculator,
   // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴의 수제 SVG 5종을 팩으로 교체
@@ -91,18 +91,28 @@ export type IconName =
   // ICON-3 이모지 전수 점검 소탕분(2026-08-30)
   | 'command'
   // GTO 탭 도구 카탈로그(2026-09-03) — 도구 26종은 서로 다른 아이콘(ToolsPanel.icons.test.ts 가 게이트)
-  | 'grid-3x3' | 'arrow-up-from-line' | 'swords' | 'dumbbell' | 'brain' | 'book-a' | 'book-x' | 'scan-search'
+  | 'arrow-up-from-line' | 'swords' | 'dumbbell' | 'brain' | 'book-a' | 'book-x'
   | 'git-compare' | 'percent' | 'shield-check' | 'handshake' | 'sigma' | 'layers' | 'gauge' | 'piggy-bank'
   | 'trending-up-down' | 'coins' | 'list-ordered' | 'chart-pie' | 'hourglass'
   | 'table' | 'graduation-cap' | 'microscope' | 'calculator'
   // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴
-  | 'circle-user' | 'wrench' | 'shield' | 'sun' | 'moon';
+  | 'circle-user' | 'wrench' | 'shield' | 'sun' | 'moon'
+  // GTO '자주 쓰는 도구' 타일 시안(2026-10-06, 자체 제작) — 회청 선 + 파랑 포인트(--icon-accent, 없으면 currentColor)
+  | 'spot-cards' | 'range-grid' | 'push-fold' | 'hand-scan';
+
+// 스페이드 외곽(24 viewBox) — 수트 글리프와 도구 타일 글리프가 같은 모양을 쓴다(한 벌).
+const SPADE_D = 'M12 3C10.03 7.03 5.72 9.19 5.72 13.03c0 2.72 2.25 4.13 4.5 3.28-.38 1.78-1.22 2.82-2.53 3.75h8.62c-1.31-.93-2.15-1.97-2.53-3.75 2.25.85 4.5-.56 4.5-3.28C18.28 9.19 13.97 7.03 12 3Z';
+// 포인트 색 — 속성(fill="var()")이 아니라 style 로 준다(SVG 표현 속성의 var() 해석은 브라우저마다 갈린다).
+const ACCENT_FILL = { fill: 'var(--icon-accent, currentColor)', stroke: 'none' } as const;
+const ACCENT_SOLID = { fill: 'var(--icon-accent, currentColor)', stroke: 'var(--icon-accent, currentColor)' } as const;
+const ACCENT_STROKE = { stroke: 'var(--icon-accent, currentColor)' } as const;
+const DIM_FILL = { fill: 'currentColor', fillOpacity: 0.6, stroke: 'none' } as const;
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
   // ── 포커 도메인 글리프(자체 제작) ────────────────────────────────────────
   // 스페이드: gen-icons.mjs 512 좌표계 path 를 24 viewBox 로 ÷21.33 스케일(형태 단일 소스)
-  spade: <path d="M12 3C10.03 7.03 5.72 9.19 5.72 13.03c0 2.72 2.25 4.13 4.5 3.28-.38 1.78-1.22 2.82-2.53 3.75h8.62c-1.31-.93-2.15-1.97-2.53-3.75 2.25.85 4.5-.56 4.5-3.28C18.28 9.19 13.97 7.03 12 3Z" fill="currentColor" stroke="none" />,
+  spade: <path d={SPADE_D} fill="currentColor" stroke="none" />,
   'heart-suit': <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" fill="currentColor" stroke="none" />,
   diamond: <path d="M12 2.5 18.8 12 12 21.5 5.2 12Z" fill="currentColor" stroke="none" />,
   club: <><circle cx="12" cy="7.5" r="3.6" fill="currentColor" stroke="none" /><circle cx="7.2" cy="13.5" r="3.6" fill="currentColor" stroke="none" /><circle cx="16.8" cy="13.5" r="3.6" fill="currentColor" stroke="none" /><path d="M10.4 13.5c-.35 3.2-1.35 5.1-2.9 6.5h9c-1.55-1.4-2.55-3.3-2.9-6.5Z" fill="currentColor" stroke="none" /></>,
@@ -114,6 +124,17 @@ const PATHS: Partial<Record<IconName, ReactElement>> = {
   'all-in': <><path d="M12 11V3M8.5 6.5 12 3l3.5 3.5" /><ellipse cx="12" cy="16" rx="7" ry="2.6" /><path d="M5 16v2.4c0 1.44 3.13 2.6 7 2.6s7-1.16 7-2.6V16" /></>,
   'felt-table': <><ellipse cx="12" cy="12" rx="9.5" ry="6.5" /><ellipse cx="12" cy="12" rx="5.8" ry="3.3" /></>,
   'timer-poker': <><path d="M9.5 2h5" /><path d="M12 2v3" /><circle cx="12" cy="13.5" r="8" /><path d="M12 9.5v4l2.6 1.6" /></>,
+  // ── GTO 도구 타일 글리프(2026-10-06 오너 시안 '자주 쓰는 도구', 자체 제작) ─────────────
+  //   선은 currentColor(회청), 포인트만 --icon-accent(파랑). 변수가 없는 자리(도구 리스트 행)에서는 currentColor 한 색으로 떨어진다.
+  //   ⚠ 겹친 카드는 mask/clipPath(id) 대신 **뒤 카드의 보이는 선만** 그렸다 — 탭 keep-alive 로 display:none 인 판의 id 참조가 끊기는 부류를 피한다.
+  //   크기: 2026-10-06 검토 P3 — 카드 두 장의 높이를 다른 세 글리프(약 19/24)에 맞추고 스페이드를 키웠다(0.34→0.44 · 0.36→0.46).
+  'spot-cards': <><path d="M7.28 18.12 L6.13 18.37 L5.53 18.31 L4.96 18.07 L4.5 17.66 L4.18 17.15 L1.62 6.02 L1.66 5.41 L1.9 4.84 L2.3 4.38 L2.83 4.06 L9.4 2.52 L10.01 2.48 L10.61 2.63 L11.13 2.96 L11.52 3.43" /><rect x="9.99" y="5.48" width="10.81" height="15.18" rx="1.95" transform="rotate(9 15.39 13.06)" /><path d={SPADE_D} transform="translate(15.39 13.29) rotate(9) scale(.44) translate(-12 -11.5)" style={ACCENT_FILL} /></>,
+  'range-grid': <>{[0, 1, 2].flatMap((r) => [0, 1, 2, 3].map((c) => {
+    const hot = (r === 0 && c === 3) || (r === 2 && c === 1);
+    return <rect key={`${r}${c}`} x={2.35 + c * 5.1} y={4.9 + r * 5.1} width="4" height="4" rx=".9" style={hot ? ACCENT_FILL : DIM_FILL} />;
+  }))}</>,
+  'push-fold': <><path d="M12 2.2 15.6 6.6H8.4Z" style={ACCENT_SOLID} /><path d="M12 6.6v4.6" style={ACCENT_STROKE} /><path d="M12 11.2c0 2.8-4.2 2.4-5.4 5.7M12 11.2c0 2.8 4.2 2.4 5.4 5.7" /><circle cx="5.4" cy="19" r="2.4" /><circle cx="18.6" cy="19" r="2.4" /></>,
+  'hand-scan': <><path d="M17.5 11V4.5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h5.5" /><path d={SPADE_D} transform="translate(10.75 10.9) scale(.46) translate(-12 -11.5)" fill="currentColor" stroke="none" /><circle cx="16.6" cy="17" r="3.4" style={ACCENT_STROKE} /><path d="m19.1 19.5 2.5 2.5" style={ACCENT_STROKE} /></>,
   // ── 리디자인 스파인 공통 글리프(자체 제작) ────────────────────────────────
   // 2026-09-24 — 여기 있던 comment·eye·bookmark·flame·target·wallet·gift·check-double·map-pin·log-out 과 위 trophy 는 지웠다.
   //   아래 Icon() 은 LUCIDE 를 PATHS 보다 먼저 보므로 같은 이름이 LUCIDE 에 있으면 이 칸은 **한 번도 그려지지 않는다**(죽은 바이트).
@@ -183,14 +204,12 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   // 두부로 떨어질 수 있다 — 유저의 99% 가 모바일이다). 뜻은 그대로 두고 글리프만 SVG 로 옮긴다.
   command: Command,              // ⌘ 검색 단축키 표기
   // ── GTO 탭 도구 카탈로그(2026-09-03) — 도구 아이콘은 ToolsPanel TOOLS 에서 이름으로 참조 ────
-  'grid-3x3': Grid3x3,                 // 프리플랍 레인지 차트(13×13 매트릭스)
-  'arrow-up-from-line': ArrowUpFromLine, // 푸시·폴드 차트(라인에서 올인으로 밀어 올림)
+  'arrow-up-from-line': ArrowUpFromLine, // 출처 배지(tools/SourceBadge) — 푸시·폴드 도구 타일은 2026-10-06 부터 'push-fold' 글리프
   swords: Swords,                      // 어그레션 차트(공격 빈도)
   dumbbell: Dumbbell,                  // 프리플랍 트레이너(반복 훈련)
   brain: Brain,                        // 포스트플랍 트레이너(상황 판단 퀴즈)
   'book-a': BookA,                     // 홀덤 용어사전(사전 = 책 + A)
   'book-x': BookX,                     // 오답 노트(책 + X)
-  'scan-search': ScanSearch,           // GTO 핸드 분석(내 패 정밀 스캔)
   'git-compare': GitCompare,           // 레인지 vs 레인지(양쪽 비교)
   percent: Percent,                    // 팟 오즈(필요 승률 %)
   'shield-check': ShieldCheck,         // MDF·블러프(최소 방어)

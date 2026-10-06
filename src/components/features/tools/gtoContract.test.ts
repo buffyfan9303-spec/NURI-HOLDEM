@@ -406,7 +406,26 @@ describe('NURI SPOT — GTO 홈 통합', () => {
       const card = PANEL.slice(at, at + 9000);
       expect(card, '칸(div)이 h-full 이 아니면 버튼이 행 높이를 못 받는다').toMatch(/<div className="relative h-full">/);
       expect(card, '버튼이 h-full 이 아니면 한 줄 제목 타일만 낮아진다').toMatch(/data-testid=\{testId\}[^>]*\n\s*className="[^"]*\bflex h-full w-full/);
-      expect(card, '제목 행간이 고정이어야 타일 높이가 폭마다 흔들리지 않는다').toMatch(/flex-col justify-center text-sm leading-5/);
+      // 2026-10-06 시안(gto-tiles-1006): 행간 20 → 18px 고정(두 줄 '프리플랍 / 레인지 차트' 가 시안처럼 촘촘하게). 고정이라는 계약은 그대로다.
+      expect(card, '제목 행간이 고정이어야 타일 높이가 폭마다 흔들리지 않는다').toMatch(/flex-col justify-center text-sm leading-\[18px\]/);
+    });
+
+    // 2026-10-06 오너 시안 "자주 쓰는 도구 — 박스·아이콘 거의 똑같이 · 필요한 아이콘 제작".
+    //   기본 4개는 자체 글리프(회청 선 + 파랑 포인트). 포인트 색은 타일 격자의 --icon-accent 에서만 켜지고,
+    //   변수가 없는 리스트 행에서는 currentColor 로 떨어져야 한다(한 색 리스트에 파랑 점이 튀지 않게).
+    it('자주 쓰는 도구 기본 4개는 시안 글리프 · 포인트 색은 격자 변수에서만 켜진다', () => {
+      const ICON = readFileSync(join(ROOT, 'src/components/atoms/Icon.tsx'), 'utf-8');
+      const want: Record<string, string> = { spot: 'spot-cards', range: 'range-grid', pushfold: 'push-fold', gto: 'hand-scan' };
+      for (const [k, icon] of Object.entries(want)) {
+        expect(PANEL, `${k} 타일 아이콘이 시안 글리프(${icon})가 아니다`).toMatch(new RegExp(`\\{ key: '${k}',[^\\n]*icon: '${icon}' \\}`));
+        expect(ICON, `${icon} 글리프가 Icon 에 없다`).toMatch(new RegExp(`'${icon}': <`));
+      }
+      expect(ICON, '포인트 색에 currentColor 폴백이 없으면 리스트 행에서 포인트가 사라진다(투명)').toContain("'var(--icon-accent, currentColor)'");
+      const gridAt = PANEL.indexOf('const grid = (items');
+      expect(PANEL.slice(gridAt, gridAt + 900), '타일 격자가 포인트 색(--icon-accent)을 다크·라이트 두 벌로 정하지 않는다')
+        .toMatch(/\[--icon-accent:#[0-9A-F]{6}\][\s\S]*\[html\.light_&\]:\[--icon-accent:#[0-9A-F]{6}\]/);
+      expect(PANEL.slice(PANEL.indexOf('const list = (items'), PANEL.indexOf('const list = (items') + 600), '리스트에 포인트 색을 켜면 한 색 리스트에 파랑이 튄다')
+        .not.toContain('--icon-accent');
     });
   });
 

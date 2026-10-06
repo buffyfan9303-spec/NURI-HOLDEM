@@ -175,8 +175,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'tda', cat: 'rules', name: '2026 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2026 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
   // ── 학습 — 차트·트레이너 ──
   { key: 'drill', cat: 'train', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
-  { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
-  { key: 'pushfold', cat: 'explore', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
+  { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'range-grid' },
+  { key: 'pushfold', cat: 'explore', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'push-fold' },
   { key: 'trainer', cat: 'train', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
   { key: 'postflop', cat: 'train', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설', icon: 'brain' },
   // 오답 노트(2026-09-03, GKR-2 잔여분) — 두 트레이너의 오답 큐를 목록으로. 아이콘 = lucide book-x
@@ -193,9 +193,9 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
   //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 4개'·'칩 5개' 계약이 깨진다.
   //     대신 카탈로그 위에 대표 카드(SpotHeroCard)를 따로 세워 우선순위를 준다.
-  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'cards' },
+  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spot-cards' },
   { key: 'replay', cat: 'review', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
-  { key: 'gto', cat: 'review', name: 'GTO 핸드 분석', desc: '내 패 승률과 참고 액션', keywords: '프리/포스트플랍 승률·휴리스틱 참고 액션', icon: 'scan-search' },
+  { key: 'gto', cat: 'review', name: 'GTO 핸드 분석', desc: '내 패 승률과 참고 액션', keywords: '프리/포스트플랍 승률·휴리스틱 참고 액션', icon: 'hand-scan' },
   { key: 'rvr', cat: 'explore', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
   // ── 계산기 — 수치 판단 ──
   { key: 'pot', cat: 'review', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
@@ -436,6 +436,7 @@ export default function ToolsPanel() {
     // 계속 관찰한다 — 판이 다시 보일 때마다 숨은 동안 도착한 딥링크를 연다. 미리 받기는 처음 한 번만.
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
+      setLayoutFavs(favsRef.current); // 탭 재진입 — 숨은 동안 바뀐 즐겨찾기를 배치에 반영(같은 참조면 리렌더 없음)
       const k = deepLink.current;
       if (k) { deepLink.current = null; setActive(k); }
       if (preloaded) return;
@@ -509,9 +510,15 @@ export default function ToolsPanel() {
       toast.show(`즐겨찾기는 최대 ${FAV_MAX}개입니다. 가장 오래된 '${droppedName}'${josa(droppedName, '을')} 뺐습니다.`, 'info');
     }
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
+    favsRef.current = next;
     setFavs(next);
   };
-  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
+  // 🔴 2026-10-06 M10-01: 별을 누르는 순간 타일·행의 **자리**가 바뀌면 손가락 아래에 다른 도구의 별이 와 엉뚱한 도구가 켜졌다(첫 칸 순간이동).
+  //   그래서 화면의 배치(타일 4칸·'즐겨찾기 더'·카탈로그에서 뺄 도구)는 layoutFavs 로 **고정**하고, 별 켜짐(favs)만 바로 반영한다.
+  //   고정은 이 판이 다시 보일 때(탭 재진입·마운트) 풀려 새 즐겨찾기가 앞으로 온다 — 아래 IntersectionObserver.
+  const favsRef = useRef(favs);
+  const [layoutFavs, setLayoutFavs] = useState(favs);
+  const favTools = layoutFavs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();
@@ -540,10 +547,14 @@ export default function ToolsPanel() {
   // 행 높이는 행마다 정해진다(2026-10-05 오너 "GTO 박스가 너무 커"). 예전엔 모든 행을 가장 높은 타일에 맞춰서
   //   320 에서 22개 타일이 전부 88px 이 됐다. 같은 행의 두 칸은 그리드 기본 stretch 로 여전히 같은 높이다.
   // 타일은 '자주 쓰는 도구' 4칸만(2026-10-05 오너 시안) — PC 에서도 4칸이라 sm 부터 한 줄 4열.
+  // 2026-10-06 오너 시안(gto-tiles-1006): 짙은 남색 면 + 아주 옅은 위→아래 그라데이션 · 1px 푸른 회색 테두리 · 회청 선 아이콘 + 파랑 포인트.
+  //   색은 이 격자 한 곳의 변수(--gt-*·--icon-accent)로 두고 라이트는 같은 구조의 밝은 면·진한 선으로 바꾼다. 실측 대비는 PR 본문.
   const grid = (items: typeof TOOLS) => (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4
+      [--gt-top:#1B293B] [--gt-bot:#152233] [--gt-edge:#435A7A] [--gt-edge-top:#4C6285] [--gt-edge-hi:#6A86AC] [--gt-ink:#C6D3EA] [--icon-accent:#5A9AF8]
+      [html.light_&]:[--gt-top:#FFFFFF] [html.light_&]:[--gt-bot:#F3F7FC] [html.light_&]:[--gt-edge:#B5C8E2] [html.light_&]:[--gt-edge-top:#A3B9D8] [html.light_&]:[--gt-edge-hi:#7F9CC4] [html.light_&]:[--gt-ink:#4C6282] [html.light_&]:[--icon-accent:#2563D9]">
       {items.map((t) => (
-        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
+        <ToolCard key={t.key} testId={`tool-${t.key}`} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
       ))}
     </div>
@@ -647,13 +658,13 @@ export default function ToolsPanel() {
           ⚠ 레인 머리줄은 items-center 다(2026-10-02 정렬 전수) — 제목 h2 가 아이콘으로 시작하는 inline-flex 라
             items-baseline 이면 기준선이 아이콘 바닥으로 잡혀 옆 'N개' 가 2px 아래 앉는다. */}
       {!hits && showTiles && (
-        <section data-main-enter data-testid="tools-featured" className="space-y-2">
-          <div data-lane-head="" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
-            <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
-              <Icon name={favTools.length > 0 ? 'star-fill' : 'trophy'} size={13} className="text-ink-muted" aria-hidden /> 자주 쓰는 도구
-            </h2>
-            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{tileTools.length}개</span>
-            <span className="min-w-0 text-2xs text-ink-secondary">{favTools.length >= 4 ? '즐겨찾기한 도구' : favTools.length > 0 ? '즐겨찾기 + 기본 도구' : '스팟 · 차트 · GTO 분석 바로가기'}</span>
+        // 2026-10-06 오너 시안(gto-tiles-1006): 머리줄은 아이콘 없이 굵은 제목 18 · 회색 개수 14 · 흐린 부제 12.75 를 **기준선**에 맞춘 한 줄
+        //   (아이콘이 없어 items-baseline 이 안전하다 — 위 2026-10-02 주석의 2px 어긋남은 아이콘 시작 h2 에서만 난다). 제목↔카드 16px.
+        <section data-main-enter data-testid="tools-featured" className="space-y-[14px]">
+          <div data-lane-head="" className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 pb-[2px] pl-[4px]">
+            <h2 className="text-[18px] leading-6 font-bold tracking-tight text-ink-primary">자주 쓰는 도구</h2>
+            <span className="text-[14px] font-semibold tabular-nums text-ink-muted">{tileTools.length}개</span>
+            <span className="min-w-0 text-xs text-ink-muted">{favTools.length >= 4 ? '즐겨찾기한 도구' : favTools.length > 0 ? '즐겨찾기 + 기본 도구' : '스팟 · 차트 · GTO 분석 바로가기'}</span>
           </div>
           {grid(tileTools)}
         </section>
@@ -739,9 +750,6 @@ export default function ToolsPanel() {
   );
 }
 
-type TileTone = 'violet' | 'indigo' | 'fuchsia' | 'cyan';
-/** 레인 → 타일 색(v6.3): 차트 violet · 트레이닝 fuchsia · 분석 cyan · 계산기 indigo (emerald 는 라이브 신호색이라 제외) */
-const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia', analyze: 'cyan', calc: 'indigo', ops: 'indigo' };
 /**
  * NURI SPOT 대표 카드 — GTO 홈의 첫 블록.
  *
@@ -800,8 +808,8 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             gto 내에 있는 아이콘은 지금 그대로 유지."** → 이 배너만 앱 로고 심볼로 되돌린다.
             같은 날 1차에서 내가 `cards` 로 바꿨던 자리다(이유: 헤더에 같은 마크가 있어 '앱 이름'처럼
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
-            ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
-              그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
+            ⚠ 도구 카탈로그 타일 아이콘(TOOLS 의 icon)은 이 배너와 따로 간다 — 둘을 같이 맞추려 들지 마라.
+              (2026-10-06 오너 '자주 쓰는 도구' 시안으로 그 4개는 자체 글리프 spot-cards·range-grid·push-fold·hand-scan 이 됐다.) */}
         {/* 2026-10-06 오너 C안 로고: 원형 남색 배지를 걷고 배경 없는 골드 다이아(알파 기준으로 잘린 이미지, 28×40).
             높이 40 = 종전 배지 높이(제목+안내 두 줄을 받친다). */}
         <BrandDiamond width={28} height={40} className="row-span-2 h-10 shrink-0 max-[359px]:row-span-1" />
@@ -832,13 +840,13 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
   );
 }
 
-function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onToggleFav, testId, tone = 'violet' }: {
+function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onToggleFav, testId }: {
   name: string;
   /** 제목의 줄바꿈 지점(TITLE_LINES). 없으면 한 줄로 그린다. 합치면 `name` 과 같아야 한다. */
   lines?: readonly [string, string];
   /** 카드에 **그리지 않는다**(2026-09-18 오너: 설명줄 전체 삭제). PC 호버 툴팁(title)으로만 남긴다 —
    *  데이터 자체는 TOOLS 에 그대로 있어 검색(`t.desc`)과 다른 두 화면(StoreToolsPanel·CalendarToolsPanel)이 계속 쓴다. */
-  desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
+  desc: string; icon: IconName; onClick: () => void; testId?: string;
   /** 누르는 순간 청크 미리 받기(PRELOAD) — 뗄 때(click)까지 ~100ms 를 번다. */
   onPointerDown?: () => void;
   fav?: boolean; onToggleFav?: () => void;
@@ -846,34 +854,22 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
   // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
   return (
     <div className="relative h-full">
-      {/* 세로 타일(2026-09-03 오너: "설명이 너무 길고 불완전") — 아이콘을 위로 올려 텍스트 폭을 106px → 155px(390px 2열)로 넓히고,
-          설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 행 stretch + h-full 이 맞춘다.
-          아이콘 행 오른쪽 자리는 즐겨찾기 별(형제 버튼, 우상단). 레퍼런스 aura-ui 피처 카드 문법(아이콘 타일 위 · 제목 · 한 줄 설명). */}
-      {/* 🔴 2026-09-18 오너 지시로 **가로 배치**가 됐다 — 아이콘 왼쪽, 제목 오른쪽, 설명줄 없음.
-          예전 주석(세로 타일·설명 ≤13자)은 그 지시로 폐기됐다. 남은 계약은 이것뿐이다:
-            · 같은 행의 카드들은 **같은 높이**다(오너: "열을 맞춰서 정렬") — 그리드 행 stretch + h-full 이 맞춘다.
-              2026-10-05 부터 2줄 자리 예약은 없다(한 줄 제목만 있는 행이 쓸데없이 높았다). 한 줄 제목은 칸 안에서
-              **세로 가운데**(flex-col justify-center + 버튼 items-center)라 아이콘과 같은 중심선에 앉는다.
-            · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이) — 단 **70px 에 한 줄로
-              들어가는 이름은 표에 없다**(TITLE_LINES 주석의 실측표). 그 이름들은 한 줄이다.
-            · 오른쪽 `pr-7` 은 오른쪽 즐겨찾기 별(h-8 w-8 · right-1, 별 글리프 14px 이 오른쪽 13~27px 에 그려진다)을 피하는 자리다.
-          ⚠ `flex-wrap` + 제목 칸 `flex‑[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
-            확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
-            그때 제목 칸이 **스스로 아이콘 아래로 내려가** 카드 전폭을 쓴다(예전 세로 배치로 자동 복귀).
-            실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.
-          ⚠ `aria-label={name}` — 두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히게 한다.
-          ⚠ `title={desc}` — 화면에서 뺀 설명을 **버리지는 않는다**(PC 호버 툴팁). 검색은 계속 t.desc 를 읽는다. */}
-      {/* 🔴 2026-10-05 오너 "GTO 쪽은 박스가 너무 커 — 위아래 여백 재판단"(명세 typo-spacing-1005 §2-2 v2):
-            세로 10→8 · 아이콘 32→28 · 별 자리 32→28 · 제목 칸 basis 4rem→3rem · 2줄 자리 예약 제거 · 제목 행간 16px 고정.
-            320 에서 제목 칸(58px)이 4rem(64px)보다 좁아 **제목이 아이콘 아래로 내려가** 타일이 88px 였다 — basis 를 줄여 같은 줄에 둔다.
-            실측(가짜 env 빌드): 54/88 → 46(한 줄 제목)/50(두 줄 제목), 320 카탈로그 문서 길이 −472px 추정. */}
+      {/* 남은 계약(2026-09-18 가로 배치 이후):
+            · 같은 행의 카드는 **같은 높이**(오너 "열을 맞춰서 정렬") — 그리드 행 stretch + 칸·버튼 h-full. 한 줄 제목은 세로 가운데.
+            · 꺾을 수 있는 자리는 TITLE_LINES 가 정한다(70px 에 한 줄로 드는 이름은 표에 없다 — 표 주석의 실측표).
+            · 오른쪽 여백(pr)은 형제 별 버튼 자리다. ⚠ aria-label={name}(쪼갠 제목을 한 낱말로) · title={desc}(화면에서 뺀 설명은 툴팁으로 남긴다).
+          (예전 세로 타일·flex-wrap 확대 폴백·아이콘 상자 주석은 2026-09-20 '200% 확대 기준 폐기'와 10-06 시안으로 끝났다 — 이력은 git.) */}
+      {/* 🔴 2026-10-06 오너 시안(gto-tiles-1006) "박스 여백·아이콘·박스 크기·디자인 거의 똑같이": 배경 상자 없는 선 아이콘(28px, 선 1.5) ·
+            굵은 흰 제목 · 오른쪽 끝 빈 별. 시안(카드 높이 대 제목 0.23 · 아이콘 0.4 · 별 0.22)을 390 2열(175px)에 옮기면 높이 64 ·
+            제목 15 · 아이콘 26~28 · 별 14 다. 가로는 시안 비율(왼쪽 여백 57/217)을 그대로 쓰면 '푸시 · 폴드 차트'(92px)가 두 줄이 돼서
+            왼쪽 13 · 아이콘↔제목 8 · 별 자리 30 으로 줄였다(제목 칸 94px). 좁은 폭(<390 · <360)은 여백·아이콘·글자를 한 단씩 줄인다. */}
       <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
-        className="surface-brass-tile flex h-full w-full min-h-[68px] flex-wrap items-center gap-x-1.5 gap-y-1 rounded-aura border border-border-strong/40 card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
-          <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
-        </span>
+        className="flex h-full w-full min-h-[64px] items-center gap-[8px] rounded-[10px] border border-[var(--gt-edge)] border-t-[var(--gt-edge-top)] bg-[var(--gt-bot)] py-[12px] pl-[12px] pr-[34px] text-left transition-colors hover:border-[var(--gt-edge-hi)]
+          max-[389px]:pl-[10px] max-[359px]:gap-[6px] max-[359px]:pl-[8px] sm:min-h-[72px] sm:gap-[16px] sm:pl-[20px] sm:pr-[48px]"
+        style={{ backgroundImage: 'linear-gradient(180deg, var(--gt-top) 0%, var(--gt-bot) 55%)' }}>
+        <Icon name={icon} size={26} strokeWidth={1.5} className="shrink-0 text-[var(--gt-ink)] max-[389px]:size-[24px] max-[359px]:size-[20px] sm:size-[32px]" aria-hidden />
         {/* 320 에서 글자 칸이 60px 남짓이라 15px 제목이 세 줄(타일 82px)이 됐다(2026-10-05 실측) — 360 미만만 한 단 작게. */}
-        <span className="flex min-w-0 flex-[1_1_3rem] flex-col justify-center text-sm leading-5 font-bold text-ink-primary max-[359px]:text-xs max-[359px]:leading-4">
+        <span data-tile-title="" className="flex min-w-0 flex-1 flex-col justify-center text-sm leading-[18px] font-bold text-ink-primary max-[389px]:text-[14px] max-[359px]:text-xs max-[359px]:leading-4 sm:text-base sm:leading-[22px]">
           {/* 2026-10-05 독립 검토 P3: 줄바꿈표(TITLE_LINES)는 이제 **꺾을 수 있는 자리**만 정한다 — 두 토막을 각각 안 끊기게 묶고 사이는 공백이라
               폭이 되면 한 줄('푸시 · 폴드 차트'), 안 되면 그 자리에서 꺾인다. 토막 하나가 칸보다 넓으면(320 의 '레인지 차트') inline-block max-w-full 이라
               토막 안에서도 접힌다(nowrap 이면 잘렸다 — e2e typography-regression 320). 종전엔 block 두 개라 390 처럼 넓은 칸에서도 늘 두 줄이었다. */}
@@ -886,19 +882,16 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
           opacity-30 은 비텍스트 대비(WCAG 1.4.11) 미달 — 색 토큰만으로 켬/끔 구분(채운 별+accent vs 윤곽 별+muted). */}
       {onToggleFav && (
         <button type="button" onClick={onToggleFav} aria-label={fav ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`} aria-pressed={fav}
-          // [B] 34×34px 미달 — .hit 로 44px 확보하려 했으나 실측(elementFromPoint)에서 실패했다:
-          //   `.hit{position:relative}`(index.css, components 레이어)와 `absolute` 유틸(utilities 레이어,
-          //   같은 특이도 0,1,0)이 같은 position 속성을 놓고 부딪히는데 이 저장소 빌드에서는 `.hit` 이 이겨
-          //   버튼이 `position:relative` 로 떨어지며 `right-1 top-1` 배치가 깨졌다 — 카드 밑에 깔린 본문
-          //   버튼이 시각적 중심을 가로챘다(2026-09-19 스윕 재실측 실제 재현, ImageLightbox.tsx:150 에
-          //   이미 같은 함정이 기록돼 있었다 — absolute 요소에는 `.hit` 대신 이 방식을 쓴다).
-          //   inline style 로 position 을 최우선 순위로 못박아 `.hit` 의 확장(::after)은 그대로 살리고
-          //   자기 배치만 되찾는다 — index.css 를 고치지 않는 최소 수정.
+          // position 은 inline style — 예전 .hit(position:relative)과 부딪혀 absolute 가 지던 함정의 흔적(지금은 .hit 이 없어도 무해하다).
           style={{ position: 'absolute' }}
-          // inset-y-0 + my-auto: 높이가 고정(h-8)이라 transform 없이 세로 가운데 — 타일이 46/50 으로 낮아져 top-1 이면 별이 아이콘보다 3~5px 위에 떴다.
-          className={['hit inset-y-0 right-1 my-auto flex h-8 w-8 items-center justify-center',
-            fav ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-          <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
+          // inset-y-0 + my-auto: 높이가 고정이라 transform 없이 세로 가운데. 2026-10-06 시안: 별 글리프 14(PC 18) · 회청 빈 별 / 켜지면 파랑 채운 별.
+          //   🔴 2026-10-06 검토 P2: 예전엔 .hit 의 44px 확장(::after)이 카드 쪽으로 14px 나와 **제목 끝 글자('트'·'석')를 누르면 별이 켜지고 도구가 안 열렸다.**
+          //     → 확장을 쓰지 않고 실제 박스를 카드 오른쪽 끝(right-0)에 34×44(PC 48×44)로 둔다. 카드 본문의 오른쪽 여백(pr-[34px]/sm:pr-[48px])이
+          //       정확히 이 박스 폭이라 제목 글자와 별 눌림 영역이 겹치지 않는다(e2e gto-catalog-tiles 'CDP 터치'). 글리프는 오른쪽 12px(PC 16px).
+          //     .hit 을 다시 붙이지 마라 — 확장이 가운데 기준이라 제목 쪽과 카드 밖(가로 잘림) 양쪽으로 나간다. 위치도 inline style 이 아니어도 된다.
+          className={['inset-y-0 right-0 my-auto flex h-[44px] w-[34px] items-center justify-end pr-[12px] sm:w-[48px] sm:pr-[16px]',
+            fav ? 'text-[var(--icon-accent)]' : 'text-[var(--gt-ink)] hover:text-ink-primary'].join(' ')}>
+          <Icon name={fav ? 'star-fill' : 'star'} size={14} strokeWidth={1.8} className="sm:size-[18px]" aria-hidden />
         </button>
       )}
     </div>
