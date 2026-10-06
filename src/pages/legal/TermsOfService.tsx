@@ -24,6 +24,7 @@
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
 import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { TERMS_SUPPLEMENT_NOTICE_DATE, TERMS_SUPPLEMENT_EFFECTIVE_DATE } from '../../lib/legalDeploy';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -78,6 +79,16 @@ export default function TermsOfService() {
       </div>
 
       <RevisionNotice />
+
+      {/* 2026-10-06 리드 결정 ① — 제2판 보완(새 조항)은 약관 제16조② 에 따라 7일 공지 뒤 적용. 날짜는 legalDeploy.ts(배포일 기준) 한 곳. */}
+      <div data-testid="terms-supplement-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+        <p className="text-xs font-bold text-ink-primary">보완 안내 — {TERMS_SUPPLEMENT_NOTICE_DATE} 공지 · {TERMS_SUPPLEMENT_EFFECTIVE_DATE}부터 적용</p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          제2조제1호·제3조제1항(제공 서비스 목록)·제3조제6항(그룹 매니저의 조치)·제3조제7항(AI 결과는 참고용)과 제5조제7항부터 제10항(권리침해 게시물의 삭제 요청·임시조치·통지)은
+          {' '}{TERMS_SUPPLEMENT_EFFECTIVE_DATE}부터 적용합니다. 그 전까지 제3조제1항은 종전 문안(홀덤 매장 및 토너먼트 정보 제공, 이용자 간 커뮤니티 게시판, 중고 물품 거래 중개 게시판 서비스)이 적용되며,
+          회원에게 불리한 내용은 없습니다. 자세한 내용은 문서 끝의 「부칙 — 개정 이력」에 있습니다.
+        </p>
+      </div>
 
       <Article n={1} title="목적">
         <Para>
@@ -229,7 +240,7 @@ export default function TermsOfService() {
           '회사는 여러 사람으로부터 재물이나 재산상의 이익을 모아 우연적 방법으로 득실을 결정하는 사행행위를 하지 않으며, 사행행위영업을 영위하지 않습니다(「사행행위 등 규제 및 처벌 특례법」 제2조).',
           '회사는 이용자에게 배당·수당·상금을 지급하지 않으며, 대회 참가비를 수취하지 않습니다. 참가비의 수취와 상금의 지급은 각 매장이 자신의 책임과 계산으로 수행합니다.',
           '회원은 서비스를 이용함에 있어 대한민국 법령을 준수할 것을 확인합니다. 회원이 서비스 밖에서 행한 도박·사행행위 및 그로 인한 형사상·민사상 책임은 전적으로 해당 회원과 그 행위가 이루어진 장소의 운영주체에게 있으며, 회사는 이에 관여하지 않습니다.',
-          '만 19세 미만인 사람은 서비스를 이용할 수 없습니다. 회원은 가입할 때 만 19세 이상임을 확인하며, 휴대폰 본인인증에서 만 19세 미만으로 확인되면 회사는 본인인증을 거절하고 그 인증 정보를 저장하지 않습니다. 회사는 회원이 만 19세 미만임을 알게 된 경우 이용계약을 해지할 수 있습니다.',
+          '만 19세 미만인 사람은 서비스를 이용할 수 없습니다. 회원은 가입할 때 만 19세 이상임을 확인하며, 휴대폰 본인인증에서 만 19세 미만으로 확인되면 회사는 본인인증을 거절하고 그 인증 정보를 저장하지 않으며, 그 계정의 이용을 제한합니다. 회사는 회원이 만 19세 미만임을 알게 된 경우 이용계약을 해지할 수 있습니다.',
           '회사는 도박 문제로 어려움을 겪는 이용자를 위하여 한국도박문제예방치유원 헬프라인 1336(24시간·무료)을 서비스 내에 상시 안내합니다.',
         ]} />
       </Article>

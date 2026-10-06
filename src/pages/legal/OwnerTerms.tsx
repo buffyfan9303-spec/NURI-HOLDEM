@@ -9,7 +9,7 @@
 // 공개 주소: /legal/owner-terms.html (scripts/gen-legal.mjs 가 이 컴포넌트를 그대로 찍는다 — 텍스트 원본은 여기 하나).
 // ⚠ 법률 검토 전 초안을 리드·오너가 확정하는 문서다(오너 몫 O-5). 바꾸면 OWNER_TERMS_VERSION 을 올리고 부칙에 적는다.
 // ⚠ 매장 이용권 단위(1T=1만원) 등 이용권 문구는 유권해석 회신 뒤 정한다(오너 결정 (B)) — 여기에는 발행 원칙만 적는다.
-import { OWNER_TERMS_EFFECTIVE_DATE, OWNER_TERMS_VERSION } from '../../lib/legalVersion';
+import { OWNER_TERMS_EFFECTIVE_DATE, OWNER_TERMS_VERSION } from '../../lib/legalDeploy';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

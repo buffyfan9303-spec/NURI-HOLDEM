@@ -2,11 +2,12 @@
 // 실행: npx vitest run src/pages/legal/legal2-1006.contract.test.ts
 // 음성 대조(실행 기록은 PR 본문): ① TierLeaderboard 버튼 disabled 식에서 `|| !vMasked` 를 지우면 P1-3 가 빨개진다
 //   ② PrivacyPolicy 제9조에 옛 문장 '회사는 회원의 휴대전화번호를 매장에 제공하지 않습니다.' 를 되살리면 P1-2 가 빨개진다
-//   ③ legalVersion TERMS_NEXT.noticeIso 만 채우고 LEGAL_VERSION 을 그대로 두면 P2-2 가 빨개진다.
+//   ③ legalDeploy TERMS_NEXT.noticeIso 만 채우고 LEGAL_VERSION 을 그대로 두면 P2-2 가 빨개진다.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { LEGAL_VERSION, TERMS_NEXT, OWNER_TERMS_VERSION } from '../../lib/legalVersion';
+import { LEGAL_VERSION } from '../../lib/legalVersion';
+import { TERMS_NEXT, OWNER_TERMS_VERSION, LEGAL_DEPLOY_ISO, TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO, PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO, OWNER_TERMS_EFFECTIVE_DATE } from '../../lib/legalDeploy';
 import { ARTICLE_10_2, CHANGES } from '../../lib/termsNextDraft';
 
 const ROOT = path.join(__dirname, '../../..');
@@ -89,7 +90,7 @@ describe('P1-5 매장 운영자 이용약관(처리위탁)', () => {
     for (const f of ['_owner_terms_purge_on_withdraw()', '_rv_require_id_consent()', '_expire_rank_verification_idcards()']) {
       expect(m).toContain(`revoke all on function public.${f} from public, anon, authenticated;`);
     }
-    expect((m.match(/set search_path = public, pg_temp/g) ?? []).length).toBe(4);
+    expect((m.match(/set search_path = public, pg_temp/g) ?? []).length).toBe(5);
     expect(m).toContain("to_regclass('public.storage_purge_queue') is null");
     expect(m.split('\n')[0]).toBe("select set_config('lock_timeout', '3s', true);");
   });
@@ -128,5 +129,34 @@ describe('P2-3·P2-4·P2-6·P2-9 약관 정정·보완', () => {
     const pp = read('src/pages/legal/PrivacyPolicy.tsx');
     expect(pp).not.toContain('회사는 연령 확인 결과 만 19세 미만임이 밝혀진 경우');
     expect(read('supabase/functions/verify-identity/logic.ts')).toMatch(/if \(age === null \|\| age < 19\) return json\(/);
+  });
+});
+
+describe('리드 결정 ①④ — 배포일 기준 날짜 한 곳 · 약관 보완 7일 공지', () => {
+  const days = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000;
+  it('보완·처리방침 제3판 공지일 = 배포일, 시행 = +7 / +30, 매장 운영자 약관 시행 = 배포일', () => {
+    expect(TERMS_SUPPLEMENT_NOTICE_ISO).toBe(LEGAL_DEPLOY_ISO);
+    expect(days(TERMS_SUPPLEMENT_NOTICE_ISO, TERMS_SUPPLEMENT_EFFECTIVE_ISO)).toBe(7);
+    expect(PRIVACY_V3_NOTICE_ISO).toBe(LEGAL_DEPLOY_ISO);
+    expect(days(PRIVACY_V3_NOTICE_ISO, PRIVACY_V3_EFFECTIVE_ISO)).toBe(30);
+    const [y, mo, d] = LEGAL_DEPLOY_ISO.split('-').map(Number);
+    expect(OWNER_TERMS_EFFECTIVE_DATE).toBe(`${y}년 ${mo}월 ${d}일`);
+  });
+  it('날짜 문자열이 다른 소스에 박히지 않았다(legalDeploy 한 곳)', () => {
+    for (const p of ['src/lib/legalVersion.ts', 'src/pages/legal/OwnerTerms.tsx', 'src/pages/legal/TermsOfService.tsx', 'src/lib/legalHistory.ts', 'src/lib/ownerTerms.ts']) {
+      expect(read(p), p).not.toMatch(/'2026-1[01]-\d\d'|2026년 1[01]월 \d+일/);
+    }
+    expect(read('src/pages/legal/TermsOfService.tsx')).toContain('data-testid="terms-supplement-notice"');
+  });
+});
+
+describe('리드 결정 ② — 만 19세 미만 확인 시 이용 제한 + 관리자 알림(서버 분기)', () => {
+  it('restrict_underage_account 는 service_role 전용 · 엣지가 부른다', () => {
+    const m = read('supabase/migrations/20261006n_legal2_owner_terms_rank_consent.sql');
+    expect(m).toContain('revoke all on function public.restrict_underage_account(uuid) from public, anon, authenticated;');
+    expect(m).toContain('grant execute on function public.restrict_underage_account(uuid) to service_role;');
+    expect(m).toMatch(/set status = 'suspended', suspended_until = null, sanction_reason = c_reason/);
+    expect(read('supabase/functions/verify-identity/index.ts')).toContain("admin.rpc('restrict_underage_account', { p_uid: userId })");
+    expect(read('supabase/functions/verify-identity/logic.ts')).toMatch(/if \(age !== null && age < 19\) \{[\s\S]{0,200}deps\.restrictUnderage\?\.\(uid\)/);
   });
 });

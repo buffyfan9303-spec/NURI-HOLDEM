@@ -146,6 +146,44 @@ begin
     when others then fails := fails + 1; out := out || 'R3 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
   end;
 
+  -- U1 (P2-6) 만 19세 미만 확인 → 무기한 정지 + 사유 + 관리자 알림(관리자 수만큼) · 다시 불러도 알림 중복 없음 · 서버 판정도 비활성
+  total := total + 1;
+  begin
+    perform set_config('request.jwt.claims', '', true);   -- 엣지 service_role 호출 흉내(auth.uid() NULL)
+    select count(*) into n1 from public.profiles where role::text = 'admin';
+    select count(*) into n2 from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한';
+    t := 'r1=' || public.restrict_underage_account(u1)::text;
+    t := t || ' r2=' || public.restrict_underage_account(u1)::text;
+    select status::text st, suspended_until is null as forever, sanction_reason like '본인인증에서 만 19세 미만%' as why into r from public.profiles where id = u1;
+    t := t || format(' st=%s/%s/%s notif=%s', r.st, r.forever, r.why,
+                     (select count(*) from public.notifications where title = '만 19세 미만 본인인증 — 이용 제한') - n2 = n1 and n1 > 0);
+    perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+    t := t || ' active=' || public.is_account_active()::text;
+    raise exception using errcode = 'ZZ001', message = t;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'r1=true r2=true st=suspended/t/t notif=t active=false' then out := out || 'U1 PASS; ';
+      else fails := fails + 1; out := out || 'U1 FAIL ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'U1 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+
+  -- U2 영구정지 계정은 건드리지 않는다 · 일반 회원(authenticated)·anon 은 직접 못 부른다 · 양성: 부르지 않은 회원 u2 는 그대로 active
+  total := total + 1;
+  begin
+    update public.profiles set status = 'banned' where id = u1;
+    t := 'banned=' || public.restrict_underage_account(u1)::text || '/' || (select status::text from public.profiles where id = u1);
+    t := t || ' other=' || (select status::text from public.profiles where id = u2);
+    t := t || ' acl=' || has_function_privilege('authenticated', 'public.restrict_underage_account(uuid)', 'execute')::text
+               || '/' || has_function_privilege('anon', 'public.restrict_underage_account(uuid)', 'execute')::text
+               || '/' || has_function_privilege('service_role', 'public.restrict_underage_account(uuid)', 'execute')::text;
+    raise exception using errcode = 'ZZ001', message = t;
+  exception
+    when sqlstate 'ZZ001' then
+      if sqlerrm = 'banned=false/banned other=active acl=false/false/true' then out := out || 'U2 PASS; ';
+      else fails := fails + 1; out := out || 'U2 FAIL ' || sqlerrm || '; '; end if;
+    when others then fails := fails + 1; out := out || 'U2 FAIL ' || sqlstate || ' ' || sqlerrm || '; ';
+  end;
+
   raise exception using errcode = 'ZZ999',
     message = format('REHEARSAL %s %s/%s :: %s', case when fails = 0 then 'PASS' else 'FAIL' end, total - fails, total, out);
 end $rehearsal$;

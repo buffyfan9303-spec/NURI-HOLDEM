@@ -7,6 +7,7 @@ select set_config('statement_timeout', '60s', true);
 -- 20261006n — 약관 전수 재검토(legal-full-1006/review.md) 의 DB 부분
 --   P1-5 매장 운영자 이용약관(개인정보 처리위탁 포함) 동의 기록 — 화면: AuthModal(업주 가입) · OwnerTermsGate(기존 업주, 내 매장)
 --   P1-3 순위 인증 신분증 사진 — 별도 동의·가림 확인 기록(서버가 없으면 접수 거부) + 미심사 30일 자동 반려·신분증 파일 삭제
+--   P2-6 만 19세 미만 확인 → 이용 제한 + 관리자 알림(restrict_underage_account · 엣지 verify-identity 가 부른다 — 엣지 배포는 리드)
 --
 -- 선행: 20261006s2(PR #187) — storage_purge_queue · cron_storage_purge(10분마다 storage-purge 엣지가 Storage API 로 지운다).
 --   신분증 파일 삭제를 그 큐에 넣는다. 큐가 없으면 아래 게이트에서 멈춘다(s2 를 먼저 적용).
@@ -145,6 +146,40 @@ grant execute on function public._expire_rank_verification_idcards() to service_
 select cron.unschedule('rank-idcard-retention') where exists (select 1 from cron.job where jobname = 'rank-idcard-retention');
 select cron.schedule('rank-idcard-retention', '20 19 * * *', 'select public._expire_rank_verification_idcards()');
 
+-- ═══ ④ 만 19세 미만 확인 → 이용 제한 + 관리자 알림(P2-6 · 리드 결정 2026-10-06) ═══════════
+-- 부르는 곳: 엣지 verify-identity(logic.ts) — 본인인증 생년월일로 만 19세 미만이 **확인**되면(생년 미확인은 제외) service_role 로 1회.
+-- 하는 일: 무기한 정지(status=suspended · suspended_until=null — 20260907c 만료 크론 대상 아님) + 사유 + 관리자 알림.
+--   정지 계정은 로그인하면 이용 제한 안내 시트에서 탈퇴할 수 있다(20261006m). 해지·파기는 관리자가 확인 뒤 처리(약관 제9조⑤·처리방침 제12조③).
+--   이미 같은 사유로 정지돼 있으면 다시 알리지 않는다(반복 인증 시도). banned·withdrawn·관리자 계정은 건드리지 않는다.
+--   생년월일은 받지도 저장하지도 않는다(회원 번호만).
+create or replace function public.restrict_underage_account(p_uid uuid)
+ returns boolean
+ language plpgsql
+ security definer
+ set search_path = public, pg_temp
+as $fn$
+declare
+  c_reason constant text := '본인인증에서 만 19세 미만으로 확인되어 이용이 제한되었습니다. 고객센터로 문의하시거나 이 화면에서 탈퇴하실 수 있습니다.';
+  v_status text; v_role text; v_reason text; v_nick text;
+begin
+  if p_uid is null then return false; end if;
+  select status::text, role::text, sanction_reason, nickname into v_status, v_role, v_reason, v_nick
+    from public.profiles where id = p_uid for update;
+  if not found or v_status in ('banned', 'withdrawn') or v_role = 'admin' then return false; end if;
+  if v_status = 'suspended' and v_reason is not distinct from c_reason then return true; end if;
+  update public.profiles
+     set status = 'suspended', suspended_until = null, sanction_reason = c_reason
+   where id = p_uid;
+  insert into public.notifications(user_id, type, title, message, link)
+  select a.id, 'system', '만 19세 미만 본인인증 — 이용 제한',
+         left(coalesce(v_nick, '(닉네임 없음)'), 30) || ' 회원의 본인인증에서 만 19세 미만이 확인되어 이용을 제한했습니다. 이용계약 해지·개인정보 파기를 처리해 주세요',
+         '/admin'
+    from public.profiles a where a.role = 'admin';
+  return true;
+end $fn$;
+revoke all on function public.restrict_underage_account(uuid) from public, anon, authenticated;
+grant execute on function public.restrict_underage_account(uuid) to service_role;
+
 -- ═══ 자가검사 — ACL·search_path·트리거 ═══════════════════════════════════════════
 do $chk$
 declare r record;
@@ -153,7 +188,7 @@ begin
     raise exception '20261006n 자가검사: anon 이 record_my_owner_terms_consent 를 실행할 수 있다'; end if;
   if not has_function_privilege('authenticated', 'public.record_my_owner_terms_consent(integer,text)', 'execute') then
     raise exception '20261006n 자가검사: authenticated 가 record_my_owner_terms_consent 를 못 쓴다'; end if;
-  for r in select unnest(array['public._owner_terms_purge_on_withdraw()', 'public._rv_require_id_consent()', 'public._expire_rank_verification_idcards()']) f loop
+  for r in select unnest(array['public._owner_terms_purge_on_withdraw()', 'public._rv_require_id_consent()', 'public._expire_rank_verification_idcards()', 'public.restrict_underage_account(uuid)']) f loop
     if has_function_privilege('anon', r.f, 'execute') or has_function_privilege('authenticated', r.f, 'execute') then
       raise exception '20261006n 자가검사: 내부 함수 % 가 anon/authenticated 에 열려 있다', r.f; end if;
   end loop;
@@ -164,7 +199,7 @@ begin
     raise exception '20261006n 자가검사: owner_terms_consents 표 권한이 넓다'; end if;
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public'
-                and p.proname in ('record_my_owner_terms_consent', '_owner_terms_purge_on_withdraw', '_rv_require_id_consent', '_expire_rank_verification_idcards')
+                and p.proname in ('record_my_owner_terms_consent', '_owner_terms_purge_on_withdraw', '_rv_require_id_consent', '_expire_rank_verification_idcards', 'restrict_underage_account')
                 and not (coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp'])) then
     raise exception '20261006n 자가검사: search_path 고정이 빠진 함수가 있다'; end if;
   if not exists (select 1 from pg_trigger where tgname = 'trg_rv_require_id_consent' and not tgisinternal) then

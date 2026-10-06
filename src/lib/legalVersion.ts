@@ -46,32 +46,19 @@ export const LEGAL_PREV_ARCHIVE_URL = `/legal/archive/${LEGAL_PREV_EFFECTIVE_ISO
  *  처리방침의 변경은 재동의가 아니라 공지 사항이다(처리방침 제14조). 그래서 이 숫자는 재동의 게이트·DB current_legal_version() 과 묶지 않는다.
  *  제3판(2026-10-06 리드 결정, PR #188): 영구 이용 제한(영구정지) 회원의 연계정보 변환값 5년 보관(제3조·제4조·제5조) —
  *    보유기간 연장은 처리방침 제14조② '정보주체의 권리에 중대한 영향을 미치는 변경'으로 보고 시행 30일 전에 공지한다
- *    (리드 결정 2026-10-06 — 위치기반서비스 이용약관 제3판 시행일과 같은 날).
- *    🔴 배포(=공지)가 늦어지면 두 날짜를 **같은 커밋에서** 함께 미룬다(공지일 + 30일 이상 = 시행일 — legalVersion.test 가 간격을 잠근다).
+ *    약관 재검토(legal-full-1006)의 처리방침 변경도 같은 판에 합쳤다. 공지일 = 배포일, 시행일 = +30일(legalDeploy.ts 한 곳 —
+ *    처음엔 위치 약관 제3판과 같은 11-05 였으나 배포일 기준으로 바뀌었다. legalVersion.test 가 30일 간격을 잠근다).
  *    코드(20261006m 의 5년 파기 규칙)가 시행일보다 먼저 적용돼도 실질 영향은 없다: 서비스 개시(2026-06-15)부터 6개월 파기와
  *    5년 파기가 처음 갈리는 날은 2026-12-15 라 시행일 뒤다. */
 export const PRIVACY_VERSION = 3;
-export const PRIVACY_NOTICE_ISO = '2026-10-06';
-export const PRIVACY_NOTICE_DATE = '2026년 10월 6일';
-export const PRIVACY_EFFECTIVE_ISO = '2026-11-05';
-export const PRIVACY_EFFECTIVE_DATE = '2026년 11월 5일';
-/** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 제3판 공지 직전의 /legal/privacy.html. sitemap 에 넣지 않는다. */
-export const PRIVACY_PREV_ARCHIVE_URL = `/legal/archive/${PRIVACY_NOTICE_ISO}/privacy.html`;
-
-/** 매장 운영자 이용약관(개인정보 처리위탁 포함 — src/pages/legal/OwnerTerms.tsx)의 판. 회원 약관 판(LEGAL_VERSION)과 별개이며
- *  업주·공동 운영자에게만 적용된다(2026-10-06 약관 재검토 P1-5). 동의 기록은 서버 owner_terms_consents(20261006n) · lib/ownerTerms.ts.
- *  🔴 시행일은 배포일로 맞춘다(리드 결정). 업주 개별 동의로 효력이 생기는 신설 문서라 공지 기간이 없다(기존 업주는 내 매장 동의 게이트). */
-export const OWNER_TERMS_VERSION = 1;
-export const OWNER_TERMS_EFFECTIVE_DATE = '2026년 10월 8일';
-
-/** 이용약관 제3판 — **공지 예정(초안)** 상태다(2026-10-06 약관 재검토 P2-2 · 리드 지시). 본문 초안은 src/lib/termsNextDraft.ts.
- *  활동 포인트 조항(제10조의2: 회수·탈퇴 시 소멸 등)이 회원에게 불리할 수 있어 공지 30일 + 재동의 게이트가 필요하다.
- *  🔴 공지일·시행일은 **리드가 정한다** — 정하기 전에는 null 로 두고 LEGAL_VERSION(2)·DB current_legal_version() 을 올리지 않는다
- *     (legalVersion.test 가 잠근다). 시행 전환 = 이 두 값을 채우고(시행일 ≥ 공지일 + 30일) 초안을 TermsOfService 에 옮긴 뒤
- *     LEGAL_VERSION·LEGAL_EFFECTIVE_*·legalHistory·current_legal_version() 을 같은 커밋에서 올린다. */
-export const TERMS_NEXT: { version: number; noticeIso: string | null; effectiveIso: string | null } = {
-  version: 3, noticeIso: null, effectiveIso: null,
-};
+// 2026-10-06 리드 결정 ④ — 공지일·시행일은 배포일 기준 한 곳(src/lib/legalDeploy.ts LEGAL_DEPLOY_ISO)에서 계산한다. 여기서 손으로 고치지 마라.
+export {
+  PRIVACY_V3_NOTICE_ISO as PRIVACY_NOTICE_ISO, PRIVACY_V3_NOTICE_DATE as PRIVACY_NOTICE_DATE,
+  PRIVACY_V3_EFFECTIVE_ISO as PRIVACY_EFFECTIVE_ISO, PRIVACY_V3_EFFECTIVE_DATE as PRIVACY_EFFECTIVE_DATE,
+} from './legalDeploy';
+/** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 2026-10-06 에 뜬 제3판 공지 직전의 /legal/privacy.html.
+ *  경로의 날짜는 **보존본을 뜬 날**이다(공지일이 배포일로 옮겨져도 파일은 그대로). sitemap 에 넣지 않는다. */
+export const PRIVACY_PREV_ARCHIVE_URL = '/legal/archive/2026-10-06/privacy.html';
 
 /** 기기 시간대와 무관한 KST 기준 오늘(YYYY-MM-DD).
  *  왜 필요한가: 기기가 UTC·PST 로 맞춰져 있으면 시행일이 사람마다 하루 어긋나 게이트가

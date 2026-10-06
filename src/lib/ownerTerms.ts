@@ -7,9 +7,9 @@
 // 동의를 받는 곳: ① 매장 운영자 가입 화면(AuthModal signup-owner — 세션이 생기면 적는다, 아래 remember/flush)
 //   ② 이미 승인된 업주·공동 운영자는 내 매장을 열 때 OwnerTermsGate 가 한 번 묻는다(기존 재동의 게이트와 같은 모양).
 import { supabase, IS_MOCK } from './supabase';
-import { OWNER_TERMS_VERSION } from './legalVersion';
+import { OWNER_TERMS_VERSION } from './legalDeploy';
 
-export { OWNER_TERMS_VERSION, OWNER_TERMS_EFFECTIVE_DATE } from './legalVersion';
+export { OWNER_TERMS_VERSION, OWNER_TERMS_EFFECTIVE_DATE } from './legalDeploy';
 
 /** 내가 동의한 가장 높은 판(없으면 0). RLS 가 본인 행만 내보낸다. */
 export async function getMyOwnerTermsVersion(): Promise<number> {
