@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { cssOklabToRgb } from './src/lib/cssOklabToRgb';
 import { cssModernOnly } from './src/lib/cssModernOnly';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -48,6 +49,15 @@ export default defineConfig({
       sourcemaps: { filesToDeleteAfterUpload: ['dist/**/*.map'] },
     }) : null,
   ].filter(Boolean),
+  // 2026-10-07 번들 감축 PR A ①: supabase-js 가 정적으로 부르는 storage-js·functions-js 를 첫 호출 때 불러오는 대리로 돌린다
+  //   (첫 화면 −7KB gz 대). 정확히 이 두 이름만 — 대리 파일은 하위 경로로 진짜를 불러 여기 다시 걸리지 않는다.
+  //   이유·지원 범위는 src/lib/sbStorageLazy.ts 머리 주석. vitest 는 이 파일을 읽지 않는다(별칭 없음).
+  resolve: {
+    alias: [
+      { find: /^@supabase\/storage-js$/, replacement: fileURLToPath(new URL('./src/lib/sbStorageLazy.ts', import.meta.url)) },
+      { find: /^@supabase\/functions-js$/, replacement: fileURLToPath(new URL('./src/lib/sbFunctionsLazy.ts', import.meta.url)) },
+    ],
+  },
   server: {
     port: 5173,
     // 백엔드 Express 서버로 API 요청 프록시
@@ -87,6 +97,8 @@ export default defineConfig({
           if (!id.includes('node_modules')) return;
           if (id.includes('react-dom') || id.includes('/react/') || id.includes('react/jsx') || id.includes('scheduler')) return 'vendor-react';
           // (vendor-motion 청크는 framer-motion 제거로 소멸 — FLIP 공용 유틸이 대체)
+          // storage-js·functions-js 는 첫 호출 때 불러온다(위 resolve.alias) — 여기 묶으면 eager 청크로 도로 들어온다.
+          if (id.includes('@supabase/storage-js') || id.includes('@supabase/functions-js')) return;
           if (id.includes('@supabase')) return 'vendor-supabase';
         },
       },

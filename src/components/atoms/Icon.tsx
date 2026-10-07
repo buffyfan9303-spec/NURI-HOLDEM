@@ -39,31 +39,20 @@
 //   채운 아이콘(solid)만 사용한다 — 아웃라인은 굵기가 갈리지 않게 lucide 로 통일.
 //
 // 아래 PATHS 의 포커 도메인 글리프는 누리홀덤 자체 제작이다(Lucide 원본 아님).
-import type { ComponentType, ReactElement, SVGProps } from 'react';
-import { StarIcon as StarSolid, HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import { useEffect, useSyncExternalStore } from 'react';
+import type { ReactElement, SVGProps } from 'react';
+// 2026-10-07 번들 감축 PR A ③: 여기(핵심)에는 **첫 화면 정적 그래프에서 쓰는 이름만** 둔다. 나머지 lucide 아이콘은
+//   iconsExtra.ts 로 옮겨 첫 화면 밖 청크로 받는다(이유·깜빡임 방지 세 겹은 iconsExtraLoader.ts 머리 주석).
+//   어느 쪽에 둘지는 iconsCore.contract.test.ts 가 정한다 — 첫 화면 파일이 쓰는 이름이 여기 없으면 빨개진다.
 import {
-  X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
-  Maximize2, Minimize2, Gavel,
-  CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, Smartphone, User, Users, Bell,
-  QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
-  Home, RefreshCw, Copy, Send, MessageCircle, Mail, Eye, Bookmark, Flame, Target, Wallet, Gift,
-  CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown,
-  // ICON-2 이모지 소탕분 — 매핑표에 실제로 쓰이는 것만 추가한다(미사용 아이콘 금지)
-  Lightbulb, ClipboardList, Play, Pause, Link2, Megaphone, Undo2, Map as MapIcon, Gem,
-  WifiOff, Radio, Dices, Package, Ban, Pin, Sparkles, Zap, Tv, Volume2, VolumeX,
-  TrendingUp, Store, BookOpen, Archive, Scale, Building2, Hand, Flag, EyeOff, Clapperboard,
-  Timer, AlarmClock, Banknote, Briefcase, ShieldAlert, Bomb, ArrowUpRight, ArrowDownLeft,
-  DoorOpen, CalendarCheck, Circle, NotebookText,
-  // ICON-3(2026-08-30) 이모지 전수 점검 소탕분
-  Command,
-  // GTO 탭 도구 카탈로그(2026-09-03, 오너 "아이콘팩에서 최대한 잘 맞는 걸로") — ToolsPanel TOOLS/LANES 전용
-  ArrowUpFromLine, Swords, Dumbbell, Brain, BookA, BookX, GitCompare, Percent,
-  ShieldCheck, Handshake, Sigma, Layers, Gauge, PiggyBank, TrendingUpDown, Coins, ListOrdered,
-  ChartPie, Hourglass, Table, GraduationCap, Microscope, Calculator,
-  // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴의 수제 SVG 5종을 팩으로 교체
+  X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, CheckCircle2,
+  AlertTriangle, Info, Lock, User, Users, Bell, Calendar, Clock, Settings, Menu, Home, RefreshCw,
+  MessageCircle, Mail, Gift, MapPin, LogOut, Trophy, Ticket, Link2, Megaphone, Map as MapIcon,
+  WifiOff, Radio, Dices, Store, Hand, CalendarCheck, NotebookText, Handshake, Table,
   CircleUserRound, Wrench, Shield, Sun, Moon,
   type LucideIcon,
 } from 'lucide-react';
+import { getIconsExtra, loadIconsExtra, subscribeIconsExtra } from './iconsExtraLoader';
 
 export type IconName =
   | 'close' | 'back' | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'chevron-up'
@@ -144,89 +133,24 @@ const PATHS: Partial<Record<IconName, ReactElement>> = {
 // 범용 이름 → lucide-react 컴포넌트(트리셰이킹: 여기 임포트된 것만 번들에 포함)
 const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   close: X, back: ChevronLeft, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
-  'chevron-down': ChevronDown, 'chevron-up': ChevronUp, search: Search, plus: Plus, minus: Minus,
-  maximize: Maximize2, minimize: Minimize2,   // 장부 전체화면 토글
-  gavel: Gavel,                               // 2026 TDA 규칙(토너먼트 판정)
-  check: Check, 'check-circle': CheckCircle2, trash: Trash2, edit: Pencil, star: Star,
-  heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, smartphone: Smartphone, user: User, users: Users,
-  bell: Bell, qr: QrCode, calendar: Calendar, clock: Clock, settings: Settings, share: Share2,
-  filter: Filter, image: Image, download: Download, external: ExternalLink, menu: Menu,
-  home: Home, refresh: RefreshCw, copy: Copy, send: Send, comment: MessageCircle, mail: Mail, eye: Eye,
-  bookmark: Bookmark, flame: Flame, target: Target, wallet: Wallet, gift: Gift,
-  'check-double': CheckCheck, 'map-pin': MapPin, 'log-out': LogOut, trophy: Trophy,
-  ticket: Ticket, phone: Phone, printer: Printer, chart: BarChart3, medal: Medal, cart: ShoppingCart, crown: Crown,
-  // ── ICON-2 이모지 소탕 확장분 ─────────────────────────────────────────────
-  lightbulb: Lightbulb,          // 💡 팁·코치마크
-  clipboard: ClipboardList,      // 📋 프리셋·불러오기·약관 항목
-  play: Play,                    // ▶ 클락 START·리플레이 재생 (내비 화살표는 chevron-* 를 쓴다)
-  pause: Pause,                  // ⏸ 클락 STOP·일시정지
+  'chevron-down': ChevronDown, 'chevron-up': ChevronUp, search: Search,
+  check: Check, 'check-circle': CheckCircle2,
+  alert: AlertTriangle, info: Info, lock: Lock, user: User, users: Users,
+  bell: Bell, calendar: Calendar, clock: Clock, settings: Settings, menu: Menu,
+  home: Home, refresh: RefreshCw, comment: MessageCircle, mail: Mail, gift: Gift,
+  'map-pin': MapPin, 'log-out': LogOut, trophy: Trophy, ticket: Ticket,
   link: Link2,                   // 🔗 공유 링크·회원 연결(alias)
   megaphone: Megaphone,          // 📢📣 공지·외치기·광고 슬롯
-  undo: Undo2,                   // ↩ 레벨 되돌리기
   map: MapIcon,                  // 🗺 길찾기·주소
-  gem: Gem,                      // 💎 리그 티어 사다리(색으로 등급 구분)
   'wifi-off': WifiOff,           // 📡 오프라인 배너
   radio: Radio,                  // 📡 실시간 정산 현황(리그)
   dice: Dices,                   // 🎲 사이드 게임
-  package: Package,              // 📦 내 판매목록·거래 매물
-  ban: Ban,                      // 🚫 신고 숨김·금지 행위
-  pin: Pin,                      // 📌 보완 추천·관련 법령
-  sparkles: Sparkles,            // ✨🤖 AI 기능 마커(NURI AI 리포트·초안·점검)
-  zap: Zap,                      // ⚡ 부스트·빠른 입력(직전과 동일)
-  tv: Tv,                        // 📺 클락 TV 송출
-  volume: Volume2,               // 🔊🔈 클락 사운드 켜짐
-  'volume-off': VolumeX,         // 🔇 클락 음소거
-  'trending-up': TrendingUp,     // 📈 상승 인사이트
   store: Store,                  // 🏪 매장 온보딩
-  'book-open': BookOpen,         // 📖 운영 가이드
-  archive: Archive,              // 📚 지난 시즌
-  scale: Scale,                  // ⚖️ 제재 기준
-  building: Building2,           // 🏢 사업자 정보
   hand: Hand,                    // 🙋 참가(바인) 신청 — 손드는 동작
-  flag: Flag,                    // 🏁 파이널·정산 완료
-  'eye-off': EyeOff,             // 🕶 섀도우밴
-  clapperboard: Clapperboard,    // 🎬 핸드 리플레이
-  timer: Timer,                  // ⏱ 클락(스톱워치) — timer-poker 는 포커 도메인 전용 글리프
-  alarm: AlarmClock,             // ⏰ 시작 알림·곧 시작
-  banknote: Banknote,            // 💵 현금 결제수단·요금 한도
-  briefcase: Briefcase,          // 👔 공동 업주(사장님) 초대
-  'shield-alert': ShieldAlert,   // 🔞 건전 이용 안내
-  bomb: Bomb,                    // 🧨 킬스위치(매장 영구 삭제)
-  'arrow-up-right': ArrowUpRight,   // ↗ 발급(보냄)
-  'arrow-down-left': ArrowDownLeft, // ↘ 사용(받음)
-  door: DoorOpen,                // 🚪 단골 입문 배지
   'calendar-check': CalendarCheck, // 🔥(7일 개근) 연속 출석 배지
-  circle: Circle,                // ⚪🟡 회원 상태 표식(색으로 상태 구분)
   notebook: NotebookText,        // 📒 장부 연동
-  // ── ICON-3 이모지 전수 점검 소탕분(2026-08-30) ────────────────────────────
-  // ⌘(U+2318)은 컬러 이모지 폰트에 없는 '기타 기술 기호'다. 실측(e2e/emoji-glyphs.spec.ts)에서
-  // 색수 1 = 단색 폰트 폴백으로 확인됐고, 그 폰트는 OS 마다 있고 없고가 갈린다(안드로이드에서
-  // 두부로 떨어질 수 있다 — 유저의 99% 가 모바일이다). 뜻은 그대로 두고 글리프만 SVG 로 옮긴다.
-  command: Command,              // ⌘ 검색 단축키 표기
-  // ── GTO 탭 도구 카탈로그(2026-09-03) — 도구 아이콘은 ToolsPanel TOOLS 에서 이름으로 참조 ────
-  'arrow-up-from-line': ArrowUpFromLine, // 출처 배지(tools/SourceBadge) — 푸시·폴드 도구 타일은 2026-10-06 부터 'push-fold' 글리프
-  swords: Swords,                      // 어그레션 차트(공격 빈도)
-  dumbbell: Dumbbell,                  // 프리플랍 트레이너(반복 훈련)
-  brain: Brain,                        // 포스트플랍 트레이너(상황 판단 퀴즈)
-  'book-a': BookA,                     // 홀덤 용어사전(사전 = 책 + A)
-  'book-x': BookX,                     // 오답 노트(책 + X)
-  'git-compare': GitCompare,           // 레인지 vs 레인지(양쪽 비교)
-  percent: Percent,                    // 팟 오즈(필요 승률 %)
-  'shield-check': ShieldCheck,         // MDF·블러프(최소 방어)
-  handshake: Handshake,                // 딜 계산기(남은 사람끼리 합의)
-  sigma: Sigma,                        // EV 계산기(기대값 Σ)
-  layers: Layers,                      // 콤보 계산기(경우의 수 겹)
-  gauge: Gauge,                        // M존 계산기(압박 지수 게이지)
-  'piggy-bank': PiggyBank,             // 뱅크롤 관리(자금 — 'wallet' 은 이용권 지갑이라 분리)
-  'trending-up-down': TrendingUpDown,  // 분산 시뮬(오르내리는 폭)
-  coins: Coins,                        // 칩 분배기(칩 = 코인)
-  'list-ordered': ListOrdered,         // 블라인드 생성기(레벨 번호표)
-  'chart-pie': ChartPie,               // 상금 분배(파이 나누기)
-  hourglass: Hourglass,                // 종료시간 예측(남은 시간)
-  table: Table,                        // 레인 '차트'(보고 외우는 표)
-  'graduation-cap': GraduationCap,     // 레인 '트레이닝'
-  microscope: Microscope,              // 레인 '분석'
-  calculator: Calculator,              // 레인 '계산기'
+  handshake: Handshake,          // 딜 계산기(남은 사람끼리 합의) · 알림
+  table: Table,                  // 레인 '차트'(보고 외우는 표) · 보기 전환
   // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴(내 정보·도구·관리자 설정·테마)
   'circle-user': CircleUserRound, wrench: Wrench, shield: Shield, sun: Sun, moon: Moon,
 };
@@ -241,9 +165,18 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
 //    같은 화면에 나란히 두면 굵기가 갈려 조잡해진다(2026-08-29 에 이모지 300곳을 SVG 로
 //    통일한 이유가 정확히 그것이다). 그래서 **아웃라인은 lucide 로 통일**하고,
 //    heroicons 는 stroke 가 아예 없는 solid 만 쓴다 — 굵기가 갈릴 여지 자체를 없앤다.
-const HERO_SOLID: Partial<Record<IconName, ComponentType<SVGProps<SVGSVGElement>>>> = {
-  'star-fill': StarSolid,
-  'heart-fill': HeartSolid,
+// 2026-10-07 번들 감축 PR A ②: 두 글리프만 쓰려고 @heroicons/react(첫 화면 vendor-react 안 ~0.9KB gz — 컴포넌트 래퍼·forwardRef)
+//   를 싣던 것을 path 데이터 직접 인라인으로 바꿨다. path·속성은 heroicons 2.2.0 24/solid 의 StarIcon·HeartIcon 원문 그대로다
+//   (MIT 고지는 위 라이선스 블록에 유지). 렌더 DOM 도 같다 — svg 속성(xmlns·viewBox·fill·aria-hidden·data-slot) + path 하나.
+const HERO_SOLID: Partial<Record<IconName, SVGProps<SVGPathElement>>> = {
+  'star-fill': {
+    fillRule: 'evenodd',
+    d: 'M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z',
+    clipRule: 'evenodd',
+  },
+  'heart-fill': {
+    d: 'm11.645 20.91-.007-.003-.022-.012a15.247 15.247 0 0 1-.383-.218 25.18 25.18 0 0 1-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0 1 12 5.052 5.5 5.5 0 0 1 16.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 0 1-4.244 3.17 15.247 15.247 0 0 1-.383.219l-.022.012-.007.004-.003.001a.752.752 0 0 1-.704 0l-.003-.001Z',
+  },
 };
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -255,12 +188,18 @@ export default function Icon({ name, size = 20, strokeWidth = 2, className, ...r
   const Solid = HERO_SOLID[name];
   if (Solid) {
     // solid 는 stroke 가 없다 — strokeWidth 를 넘기지 않는다(넘기면 도형이 다시 뚱뚱해진다).
-    return <Solid width={size} height={size} className={className} aria-hidden {...rest} />;
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"
+        width={size} height={size} className={className} {...rest}>
+        <path {...Solid} />
+      </svg>
+    );
   }
-  const L = LUCIDE[name];
+  const L = LUCIDE[name] ?? getIconsExtra()?.[name];
   if (L) {
     return <L size={size} strokeWidth={strokeWidth} className={className} aria-hidden {...rest} />;
   }
+  if (!PATHS[name]) return <PendingIcon name={name} size={size} strokeWidth={strokeWidth} className={className} {...rest} />;
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -270,4 +209,14 @@ export default function Icon({ name, size = 20, strokeWidth = 2, className, ...r
       {PATHS[name]}
     </svg>
   );
+}
+
+/** iconsExtra 청크가 아직이면 **같은 크기의 빈 svg** 를 그렸다가 도착하면 채운다(레이아웃 이동 0).
+ *  data-icon-pending 은 측정용 표식이다 — 첫 화면에서 보이면 iconsCore 계약이 놓친 것이다. */
+function PendingIcon({ name, size, strokeWidth, className, ...rest }: IconProps & { size: number }) {
+  const extra = useSyncExternalStore(subscribeIconsExtra, getIconsExtra, getIconsExtra);
+  useEffect(() => { if (!extra) loadIconsExtra().catch(() => {}); }, [extra]);
+  const L = extra?.[name];
+  if (L) return <L size={size} strokeWidth={strokeWidth} className={className} aria-hidden {...rest} />;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden data-icon-pending={name} {...rest} />;
 }

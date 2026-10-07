@@ -4,7 +4,8 @@
 //    반려된 것만 작성자·운영진·관리자. 전체 일정 피드에는 승인된 것만(서버 schedules_select).
 //  - 등록·수정·삭제는 개설자·운영진(서버 can_post_group_poster)과 관리자. 그룹이 관리자 승인 전이면 서버가 막는다 — 여기서도 버튼을 감춘다.
 //  - 일정 피드 노출(approved)은 서버 트리거가 정한다. 이 화면은 상태를 보여 줄 뿐 승인값을 만들지 않는다.
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { deleteSchedule, getGroupSchedules, type Schedule } from '../../api/schedules';
@@ -12,7 +13,8 @@ import type { Venue } from '../../api/community';
 import type { PosterFormData, PosterSubmitResult } from './PosterFormModal';
 import { msgOf } from '../../lib/dbError';
 
-const PosterFormModal = lazy(() => import('./PosterFormModal'));
+// lazyWithReload — 나중 청크 아이콘('clipboard')을 화면과 같이 기다리고, 청크 실패는 1회 새로고침으로 복구한다(PR #205 verifier P3).
+const PosterFormModal = lazyWithReload(() => import('./PosterFormModal'));
 
 type SubmitPoster = (d: PosterFormData) => void | PosterSubmitResult | Promise<PosterSubmitResult>;
 
