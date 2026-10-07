@@ -10,6 +10,7 @@
 // 세션은 가짜(로컬), 외부 요청은 하나도 continue 하지 않는다. 운영 쓰기 0.
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -23,7 +24,7 @@ const me = {
 const meProfile = {
   id: UID, name: '읽는사람이름', nickname: '읽는사람', email: 'reader@example.com', role: 'user', approved: false, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 3,
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
 };
 const TITLE = '메뉴 경합 점검용 글';
 const post = {

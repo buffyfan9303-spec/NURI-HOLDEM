@@ -11,6 +11,7 @@
 // 실행: E2E_BASE_URL=http://localhost:4420 npx playwright test e2e/ledger-audit-fixes.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page, WebSocketRoute } from '@playwright/test';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-0000000000ed';
@@ -76,7 +77,7 @@ async function openBoard(page: Page, o: Opts = {}) {
   await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(FAKE.user)));
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active', venue_id: VENUE, activity_points: 0,
-    created_at: FAKE.user.created_at, agreed_to_terms: true, consented_legal_version: 3,
+    created_at: FAKE.user.created_at, agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
   })));
   await page.route(/\/rest\/v1\/venues\?/, (r) => r.fulfill(json([{ id: VENUE, name: '테스트 홀덤', region: '서울', address: '서울 강남구 1', owner_id: UID, approved: true, status: 'active', verification_status: 'verified', is_paid_ad: false, display_order: 1, follower_count: 0, rating: 4.5 }])));
   await page.route(/\/rest\/v1\/rpc\/(can_access_ledger|can_manage_pos|can_manage_venue|can_view_vouchers)/, (r) => r.fulfill(json(true)));

@@ -11,6 +11,7 @@ import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 import { bootOwner, openMyStore, MOCK_UID, MOCK_VENUE, MOCK_VENUE_NAME, MOCK_DAY } from './_mockOwner';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -27,7 +28,7 @@ function fakeSession(uid: string, email: string) {
 const profile = (id: string, role: string, nickname: string) => ({
   id, name: `${nickname}이름`, nickname, email: `${nickname}@example.com`, role, approved: true, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 3,
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
 });
 const sched = (id: string, extra: Record<string, unknown>) => ({
   id, title: '그룹 토너', venue_id: 'g', pub_name: '그룹', region: '서울', date: TOMORROW, start_time: '19:00', duration: '',

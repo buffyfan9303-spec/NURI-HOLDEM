@@ -11,6 +11,7 @@
 //   빈 저장소로 시작해 판정 키가 없으므로 여기 localStorage 주입이 그대로 유효하다 —
 //   다만 그 키를 '0' 으로 심는 테스트를 쓴다면 주입도 sessionStorage 로 옮겨야 한다.
 import type { Page } from '@playwright/test';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? 'https://idsxiqspecrucvfvtgbw.supabase.co';
 export const ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? 'sb_publishable_5H0ITdQ27V7EVO9fcfBdew_V9DUF0Kt';
@@ -199,7 +200,7 @@ export async function stubLogin(page: Page, over: Record<string, unknown> = {}):
     status: 'active', suspended_until: null, sanction_reason: null,
     // ⚠ 현재 약관 버전(src/lib/legalVersion.ts LEGAL_VERSION)으로 둔다 — null 이면 재동의 게이트가
     //   모든 화면 위에 뜨고, 그걸 걷어내는 dismissOverlays 가 검사하려던 딥링크 모달까지 함께 닫는다.
-    agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3,
+    agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: LEGAL_VERSION,
     joined_at: '2026-01-01T00:00:00Z', last_seen_at: null, name_changed_at: null,
     activity_points: 10, badges: [], staff_title: null, ci_hash: null, verified_at: null, real_name: null,
     ...over,

@@ -7,6 +7,7 @@
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEYS = ['sb-idsxiqspecrucvfvtgbw-auth-token', 'sb-e2efake-auth-token'];
 const UID = '00000000-0000-4000-8000-00000000c503';
@@ -20,7 +21,7 @@ const SESSION = {
 };
 // ci_hash 가 있어야 verified(=!!ci_hash) — 지갑의 '사용하기' 버튼이 열린다.
 const PROFILE = { id: UID, name: 'R503', nickname: 'R503', role: 'user', approved: true, status: 'active', activity_points: 0,
-  agreed_to_terms: true, consented_legal_version: 3, ci_hash: 'e2e-ci', verified_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z' };
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION, ci_hash: 'e2e-ci', verified_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z' };
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const voucherRow = (i: number) => ({
   id: `cccccccc-0000-4000-8000-${String(i).padStart(12, '0')}`,

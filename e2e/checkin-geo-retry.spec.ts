@@ -9,6 +9,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
+import { pinBeforeGeoRequired } from './_geoClock';
 
 const VENUE = '11111111-2222-3333-4444-555555555555';
 
@@ -126,6 +127,7 @@ test('🔴 G5 — 반경 밖 거부(geo_out_of_range) → 재시도 시트 · �
 // 음성 대조(2026-10-05): App.tsx 의 버튼 onClick 에서 requestCheckin(v) 호출을 빼면 G4 가 빨개진다(요청 0회).
 test('🔴 G4 — 동의 안 한 손님: 재시도 시트의 「출석 요청 보내기」 → request_checkin 1회(매장 id 만) · 승인 대기 안내 · 출석 재호출 없음', async ({ page }) => {
   test.setTimeout(60_000);
+  await pinBeforeGeoRequired(page); // 아래 '시행일 전에는 다시 묻지 않고' 가정 — 시행일 뒤에는 동의 시트가 먼저 떠 check_in 이 안 나간다
   const calls = await setup(page,
     { status: 200, body: { code: 'geo_consent_required', error: '위치 확인 출석 매장이라 위치정보 이용에 동의해야 이 매장에서 출석할 수 있습니다. 동의하지 않아도 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다' } });
   const req: unknown[] = [];
