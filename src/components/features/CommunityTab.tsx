@@ -49,6 +49,10 @@ interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
   marketSlot?: ReactNode;
   venues: Venue[];
+  /** App 의 매장 목록 첫 조회가 끝났는가. 끝나기 전 빈 목록은 '0곳' 이 아니라 '아직 모름' 이다 — 뼈대를 보인다. 기본 true = 예전 동작. */
+  venuesLoaded?: boolean;
+  /** 매장 목록 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
+  venuesErr?: unknown;
   comments: Comment[];
   posts: CommunityPost[];
   /** App 의 게시글 첫 조회가 끝났는가(스냅샷 포함). 게시판 뼈대 행 수를 정한다 — 끝났으면 그 개수, 0 이면 뼈대 대신 빈 상태. */
@@ -128,7 +132,7 @@ const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, venuesLoaded = true, venuesErr = null, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -587,6 +591,9 @@ function CommunityTab({
           <MyCommunitiesActionM onSelectVenue={onSelectVenue} onCreated={onReloadVenues} version={myCommVer} />
           <VenuesSectionM
             sortedVenues={sortedVenues}
+            // 목록이 비어 있을 때만 의미가 있다 — 스냅샷이든 응답이든 한 곳이라도 있으면 그대로 그린다
+            loading={venues.length === 0 && !venuesLoaded && venuesErr == null}
+            loadErr={venues.length === 0 ? venuesErr : null}
             query={query}
             onQuery={setQuery}
             onSelectVenue={onSelectVenue}
@@ -1509,9 +1516,12 @@ const VENUE_FILTERS: { key: string; label: string }[] = [
   { key: 'dealer_team', label: '딜러팀' }, { key: 'club', label: '동호회' }, { key: 'youtuber', label: '유튜버' },
 ];
 function VenuesSection({
-  sortedVenues, query, onQuery, onSelectVenue, onReloadVenues,
+  sortedVenues, loading = false, loadErr = null, query, onQuery, onSelectVenue, onReloadVenues,
 }: {
   sortedVenues: { venue: Venue; commentCount: number; latest?: Comment }[];
+  /** 첫 조회 전이라 목록이 비어 있다 — '결과가 없습니다' 대신 뼈대(2026-10-07: 응답 전 빈 상태가 '0곳' 으로 읽혔다) */
+  loading?: boolean;
+  loadErr?: unknown;
   query: string;
   onQuery: (q: string) => void;
   onSelectVenue: (id: string) => void;
@@ -1576,7 +1586,7 @@ function VenuesSection({
       <div data-main-enter className="border-b border-border-subtle pb-1.5">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-bold text-ink-primary">{VENUE_FILTERS.find((f) => f.key === kindFilter)?.label ?? '전체'}</h2>
-          <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>
+          {!loading && loadErr == null && <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>}
           {/* 정렬 안내 — 실제 정렬(인증 → 유료광고 → 팔로워순)과 일치 */}
           {/* ⚠ shrink-0 + whitespace-nowrap 이라 좁아져도 줄지도 접히지도 않아, 390·200% 에서
               "→ 팔로워순" 이 뷰포트 밖으로 나갔다(실측 2026-09-18). 이건 안내 문구이므로
@@ -1600,8 +1610,24 @@ function VenuesSection({
       </div>
 
       {/* 리스트 */}
-      {filtered.length === 0 ? (
-        <EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" />
+      {loadErr != null ? (
+        <LoadErrorCard error={loadErr} what="매장 목록" onRetry={onReloadVenues} />
+      ) : loading ? (
+        // 매장 카드와 같은 껍데기·줄 구조(썸네일 40 · 이름/지역 2줄) — 응답이 와도 목록이 밀리지 않는다.
+        // data-stable-skeleton: 판 교체(tabCover)가 '준비 전' 으로 보고 떠나는 판을 붙잡지 않게(BoardListSkeleton 과 같은 이유)
+        <ul aria-busy="true" data-stable-skeleton="" data-testid="venue-list-loading" className="space-y-2">
+          {[0, 1, 2].map((k) => (
+            <li key={k} aria-hidden className="flex items-center gap-2.5 px-2.5 py-2 rounded-aura border card-aura">
+              <span className="skeleton h-10 w-10 shrink-0 rounded-xl" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="skeleton mb-0.5 block w-32 text-sm font-semibold rounded-input"><span className="invisible">매장</span></span>
+                <span className="skeleton block w-24 text-2xs rounded-input"><span className="invisible">지역</span></span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : filtered.length === 0 ? (
+        <div data-testid="venue-empty"><EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" /></div>
       ) : (
         <ul data-main-enter className="space-y-2">
           {filtered.map(({ venue, commentCount, latest }) => (

@@ -2118,6 +2118,8 @@ export default function App() {
   // 네트워크 매장 목록이 한 번이라도 도착했는가 — ?v= 딥링크의 '없는 매장' 판정은 이 뒤에만 한다
   // (부팅 직후 venues 는 localStorage 스냅샷이라, 스냅샷 이후 문을 연 매장의 링크를 '없음'으로 튕기면 안 된다).
   const [venuesLoaded, setVenuesLoaded] = useState(false);
+  // 매장 목록 조회 실패 — 커뮤니티 '홀덤펍' 이 '결과가 없습니다'(빈 상태)·무한 뼈대 대신 오류·재시도를 보인다(2026-10-07)
+  const [venuesErr, setVenuesErr] = useState<unknown>(null);
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -2480,7 +2482,7 @@ export default function App() {
     } else ptrSettle(-52, '0');
   };
   // 실패를 삼키면 '등록된 홀덤펍이 없습니다'·'결과가 없습니다'(빈 상태)로 위장된다 — 최소한 실패했다고 말한다
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); }).catch(() => toast.show('매장 목록을 불러오지 못했습니다', 'error')); }, [toast]);
+  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); setVenuesErr(null); }).catch((e: unknown) => { setVenuesErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); }); }, [toast]);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsLoaded(true); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
@@ -2532,7 +2534,8 @@ export default function App() {
         }
       } else if (my === schedReqRef.current) setSchedulesError(sr.reason);
       setSchedulesLoaded(true); // 스켈레톤은 가드하지 않는다(reloadSchedules 의 finally 와 같은 이유)
-      if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); setVenuesLoaded(true); }
+      if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); setVenuesLoaded(true); setVenuesErr(null); }
+      else setVenuesErr(vr.reason);
       if (nr.status === 'fulfilled') { setNotices(nr.value); setNoticesErr(null); writeSnap('notices', nr.value); setNoticesLoaded(true); }
       else setNoticesErr(nr.reason);
     });
@@ -4793,6 +4796,7 @@ export default function App() {
             active={activeTab === 'community' || activeTab === 'market'}
             marketSlot={marketSlot}
             venues={venues}
+            venuesLoaded={venuesLoaded} venuesErr={venuesErr}
             comments={comments}
             posts={posts}
             postsLoaded={postsLoaded}
