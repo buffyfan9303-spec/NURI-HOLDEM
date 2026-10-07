@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { getMyLocationConsent, setMyLocationConsent, type LocationConsentState } from '../api/locationPrivacy';
 import { supabase } from './supabase';
 import { LOCATION_TERMS_VERSION } from './locationTerms';
+import { retryableImport } from './retryImport';
 
 // 판·시행일은 lib/locationTerms.ts 한 곳 — 옛 import 경로를 깨지 않게 다시 내보낸다.
 export { LOCATION_TERMS_VERSION, LOCATION_TERMS_EFFECTIVE } from './locationTerms';
@@ -54,10 +55,12 @@ export function otherGateOpen(doc: Document = document): boolean {
  *  별도 루트에 스스로 마운트한다(Modal 은 컨텍스트 의존이 없다). 시트 모듈은 지연 로드 — 첫 화면 번들에 안 실린다.
  *  두 번 불려도 한 장만 뜨게 진행 중 Promise 를 공유한다. */
 let pending: Promise<boolean | null> | null = null;
+// 같은 주소로는 실패한 import 를 브라우저가 다시 받지 않는다 — 다음 출석의 재시도는 ?r=n 새 주소(retryImport.ts, 2026-10-08 R11-03).
+const loadSheet = retryableImport(() => import('../components/features/LocationConsentSheet'));
 export type ConsentAskOptions = { required?: boolean };
 export function askLocationConsent(opts: ConsentAskOptions = {}): Promise<boolean | null> {
   if (pending) return pending;
-  pending = import('../components/features/LocationConsentSheet').then(({ default: View }) =>
+  pending = loadSheet().then(({ default: View }) =>
     new Promise<boolean | null>((resolve) => {
       const host = document.createElement('div');
       host.setAttribute(CONSENT_HOST_ATTR, ''); // 시트가 '다른 게이트'에서 자기 자신을 빼는 표식(otherGateOpen)

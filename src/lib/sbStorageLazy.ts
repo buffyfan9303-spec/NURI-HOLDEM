@@ -16,13 +16,15 @@
  * 이 패키지가 다시 내보내는 `StorageApiError` 는 아래 자리표시자다 — 앱 코드에서 `instanceof` 로 쓰지 마라
  *   (sbLazy.test.ts 가 그런 import 를 막는다). 실제 오류 객체는 진짜 패키지가 만든다.
  */
+import { retryableImport } from './retryImport';
+
 type RealMod = typeof import('@supabase/storage-js/dist/index.mjs');
 type RealClient = InstanceType<RealMod['StorageClient']>;
 type RealFileApi = ReturnType<RealClient['from']>;
 type Opts = { useNewHostname?: boolean };
 
-let mod: Promise<RealMod> | undefined;
-const load = () => (mod ??= import('@supabase/storage-js/dist/index.mjs'));
+// 실패해도 다음 호출이 새 주소(?r=n)로 다시 받는다(retryImport.ts).
+const load = retryableImport(() => import('@supabase/storage-js/dist/index.mjs'));
 
 export class StorageClient {
   private real?: Promise<RealClient>;
@@ -40,7 +42,10 @@ export class StorageClient {
   }
 
   private client(): Promise<RealClient> {
-    return (this.real ??= load().then((m) => new m.StorageClient(...this.args)));
+    return (this.real ??= load().then(
+      (m) => new m.StorageClient(...this.args),
+      (err) => { this.real = undefined; throw err; },   // 실패한 약속을 붙들지 않는다 — 다음 호출이 load() 로 다시 받는다
+    ));
   }
 
   /** 타입은 진짜 StorageFileApi 로 둔다 — 실제로 지원하는 범위는 머리 주석. */
