@@ -56,6 +56,8 @@ export default defineConfig({
     alias: [
       { find: /^@supabase\/storage-js$/, replacement: fileURLToPath(new URL('./src/lib/sbStorageLazy.ts', import.meta.url)) },
       { find: /^@supabase\/functions-js$/, replacement: fileURLToPath(new URL('./src/lib/sbFunctionsLazy.ts', import.meta.url)) },
+      // PR B: realtime-js(+phoenix)도 첫 channel() 때 — 호출 기록·재생 대리(src/lib/sbRealtimeLazy.ts 머리 주석).
+      { find: /^@supabase\/realtime-js$/, replacement: fileURLToPath(new URL('./src/lib/sbRealtimeLazy.ts', import.meta.url)) },
     ],
   },
   server: {
@@ -99,6 +101,9 @@ export default defineConfig({
           // (vendor-motion 청크는 framer-motion 제거로 소멸 — FLIP 공용 유틸이 대체)
           // storage-js·functions-js 는 첫 호출 때 불러온다(위 resolve.alias) — 여기 묶으면 eager 청크로 도로 들어온다.
           if (id.includes('@supabase/storage-js') || id.includes('@supabase/functions-js')) return;
+          // PR B — realtime-js·phoenix 도 같은 이유. ⚠ 여기서 청크 이름을 주지 마라: 이름을 주면 rolldown 이 `import(…).then(e=>e.t)` 외피를
+          //   씌워 sbRealtimeLazy 의 `?r=` 재시도(맨 import)가 다른 모양을 받는다(2026-10-07 실측). 청크 이름은 진입 파일(RealtimeClient)에서 온다.
+          if (id.includes('@supabase/realtime-js') || id.includes('@supabase/phoenix')) return;
           if (id.includes('@supabase')) return 'vendor-supabase';
         },
       },
