@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 // 가짜 id_token(payload {"sub":"1"}, 서명 'sig') — 비밀 탐지기가 소스 글자를 토큰으로 오인하지 않게 실행할 때 조립한다.
 const b64u = (s: string) => Buffer.from(s).toString('base64url');
@@ -180,7 +181,7 @@ for (const provider of ['kakao', 'email'] as const) {
   test(`같은 본인인증 관문 — ${provider} 회원(동의 완료·미인증)에 본인인증 띠가 뜬다`, async ({ page }) => {
     test.skip(!PORTONE, 'PORTONE 공개 식별자로 빌드하고 E2E_PORTONE=on 일 때만 — 그 밖의 빌드는 띠가 원래 안 뜬다');
     test.setTimeout(45_000);
-    const agreed = { agreed_to_terms: true, agreed_to_privacy: true, agreed_to_anti_gambling: true, consented_legal_version: 3 };
+    const agreed = { agreed_to_terms: true, agreed_to_privacy: true, agreed_to_anti_gambling: true, consented_legal_version: LEGAL_VERSION };
     await stubSession(page, provider, agreed);
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -194,7 +195,7 @@ for (const provider of ['kakao', 'email'] as const) {
   test(`대조 — ${provider} 회원이 본인인증(ci_hash)을 마치면 띠가 없다`, async ({ page }) => {
     test.skip(!PORTONE, '위와 같은 빌드에서만 의미가 있다(띠가 원래 안 뜨는 빌드면 거짓 통과)');
     test.setTimeout(45_000);
-    await stubSession(page, provider, { agreed_to_terms: true, consented_legal_version: 3, ci_hash: 'e2e-hash', verified_at: '2026-10-07T00:00:00Z' });
+    await stubSession(page, provider, { agreed_to_terms: true, consented_legal_version: LEGAL_VERSION, ci_hash: 'e2e-hash', verified_at: '2026-10-07T00:00:00Z' });
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
@@ -209,7 +210,7 @@ for (const provider of ['kakao', 'email'] as const) {
 for (const provider of ['kakao', 'email'] as const) {
   test(`내 정보 › 보안 — ${provider} 계정의 비밀번호 칸`, async ({ page }) => {
     test.setTimeout(45_000);
-    await stubSession(page, provider, { agreed_to_terms: true, consented_legal_version: 3 });
+    await stubSession(page, provider, { agreed_to_terms: true, consented_legal_version: LEGAL_VERSION });
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');

@@ -14,6 +14,7 @@
 import type { Page, CDPSession } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 
@@ -304,7 +305,7 @@ async function bootAdmin(page: Page, setting: (key: string, n: number) => { v: s
     if (/\/home_banners\?/.test(req.url())) return r.fulfill(json(BANNERS));
     if (/\/profiles\?/.test(req.url())) return r.fulfill(json(/order=/.test(req.url()) ? [] : {
       id: AUID, name: '운영자', nickname: '운영자', email: 'admin@example.com', role: 'admin', approved: true, status: 'active', venue_id: null,
-      activity_points: 0, created_at: '2026-01-01T00:00:00Z', agreed_to_terms: true, consented_legal_version: 3,
+      activity_points: 0, created_at: '2026-01-01T00:00:00Z', agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
     }));
     return r.fulfill(json((req.headers()['accept'] ?? '').includes('pgrst.object') ? null : []));
   });

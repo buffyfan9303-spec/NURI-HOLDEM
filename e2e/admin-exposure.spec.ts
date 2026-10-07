@@ -12,6 +12,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-00000000ad11';
@@ -46,7 +47,7 @@ async function bootAdmin(page: Page, opts: { bannersFail?: boolean; banners?: un
     return r.fulfill(json({
       id: UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 3,
+      agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
     }));
   });
   // 배너 — 실패를 주입할 수 있게 별도 라우트. skipBannerRoute 면 호출부가 직접 건다(요청 수를 세는 테스트).

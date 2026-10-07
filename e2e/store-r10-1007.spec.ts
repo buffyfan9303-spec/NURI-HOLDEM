@@ -15,6 +15,7 @@
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { bootOwner, openMyStore, FAKE_SESSION, STORAGE_KEY, MOCK_UID, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
@@ -63,7 +64,7 @@ test('⑧b 새로고침 → 다른 탭을 고른 뒤 권한 재확인이 탭 목
         profileGets += 1;
         return r.fulfill(json({
           id: MOCK_UID, name: '업주', nickname: '업주', role, approved: true, status: 'active',
-          venue_id: MOCK_VENUE, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: 3,
+          venue_id: MOCK_VENUE, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: LEGAL_VERSION,
         }));
       });
     },

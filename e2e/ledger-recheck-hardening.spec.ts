@@ -8,6 +8,7 @@
 //   deleteLedgerSession 의 p_password 를 지우면 ② 의 p_password 검사가 실패한다.
 import { test, expect } from './_fixtures';
 import { type Page } from '@playwright/test';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-0000000000ed';
@@ -54,7 +55,7 @@ async function openBoard(page: Page, calls: Calls, o: { hasPw: boolean }) {
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active',
     venue_id: VENUE, activity_points: 0, created_at: FAKE.user.created_at,
-    agreed_to_terms: true, consented_legal_version: 3,
+    agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
   })));
   await page.route(/\/rest\/v1\/venues\?/, (r) => r.fulfill(json([{
     id: VENUE, name: '테스트 홀덤', region: '서울', address: '서울 강남구 1', owner_id: UID,
