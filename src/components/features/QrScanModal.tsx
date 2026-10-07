@@ -93,7 +93,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
   // 루트의 하단 탭바(z-50)가 시트 하단 안내 문구를 덮었다(390px 실측 — 겹침).
   // body 로 포털해 루트 컨텍스트의 z-[60]으로 올린다(다른 루트 모달과 동일한 층).
   return createPortal(
-    <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : '출석 QR'} maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : '출석 QR'} maxWidth="sm" variant="sheet" dragToClose>
       <div className="space-y-3 p-4 pb-6">
         {(phase === 'unsupported' || phase === 'denied') ? (
           <div className="flex flex-col items-center gap-3 rounded-aura border card-aura px-4 py-8 text-center">

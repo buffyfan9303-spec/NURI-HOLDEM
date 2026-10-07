@@ -92,7 +92,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
     dlg.setAttribute('aria-label', title);
   };
   return (
-    <Modal open={!!doc} onClose={onClose} title={title} maxWidth="lg" variant="sheet">
+    <Modal open={!!doc} onClose={onClose} title={title} maxWidth="lg" variant="sheet" dragToClose>
       <div ref={nameDialog}>
         {shown === 'terms'         && <TermsOfService />}
         {shown === 'privacy'       && <PrivacyPolicy />}

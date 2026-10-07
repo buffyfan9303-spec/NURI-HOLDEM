@@ -45,7 +45,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
   // 쓰기 전에 막고, 집안 표준 promptLogin() 으로 로그인 모달까지 이어 준다.
   if (!user) {
     return (
-      <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet">
+      <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet" dragToClose>
         <div className="p-6 text-center">
           <p className="text-sm font-bold text-ink-primary">로그인하면 문의를 접수할 수 있습니다</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">

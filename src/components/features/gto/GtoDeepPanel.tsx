@@ -176,7 +176,7 @@ function DeepActionSheet({
   // 셸은 Modal 원자(MODAL-03) — 손으로 짠 시트는 aria-modal 만 선언하고 포커스 이동·트랩·복원이 없었고,
   // ESC 도 안 들어서 도구 전체화면(page Modal)이 대신 닫혔다. 원자가 뒤로가기·ESC(최상단 한 겹)·44px 닫기까지 준다.
   return (
-    <Modal open onClose={onClose} title="스트리트별 권장 액션" variant="sheet" maxWidth="md">
+    <Modal open onClose={onClose} title="스트리트별 권장 액션" variant="sheet" maxWidth="md" dragToClose>
         <div className="space-y-2 px-4 py-3">
           {!rows ? (
             <p className="py-6 text-center text-2xs text-ink-muted">Hero / Villain 카드를 모두 입력하세요.</p>
