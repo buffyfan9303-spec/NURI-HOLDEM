@@ -8,6 +8,7 @@
 // 음성 대조: Modal.tsx 헤더의 sheetTouch 조건에서 `|| !!confirmClose` 를 빼면 ①·①b 가 실패한다.
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -20,7 +21,7 @@ const me = {
 const meProfile = {
   id: UID, name: '끄는사람이름', nickname: '끄는사람', email: 'drag@example.com', role: 'user', approved: true, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 2,
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
 };
 const TITLE = '헤더 끌기 점검용 글';
 const post = {

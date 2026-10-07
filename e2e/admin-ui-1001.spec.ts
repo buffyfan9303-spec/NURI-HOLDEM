@@ -6,6 +6,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-00000000ad11';
@@ -27,7 +28,7 @@ const json = (b: unknown, status = 200) => ({ status, contentType: 'application/
 const profile = (id: string, role: string, nickname: string, extra: Record<string, unknown> = {}) => ({
   id, name: `${nickname}이름`, nickname, email: `${nickname}@example.com`, role, approved: true, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 3, ...extra,
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION, ...extra,
 });
 const USERS = [
   profile(UID, 'admin', '운영자'),

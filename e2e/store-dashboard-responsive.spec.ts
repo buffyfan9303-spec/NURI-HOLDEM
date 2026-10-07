@@ -10,6 +10,7 @@
 // (no-export-ui.spec.ts 의 fixture 레시피를 그대로 따른다 — 같은 화면을 여는 검증된 경로다.)
 import { test, expect } from './_fixtures';
 import { type Page } from '@playwright/test';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-0000000000ed';
@@ -63,7 +64,7 @@ async function openDashboard(page: Page, theme: 'dark' | 'light' = 'dark') {
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active',
     venue_id: VENUE, activity_points: 0, created_at: FAKE.user.created_at,
-    agreed_to_terms: true, consented_legal_version: 3,
+    agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
   })));
   await page.route(/\/rest\/v1\/venues\?/, (r) => r.fulfill(json([{
     id: VENUE, name: '아주아주 긴 이름의 테스트 홀덤 라운지 강남점', region: '서울', address: '서울 강남구 1', owner_id: UID,

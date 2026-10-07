@@ -21,6 +21,7 @@
 //   base test + 단일 핸들러를 쓴다 — 로컬(baseURL) 외의 어떤 요청도 continue 하지 않는다.
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const LONG_URL = 'https://example.com/tournaments/2026/seoul-main-event-registration-and-schedule?utm_source=nuri&utm_campaign=verylongparam';
 const BODY = [
@@ -106,7 +107,7 @@ async function install(page: Page, baseURL: string | undefined, opts: { loggedIn
     if (opts.loggedIn && /\/rest\/v1\/profiles\?/.test(url) && route.request().method() === 'GET') {
       return j(route, {
         id: READER_UID, name: '읽는사람', nickname: '읽는사람', role: 'user', approved: false, status: 'active',
-        venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: 3,
+        venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: LEGAL_VERSION,
       });
     }
     if (/\/auth\/v1\//.test(url)) {

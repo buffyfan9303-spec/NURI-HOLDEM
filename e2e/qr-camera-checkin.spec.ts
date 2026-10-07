@@ -8,6 +8,7 @@
 // 실행: E2E_BASE_URL=http://localhost:4304 npx playwright test e2e/qr-camera-checkin.spec.ts
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
+import { pinBeforeGeoRequired } from './_geoClock';
 import { VENUE, fakeCamera, cameraArgs, forceJsQr, liveTracks, openedTracks, json } from './_fakeCamera';
 
 test.use(cameraArgs(fakeCamera(`https://nuriholdem.com/?checkin=${VENUE}`)));
@@ -45,6 +46,7 @@ test('🔴 Q1 — 카메라 프레임의 출석 QR → check_in(p_venue_id) 1회
 //   토스트가 아니라 App 의 재시도 시트(대체 경로 안내)가 **맨 위에** 뜬다(이용권 시트는 닫힌다).
 test('🔴 Q2 — 위치 확인 출석 매장 거부(geo_consent_required) → 이용권 시트가 닫히고 재시도 시트가 맨 위에(대체 경로)', async ({ page }) => {
   test.setTimeout(60_000);
+  await pinBeforeGeoRequired(page); // 아래 '시행일 전 힌트라 다시 묻지 않고' 가정 — 시행일 뒤에는 동의 시트가 먼저 뜬다
   const calls: Record<string, unknown>[] = [];
   await stabilizeBackstack(page);
   await stubLogin(page);
