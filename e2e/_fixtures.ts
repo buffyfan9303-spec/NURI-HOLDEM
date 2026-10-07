@@ -11,6 +11,7 @@ import { test as base, expect } from '@playwright/test';
 import { PROD_REF, WRITES_ALLOWED } from './_session';
 import { PROD_EMPTY, prodEmpty } from './_prodEmpty';
 import { eventLiveResponse } from './_mocks';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 /** E2E_EVENT_LIVE=1 — 이벤트가 **공개 중인** 운영(2026-10-08 12:00 KST 로티아레나 출석 이벤트 공개 뒤)을 흉내 낸다.
  *  event_campaigns·event_board 읽기를 live 한 건으로 고정한다(스펙이 page.route 로 따로 목킹하면 그쪽이 이긴다). */
@@ -70,12 +71,12 @@ export function isAllowedRequest(method: string, url: string, writesAllowed = WR
   return writesAllowed && ref !== PROD_REF;
 }
 
-/** 목 profiles 응답에 consented_legal_version 키가 **아예 없으면** 현재 버전(3 — src/lib/legalVersion.ts LEGAL_VERSION)을 채운다. 명시한 null 은 그대로 둔다. */
+/** 목 profiles 응답에 consented_legal_version 키가 **아예 없으면** 현재 버전(src/lib/legalVersion.ts LEGAL_VERSION — 판이 오를 때 스펙이 썩지 않게 상수로 읽는다)을 채운다. 명시한 null 은 그대로 둔다. */
 function withLegalConsent(body: string): string {
   try {
     const add = (o: unknown) => {
       if (o && typeof o === 'object' && !Array.isArray(o) && 'id' in o && !('consented_legal_version' in o)) {
-        (o as Record<string, unknown>).consented_legal_version = 3;
+        (o as Record<string, unknown>).consented_legal_version = LEGAL_VERSION;
       }
     };
     const v = JSON.parse(body);
