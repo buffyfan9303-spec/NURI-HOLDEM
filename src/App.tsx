@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
-import { reloadBootTab, rememberTab } from './lib/reloadTab';
+import { reloadBootTab, rememberTab, reloadSaved, saveForReload, ME_OPEN_KEY, ME_TAB_KEY } from './lib/reloadTab';
 import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
@@ -264,6 +264,12 @@ function LazyFallback() {
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-ink-secondary" />
     </div>
   );
+}
+/** 지연 탭 경계가 **본문을 보이고 있는가**(폴백이 아닌가)를 App 에 알린다 — 아래 사업자 푸터가 이 값을 기다린다.
+ *  Suspense 가 본문을 숨기면(폴백) 레이아웃 이펙트가 정리되고, 다시 보이면 다시 돈다(React 18+). 레이아웃 이펙트라 페인트 전에 맞춰진다. */
+function PaneShownMarker({ onShown }: { onShown: (v: boolean) => void }) {
+  useLayoutEffect(() => { onShown(true); return () => onShown(false); }, [onShown]);
+  return null;
 }
 function OverlayFallback() {
   return (
@@ -1140,7 +1146,7 @@ export default function App() {
       // 🔴 2026-09-26(auth-boot-gap G7) — 푸시 부팅 링크(?nl=)가 권한 탭(/admin · /my-store/* · /staff-schedule)을 가리키면
       //   그 탭으로 시작한다. 홈으로 시작하면 권한이 오기 전 ~100~150ms 홈이 그려졌다가 바뀌었다(깜빡임).
       //   권한이 없으면 아래 탭 가드가 확인 뒤 홈으로 보낸다(?tab=admin 과 같은 길).
-      // audit10 P3-6 — 내 매장에서 새로고침하면 내 매장으로(권한 확인 전 홀드는 아래 pendingDeepTab 이 맡는다).
+      // 새로고침하면 보던 탭으로(오너 2026-10-07 · lib/reloadTab). 권한 탭의 확인 전 홀드는 아래 pendingDeepTab 이 맡는다.
       return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')) ?? reloadBootTab() ?? 'home';
     } catch { return 'home'; }
   });
@@ -1166,8 +1172,10 @@ export default function App() {
     try {
       const sp0 = new URLSearchParams(window.location.search);
       const t0 = sp0.get('tab');
+      const r0 = reloadBootTab();
       if (t0 === 'my-store' || t0 === 'admin') pendingDeepTab.current = t0;
-      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')) ?? reloadBootTab(); // 알림 부팅 링크·새로고침도 같은 기억(G7 · P3-6)
+      // 알림 부팅 링크·새로고침도 같은 기억(G7 · P3-6) — 권한이 늦게 오는 탭만. 나머지 탭은 처음부터 목록에 있다.
+      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')) ?? (r0 === 'my-store' || r0 === 'admin' ? r0 : null);
     } catch { /* noop */ }
   }
   /** 알림 부팅 링크(?nl=)가 가리킨 권한 탭 — 부팅 동안만 의미가 있는 상수(G7). 아래 탭 가드가 '업주의 /admin' 을 내 매장으로 보낼 때 쓴다. */
@@ -1880,12 +1888,10 @@ export default function App() {
   const [pendingPostId, setPendingPostId] = useState<string | null>(() => {
     try { return new URLSearchParams(window.location.search).get('post'); } catch { return null; }
   });
-  useEffect(() => {
-    if (!pendingPostId) return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete('post');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-  }, [pendingPostId]);
+  // 🔴 2026-10-07(design-review P2-2) — `?post=` 를 읽자마자 지우지 않는다. 이벤트 판(?event=, 위)과 같은 계약:
+  //   글 상세가 **열려 있는 동안만** 주소에 남기고(아래 openPost 동기화), 닫히면 지운다.
+  //   예전엔 1회성이라 글을 보다가 새로고침(새 댓글 확인 — 흔한 동작)하면 상세가 닫히고 목록으로 떨어졌다.
+  //   못 여는 글(삭제·숨김·권한 없음)은 아래 단건 조회 실패 분기가 지우고 커뮤니티로 보낸다 — 새로고침마다 반복되지 않는다.
 
   // ── 푸시 알림 딥링크 (?nl=<원문 링크>) — CONNECTIVITY-ALL 1(2026-09-24) ──
   //   sw.js toAppLink 가 경로로는 못 여는 알림 링크(/posts/<id> · /wallet · /my-store/ledger …)를 원문 그대로 싣는다.
@@ -2121,6 +2127,8 @@ export default function App() {
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
+  /** 부팅 때의 posts 배열(스냅샷) 그 자체 — 서버 응답은 늘 새 배열이라 `posts === bootPostsRef.current` 면 아직 스냅샷이다(아래 ?post 해석). */
+  const bootPostsRef = useRef(posts);
   const [postsLoaded,   setPostsLoaded]   = useState<boolean>(() => readSnap<CommunityPost[]>('posts') != null); // 게시판 뼈대 행 수 판단(M7-01) — 0건과 '아직 모름'을 가른다
   const [postsErr,      setPostsErr]      = useState<unknown>(null);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
@@ -2162,6 +2170,32 @@ export default function App() {
     if (backToMe) setVoucherWalletOpen(true);
   }, []);
   useEffect(() => { if (openPost === null) postMeReturnRef.current = false; }, [openPost]);
+  // 열린 글을 주소(?post=)에 남긴다(design-review P2-2) — 이벤트 판의 syncEventParam 과 같은 조리법:
+  //   replaceState(뒤로가기 겹은 useBackClose 가 따로 쌓는다 · history.state 를 보존해 __layer 토큰이 끊기지 않는다) + popstate 재동기화
+  //   (뒤로가기는 예전 항목의 주소를 되살리므로, 닫힌 뒤 ?post 가 돌아와 있으면 새로고침에 닫은 글이 다시 열린다).
+  //   딥링크를 해석하는 동안(pendingPostId · 단건 조회 중)은 손대지 않는다 — 열기도 전에 지우면 그 사이 새로고침이 같은 글로 가지 않는다.
+  const postFetchRef = useRef(false);
+  const openPostIdRef = useRef<string | null>(null);
+  const syncPostParam = useCallback(() => {
+    if (postFetchRef.current) return;
+    try {
+      const url = new URL(window.location.href);
+      const want = openPostIdRef.current;
+      if (url.searchParams.get('post') === want) return;
+      if (want) url.searchParams.set('post', want); else url.searchParams.delete('post');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch { /* noop */ }
+  }, []);
+  const openPostId = openPost?.id ?? null;
+  useEffect(() => {
+    openPostIdRef.current = openPostId;
+    if (!pendingPostId) syncPostParam();
+  }, [openPostId, pendingPostId, syncPostParam]);
+  useEffect(() => {
+    const onPop = () => { window.setTimeout(syncPostParam, 0); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [syncPostParam]);
   // 공유 딥링크로 받은 글이 로드되면 상세를 연다(비로그인 열람 허용).
   useEffect(() => {
     // ⚠ N02: 예전엔 `posts.length === 0` 이면 여기서 그냥 돌아갔다. 그런데 `pendingPostId` 는
@@ -2169,22 +2203,29 @@ export default function App() {
     //   목록이 아직 안 왔거나 진짜로 0건이거나 — 어느 쪽이든 목록과 무관하게 대상을 해석해야 한다.
     //   목록이 비어 있으면 `found` 가 undefined 라 자연히 아래 단건 조회로 떨어진다.
     if (!pendingPostId) return;
-    const found = posts.find((p) => p.id === pendingPostId);
+    // ⚠ 부팅 스냅샷(readSnap 'posts' — 지난 방문의 목록)은 믿지 않는다. 새로고침으로 되살린 ?post(P2-2)가 그 사이 지워진·숨겨진 글이면
+    //   스냅샷에서 찾아 **옛 본문을 연 채** 남았다(실측 2026-10-07: 지운 글에서 새로고침 → 안내 없이 옛 상세). 서버 목록이 오기 전엔 단건 조회로 확인한다.
+    const found = posts === bootPostsRef.current ? undefined : posts.find((p) => p.id === pendingPostId);
     if (found) setOpenPost(found);
     // 링크가 최근 50건 밖(오래된 글)이면 조용히 실패하던 구간 — 단건 조회로 살린다
     else {
       const missingId = pendingPostId;
       const fromTab = activeTabRef.current;
+      postFetchRef.current = true;
       getPostById(missingId).then((fetched) => {
-        if (fetched) setOpenPost(fetched);
+        postFetchRef.current = false;
+        if (fetched) setOpenPost(fetched);   // 주소는 위 동기화가 커밋 뒤 이 글로 맞춘다
         // 없는 글과 못 불러온 글은 다른 사건이다 — 같은 문구로 뭉뚱그리면 유저가 새로고침할지 포기할지 모른다.
         // 2026-10-02: 안내만 하고 홈에 두면 '그래서 어디로?' 가 남는다 — 글이 있던 커뮤니티로 보낸다.
         //   (응답을 기다리는 사이 유저가 직접 다른 탭을 골랐다면 그 선택이 이긴다 — fromTab 이 그대로일 때만 옮긴다)
         else {
+          syncPostParam();   // 못 연 글(삭제·숨김·권한 없음)은 ?post 를 지운다 — 새로고침마다 반복되지 않게
           toast.show('삭제되었거나 찾을 수 없는 글입니다', 'info');
           if (activeTabRef.current === fromTab) changeTab('community');
         }
       }).catch(() => {
+        postFetchRef.current = false;
+        syncPostParam();
         toast.show('게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error');
       });
     }
@@ -2240,10 +2281,14 @@ export default function App() {
   const openLegal = useCallback((d: LegalDoc) => startTransition(() => setLegalDoc(d)), []);
   const openSupport = useCallback(() => startTransition(() => setSupportOpen(true)), []);
   const footerActions = useMemo(() => ({ onOpenLegal: openLegal, onOpenSupport: openSupport }), [openLegal, openSupport]);
-  const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
+  /** 지연 탭 경계가 본문을 보이는 중인가(PaneShownMarker) — 사업자 푸터는 폴백 동안 그리지 않는다(아래 푸터 주석). */
+  const [paneShown, setPaneShown] = useState(false);
+  // '내 정보' 를 보다가 새로고침하면 그대로 연다(오너 2026-10-07 · lib/reloadTab) — 보던 하위 탭은 MeTabs 가 남긴다.
+  const [voucherWalletOpen, setVoucherWalletOpen] = useState(() => reloadSaved(ME_OPEN_KEY, ['1']) !== null);
+  useEffect(() => { saveForReload(ME_OPEN_KEY, voucherWalletOpen ? '1' : ''); }, [voucherWalletOpen]);
   const [voucherSheetOpen, setVoucherSheetOpen] = useState(false); // 헤더 [이용권·출석] 시트(루트 렌더)
   // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
-  const [meTab, setMeTab] = useState<MeTab>('dashboard');
+  const [meTab, setMeTab] = useState<MeTab>(() => reloadSaved<MeTab>(ME_TAB_KEY, ['dashboard', 'profile', 'settings', 'security']) ?? 'dashboard');
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
   useEffect(() => {
@@ -4737,6 +4782,7 @@ export default function App() {
 
       {/* 탭 컨텐츠(지연 로딩) — 일정 탐색 이후 탭들은 청크 분리, 전환 시 짧은 로더 표시 */}
       <Suspense fallback={<LazyFallback />}>
+      <PaneShownMarker onShown={setPaneShown} />
       {/* 라이브 — 진행 중 게임 현황 */}
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div data-tab="live" className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
@@ -4887,7 +4933,10 @@ export default function App() {
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
       {/* key=activeTab — 탭마다 새 노드로 마운트한다. 푸터는 판 밖 단일 노드라 판 교체+스크롤 복원 프레임(뒤로가기 등 비입력 이동)에서
           두 판 높이 차만큼 '이동'으로 잡혀 CLS 0.05~0.81 이었다(운영 [perf:cls] 634건 중 429건 @div.reveal). 새로 삽입된 노드는 이동으로 세지 않는다. */}
-      <div className="reveal" key={activeTab}>
+      {/* paneShown — 지연 탭 경계가 폴백(LazyFallback · 한 화면 높이 예약)을 보이는 동안 푸터는 폴백 밑에 서 있다가, 본문이 보이는 순간 key 가 바뀌어 새 노드로 다시 끼워진다(2026-10-07 design-review P3-4).
+          본문이 한 화면보다 짧을 때 푸터가 위로 끌려 올라와 CLS 0.06~0.16 이던 것을 막는다 — 새로 삽입된 노드는 이동으로 세지 않는다.
+          🔴 푸터는 "항상" 그린다(P2-L): 지연 청크가 끝나지 않아도 사업자 정보·19세·1336 은 DOM 에 있어야 한다(법정 상시 노출). 조건부 렌더(paneShown && …)로 되돌리지 마라. */}
+      <div className="reveal" key={`${activeTab}:${paneShown ? 1 : 0}`}>
         <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
       </div>
 

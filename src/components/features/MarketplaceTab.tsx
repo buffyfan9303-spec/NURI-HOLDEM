@@ -13,6 +13,7 @@ import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
+import { useReloadState } from '../../lib/reloadTab';
 import NoticeSection from './NoticeSection';
 import { relativeTime } from '../../lib/relativeTime';
 
@@ -81,7 +82,8 @@ function MarketplaceTab({
   const showSkel = useSkeletonGate(loading && listings.length === 0); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
-  const [category, setCategory]       = useState<ListingCategory | 'all'>('all');
+  // 새로고침하면 보던 분류 칩 그대로(design-review P3-1 · lib/reloadTab) — 장터는 커뮤니티 '장터' 섹션 안에만 산다.
+  const [category, setCategory]       = useReloadState<ListingCategory | 'all'>('nuri:reload:market-cat', CAT_ORDER, 'all', 'community');
   const [includeSold, setIncludeSold] = useState(false);
   const [query, setQuery]             = useState('');
   const [sortBy, setSortBy]           = useState<SortBy>('recent');

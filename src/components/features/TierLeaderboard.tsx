@@ -39,6 +39,7 @@ import {
   type CatalogMark,
 } from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
+import { useReloadState } from '../../lib/reloadTab';
 import {
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
@@ -308,11 +309,11 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
 }
 
 export default function TierLeaderboard() {
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
-  const [board, setBoard] = useState<Board>('activity');
+  const [board, setBoard] = useReloadState<Board>('nuri:reload:rank-board', RANK_TABS, 'activity', 'community'); // 새로고침하면 보던 순위판(lib/reloadTab)
   // ── UI-08-1·2·4(2026-09-13): 계정 경계 + 조회 실패 상태 ──────────────────────────────────────
   //   · 계정 경계는 재마운트(key={user?.id})가 아니라 **owner 스탬프**다 — 재마운트하면 rows→[]·loading→true 로 랭킹 패널이 스켈레톤으로 접혀
   //     문서 높이가 무너진다(오너 이슈 #5 실측: docHeight 1684→1418 · scrollY 487→221 · CLS 0.2516)고 UI-06 스크롤 복원 대상도 사라진다.
@@ -762,6 +763,11 @@ export default function TierLeaderboard() {
   }, [user?.activityPoints, displayStamp, activityTick]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
+  // '내 등급 카드' — 인증 확인 중(authLoading)에는 같은 카드를 0점으로 **보이지 않게** 그려 자리를 잡는다(design-review P3-4, 2026-10-07).
+  //   새로고침으로 순위에서 부팅하면 판이 프로필보다 먼저 그려져, 프로필이 오는 순간 카드(186px)가 끼어들며 아래 전부가 밀렸다
+  //   (390 · CPU 4배 실측 layout-shift 0.17). 비로그인은 세션이 없어 확인이 판보다 먼저 끝나므로 이 자리를 잡지 않는다.
+  const cardProg = myProg ?? (authLoading ? tierProgress(0) : null);
+  const cardPts = user?.activityPoints ?? 0;
   const isAdmin = user?.role === 'admin';
   const myRank = useMemo(() => {
     if (!user) return null;
@@ -845,15 +851,15 @@ export default function TierLeaderboard() {
         <p className="min-w-0 text-2xs font-semibold leading-relaxed text-gold-300">상위 랭커에게 프로·인플루언서 협업 기회가 열립니다</p>
       </div>
       {/* 내 등급 카드 */}
-      {user && myProg && (
-        <section className="rounded-aura border card-aura p-3">
+      {cardProg && (
+        <section className={['rounded-aura border card-aura p-3', user ? '' : 'invisible'].join(' ')} aria-hidden={user ? undefined : true}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} overallRank={myRank} />
+              <TierBadge points={cardPts} size={30} admin={isAdmin} overallRank={myRank} />
               <div>
                 <p className="text-2xs text-ink-muted">내 활동 등급</p>
                 <p className="text-lg font-extrabold text-ink-primary leading-tight">
-                  {isAdmin ? 'SS' : myIsAce ? 'AA' : myProg.current.label}
+                  {isAdmin ? 'SS' : myIsAce ? 'AA' : cardProg.current.label}
                   <span className="ml-1.5 text-xs font-semibold text-ink-muted">등급</span>
                 </p>
               </div>
@@ -861,7 +867,7 @@ export default function TierLeaderboard() {
             <div className="text-right">
               <p className="text-2xs text-ink-muted">활동 점수</p>
               <p className="text-lg font-extrabold stat-violet tabular-nums leading-tight">
-                <CountUp value={user.activityPoints ?? 0} />
+                <CountUp value={cardPts} />
               </p>
               {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 <b className="text-xs font-extrabold tabular-nums text-ink-primary">{myRank}위</b></p>}
             </div>
@@ -870,22 +876,22 @@ export default function TierLeaderboard() {
           {/* 다음 등급 진행률 (운영자는 SS 고정) */}
           {isAdmin ? (
             <p className="mt-3 text-2xs font-bold text-danger-light">관리자 전용 SS 등급 · 순위 집계 제외</p>
-          ) : myProg.next ? (
+          ) : cardProg.next ? (
             <div className="mt-3">
               <div className="flex items-center justify-between text-2xs text-ink-muted mb-1">
-                <span>다음 등급 <span className="font-bold text-ink-secondary">{myProg.next.label}</span></span>
-                <span className="tabular-nums"><b className="text-ink-secondary">{(user.activityPoints ?? 0).toLocaleString()}</b> / {myProg.next.min.toLocaleString()}점 · {myProg.toNext.toLocaleString()}점 남음</span>
+                <span>다음 등급 <span className="font-bold text-ink-secondary">{cardProg.next.label}</span></span>
+                <span className="tabular-nums"><b className="text-ink-secondary">{(cardPts).toLocaleString()}</b> / {cardProg.next.min.toLocaleString()}점 · {cardProg.toNext.toLocaleString()}점 남음</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="h-2 min-w-0 flex-1 rounded-full bg-surface-high overflow-hidden">
                   <div
                     className="h-full rounded-full transition-[width]"
-                    style={{ width: `${Math.round(myProg.ratio * 100)}%`, background: `linear-gradient(90deg, ${tierCss(myProg.current.vividVar)}, ${tierCss(myProg.next.vividVar)})` }}
+                    style={{ width: `${Math.round(cardProg.ratio * 100)}%`, background: `linear-gradient(90deg, ${tierCss(cardProg.current.vividVar)}, ${tierCss(cardProg.next.vividVar)})` }}
                   />
                 </div>
                 {/* 바 끝 = 다음 등급 뱃지 미리보기 */}
-                <span className="shrink-0" title={`다음 등급 ${myProg.next.label} · ${myProg.next.title}`}>
-                  <TierBadge points={myProg.next.min} size={16} />
+                <span className="shrink-0" title={`다음 등급 ${cardProg.next.label} · ${cardProg.next.title}`}>
+                  <TierBadge points={cardProg.next.min} size={16} />
                 </span>
               </div>
             </div>
@@ -933,7 +939,7 @@ export default function TierLeaderboard() {
                   key={t.key}
                   className={[
                     'flex items-center justify-between px-2 py-1.5 rounded-input border',
-                    t.rank === myProg.current.rank
+                    t.rank === cardProg.current.rank
                       ? 'border-accent-400/50 bg-accent-300/6'
                       : 'border-border-subtle bg-surface-high',
                   ].join(' ')}
