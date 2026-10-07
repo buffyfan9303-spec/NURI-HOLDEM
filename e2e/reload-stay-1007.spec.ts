@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { bootOwner, openMyStore, MOCK_UID, MOCK_VENUE } from './_mockOwner';
 import { mockPosts } from './_mocks';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 type Frame = { panes: string[]; nav: string | null; act: string | null; dx: number | null };
 type Probe = { act: string; pill?: string };
@@ -248,7 +249,7 @@ test('④ 1440 권한이 사라진 계정 — 내 매장에서 새로고침하�
     extra: async (p) => {
       await p.route(/\/rest\/v1\/profiles\?/, (r) => (r.request().method() !== 'GET' ? r.fallback() : r.fulfill({
         status: 200, contentType: 'application/json',
-        body: JSON.stringify({ id: MOCK_UID, name: '업주', nickname: '업주', role, approved: true, status: 'active', venue_id: role === 'user' ? null : MOCK_VENUE, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: 3 }),
+        body: JSON.stringify({ id: MOCK_UID, name: '업주', nickname: '업주', role, approved: true, status: 'active', venue_id: role === 'user' ? null : MOCK_VENUE, activity_points: 0, created_at: '2026-01-01T00:00:00Z', consented_legal_version: LEGAL_VERSION }),
       })));
     },
   });

@@ -18,6 +18,7 @@
 import type { Page, Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
 import { OWNER_TERMS_VERSION } from '../src/lib/legalDeploy';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 /** supabase-js v2 의 세션 키 — 앱이 로드되기 전에 심으면 정상 로그인으로 부팅한다. */
@@ -85,7 +86,7 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     venue_id: MOCK_VENUE, activity_points: 0, created_at: FAKE_SESSION.user.created_at,
     // 2026-09-28 — 개정 약관 시행일(LEGAL_EFFECTIVE_ISO 2026-09-29)부터 구버전 동의자는 '개정 약관 동의' 차단 게이트를 본다.
     //   이 칸이 없으면 시행일 이후 **모든 목킹 업주 스펙**이 게이트에 막혀 '내 매장' 을 못 찾는다(자정 넘김 스펙에서 실측).
-    consented_legal_version: 3,
+    consented_legal_version: LEGAL_VERSION,
     ...opts.profile,
   }));
   const venueRow = {
