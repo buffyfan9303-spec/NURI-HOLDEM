@@ -199,6 +199,15 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   const [codeSent,     setCodeSent]    = useState(false);  // 코드 발송 단계 여부
   const [sendingCode,  setSendingCode] = useState(false);
   const [changingPw,   setChangingPw]  = useState(false);
+  // 인증번호를 받을 이메일이 **계정(auth)** 에 있는가 — 카카오(OIDC) 계정은 없다(20261007ka). 프로필 행이 아니라 세션을 본다:
+  //   인증번호는 auth 이메일로 가기 때문이다. 모르면(조회 전·실패) 종전대로 폼을 보인다.
+  const [noAuthEmail, setNoAuthEmail] = useState(false);
+  useEffect(() => {
+    if (IS_MOCK) return;
+    let alive = true;
+    supabase.auth.getSession().then(({ data }) => { if (alive && data.session) setNoAuthEmail(!data.session.user.email); }).catch(() => {});
+    return () => { alive = false; };
+  }, [user?.id]);
 
   // 모달이 "열리는 순간"에만 폼 초기화 (이후 user 객체가 새로 들어와도 입력 유지)
   //  — 탭 복귀/토큰 갱신 시 onAuthStateChange가 setUser를 호출해도
@@ -384,7 +393,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             <div>
               <p className="mb-1 text-2xs text-ink-muted">이메일</p>
               <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
-                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email || '없음 (카카오 로그인)'}</span>
+                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email || '없음'}</span>
               </div>
               <p className="mt-1 text-2xs text-ink-muted">이메일은 변경할 수 없습니다</p>
             </div>
@@ -685,7 +694,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         </div>
 
         {/* 이메일 없는 계정(카카오 로그인, 20261007ka)은 인증번호를 받을 곳이 없다 — 비밀번호 변경 대신 안내만 둔다. */}
-        {!IS_MOCK && !user.email ? (
+        {noAuthEmail ? (
           <p data-testid="no-email-password-note" className="mx-4 mt-4 rounded-aura border border-border-subtle bg-surface-high p-3 text-xs leading-relaxed text-ink-muted">
             카카오로 가입한 계정은 비밀번호 없이 카카오 로그인으로 들어옵니다.
           </p>

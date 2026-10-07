@@ -200,3 +200,26 @@ for (const provider of ['kakao', 'email'] as const) {
     await expect(page.getByRole('button', { name: /휴대폰 본인인증이 필요합니다/ })).toHaveCount(0);
   });
 }
+
+// 이메일이 없는 카카오 계정은 인증번호를 받을 곳이 없다 — 비밀번호 변경 폼 대신 안내. 이메일 회원은 종전대로 폼(대조).
+for (const provider of ['kakao', 'email'] as const) {
+  test(`내 정보 › 보안 — ${provider} 계정의 비밀번호 칸`, async ({ page }) => {
+    test.setTimeout(45_000);
+    await stubSession(page, provider, { agreed_to_terms: true, consented_legal_version: 3 });
+    await stabilizeBackstack(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.getByRole('button', { name: '홍길동 메뉴' }).click({ timeout: 20_000 });
+    await page.getByRole('button', { name: '내 정보 열기' }).click();
+    const tab = page.locator('[data-profile-tabbar]').getByRole('tab', { name: '보안', exact: true });
+    await tab.evaluate((b) => (b as HTMLElement).click());
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    if (provider === 'kakao') {
+      await expect(page.getByTestId('no-email-password-note')).toBeVisible();
+      await expect(page.getByRole('button', { name: '비밀번호 보기' })).toHaveCount(0);
+    } else {
+      await expect(page.getByRole('button', { name: '비밀번호 보기' }).first()).toBeVisible();
+      await expect(page.getByTestId('no-email-password-note')).toHaveCount(0);
+    }
+  });
+}
