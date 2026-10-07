@@ -4919,14 +4919,12 @@ export default function App() {
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
       {/* key=activeTab — 탭마다 새 노드로 마운트한다. 푸터는 판 밖 단일 노드라 판 교체+스크롤 복원 프레임(뒤로가기 등 비입력 이동)에서
           두 판 높이 차만큼 '이동'으로 잡혀 CLS 0.05~0.81 이었다(운영 [perf:cls] 634건 중 429건 @div.reveal). 새로 삽입된 노드는 이동으로 세지 않는다. */}
-      {/* paneShown — 지연 탭 경계가 폴백(LazyFallback · 한 화면 높이 예약)을 보이는 동안은 푸터를 그리지 않는다(2026-10-07 design-review P3-4).
-          그리면 폴백 밑(접힌 선)에 섰다가 본문이 한 화면보다 짧으면 위로 끌려 올라왔다 — 새로고침으로 지연 탭에서 부팅할 때
-          CPU 4배 실측 0.06~0.16(실시간·명예의 전당·내 정보). 폴백은 이미 한 화면을 채워 푸터가 접힌 선 밖이었으니 보이는 것은 그대로다. */}
-      {paneShown && (
-        <div className="reveal" key={activeTab}>
-          <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
-        </div>
-      )}
+      {/* paneShown — 지연 탭 경계가 폴백(LazyFallback · 한 화면 높이 예약)을 보이는 동안 푸터는 폴백 밑에 서 있다가, 본문이 보이는 순간 key 가 바뀌어 새 노드로 다시 끼워진다(2026-10-07 design-review P3-4).
+          본문이 한 화면보다 짧을 때 푸터가 위로 끌려 올라와 CLS 0.06~0.16 이던 것을 막는다 — 새로 삽입된 노드는 이동으로 세지 않는다.
+          🔴 푸터는 "항상" 그린다(P2-L): 지연 청크가 끝나지 않아도 사업자 정보·19세·1336 은 DOM 에 있어야 한다(법정 상시 노출). 조건부 렌더(paneShown && …)로 되돌리지 마라. */}
+      <div className="reveal" key={`${activeTab}:${paneShown ? 1 : 0}`}>
+        <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
+      </div>
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
       {/* 모달 렌더 크래시가 앱 전체 폴백으로 번지지 않게 묶음 단위 바운더리 — 대상이 바뀌면 자동 리셋 */}

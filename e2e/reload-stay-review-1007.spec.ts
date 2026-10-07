@@ -284,3 +284,41 @@ test('P3-1 390 게시판 분류 칩 · 장터 분류 칩 — 새로고침 뒤 �
   await click(page, '[data-testid="sec-tab-board"]');
   await expect(page.locator('[data-board-cat-rail] button[aria-pressed="true"]').first(), '게시판 분류가 전체로 돌아갔다').toHaveText('핸드 분석', { timeout: 15_000 });
 });
+
+// ── P2-L(재판정 88ba7824) 법정 푸터 — 지연 탭 청크가 끝나지 않아도 푸터는 DOM 에 있고 스크롤로 닿는다 ──────────────
+// 푸터를 `{paneShown && …}` 로 그리면 폴백(LazyFallback)이 끝나지 않는 동안 사업자 정보·19세·1336 이 영원히 빠진다(법정 상시 노출 위반).
+// 음성 대조(2026-10-07): 수정 전 빌드(88ba7824) hang·abort 모두 FAIL(푸터 없음) — 수정 후 PASS. 하네스: rejudge-88ba7824/zz-dr208c.spec.ts
+test.describe('P2-L 법정 푸터 — 지연 탭 청크 상태와 무관', () => {
+  test.use({ serviceWorkers: 'block' });
+  for (const mode of ['hang', 'abort'] as const) {
+    test(`P2-L 390 커뮤니티 청크 ${mode} — 직접 진입해도 사업자번호·19세·1336 이 DOM 에 있고 스크롤로 닿는다`, async ({ page }) => {
+      test.setTimeout(60_000);
+      await page.setViewportSize(M390);
+      await mockPosts(page, 12);
+      const hit: string[] = [];
+      await page.route(/\/assets\/CommunityTab-[^/]+\.js/, (r) => {
+        hit.push(r.request().url());
+        return mode === 'abort' ? r.abort() : new Promise(() => { /* 영원히 대기 */ });
+      });
+      await page.goto('/?tab=community', { waitUntil: 'commit' }).catch(() => {});
+      await expect.poll(() => hit.length, { message: '전제: 커뮤니티 청크 요청이 가로채였다', timeout: 20_000 }).toBeGreaterThan(0);
+      await page.waitForTimeout(5000);
+      if (mode === 'hang') {
+        await expect(page.locator('.pane-reserve[aria-busy="true"][aria-label="불러오는 중"]'), '전제: 끝나지 않는 폴백 상태다').toHaveCount(1);
+      }
+      const footer = page.locator('footer[data-testid="business-footer"]');
+      await expect(footer, '법정 푸터가 DOM 에 없다').toHaveCount(1);
+      const st = await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const ft = document.querySelector('[data-testid="business-footer"]');
+        const txt = ft?.textContent ?? '';
+        return { reachable: ft ? ft.getBoundingClientRect().top < innerHeight : false, bizno: txt.includes('525-20-02937'), age: txt.includes('19세'), helpline: txt.includes('1336') };
+      });
+      console.log(`[P2-L ${mode}]`, JSON.stringify(st));
+      expect(st.reachable, '끝까지 스크롤해도 푸터가 화면에 닿지 않는다').toBe(true);
+      expect(st.bizno, '사업자등록번호').toBe(true);
+      expect(st.age, '만 19세 미만 고지').toBe(true);
+      expect(st.helpline, '도박문제 상담 1336').toBe(true);
+    });
+  }
+});
