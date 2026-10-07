@@ -3063,6 +3063,8 @@ export default function App() {
   const oauthErrShown = useRef(false);
   useEffect(() => {
     if (oauthErrShown.current) return;
+    // 카카오 복귀(/auth/kakao?error=…)는 아래 카카오 effect 가 맡는다 — 여기서 먼저 읽으면 문장이 둘 뜨고 state 정리가 꼬인다.
+    if (window.location.pathname === '/auth/kakao') return;
     try {
       const q = new URLSearchParams(window.location.search);
       const h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -3101,6 +3103,18 @@ export default function App() {
         window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
       }
     } catch { /* ignore */ }
+  }, [toast]);
+
+  // ── 카카오 로그인 복귀(/auth/kakao?code&state) — lib/kakaoLogin 의 흐름 설명 참고 ─────────────────
+  //   경로 문자열은 lib/kakaoLogin.ts 의 KAKAO_CALLBACK_PATH 와 같아야 한다(src/lib/kakaoLogin.test.ts 가 대조한다).
+  //   모듈은 이 경로로 들어왔을 때만 받는다 — 첫 화면 번들에 싣지 않는다. 세션이 생기면 AuthContext 가 SIGNED_IN 으로 이어받는다.
+  const kakaoReturnRan = useRef(false);
+  useEffect(() => {
+    if (kakaoReturnRan.current || window.location.pathname !== '/auth/kakao') return;
+    kakaoReturnRan.current = true;
+    void import('./lib/kakaoLogin')
+      .then((m) => m.completeKakaoLogin(), () => '카카오 로그인을 완료하지 못했습니다. 다시 시도해 주세요')
+      .then((msg) => { if (msg) toast.show(msg, 'error'); });
   }, [toast]);
 
   // 없는 매장 링크(/s/<코드>) 안내 — 공유 링크를 받았는데 그 매장이 없을 때.

@@ -384,7 +384,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             <div>
               <p className="mb-1 text-2xs text-ink-muted">이메일</p>
               <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
-                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email}</span>
+                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email || '없음 (카카오 로그인)'}</span>
               </div>
               <p className="mt-1 text-2xs text-ink-muted">이메일은 변경할 수 없습니다</p>
             </div>
@@ -684,6 +684,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           <LocationPrivacyCard onOpenLegal={onOpenLegal} />
         </div>
 
+        {/* 이메일 없는 계정(카카오 로그인, 20261007ka)은 인증번호를 받을 곳이 없다 — 비밀번호 변경 대신 안내만 둔다. */}
+        {!IS_MOCK && !user.email ? (
+          <p data-testid="no-email-password-note" className="mx-4 mt-4 rounded-aura border border-border-subtle bg-surface-high p-3 text-xs leading-relaxed text-ink-muted">
+            카카오로 가입한 계정은 비밀번호 없이 카카오 로그인으로 들어옵니다.
+          </p>
+        ) : (
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-aura bg-surface-high border border-border-subtle">
@@ -778,6 +784,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             </div>
           )}
         </form>
+        )}
         <PushNotificationSetting />
         {/* 계정 관리 — 파괴적 액션(차단 관리·로그아웃·탈퇴)은 헤어라인으로 분리해 최하단 */}
         <div className="mx-4 mb-4 border-t border-border-subtle" aria-hidden />

@@ -389,6 +389,11 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# 카카오 로그인(OIDC) — 호출자는 아직 로그인 전(익명)이다. verify_jwt 는 anon 키 JWT 도 통과시켜 게이트가 아니므로 끄고,
+# 함수 안에서 Origin 허용 목록·입력 형식·IP 당 분당 상한으로 막는다(supabase/functions/kakao-oidc-exchange/logic.ts).
+[functions.kakao-oidc-exchange]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

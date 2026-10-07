@@ -22,7 +22,9 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { updateMyConsent } from '../../api/auth';
+import { updateMyConsent, checkNicknameAvailable, setMyNickname } from '../../api/auth';
+import type { NicknameDraft } from './SocialNicknameField';
+import { isValidDisplayName } from '../../lib/displayName';
 import { legalConsentStage, legalRequiredSinceIso } from '../../lib/legalVersion';
 import { koDate } from '../../lib/legalDeploy';
 import { saveLocationConsent } from '../../lib/locationConsent';
@@ -32,6 +34,10 @@ import ConsentSummary from './ConsentSummary';
 
 // 위치 동의 칸은 소셜 가입의 첫 동의에서만 보인다 — 이 게이트는 첫 화면 번들에 실리므로 칸은 지연 로드한다(번들 예산).
 const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
+// 닉네임 확인 칸도 소셜 첫 동의에서만 보인다 — 같은 이유로 지연 로드.
+const SocialNicknameField = lazy(() => import('./SocialNicknameField'));
+// 닉네임 칸이 쓰는 검사·저장·형식 규칙 — 가입 폼(AuthModal NicknameField)과 같은 함수다. 지연 칸에 props 로 넘기는 이유는 SocialNicknameField 머리말.
+const NICK_API = { check: checkNicknameAvailable, save: setMyNickname, valid: isValidDisplayName };
 
 type GateMode = 'initial' | 'required';
 
@@ -87,6 +93,10 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
     setPubRankTouched(false);
   }, [reconsent, user]);
 
+  // 소셜 첫 동의의 닉네임 확인(SocialNicknameField). null = 칸이 아직 안 떴다 → 지금 닉네임 그대로(게이트를 막지 않는다).
+  const [nick, setNick] = useState<NicknameDraft | null>(null);
+  const nickBlocked = mode === 'initial' && nick !== null && !nick.ok;
+
   // 선택 항목(marketing·pubRank)은 allRequired 에 넣지 않는다 — 넣으면 동의 강제가 된다.
   const allRequired = age19 && terms && privacy && anti;
   const allChecked  = allRequired && marketing && pubRank;
@@ -102,8 +112,11 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
 
   const submit = async () => {
     if (!allRequired) return toast.show('필수 항목에 모두 동의해 주세요', 'error');
+    if (nickBlocked) return toast.show('사용 가능한 닉네임을 입력해 주세요', 'error');
     setSaving(true);
     try {
+      // 소셜 첫 동의의 닉네임 — 바꿨을 때만 저장한다(서버 set_my_nickname 이 금칙어·사칭어·길이·중복을 다시 강제).
+      if (mode === 'initial' && nick && nick.value !== (user?.nickname ?? '').trim()) await nick.save();
       // 랭킹 공개(선택)는 '물어봤을 때만' 보낸다. 미응답(null)을 손대지 않은 채 false 로 덮으면
       // '거부'로 굳어 나중에 다시 물어볼 수 없다.
       const sendPubRank = !reconsent || pubRankTouched || user?.publicRankingConsent != null;
@@ -149,6 +162,10 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           </div>
         )}
 
+        {mode === 'initial' && user && (
+          <Suspense fallback={null}><SocialNicknameField current={user.nickname ?? ''} onChange={setNick} api={NICK_API} /></Suspense>
+        )}
+
         {/* 공개 약관 원문 — 로그인 여부와 무관하게 열리는 정적 페이지 */}
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-2xs">
           {DOC_LINKS.map(([label, href]) => (
@@ -187,7 +204,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
             필수 동의 게이트라 '동의하고 시작'이 스크롤해야 보이면 안 된다(e2e/consent-gate-drag 가 잡는다). */}
         <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border-subtle bg-surface-mid px-4 py-3">
           <button type="button" onClick={() => logout()} className="btn-ghost flex-1">로그아웃</button>
-          <button type="button" onClick={submit} disabled={saving || !allRequired} className="btn-primary flex-1 disabled:opacity-60">
+          <button type="button" onClick={submit} disabled={saving || !allRequired || nickBlocked} className="btn-primary flex-1 disabled:opacity-60">
             {saving ? '저장 중…' : mode === 'initial' ? '동의하고 시작' : '동의하고 계속'}
           </button>
         </div>

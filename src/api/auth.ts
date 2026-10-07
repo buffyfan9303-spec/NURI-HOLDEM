@@ -86,7 +86,7 @@ export interface SignupOwnerPayload extends SignupUserPayload {
 function rowToUser(row: any): User {
   return {
     id:             row.id,
-    email:          row.email,
+    email:          row.email ?? '', // 카카오 로그인 회원은 이메일이 없다(20261007ka — profiles.email NULL 허용). 빈 값이면 화면이 그 줄을 안 그린다
     name:           row.name,
     nickname:       row.nickname ?? undefined,
     nicknameLocked: row.nickname_locked === true,
@@ -847,5 +847,5 @@ export async function setMyPhoneLookup(allow: boolean): Promise<void> {
 //   resolve_ranking_members 에 매장 범위를 걸었다 — 매장 무관 전 회원 검색을 되살리지 마라.
 // 되살리려면 git 이력(2026-09-11 이전)의 rawSearchMembersForRanking 을 가져온다.
 
-// 카카오 로그인(loginWithKakao · VITE_KAKAO_LOGIN 스위치)은 2026-09-10 오너 지시로 삭제했다 — 제공자 성공 이력 0건.
-// 소셜 로그인은 Google 하나다. 되살리려면 git 이력(2026-09-10 이전)의 loginWithKakao 를 가져온다.
+// 카카오 로그인은 2026-10-07 오너 지시로 다시 넣었다 — signInWithOAuth 가 아니라 OIDC + signInWithIdToken 이다(src/lib/kakaoLogin.ts).
+// 옛 loginWithKakao(2026-09-10 삭제)는 Supabase 가 account_email 을 강제 요청해 비즈 앱이 아니면 KOE205 로 막혀 성공 이력이 0건이었다.

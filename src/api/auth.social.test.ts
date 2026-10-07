@@ -1,6 +1,6 @@
 // 소셜 로그인 시작 파라미터(AUTH-03) — Google 은 prompt=select_account 를 붙인다.
 // 브라우저에 Google 계정이 하나만 살아 있으면 Google 은 계정 선택 없이 그 계정으로 즉시 돌려보내서,
-// 앱에서 로그아웃한 뒤 '다른 계정으로' 들어올 길이 없었다. (카카오 로그인은 2026-09-10 삭제 — 소셜은 Google 하나.)
+// 앱에서 로그아웃한 뒤 '다른 계정으로' 들어올 길이 없었다. (카카오 로그인은 2026-10-07 OIDC 로 다시 넣었다 — src/lib/kakaoLogin.test.ts.)
 // 실행: npx vitest run src/api/auth.social.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -33,8 +33,10 @@ describe('OAuth 시작 파라미터', () => {
     }));
   });
 
-  it('카카오 로그인 진입점이 남아 있지 않다(2026-09-10 삭제)', () => {
+  it('옛 카카오 OAuth 진입점(loginWithKakao — Supabase 가 account_email 을 강제해 KOE205)은 되살리지 않는다', async () => {
+    // 카카오는 src/lib/kakaoLogin.ts 의 OIDC + signInWithIdToken 하나로만 들어온다.
     expect('loginWithKakao' in auth).toBe(false);
-    expect('KAKAO_LOGIN_ENABLED' in auth).toBe(false);
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(new URL('./auth.ts', import.meta.url), 'utf8')).not.toMatch(/provider:\s*'kakao'/);
   });
 });
