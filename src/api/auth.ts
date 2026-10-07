@@ -86,7 +86,7 @@ export interface SignupOwnerPayload extends SignupUserPayload {
 function rowToUser(row: any): User {
   return {
     id:             row.id,
-    email:          row.email,
+    email:          row.email ?? '', // 카카오 로그인 회원은 이메일이 없다(20261007ka — profiles.email NULL 허용). 빈 값이면 화면이 그 줄을 안 그린다
     name:           row.name,
     nickname:       row.nickname ?? undefined,
     nicknameLocked: row.nickname_locked === true,
@@ -542,6 +542,7 @@ export async function adminWithdrawUser(userId: string, reason: string): Promise
     console.warn('[sanction] notify email failed (function may be undeployed):', e);
   }
 
+  await unlinkKakaoBeforeWithdraw(userId);   // critical-211 P2-1 — identity 를 지우는 RPC 보다 먼저
   const { error } = await supabase.rpc('admin_withdraw_user', { p_user_id: userId, p_reason: reason });
   if (!error) return;
   const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message ?? '');
@@ -588,11 +589,28 @@ export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: 
   return { vouchers: v.count ?? 0, posts: p.count ?? 0 };
 }
 
+// ── 탈퇴 직전 카카오 연결 끊기(critical-211 P2-1) ──────────────────────────────
+// 카카오 정책상 탈퇴 과정에 연결 해제(unlink)가 들어가야 한다. 엣지 kakao-unlink 가 service role 로 대상의 카카오 회원번호를 읽어
+// 카카오 Admin 키로 끊는다 — 탈퇴 RPC 가 auth.identities 를 지우면 회원번호를 못 읽으므로 **RPC 전에** 끝까지 기다린다.
+// 카카오가 아닌 회원, 그리고 탈퇴 RPC 가 거절할 회원(매장 대표·제재 중 본인·운영자 대상 — 엣지가 서버에서 먼저 확인,
+// critical-211 재반증 P3-B)은 서버가 아무것도 안 한다(skipped). 실패해도 **던지지 않는다** — 탈퇴 권리가 우선이고,
+// 못 끊은 회원번호는 서버 큐(20261007kb)가 남겨 크론이 재시도한다. 이 호출 자체가 안 닿아도 identity 삭제 트리거가 큐에 넣는다.
+async function unlinkKakaoBeforeWithdraw(userId?: string): Promise<void> {
+  try {
+    // 15초 상한 — 엣지가 멈춰도 탈퇴가 붙잡히지 않는다(엣지 안의 카카오 호출 상한은 8초)
+    const { data, error } = await supabase.functions.invoke('kakao-unlink', { body: userId ? { userId } : {}, timeout: 15_000 });
+    if (error || (data as { queued?: boolean } | null)?.queued) console.warn('[kakao-unlink] 즉시 해제 못 함 — 서버 큐가 재시도한다');
+  } catch {
+    console.warn('[kakao-unlink] 호출 실패 — 서버 큐(identity 삭제 트리거)가 재시도한다');
+  }
+}
+
 // ── 회원 자가 탈퇴 ────────────────────────────────────────────────────────────
 // 개인정보(실명·전화·CI·생년월일·성별·통신사·이메일) 파기 + status='withdrawn' 익명화.
 // 매장 대표는 매장을 먼저 정리(킬스위치 삭제/대표 양도)해야 하며, 서버가 거부한다.
 export async function withdrawMyAccount(): Promise<void> {
   if (IS_MOCK) return;
+  await unlinkKakaoBeforeWithdraw();   // critical-211 P2-1 — identity 를 지우는 RPC 보다 먼저
   const { error } = await supabase.rpc('withdraw_my_account');
   if (error) throw new Error(error.message);
 }
@@ -847,5 +865,5 @@ export async function setMyPhoneLookup(allow: boolean): Promise<void> {
 //   resolve_ranking_members 에 매장 범위를 걸었다 — 매장 무관 전 회원 검색을 되살리지 마라.
 // 되살리려면 git 이력(2026-09-11 이전)의 rawSearchMembersForRanking 을 가져온다.
 
-// 카카오 로그인(loginWithKakao · VITE_KAKAO_LOGIN 스위치)은 2026-09-10 오너 지시로 삭제했다 — 제공자 성공 이력 0건.
-// 소셜 로그인은 Google 하나다. 되살리려면 git 이력(2026-09-10 이전)의 loginWithKakao 를 가져온다.
+// 카카오 로그인은 2026-10-07 오너 지시로 다시 넣었다 — signInWithOAuth 가 아니라 OIDC + signInWithIdToken 이다(src/lib/kakaoLogin.ts).
+// 옛 loginWithKakao(2026-09-10 삭제)는 Supabase 가 account_email 을 강제 요청해 비즈 앱이 아니면 KOE205 로 막혀 성공 이력이 0건이었다.

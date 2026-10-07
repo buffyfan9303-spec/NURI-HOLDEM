@@ -1,8 +1,8 @@
 // 소셜 로그인 · 약관 시트 · 동의 게이트 — AUTH-01 · MODAL-03 · AUTH-04
 //
 // 잠그는 것 셋:
-//  ① 로그인 창의 소셜 CTA 는 Google 하나다 — 카카오 로그인은 2026-09-10 오너 지시로 삭제(제공자 성공 이력 0건).
-//     되살아나면(코드·환경변수 어느 쪽이든) 이 케이스가 잡는다.
+//  ① 기본 빌드(공개 스위치 VITE_KAKAO_LOGIN_ENABLED 없음 = CI)의 소셜 CTA 는 Google 하나다. 카카오 로그인은 2026-10-07 OIDC 로
+//     다시 넣었지만 스위치를 켠 빌드에서만 보인다 — 켬 빌드의 검사는 e2e/kakao-login.spec.ts(E2E_KAKAO_LOGIN=on).
 //  ② 가입 폼의 약관 '보기' 시트가 열리면 포커스가 시트 안으로 들어오고, Tab 이 뒤쪽 폼으로 새지 않으며,
 //     닫으면 '보기' 버튼으로 돌아온다(Modal 원자로 감싼 결과).
 //  ③ agreed_to_terms=false 로 로그인한 회원(=소셜 첫 로그인, 20260909a 적용 후)에게 '서비스 이용 동의' 게이트가 뜨고
@@ -23,10 +23,11 @@ async function openLogin(page: Page) {
   return dialog;
 }
 
-test('🔴 로그인 창 — 소셜 CTA 는 Google 하나고 카카오 버튼은 없다(AUTH-01 · 2026-09-10 삭제)', async ({ page }) => {
+test('🔴 로그인 창 — 기본 빌드의 소셜 CTA 는 Google 하나고 카카오 버튼은 없다(AUTH-01 · 스위치 꺼짐)', async ({ page }) => {
+  test.skip(process.env.E2E_KAKAO_LOGIN === 'on', '카카오 스위치를 켠 빌드 — e2e/kakao-login.spec.ts 가 맡는다');
   const dialog = await openLogin(page);
   await expect(dialog.getByRole('button', { name: /Google로/ })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: /카카오/ }), '삭제한 카카오 로그인 버튼이 다시 렌더됐다').toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: /카카오/ }), '스위치가 꺼진 빌드인데 카카오 로그인 버튼이 렌더됐다').toHaveCount(0);
 });
 
 test('🔴 약관 시트 — 열리면 포커스가 안으로 들어오고 Tab 이 밖으로 새지 않으며 닫으면 보기 버튼으로 돌아온다(MODAL-03)', async ({ page }) => {

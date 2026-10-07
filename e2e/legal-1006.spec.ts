@@ -58,10 +58,12 @@ test.describe('법령 점검 2026-10-06', () => {
 
   test('정지 계정 — 다른 기능은 막히고(비로그인 상태) 이용 제한 안내 시트에서 탈퇴·로그아웃할 수 있다', async ({ page }) => {
     const rpc: Record<string, unknown[]> = {};
-    await boot(page, { status: 'suspended', suspended_until: new Date(Date.now() + 7 * 86_400_000).toISOString(), agreed_to_terms: true }, rpc);
+    await boot(page, { status: 'suspended', suspended_until: new Date(Date.now() + 7 * 86_400_000).toISOString(), sanction_reason: '반복 도배', agreed_to_terms: true }, rpc);
     const sheet = page.getByTestId('sanctioned-sheet');
     await expect(sheet).toBeVisible({ timeout: 20_000 });
     await expect(sheet).toContainText('이용이 일시 정지된 계정입니다');
+    // critical-211 P2-2: 이메일이 없는 회원(카카오)도 사유를 받는다 — 메일이 아니라 앱 안 안내로
+    await expect(sheet).toContainText('사유: 반복 도배.');
     await expect(page.getByRole('button', { name: 'CCC 메뉴' }), '제재 계정이 로그인 상태로 보이면 안 된다').toHaveCount(0);
     await expect(page.getByRole('button', { name: /회원 탈퇴하기/ })).toBeVisible();
     await page.getByRole('button', { name: '로그아웃', exact: true }).click();

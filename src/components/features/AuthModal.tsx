@@ -8,6 +8,7 @@ import StatefulActionButton from '../atoms/StatefulActionButton';
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
+import { kakaoLoginEnabled, startKakaoLogin } from '../../lib/kakaoLogin';
 import { signInWithGoogle,
   signUpUser, signUpOwner, checkNicknameAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword, EMAIL_OTP_LENGTH,
@@ -22,6 +23,7 @@ import MarketingConsent from '../../pages/legal/MarketingConsent';
 import SignupLocationConsent from './SignupLocationConsent';
 import { rememberSignupLocationConsent, flushSignupLocationConsent } from '../../lib/locationConsent';
 import { authMsgOf } from '../../lib/authError';
+import { msgOf } from '../../lib/dbError';
 import { marketingConsentNotice } from '../../lib/marketingConsent';
 import ConsentSummary from './ConsentSummary';
 import OwnerTerms from '../../pages/legal/OwnerTerms';
@@ -428,10 +430,41 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
+/**
+ * 카카오 로그인 버튼 — 카카오 디자인 가이드(노란 #FEE500 · 검정 말풍선 심볼 · '카카오 로그인' · 글자 검정 85%).
+ * 공개 스위치(VITE_KAKAO_LOGIN_ENABLED)가 꺼져 있으면 **아무것도 그리지 않는다**(기본 꺼짐 — 콘솔 설정 전에 누르면 실패한다).
+ * 카카오로 들어와도 이메일·구글 가입자와 같은 동의 게이트·본인인증 게이트를 지난다(lib/kakaoLogin.ts 머리말).
+ */
+function KakaoLoginButton({ onError, keepSignedIn, disabled, onBusy }: {
+  onError: (msg: string) => void; keepSignedIn: boolean; disabled?: boolean; onBusy?: (b: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (!kakaoLoginEnabled()) return null;
+  const set = (b: boolean) => { setBusy(b); onBusy?.(b); };
+  return (
+    <button type="button" data-testid="kakao-login" disabled={busy || disabled}
+      onClick={() => {
+        rememberCurrentView(); // 구글과 같다 — 떠났다 돌아올 때 보던 화면을 되살린다(N03)
+        set(true);
+        startKakaoLogin(keepSignedIn).catch((e) => {
+          clearViewIntent();
+          onError(msgOf(e, '카카오 로그인을 시작하지 못했습니다'));
+          set(false);
+        });
+      }}
+      className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+        <path fill="#000" d="M12 3C6.48 3 2 6.58 2 11c0 2.83 1.86 5.32 4.66 6.74l-.95 3.48c-.08.3.26.54.52.37l4.15-2.75c.53.06 1.07.09 1.62.09 5.52 0 10-3.58 10-8S17.52 3 12 3z" />
+      </svg>
+      {busy ? '카카오로 이동 중…' : '카카오 로그인'}
+    </button>
+  );
+}
+
 function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) => void; keepSignedIn: boolean }) {
-  // 진행 중이면 비활성(중복 리다이렉트 방지). 소셜은 Google 하나 — 카카오 로그인은 2026-09-10 오너 지시로 삭제.
-  //   레퍼런스에 Apple 이 있지만 추가하지 않는다: 이 서비스의 소셜 정책은 Google 단일이다.
-  const [busy, setBusy] = useState<'google' | null>(null);
+  // 진행 중이면 비활성(중복 리다이렉트 방지). 카카오는 공개 스위치가 켜졌을 때만 보인다(KakaoLoginButton).
+  //   레퍼런스에 Apple 이 있지만 추가하지 않는다(웹 서비스 — 앱스토어 4.8 메모는 docs 밖 별도 문서).
+  const [busy, setBusy] = useState<'google' | 'kakao' | null>(null);
   return (
     <div className="space-y-2">
       {/* 구분선이 CTA 와 소셜 사이에 온다 — 이메일 로그인이 1급, 소셜은 대안이라는 위계 */}
@@ -462,6 +495,8 @@ function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) 
         </svg>
         {busy === 'google' ? 'Google로 이동 중…' : 'Google로 계속하기'}
       </button>
+      <KakaoLoginButton onError={onError} keepSignedIn={keepSignedIn} disabled={busy === 'google'}
+        onBusy={(b) => setBusy(b ? 'kakao' : null)} />
 
       <p className="px-2 text-center text-2xs leading-relaxed text-ink-muted/80">
         가입 시 <b className="text-ink-muted">이용약관·개인정보처리방침</b>에 동의하게 됩니다
@@ -756,6 +791,20 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
         >
           {loading ? '처리 중…' : '가입하기'}
         </button>
+        {kakaoLoginEnabled() && (
+          // 카카오로 가입해도 관문은 같다 — 로그인 직후 같은 약관 동의 게이트(닉네임 확인 포함), 그다음 휴대폰 본인인증.
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center gap-3" aria-hidden>
+              <span className="h-px flex-1 bg-white/[0.07]" />
+              <span className="text-2xs tracking-wide text-ink-muted">또는</span>
+              <span className="h-px flex-1 bg-white/[0.07]" />
+            </div>
+            <KakaoLoginButton onError={(m) => toast.show(m, 'error')} keepSignedIn={isKeepSignedIn()} disabled={loading} />
+            <p className="px-2 text-center text-2xs leading-relaxed text-ink-muted/80">
+              카카오로 가입해도 약관 동의와 휴대폰 본인인증을 똑같이 거칩니다
+            </p>
+          </div>
+        )}
         <ModeSwitch question="이미 계정이 있으신가요?" action="로그인" onClick={onDone} />
       </form>
 
