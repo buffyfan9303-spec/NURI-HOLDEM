@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
-import { reloadBootTab, rememberTab } from './lib/reloadTab';
+import { reloadBootTab, rememberTab, reloadSaved, saveForReload, ME_OPEN_KEY, ME_TAB_KEY } from './lib/reloadTab';
 import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
@@ -1140,7 +1140,7 @@ export default function App() {
       // 🔴 2026-09-26(auth-boot-gap G7) — 푸시 부팅 링크(?nl=)가 권한 탭(/admin · /my-store/* · /staff-schedule)을 가리키면
       //   그 탭으로 시작한다. 홈으로 시작하면 권한이 오기 전 ~100~150ms 홈이 그려졌다가 바뀌었다(깜빡임).
       //   권한이 없으면 아래 탭 가드가 확인 뒤 홈으로 보낸다(?tab=admin 과 같은 길).
-      // audit10 P3-6 — 내 매장에서 새로고침하면 내 매장으로(권한 확인 전 홀드는 아래 pendingDeepTab 이 맡는다).
+      // 새로고침하면 보던 탭으로(오너 2026-10-07 · lib/reloadTab). 권한 탭의 확인 전 홀드는 아래 pendingDeepTab 이 맡는다.
       return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')) ?? reloadBootTab() ?? 'home';
     } catch { return 'home'; }
   });
@@ -1166,8 +1166,10 @@ export default function App() {
     try {
       const sp0 = new URLSearchParams(window.location.search);
       const t0 = sp0.get('tab');
+      const r0 = reloadBootTab();
       if (t0 === 'my-store' || t0 === 'admin') pendingDeepTab.current = t0;
-      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')) ?? reloadBootTab(); // 알림 부팅 링크·새로고침도 같은 기억(G7 · P3-6)
+      // 알림 부팅 링크·새로고침도 같은 기억(G7 · P3-6) — 권한이 늦게 오는 탭만. 나머지 탭은 처음부터 목록에 있다.
+      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')) ?? (r0 === 'my-store' || r0 === 'admin' ? r0 : null);
     } catch { /* noop */ }
   }
   /** 알림 부팅 링크(?nl=)가 가리킨 권한 탭 — 부팅 동안만 의미가 있는 상수(G7). 아래 탭 가드가 '업주의 /admin' 을 내 매장으로 보낼 때 쓴다. */
@@ -2240,10 +2242,12 @@ export default function App() {
   const openLegal = useCallback((d: LegalDoc) => startTransition(() => setLegalDoc(d)), []);
   const openSupport = useCallback(() => startTransition(() => setSupportOpen(true)), []);
   const footerActions = useMemo(() => ({ onOpenLegal: openLegal, onOpenSupport: openSupport }), [openLegal, openSupport]);
-  const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
+  // '내 정보' 를 보다가 새로고침하면 그대로 연다(오너 2026-10-07 · lib/reloadTab) — 보던 하위 탭은 MeTabs 가 남긴다.
+  const [voucherWalletOpen, setVoucherWalletOpen] = useState(() => reloadSaved(ME_OPEN_KEY, ['1']) !== null);
+  useEffect(() => { saveForReload(ME_OPEN_KEY, voucherWalletOpen ? '1' : ''); }, [voucherWalletOpen]);
   const [voucherSheetOpen, setVoucherSheetOpen] = useState(false); // 헤더 [이용권·출석] 시트(루트 렌더)
   // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
-  const [meTab, setMeTab] = useState<MeTab>('dashboard');
+  const [meTab, setMeTab] = useState<MeTab>(() => reloadSaved<MeTab>(ME_TAB_KEY, ['dashboard', 'profile', 'settings', 'security']) ?? 'dashboard');
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
   useEffect(() => {

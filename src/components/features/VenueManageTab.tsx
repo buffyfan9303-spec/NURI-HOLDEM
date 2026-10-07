@@ -58,6 +58,7 @@ import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
 import { loadRankingsEffect } from '../../lib/rankingsLoad';
+import { reloadSaved, saveForReload, useReloadState } from '../../lib/reloadTab';
 
 /** 판 높이 예약의 탈출구(F-2) — 해제 시각이 아니다. 로딩 표시가 영영 안 사라지는 버그에서 rAF 대기를 끊을 뿐이다. */
 const PANE_LOCK_ESCAPE_MS = 10_000;
@@ -92,6 +93,8 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
+const SETTINGS_IDS = SETTINGS_TABS.map((t) => t.id);
+const MYSTORE_SEC_KEY = 'nuri:reload:mystore-sec';
 /** B1(2026-10-02) 폼 읽기 폭 상한(px) — ≥1440 은 내 매장 판 상한이 풀려(F-2) 1920 에서 판이 1636px 다. 폼(설정·초대·팔로워 알림)은
  *  1366 판 폭(≈946)으로 읽게 여기서 멈춘다. ≤1366 은 판이 이보다 좁아 아무것도 안 바뀐다. 루트 17px 이라 rem 이 아니라 px. */
 const READ_W = 960;
@@ -301,6 +304,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 2026-09-28 — 새 포스터는 **지금 고른 매장**으로 등록한다(App.handleCreatePosterFromStore 가 이 id 를 받는다).
   const createPosterHere = useCallback(() => onCreatePoster(venueId), [onCreatePoster, venueId]);
   const [section, setSection] = useState<Section | null>(null);
+  // 새로고침하면 보던 섹션으로(오너 2026-10-07 · lib/reloadTab). 섹션은 권한 확인 뒤에야 정해지므로(아래 setSection(s => s ?? …))
+  //   그 자리에서 대시보드 대신 쓰고, 권한 밖이면 첫 확인 직후(페인트 전) 대시보드로 돌린다 — 대시보드가 한 번 그려졌다 바뀌지 않는다.
+  const reloadSec = useRef(reloadSaved(MYSTORE_SEC_KEY, MYSTORE_ORDER) as Section | null);
+  useEffect(() => { if (section) saveForReload(MYSTORE_SEC_KEY, section); }, [section]);
   // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
   const [gameStep, setGameStep] = useState<GameStep>(() => {
     try { const v = localStorage.getItem('nuri:game-step'); if (v && isGameStep(v)) return v; } catch { /* noop */ }
@@ -309,7 +316,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
   useEffect(() => { sectionRef.current = section; settingsTabRef.current = settingsTab; });
   // IA3c: 설정 하위탭 상태(기본 '매장 페이지')
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('page');
+  const [settingsTab, setSettingsTab] = useReloadState<SettingsTab>('nuri:reload:mystore-set', SETTINGS_IDS, 'page'); // 권한 밖이면 아래 permsLoaded 효과가 첫 노출 탭으로
   // ⚠ 예전엔 useDeferredValue 였다. VT 의 flushSync 커밋 안에서 deferred 값은 옛 값으로 남아
   //   스냅샷이 **옛 판**을 찍고 진짜 교체가 전환 뒤에 노출됐다(오너 2026-09-15 "드르륵").
   //   판은 keep-alive(display 토글)라 재방문 전환 비용이 거의 없고, 첫 마운트 비용은 VT 스냅샷이 가린다.
@@ -870,7 +877,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (isAdmin) {
       setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true); setSchedOk(true);
       setPermsFor(venueId);
-      setSection((s) => s ?? 'dashboard');
+      setSection((s) => s ?? reloadSec.current ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
       return () => { alive = false; };
@@ -893,7 +900,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         if (!alive) return;
         setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro);
         setPermsFor(venueId);
-        setSection((s) => s ?? 'dashboard');
+        setSection((s) => s ?? reloadSec.current ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
       .finally(() => { if (alive) setPermsLoaded(true); });
@@ -997,6 +1004,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const renderSection = section;
   const renderGameStep = gameStep;
   const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
+  // 새로고침 복원(위 reloadSec)은 첫 권한 확인에서 한 번만 따진다 — 지금 권한으로 열 수 없는 섹션이면 페인트 전에 대시보드로.
+  useLayoutEffect(() => {
+    if (!permsLoaded) return;
+    const r = reloadSec.current;
+    reloadSec.current = null;
+    if (r && section === r && !dItem) setSection('dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 첫 확인 1회
+  }, [permsLoaded]);
 
   // ── U1: 스텝 공통 문맥(매장 › 날짜 › 게임) ────────────────────────────────
   // 왜: 포스터→장부→클락→순위를 오갈 때 "지금 어느 대회를 만지는 중인가"가 화면 어디에도 없었다.

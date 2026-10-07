@@ -51,6 +51,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
 import { ownerDisplayName, ownerChoices } from '../../lib/adminVenueOwner';
+import { useReloadState } from '../../lib/reloadTab';
 import { usePendingCounts, sumKnown, type PendingKey, type PendingCounts } from './adminPendingCounts';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
@@ -1286,7 +1287,7 @@ function PlanUsageCard() {
 export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts, tabActive = true,
 }: AdminTabProps) {
-  const [section, setSection] = useState<Section>('analytics');
+  const [section, setSection] = useReloadState<Section>('nuri:reload:admin-sec', ADMIN_ORDER, 'analytics'); // 새로고침하면 보던 섹션(lib/reloadTab)
   /** 신고 큐 '작성자 제재' → 회원 관리 검색창에 미리 넣을 닉네임(점검 A-07). 일반 메뉴 이동은 비운다. */
   const [userSearch, setUserSearch] = useState('');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)

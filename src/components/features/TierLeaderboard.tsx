@@ -39,6 +39,7 @@ import {
   type CatalogMark,
 } from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
+import { useReloadState } from '../../lib/reloadTab';
 import {
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
@@ -312,7 +313,7 @@ export default function TierLeaderboard() {
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
-  const [board, setBoard] = useState<Board>('activity');
+  const [board, setBoard] = useReloadState<Board>('nuri:reload:rank-board', RANK_TABS, 'activity'); // 새로고침하면 보던 순위판(lib/reloadTab)
   // ── UI-08-1·2·4(2026-09-13): 계정 경계 + 조회 실패 상태 ──────────────────────────────────────
   //   · 계정 경계는 재마운트(key={user?.id})가 아니라 **owner 스탬프**다 — 재마운트하면 rows→[]·loading→true 로 랭킹 패널이 스켈레톤으로 접혀
   //     문서 높이가 무너진다(오너 이슈 #5 실측: docHeight 1684→1418 · scrollY 487→221 · CLS 0.2516)고 UI-06 스크롤 복원 대상도 사라진다.
