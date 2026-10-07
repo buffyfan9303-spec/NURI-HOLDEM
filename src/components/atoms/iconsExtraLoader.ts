@@ -11,16 +11,17 @@
 // 실패 복구(PR #205 검토 P2-1): 브라우저는 실패한 동적 import 를 모듈 맵에 남긴다 — **같은 주소로 다시 import() 하면 망이 돌아와도
 //   즉시 또 실패한다**(실측 2026-10-07: Chromium·WebKit·Firefox 모두 같은 주소 2회 실패, `?r=1` 을 붙인 주소는 성공).
 //   그래서 재시도는 주소 뒤에 ?r=n 을 붙여 새 모듈로 받는다. 새로고침으로 복구하지 않는다 — 입력 중인 글·열린 시트가 날아가고,
-//   망이 아직 끊겨 있으면 앱 대신 오프라인 화면이 뜬다(검토 O1). 재시도 계기: 다음 호출(새 화면·빈 칸 마운트) · 화면 클릭 · online · 타이머.
+//   망이 아직 끊겨 있으면 앱 대신 오프라인 화면이 뜬다(검토 O1). 재시도 계기: 다음 호출(새 화면·빈 칸 마운트) · 화면 클릭 · online ·
+//   화면 복귀 · 타이머(src/lib/chunkRetry.ts — 8번 빠르게, 그 뒤는 보이는 동안 60초마다 계속. 예전엔 8번에서 멈췄다 — PR #206).
 //   e2e/icons-extra-retry.spec.ts 가 '부팅 중 실패 → 복구 → GTO 빈 칸 0 · 새로고침 없음' 을 지킨다.
 import type { LucideIcon } from 'lucide-react';
 import type { IconName } from './Icon';
+import { chunkRetry } from '../../lib/chunkRetry';
 
 type Extra = Partial<Record<IconName, LucideIcon>>;
 let extra: Extra | undefined;
 let pending: Promise<void> | undefined;
 let fails = 0;
-let timer: ReturnType<typeof setTimeout> | undefined;
 const subs = new Set<() => void>();
 
 export const getIconsExtra = (): Extra | undefined => extra;
@@ -43,26 +44,25 @@ function retryUrl(): string | undefined {
 export function loadIconsExtra(): Promise<void> {
   const url = fails ? retryUrl() : undefined;
   return (pending ??= (url ? (import(/* @vite-ignore */ url) as ReturnType<typeof importExtra>) : importExtra()).then(
-    (m) => { extra = m.EXTRA; clearTimeout(timer); subs.forEach((fn) => fn()); },
+    (m) => { extra = m.EXTRA; again.done(); subs.forEach((fn) => fn()); },
     (err) => {
       pending = undefined;
       fails++;
-      // ponytail: 타이머 재시도는 8번(약 45초)까지만 — 배포로 옛 청크가 404 인 세션이 영원히 두드리지 않게. 그 뒤는 클릭·online·새 화면이 계기.
-      if (fails <= 8) { clearTimeout(timer); timer = setTimeout(retry, Math.min(1000 * 2 ** (fails - 1), 8000)); }
+      again.failed();
       throw err;
     },
   ));
 }
 
 function retry() { if (!extra && !pending) loadIconsExtra().catch(() => {}); }
+// ponytail: 8번 뒤에도 보이는 동안 60초마다 다시 받는다 — 배포 공백(옛 청크 404)인 탭은 1분에 1건씩 두드린다. 새로고침 복구가 필요해지면 lazyWithReload 의 가드를 붙여라.
+const again = chunkRetry(retry, { limit: 8, cap: 8000 });
 
-// ② 미리 받기 + 실패 뒤 재시도 계기 — 브라우저에서만.
+// ② 미리 받기 — 브라우저에서만(실패 뒤 계기는 chunkRetry 가 건다).
 if (typeof window !== 'undefined') {
   type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
   const w = window as IdleWin;
   const schedule = () => (w.requestIdleCallback ? w.requestIdleCallback(retry, { timeout: 2000 }) : setTimeout(retry, 1000));
   if (document.readyState === 'complete') schedule();
   else window.addEventListener('load', schedule, { once: true });
-  window.addEventListener('online', () => { if (fails) retry(); });
-  document.addEventListener('click', () => { if (fails) retry(); }, { capture: true, passive: true });
 }
