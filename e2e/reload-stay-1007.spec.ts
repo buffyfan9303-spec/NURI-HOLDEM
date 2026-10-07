@@ -41,11 +41,20 @@ async function recordFrames(page: Page, probe: Probe | null) {
   }, probe);
 }
 
-/** 새로고침하고 정착할 때까지 기다린 뒤 프레임 기록을 돌려준다. */
+/** 새로고침하고 정착할 때까지 기다린 뒤 프레임 기록을 돌려준다.
+ *  ⚠ CPU 4배 감속으로 부팅한다(design-review P3-4, 2026-10-07). 감속 없이 재면 CLS 가 **러너 부하에 따라** 갈렸다 — 데이터가 첫 페인트 전에
+ *    오면 0, 뒤에 오면 그 칸만큼 밀린다(관리자 1회차 0.131 / 2회차 0 · workers 3). 늘 느린 길로 부팅해 그 밀림을 매번 재는 쪽으로 고정했다
+ *    (임계 0.1 은 그대로). 이 감속에서 관리자 운영 지표 격자가 늦게 끼어들어 0.102 를 냈고, 격자 자리를 미리 잡아 고쳤다(AdminTab StatsPanel). */
 async function reloadAndRead(page: Page, tab: string) {
-  await page.reload();
-  await expect(page.locator(`.tab-pane[data-tab="${tab}"]`), `새로고침했더니 ${tab} 이 아니다(홈으로 갔다)`).toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  try {
+    await page.reload();
+    await expect(page.locator(`.tab-pane[data-tab="${tab}"]`), `새로고침했더니 ${tab} 이 아니다(홈으로 갔다)`).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(2500);
+  } finally {
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  }
   return page.evaluate(() => ({ f: (window as unknown as { __f: Frame[] }).__f, cls: (window as unknown as { __cls: number }).__cls }));
 }
 
@@ -68,6 +77,11 @@ function expectStayed(r: { f: Frame[]; cls: number }, tab: string, label: string
   expect(r.cls, `${label}: 새로고침 부팅 CLS`).toBeLessThan(0.1);
 }
 
+/** 장터 공지·매물을 고정한다(빈 목록 즉시 응답). 운영 데이터로 두면 공지가 첫 페인트 뒤에 오는 회차만 그 높이(실측 210px)가 끼어들어
+ *  CLS 가 0.21 로 튀었다(전량 e2e 부하 1회 · 공지 1.5초 지연 재현 0.178). 그 늦은 공지 밀림은 새로고침 복원과 무관한 직접 진입 부류라
+ *  따로 다루고, 이 스펙은 같은 데이터에서 복원이 밀림을 만들지 않는지만 본다(게시판 글을 mockPosts 로 고정하는 것과 같은 이유). */
+const pinMarket = (page: Page) => page.route(/\/rest\/v1\/marketplace_(notices|listings)\?/, (r) => (r.request().method() === 'GET'
+  ? r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }) : r.fallback()));
 const click = (page: Page, sel: string) => page.evaluate((s) => { document.querySelector<HTMLElement>(s)?.click(); }, sel);
 const gotoTab = (page: Page, t: string) => page.evaluate((x) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: x })), t);
 const M390 = { width: 390, height: 844 };
@@ -79,6 +93,7 @@ for (const c of [{ sec: 'board', label: '게시판' }, { sec: 'market', label: '
     test.setTimeout(90_000);
     await recordFrames(page, SECBAR);
     await mockPosts(page, 12);
+    await pinMarket(page);
     await bootOwner(page, { viewport: M390 });
     await page.locator('nav[aria-label="하단 내비게이션"] button[aria-label="커뮤니티"]').click();
     await expect(page.locator('[data-community-secbar]')).toBeVisible({ timeout: 20_000 });

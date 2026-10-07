@@ -1287,7 +1287,7 @@ function PlanUsageCard() {
 export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts, tabActive = true,
 }: AdminTabProps) {
-  const [section, setSection] = useReloadState<Section>('nuri:reload:admin-sec', ADMIN_ORDER, 'analytics'); // 새로고침하면 보던 섹션(lib/reloadTab)
+  const [section, setSection] = useReloadState<Section>('nuri:reload:admin-sec', ADMIN_ORDER, 'analytics', 'admin'); // 새로고침하면 보던 섹션(lib/reloadTab)
   /** 신고 큐 '작성자 제재' → 회원 관리 검색창에 미리 넣을 닉네임(점검 A-07). 일반 메뉴 이동은 비운다. */
   const [userSearch, setUserSearch] = useState('');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
@@ -1945,17 +1945,18 @@ function StatsPanel() {
   const load = useCallback(() => { getAdminStats().then((x) => { setErr(null); setS(x); }).catch(setErr); }, []);
   useEffect(() => { load(); }, [load]);
   if (err != null) return <LoadErrorCard error={err} what="운영 지표" onRetry={load} compact />;
-  if (!s) return null;
+  // 🔴 도착 전에도 같은 9칸 격자를 그린다(숫자 자리만 비움). 예전엔 null 이라 지표가 오는 순간 아래 관리 화면 전체가 격자 높이만큼 밀렸다 —
+  //   1440 · CPU 4배 새로고침 실측 layout-shift 0.102(관리 판 124→288px). PR #208 새로고침 CLS 단언이 부하에 따라 흔들린 원인이다(design-review P3-4).
   const cards = [
-    { label: '전체 회원', v: s.users },        { label: '업주', v: s.owners },            { label: '승인 대기 업주', v: s.pendingOwners },
-    { label: '제재 회원', v: s.suspended },     { label: '게시글', v: s.posts },           { label: '매물', v: s.listings },
-    { label: '포스터', v: s.schedules },        { label: '승인 대기 포스터', v: s.pendingSchedules }, { label: '7일 신규 가입', v: s.signups7d },
+    { label: '전체 회원', v: s?.users },        { label: '업주', v: s?.owners },            { label: '승인 대기 업주', v: s?.pendingOwners },
+    { label: '제재 회원', v: s?.suspended },     { label: '게시글', v: s?.posts },           { label: '매물', v: s?.listings },
+    { label: '포스터', v: s?.schedules },        { label: '승인 대기 포스터', v: s?.pendingSchedules }, { label: '7일 신규 가입', v: s?.signups7d },
   ];
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2" aria-busy={!s}>
       {cards.map((c) => (
         <div key={c.label} className="rounded-input border border-border-default bg-surface-low py-2 text-center">
-          <p className="text-lg font-bold text-ink-primary tabular-nums leading-none">{c.v.toLocaleString()}</p>
+          <p className="text-lg font-bold text-ink-primary tabular-nums leading-none">{c.v != null ? c.v.toLocaleString() : <span className="invisible">0</span>}</p>
           <p className="text-2xs text-ink-muted mt-1">{c.label}</p>
         </div>
       ))}

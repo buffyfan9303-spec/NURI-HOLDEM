@@ -95,6 +95,7 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
 const SETTINGS_IDS = SETTINGS_TABS.map((t) => t.id);
 const MYSTORE_SEC_KEY = 'nuri:reload:mystore-sec';
+const MYSTORE_VENUE_KEY = 'nuri:reload:mystore-venue';
 /** B1(2026-10-02) 폼 읽기 폭 상한(px) — ≥1440 은 내 매장 판 상한이 풀려(F-2) 1920 에서 판이 1636px 다. 폼(설정·초대·팔로워 알림)은
  *  1366 판 폭(≈946)으로 읽게 여기서 멈춘다. ≤1366 은 판이 이보다 좁아 아무것도 안 바뀐다. 루트 17px 이라 rem 이 아니라 px. */
 const READ_W = 960;
@@ -298,15 +299,29 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   /** 목록을 **성공적으로** 받은 계정 uid — 실패면 null. 대표 업주 판정(primaryOwner)이 남의 목록·실패를 '대표 아님'으로 읽지 않게. */
   const [memberVenuesOf, setMemberVenuesOf] = useState<string | null>(null);
   const [adminVenuesLoaded, setAdminVenuesLoaded] = useState(false);
+  // 🔴 새로고침하면 보던 **매장**도 그대로(design-review P2-1, 2026-10-07). 섹션만 되살리고 매장은 대표 매장으로 돌아가면
+  //   여러 매장 업주가 B 매장 장부에서 새로고침했을 때 **A 매장의 같은 장부**가 열린다 — 모양이 같아 바인을 엉뚱한 매장에 적는다.
+  //   · 남긴 id 는 **서버가 준 내 매장 목록**(my_member_venues · 운영자는 전체 매장) 안에 있을 때만 쓴다(소속 해제·남의 id 는 버린다).
+  //   · 대표 매장이 아닌 id 를 되살릴 때는 목록이 올 때까지 매장을 **정하지 않는다**(venueHeld) — 그 사이 대표 매장 권한·데이터를
+  //     한 번도 조회하지 않으므로 늦게 온 A 응답이 B 화면에 섞일 자리가 없고, 섹션 복원(reloadSec)도 매장이 정해진 뒤에야 확정된다.
+  //   · 목록에 없으면 대표 매장 + 대시보드(reloadSec 를 버린다).
+  const [reloadVenue] = useState(() => {
+    const id = reloadSaved<string>(MYSTORE_VENUE_KEY, null, 'my-store');
+    return id ? { id, other: id !== user?.venueId } : null;
+  });
+  const [venueHeld, setVenueHeld] = useState(() => !!reloadVenue?.other);
+  const holdVenue = venueHeld && !isAdmin;
   // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
   const venueId: string | null = isAdmin ? adminVenueId
+    : holdVenue ? null
     : (memberVenueId ?? user?.venueId ?? memberVenues[0]?.id ?? null);
+  useEffect(() => { if (venueId) saveForReload(MYSTORE_VENUE_KEY, venueId); }, [venueId]);
   // 2026-09-28 — 새 포스터는 **지금 고른 매장**으로 등록한다(App.handleCreatePosterFromStore 가 이 id 를 받는다).
   const createPosterHere = useCallback(() => onCreatePoster(venueId), [onCreatePoster, venueId]);
   const [section, setSection] = useState<Section | null>(null);
   // 새로고침하면 보던 섹션으로(오너 2026-10-07 · lib/reloadTab). 섹션은 권한 확인 뒤에야 정해지므로(아래 setSection(s => s ?? …))
   //   그 자리에서 대시보드 대신 쓰고, 권한 밖이면 첫 확인 직후(페인트 전) 대시보드로 돌린다 — 대시보드가 한 번 그려졌다 바뀌지 않는다.
-  const reloadSec = useRef(reloadSaved(MYSTORE_SEC_KEY, MYSTORE_ORDER) as Section | null);
+  const reloadSec = useRef(reloadSaved(MYSTORE_SEC_KEY, MYSTORE_ORDER, 'my-store') as Section | null);
   useEffect(() => { if (section) saveForReload(MYSTORE_SEC_KEY, section); }, [section]);
   // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
   const [gameStep, setGameStep] = useState<GameStep>(() => {
@@ -316,7 +331,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
   useEffect(() => { sectionRef.current = section; settingsTabRef.current = settingsTab; });
   // IA3c: 설정 하위탭 상태(기본 '매장 페이지')
-  const [settingsTab, setSettingsTab] = useReloadState<SettingsTab>('nuri:reload:mystore-set', SETTINGS_IDS, 'page'); // 권한 밖이면 아래 permsLoaded 효과가 첫 노출 탭으로
+  const [settingsTab, setSettingsTab] = useReloadState<SettingsTab>('nuri:reload:mystore-set', SETTINGS_IDS, 'page', 'my-store'); // 권한 밖이면 아래 permsLoaded 효과가 첫 노출 탭으로
   // ⚠ 예전엔 useDeferredValue 였다. VT 의 flushSync 커밋 안에서 deferred 값은 옛 값으로 남아
   //   스냅샷이 **옛 판**을 찍고 진짜 교체가 전환 뒤에 노출됐다(오너 2026-09-15 "드르륵").
   //   판은 keep-alive(display 토글)라 재방문 전환 비용이 거의 없고, 첫 마운트 비용은 VT 스냅샷이 가린다.
@@ -854,21 +869,37 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false); setMemberVenuesOf(null);
     if (isAdmin || !myUidForVenues) return;
     let alive = true;
-    listMyMemberVenues().then((vs) => { if (alive) { setMemberVenues(vs); setMemberVenuesOf(myUidForVenues); } }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ })
-      .finally(() => { if (alive) setMemberVenuesLoaded(true); });
+    listMyMemberVenues().catch(() => null /* 전환기만 안 뜬다 — 종전 동작 */).then((vs) => {
+      if (!alive) return;
+      if (vs) { setMemberVenues(vs); setMemberVenuesOf(myUidForVenues); }
+      // 새로고침 매장 복원(위 reloadVenue) — 같은 커밋에서 매장·붙듦·목록 도착을 함께 바꾼다(대표 매장이 끼어드는 렌더가 없다).
+      if (reloadVenue?.other) {
+        if (vs?.some((v) => v.id === reloadVenue.id)) setMemberVenueId(reloadVenue.id);
+        else reloadSec.current = null;   // 목록 밖 — 대표 매장의 대시보드로
+      }
+      setVenueHeld(false);
+      setMemberVenuesLoaded(true);
+    });
     return () => { alive = false; };
-  }, [isAdmin, myUidForVenues]);
+  }, [isAdmin, myUidForVenues, reloadVenue]);
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
     if (!isAdmin) return;
     let alive = true;
     getAllVenues()
-      .then((vs) => { if (alive) { setAdminVenues(vs); setAdminVenueId((cur) => cur ?? vs[0]?.id ?? null); } })
+      .then((vs) => {
+        if (!alive) return;
+        setAdminVenues(vs);
+        // 새로고침 매장 복원 — 전체 매장 목록 안의 id 만(없어진 매장이면 첫 매장의 대시보드).
+        const keep = reloadVenue && vs.some((v) => v.id === reloadVenue.id) ? reloadVenue.id : null;
+        if (reloadVenue && !keep) reloadSec.current = null;
+        setAdminVenueId((cur) => cur ?? keep ?? vs[0]?.id ?? null);
+      })
       .catch(() => {})
       .finally(() => { if (alive) setAdminVenuesLoaded(true); });
     return () => { alive = false; };
-  }, [isAdmin]);
+  }, [isAdmin, reloadVenue]);
 
   // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위). 운영자는 전권이라 조회 생략.
   useEffect(() => {
@@ -1058,6 +1089,15 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
+  // 새로고침 매장 복원 대기(위 venueHeld) — 처음 여는 순간과 같은 대기 화면(같은 바깥 상자·pane-reserve 높이).
+  //   '매장 생성'·'소속 없음' 판정은 목록이 와서 매장이 정해진 뒤에 한다(그 전엔 venueId 가 비어 있을 뿐이다).
+  if (holdVenue) {
+    return (
+      <div ref={setUncapRoot} data-uncap-root="" data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
+        <p className="pane-reserve pt-16 text-center text-sm text-ink-muted">불러오는 중…</p>
+      </div>
+    );
+  }
   if (!isAdmin && !venueId) {
     if (isOwner) return <VenueCreateForm onCreated={refreshProfile} />;
     return (

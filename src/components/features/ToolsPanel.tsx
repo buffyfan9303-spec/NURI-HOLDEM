@@ -494,7 +494,7 @@ export default function ToolsPanel() {
 
   // 검색 + 레인 필터 칩 — 접이식 헤더(모바일 회귀)를 대체하는 비접이 IA.
   const [q, setQ] = useState('');
-  const [lane, setLane] = useReloadState<ToolCat | 'all'>('nuri:reload:tools-lane', LANE_ORDER, 'all'); // 새로고침하면 보던 분류(lib/reloadTab) — 열린 도구는 #tool= 이 되살린다
+  const [lane, setLane] = useReloadState<ToolCat | 'all'>('nuri:reload:tools-lane', LANE_ORDER, 'all', 'tools'); // 새로고침하면 보던 분류(lib/reloadTab) — 열린 도구는 #tool= 이 되살린다
   const ql = q.trim().toLowerCase();
   // 검색도 카탈로그와 같은 범위(이관 도구·오늘의 드릴 제외)
   const hits = ql ? TOOLS.filter((t) => !HIDDEN_SET.has(t.key) && matchesToolQuery([t.name, t.desc, t.keywords], ql)) : null;

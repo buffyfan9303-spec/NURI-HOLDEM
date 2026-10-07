@@ -43,7 +43,7 @@ import { relativeTime } from '../../lib/relativeTime';
 import { markProgrammaticScroll, notifyScrollNow } from '../../lib/useScrollY';
 import { restoreScrollTop } from '../../lib/headerShrink';
 import { msgOf } from '../../lib/dbError';
-import { reloadSaved, saveForReload } from '../../lib/reloadTab';
+import { reloadSaved, saveForReload, useReloadState } from '../../lib/reloadTab';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -105,11 +105,13 @@ const FAB_HYST_PX = 8;
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
 // 새로고침하면 보던 섹션으로(오너 2026-10-07 "커뮤니티-게시판에서 새로고침을 하면 홈으로 넘어가" · lib/reloadTab). 첫 렌더 값이라 알약이 미끄러지지 않는다.
 const SEC_KEY = 'nuri:reload:community-sec';
-lastCommunitySection = reloadSaved(SEC_KEY, SEC_ORDER) ?? lastCommunitySection;
+//   ⚠ 이 줄은 모듈이 처음 실릴 때(커뮤니티를 처음 열 때) 돈다 — 새로고침 직전 탭이 커뮤니티일 때만 쓴다(lib/reloadTab BOOT_TAB · P3-3).
+lastCommunitySection = reloadSaved(SEC_KEY, SEC_ORDER, 'community') ?? lastCommunitySection;
 
 // 게시판 카테고리 필터 — 라벨·색표는 src/lib/postCategory.ts 가 단일 출처.
 // (글보기 상세에도 같은 뱃지를 넣어야 해서 모듈로 뺐다 — 복사해 두면 언젠가 한쪽만 바뀐다)
 const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
+const BOARD_CAT_IDS = BOARD_CATEGORIES.map((c) => c.id);
 
 
 
@@ -692,7 +694,8 @@ function FeedSection({
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState<PostCategory | 'all'>('all');
+  // 새로고침하면 보던 분류 칩 그대로(design-review P3-1 · lib/reloadTab). 이 피드는 게시판 한 곳(enableCategory)에만 쓰인다.
+  const [cat, setCat] = useReloadState<PostCategory | 'all'>('nuri:reload:board-cat', BOARD_CAT_IDS, 'all', 'community');
   // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
   const [order, setOrder] = useState<'new' | 'popular'>('new');
   const [visible, setVisible] = useState(15);
