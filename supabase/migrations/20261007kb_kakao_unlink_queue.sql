@@ -1,3 +1,4 @@
+-- ✅ 적용 완료 2026-10-07(리드, commit.mjs) — 리허설 12/12(U7 SKIP)·critical 반례 P_kb 5/5(T5 삭제·T4 통과) 후 적용. 실측: kakao_unlink_queue 존재·RLS on·authenticated SELECT 불가 · auth.identities 트리거 1 · cron 1(jobid 255) · 파일 md5(LF) 3ebf0c2ad0e0c0c096b9095d8c2129d4 · 엣지 kakao-unlink/kakao-oidc-exchange 배포(무인증 401·타 Origin 403·키 미등록 503)
 -- ⏳ 미적용 — 초안(home-team, 2026-10-07). 적용 판단·실행은 리드. 리허설: supabase/tests/20261007kb_rehearsal.sql
 --    적용하면 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다. 짝 엣지 함수 kakao-unlink 와 KAKAO_ADMIN_KEY 등록은 콘솔설정.md.
 select set_config('lock_timeout', '3s', true);
