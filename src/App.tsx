@@ -4912,7 +4912,7 @@ export default function App() {
       {geoRetry && geoRetry.uid === (user?.id ?? null) && (() => {
         const copy = checkinGeoRetryCopy(geoRetry.code, typeof navigator === 'undefined' ? '' : navigator.userAgent);
         return (
-          <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요합니다" variant="sheet" maxWidth="sm">
+          <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요합니다" variant="sheet" maxWidth="sm" dragToClose>
             <div data-testid="checkin-geo-retry" className="space-y-2 px-4 pb-5 pt-1">
               <p className="text-sm text-ink-primary">{copy.reason}</p>
               {copy.hint && <p className="text-xs text-ink-secondary">{copy.hint}</p>}
