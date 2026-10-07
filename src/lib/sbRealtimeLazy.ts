@@ -16,12 +16,14 @@
  *
  * 청크를 못 받으면(망 흔들림·배포 공백): 구독 중인 채널 콜백에 'CHANNEL_ERROR' 를 준다(진짜도 소켓이 실패하면 같은 상태를 준다 —
  *   채팅은 이걸 보고 폴링으로 돌아간다). 그리고 **다른 주소(?r=n)** 로 다시 받는다 — 브라우저는 실패한 동적 import 를
- *   같은 주소로는 다시 받지 않는다(iconsExtraLoader.ts 머리 주석, PR #205 실측). 계기: 타이머 · online · 화면 복귀 · 클릭.
+ *   같은 주소로는 다시 받지 않는다(iconsExtraLoader.ts 머리 주석, PR #205 실측). 계기: 타이머(src/lib/chunkRetry.ts) · online · 화면 복귀 · 클릭.
  *   받으면 쌓인 호출을 재생해 진짜 'SUBSCRIBED' 가 온다. 실패는 console.error + reportError(client_errors·Sentry)로 남긴다.
  *
  * 앱이 쓰는 모양(2026-10-07 전수, 24곳): `supabase.channel(name).on('postgres_changes', …).subscribe(cb?)` · `supabase.removeChannel(ch)`.
  * 여기 없는 채널 멤버(state 외 내부 필드)는 진짜가 오기 전엔 없다 — 새로 쓰려면 아래 LazyChannel 에 추가하고 테스트에 넣어라.
  */
+import { chunkRetry } from './chunkRetry';
+
 type RealMod = typeof import('@supabase/realtime-js/dist/module/RealtimeClient.js');
 type RealClient = InstanceType<RealMod['default']>;
 type RealChannel = ReturnType<RealClient['channel']>;
@@ -145,7 +147,8 @@ export class RealtimeClient {
   private loading = false;
   /** 진짜 client.channels 의 거울 — 진짜가 오기 전에만 쓴다. */
   private chans: LazyChannel[] = [];
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  // ponytail: 20번 빠르게(최대 30초 간격), 그 뒤는 보이는 동안 60초마다 계속 — 무인 TV 도 결국 붙는다. 배포 공백 탭은 1분에 1건씩 두드린다.
+  private readonly again = chunkRetry(() => { if (!this.real) this.boot(); }, { limit: 20, cap: 30_000 });
   private readonly endPoint: string;
   private readonly options: Opts;
 
@@ -223,7 +226,7 @@ export class RealtimeClient {
     this.loading = true;
     load().then(
       (m) => {
-        clearTimeout(this.timer);
+        this.again.done();
         const r = new m.default(this.endPoint, this.options);
         this.real = r;
         this.chans = [];
@@ -234,24 +237,10 @@ export class RealtimeClient {
         this.loading = false;
         report('실시간 모듈을 받지 못했다 — 다른 주소로 다시 받는다', err, fails === 1);
         this.chans.forEach((c) => c.failed(err));
-        this.retryLater();
+        this.again.failed();
       },
     );
   }
-
-  private retryLater() {
-    clearTimeout(this.timer);
-    // ponytail: 타이머는 20회(약 9분)까지 — 배포로 옛 청크가 사라진 탭이 ?r=n 주소를 끝없이 만들지 않게(SW 가 200 응답을 주소별로 담는다).
-    //   그 뒤는 online·화면 복귀·클릭이 계기다. 무인 TV 가 배포 공백에 걸리면 새로고침이 필요하다 — 생기면 lazyWithReload 의 1회 새로고침 가드를 붙여라.
-    if (fails <= 20) this.timer = setTimeout(() => this.boot(), Math.min(1000 * 2 ** (fails - 1), 30_000));
-    if (typeof window === 'undefined' || this.listening) return;
-    this.listening = true;
-    const kick = () => { if (!this.real) this.boot(); };
-    window.addEventListener('online', kick);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') kick(); });
-    document.addEventListener('click', kick, { capture: true, passive: true });
-  }
-  private listening = false;
 }
 
 function unwrap(ch: RealChannel): RealChannel {

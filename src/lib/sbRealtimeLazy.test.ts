@@ -218,3 +218,46 @@ describe('sbRealtimeLazy — 청크를 못 받으면', () => {
     }
   }, 20_000);
 });
+
+describe('sbRealtimeLazy — 재시도는 20번 뒤에도 끊지 않는다(무인 클락 TV)', () => {
+  it('항상 실패: 빠른 20번 뒤 보이는 동안 60초 간격, 숨김이면 0회, 보이면 즉시', async () => {
+    class FakeDoc extends EventTarget { visibilityState = 'visible'; }
+    const g = globalThis as Record<string, unknown>;
+    const doc = new FakeDoc();
+    g.document = doc;
+    g.window = new EventTarget();
+    const io = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.resetModules();
+    let attempts = 0;
+    vi.doMock('@supabase/realtime-js/dist/module/RealtimeClient.js', () => { attempts++; throw new Error('chunk 404'); });
+    const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { RealtimeClient: Fresh } = await import('./sbRealtimeLazy');
+      const c = new Fresh(ENDPOINT, makeEnv().options as never);
+      c.channel('clock:tv').on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states' }, () => {}).subscribe();
+      await io();
+      expect(attempts).toBe(1);
+      const fast = [1, 2, 4, 8, 16, ...Array(15).fill(30)].map((s) => s * 1000);   // limit 20 · cap 30초
+      for (const ms of fast) { vi.advanceTimersByTime(ms); await io(); }
+      expect(attempts).toBe(21);
+      vi.advanceTimersByTime(59_999); await io();
+      expect(attempts, '상한 뒤 60초 전에는 안 부른다').toBe(21);
+      vi.advanceTimersByTime(1); await io();
+      expect(attempts, '상한 뒤에도 60초에 다시').toBe(22);
+      vi.advanceTimersByTime(60_000); await io();
+      expect(attempts).toBe(23);
+      doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(10 * 60_000); await io();
+      expect(attempts, '숨김 동안 0회').toBe(23);
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await io();
+      expect(attempts, '보이자마자 1회').toBe(24);
+    } finally {
+      errs.mockRestore();
+      vi.useRealTimers();
+      vi.doUnmock('@supabase/realtime-js/dist/module/RealtimeClient.js');
+      delete g.document;
+      delete g.window;
+    }
+  });
+});

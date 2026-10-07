@@ -2,7 +2,7 @@
  * 번들 감축 PR B — 실시간 청크(realtime-js + phoenix)를 첫 channel() 때 받는다(src/lib/sbRealtimeLazy.ts).
  * 그 청크를 부팅 중에 못 받아도, 망이 돌아오면 **새로고침 없이** 홈 일정 구독이 붙는다.
  *
- * 왜 e2e 인가: 재시도는 빌드 산출물의 `import("./RealtimeClient-<해시>.js")` 를 읽어 `?r=n` 새 주소로 받는다 — vitest 에는 그 문자열이 없다.
+ * 왜 e2e 인가: 재시도는 빌드 산출물에 적힌 청크 주소(RealtimeClient-<해시>.js)를 읽어 `?r=n` 새 주소로 받는다 — vitest 에는 그 문자열이 없다.
  *   브라우저는 실패한 동적 import 를 같은 주소로는 다시 받지 않는다(PR #205 실측, e2e/icons-extra-retry.spec.ts).
  * 거짓 통과 방지: ① 차단이 실제로 요청을 끊었다(hits) ② 끊긴 동안 소켓 join 0 ③ 회복 요청이 다른 주소(?r=)였다
  *   ④ 새로고침으로 회복한 것이 아니다(창 표식 유지).
@@ -19,7 +19,7 @@ test('실시간 청크가 부팅 중에만 실패해도 새로고침 없이 홈 
   let block = true;
   let hits = 0;
   const urls: string[] = [];
-  await context.route(/\/assets\/RealtimeClient-[^/?]+\.js(\?.*)?$/, (r) => {
+  await context.route(/\/assets\/RealtimeClient-[\w-]+\.js/, (r) => {
     urls.push(r.request().url());
     if (!block) return r.continue();
     hits++;
