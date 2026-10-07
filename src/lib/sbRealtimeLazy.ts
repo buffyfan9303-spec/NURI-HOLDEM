@@ -12,7 +12,11 @@
  *   ① 같은 이름 채널은 같은 객체(진짜 channel() 의 topic 재사용) ② subscribe 뒤 presence·postgres_changes 의 on() 은 던진다
  *   ③ 닫힌 채널을 다시 subscribe 하면 던진다 ④ 아직 join 전인 채널의 unsubscribe·removeChannel 은 그 자리에서 목록에서 빠진다
  *   ⑤ presenceState() 는 빈 객체. 재생 중 진짜가 다르게 굴면(예측과 다른 예외) 조용히 넘기지 않고 보고한다.
- *   진짜 setAuth 는 세대 번호로 마지막 호출이 이긴다 — 순서를 지켜 재생하므로 결과가 같다.
+ *   **setAuth 만은 순서대로 재생하지 않는다**(PR #206 critical P2-1 실측): phoenix 는 join 프레임의 토큰을 subscribe 순간 굳히고,
+ *   인자 없는 setAuth(로그아웃·갱신)는 비동기라, 한 루프에 섞어 재생하면 join 이 옛 토큰(로그아웃한 A·갱신 전 A1)으로 굳는다.
+ *   join 뒤의 setAuth 는 값이 같아 access_token 프레임도 안 보내 서버 채널이 옛 토큰의 RLS 로 남는다.
+ *   그래서 쌓인 setAuth 를 **채널보다 먼저** 순서대로 부르고 끝날 때까지 기다린 뒤(그동안 새 호출은 계속 큐로) 채널을 재생한다 —
+ *   진짜의 세대 번호 규칙상 마지막 호출만 남으므로, 서버가 아는 토큰은 '로드된 진짜에 실시간으로 부른 결과'와 같다.
  *
  * 청크를 못 받으면(망 흔들림·배포 공백): 구독 중인 채널 콜백에 'CHANNEL_ERROR' 를 준다(진짜도 소켓이 실패하면 같은 상태를 준다 —
  *   채팅은 이걸 보고 폴링으로 돌아간다). 그리고 **다른 주소(?r=n)** 로 다시 받는다 — 브라우저는 실패한 동적 import 를
@@ -144,6 +148,8 @@ class LazyChannel {
 export class RealtimeClient {
   private real?: RealClient;
   private ops: Op[] = [];
+  /** 진짜가 오기 전의 setAuth — ops 보다 먼저 재생하고 기다린다(머리 주석 P2-1). */
+  private auths: ((r: RealClient) => Promise<void>)[] = [];
   private loading = false;
   /** 진짜 client.channels 의 거울 — 진짜가 오기 전에만 쓴다. */
   private chans: LazyChannel[] = [];
@@ -194,8 +200,9 @@ export class RealtimeClient {
   }
 
   setAuth(token?: string | null): Promise<void> {
-    // 부팅 때마다 불린다(INITIAL_SESSION) — 이것만으로는 청크를 받지 않는다. 채널이 생기면 순서대로 재생된다.
-    return this.real ? this.real.setAuth(token) : this.queueAsync((r) => r.setAuth(token));
+    // 부팅 때마다 불린다(INITIAL_SESSION) — 이것만으로는 청크를 받지 않는다. 진짜가 오면 채널보다 먼저 재생된다.
+    if (this.real) return this.real.setAuth(token);
+    return new Promise<void>((resolve, reject) => { this.auths.push((r) => r.setAuth(token).then(resolve, reject)); });
   }
 
   /** @internal 진짜가 오기 전 호출을 쌓는다. throws=동기 예외를 이미 호출부에 던졌다(재생 때도 같은 예외가 나야 정상). */
@@ -225,9 +232,11 @@ export class RealtimeClient {
     if (this.real || this.loading) return;
     this.loading = true;
     load().then(
-      (m) => {
+      async (m) => {
         this.again.done();
         const r = new m.default(this.endPoint, this.options);
+        // 토큰 먼저(P2-1) — this.real 을 비워 둔 채 기다리므로 그사이 호출(새 setAuth 포함)은 계속 큐에 쌓인다.
+        while (this.auths.length) await Promise.all(this.auths.splice(0).map((f) => f(r)));
         this.real = r;
         this.chans = [];
         // 재생 중 콜백이 대리를 다시 부르면 진짜로 바로 간다(this.real 이 이미 있다). 큐에 새로 붙는 것도 끝까지 비운다.
@@ -241,6 +250,18 @@ export class RealtimeClient {
       },
     );
   }
+}
+
+// 미리 받기(PR #206 critical P3-2) — 첫 화면 load 뒤 한가할 때 청크를 받아 둔다. 배포 공백에는 옛 해시 청크 주소가 ?r= 를 붙여도
+// 200 text/html 을 돌려줘(운영 실측) 재시도로는 영영 못 받는다 — 구독 없이 시작한 탭(비로그인 GTO·도구)이 배포 뒤 홈에 가면 실시간이 죽었다.
+// 실패하면 한 번 보고만 한다(fails 가 올라 다음 channel() 은 ?r= 주소로 받는다). 이미 받는 중·받았으면 load() 가 같은 약속을 돌려준다.
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+  const w = window as IdleWin;
+  const warm = () => { if (!fails) load().catch((e) => report('실시간 모듈 미리 받기 실패', e)); };
+  const schedule = () => (w.requestIdleCallback ? w.requestIdleCallback(warm, { timeout: 5000 }) : setTimeout(warm, 2000));
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule, { once: true });
 }
 
 function unwrap(ch: RealChannel): RealChannel {

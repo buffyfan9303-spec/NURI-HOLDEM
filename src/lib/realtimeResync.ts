@@ -8,13 +8,18 @@
 //   화면은 `useResyncOnWake(reload, active)` 로 창 복귀·온라인 복귀(+선택 폴링) 때 다시 읽는다.
 import { useEffect, useRef } from 'react';
 
-/** 채널 상태 콜백 — 첫 'SUBSCRIBED' 는 무시하고(그 직후 화면이 이미 읽는다), **다시** 들어온 'SUBSCRIBED' 마다 onChange. */
+/** 채널 상태 콜백 — 첫 'SUBSCRIBED' 는 무시하고(그 직후 화면이 이미 읽는다), **다시** 들어온 'SUBSCRIBED' 마다 onChange.
+ *  오류('CHANNEL_ERROR'·'TIMED_OUT') 뒤의 'SUBSCRIBED' 는 첫 번째여도 onChange — 처음부터 못 붙은 동안(실시간 청크 실패 후 재시도,
+ *  소켓 첫 연결 실패)의 변경을 화면이 놓친다(PR #206 critical P3-1 실측: CHANNEL_ERROR → SUBSCRIBED 에 재조회 0회). */
 export function resubscribeStatus(onChange: () => void): (status: string) => void {
   let joined = false;
+  let lost = false;
   return (status: string) => {
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') lost = true;
     if (status !== 'SUBSCRIBED') return;
-    if (joined) onChange();
+    if (joined || lost) onChange();
     joined = true;
+    lost = false;
   };
 }
 

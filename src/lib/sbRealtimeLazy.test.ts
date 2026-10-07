@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RealtimeClient as RealClient } from '@supabase/realtime-js';
 import { RealtimeClient as LazyClient } from './sbRealtimeLazy';
+import { resubscribeStatus } from './realtimeResync';
 
 const ENDPOINT = 'wss://idsxiqspecrucvfvtgbw.supabase.co/realtime/v1';
 const APIKEY = 'sb_publishable_test';
@@ -19,10 +20,12 @@ const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16)
 
 /** 가짜 웹소켓 + 가짜 서버. 같은 입력에 같은 응답을 같은 시점(다음 틱)에 낸다.
  *  frames = 망으로 나간 것(소켓 생성·프레임·닫기·REST 대체 전송) 순서. log = 앱이 보는 것(콜백·동기 반환값·예외) 순서. */
-function makeEnv() {
+function makeEnv(o: { authDelayMs?: number } = {}) {
   const frames: string[] = [];
   const log: string[] = [];
   const sockets: FakeWS[] = [];
+  /** 가짜 서버가 채널(topic)마다 마지막으로 받은 토큰 — join 의 access_token(없으면 apikey) 뒤 access_token 프레임으로 바뀐다. */
+  const serverTok = new Map<string, string>();
   const reply = (ws: FakeWS, m: Msg) => setTimeout(() => ws.readyState === 1 && ws.onmessage?.({ data: JSON.stringify(m) }), 0);
   class FakeWS {
     readyState = 0;
@@ -39,6 +42,10 @@ function makeEnv() {
       if (typeof d !== 'string') { frames.push(`bin:${hex(d)}`); return; }
       frames.push(d);
       const [joinRef, ref, topic, event, payload] = JSON.parse(d) as Msg;
+      const tok = (payload as { access_token?: string }).access_token;
+      if (event === 'phx_join') serverTok.set(topic, tok ?? APIKEY);
+      else if (event === 'access_token') serverTok.set(topic, String(tok));
+      else if (event === 'phx_leave') serverTok.delete(topic);
       if (event === 'phx_join') {
         if (topic.includes('deny')) return reply(this, [joinRef, ref, topic, 'phx_reply', { status: 'error', response: { reason: 'denied' } }]);
         if (topic.includes('slow')) return;   // 응답 없음 → TIMED_OUT
@@ -59,12 +66,13 @@ function makeEnv() {
     params: { apikey: APIKEY },
     transport: FakeWS as never,
     fetch: fetchImpl,
-    accessToken: async () => token,
+    // supabase-js _getAccessToken(getSession) 처럼 비동기 — authDelayMs 를 주면 실제처럼 타이머 한 번을 넘긴다.
+    accessToken: async () => { if (o.authDelayMs) await new Promise((r) => setTimeout(r, o.authDelayMs)); return token; },
     timeout: 120,
     heartbeatIntervalMs: 600_000,
     reconnectAfterMs: () => 10,
   };
-  return { frames, log, sockets, options, setToken: (t: string) => { token = t; } };
+  return { frames, log, sockets, serverTok, options, setToken: (t: string) => { token = t; } };
 }
 
 type AnyClient = {
@@ -193,6 +201,81 @@ describe('sbRealtimeLazy — 진짜와 같은 프레임·같은 콜백 순서', 
   });
 });
 
+// 위 동일성 시험의 기준은 '소켓이 아직 안 열린 진짜'다 — 재생 충실도(프레임·콜백 순서)는 그걸로 보지만, 토큰은 그 기준이 같은 틈을 가져
+// 못 본다(PR #206 critical P2-1: 진짜도 소켓이 늦으면 join 이 옛 토큰으로 굳는다). 그래서 토큰은 **로드된 진짜에 같은 호출을 실시간으로
+// 보낸 결과**(소켓이 첫 subscribe 직후 열림 · 로그아웃은 끝난 뒤 다음 화면)와 서버가 아는 채널 토큰을 비교한다.
+// 음성 대조: sbRealtimeLazy.ts 의 setAuth 를 ops 큐로 되돌리면(순서대로 재생) 세 시험 모두 빨개진다.
+describe('sbRealtimeLazy — 로드 전 토큰 변경이 서버 채널에 반영된다(진짜 실시간 기준)', () => {
+  const pg = (table: string, filter?: string) => ({ event: '*', schema: 'public', table, ...(filter ? { filter } : {}) });
+  type Env = ReturnType<typeof makeEnv>;
+  /** live=진짜를 실시간으로(소켓이 첫 subscribe 직후 열린다). 대리는 소켓이 로드 뒤에야 생기므로 끝에 연다. */
+  async function run(C: Ctor, live: boolean, steps: (c: AnyClient, env: Env, openNow: () => Promise<void>) => Promise<void>) {
+    const env = makeEnv({ authDelayMs: 1 });
+    const c = new C(ENDPOINT, env.options);
+    const openNow = async () => { if (!live) return; await until(() => env.sockets.length > 0); env.sockets[0].open(); await flush(); };
+    await steps(c, env, openNow);
+    await until(() => env.sockets.length > 0);
+    if (env.sockets[0].readyState === 0) env.sockets[0].open();
+    await flush(20);
+    return { serverTok: Object.fromEntries(env.serverTok), frames: env.frames };
+  }
+
+  it('로그아웃 → 다른 계정(B) 로그인: 서버 채널은 B', async () => {
+    const steps = async (c: AnyClient, env: Env, openNow: () => Promise<void>) => {
+      env.setToken('jwt-A'); void c.setAuth('jwt-A');                     // INITIAL_SESSION(A)
+      c.channel('ledger:venueA:r1').on('postgres_changes', pg('ledger_entries', 'venue_id=eq.A'), () => {}).subscribe();
+      await openNow();
+      env.setToken(APIKEY); void c.setAuth();                              // SIGNED_OUT
+      env.setToken('jwt-B'); void c.setAuth('jwt-B');                      // SIGNED_IN(B)
+    };
+    const real = await run(RealClient as unknown as Ctor, true, steps);
+    const lazy = await run(LazyClient as unknown as Ctor, false, steps);
+    expect(real.serverTok).toEqual({ 'realtime:ledger:venueA:r1': 'jwt-B' });
+    expect(lazy.serverTok).toEqual(real.serverTok);
+  });
+
+  it('첫 join 전 토큰 갱신(A1 → A2): 서버 채널은 A2', async () => {
+    const steps = async (c: AnyClient, env: Env, openNow: () => Promise<void>) => {
+      env.setToken('jwt-A1'); void c.setAuth('jwt-A1');
+      c.channel('notif:A').on('postgres_changes', pg('notifications', 'user_id=eq.A'), () => {}).subscribe();
+      await openNow();
+      env.setToken('jwt-A2'); void c.setAuth('jwt-A2');                    // TOKEN_REFRESHED
+    };
+    const real = await run(RealClient as unknown as Ctor, true, steps);
+    const lazy = await run(LazyClient as unknown as Ctor, false, steps);
+    expect(real.serverTok).toEqual({ 'realtime:notif:A': 'jwt-A2' });
+    expect(lazy.serverTok).toEqual(real.serverTok);
+  });
+
+  it('로그아웃 뒤 새로 만든 채널은 익명(apikey)으로 join 한다 — 로그아웃한 A 의 토큰이 나가지 않는다', async () => {
+    const steps = (awaitLogout: boolean) => async (c: AnyClient, env: Env) => {
+      env.setToken('jwt-A'); void c.setAuth('jwt-A');
+      env.setToken(APIKEY); const out = c.setAuth();                       // SIGNED_OUT
+      if (awaitLogout) await out;   // 진짜: 로그아웃이 끝난 뒤 사용자가 홈으로 간다(대리는 로드 전이라 기다리면 영영 안 풀린다)
+      c.channel('schedules_all_r').on('postgres_changes', pg('schedules'), () => {}).subscribe();
+    };
+    const real = await run(RealClient as unknown as Ctor, true, steps(true));
+    const lazy = await run(LazyClient as unknown as Ctor, false, steps(false));
+    expect(real.serverTok).toEqual({ 'realtime:schedules_all_r': APIKEY });
+    expect(lazy.serverTok).toEqual(real.serverTok);
+    expect(lazy.frames.filter((f) => f.includes('jwt-A')), '로그아웃한 토큰이 망으로 나갔다').toEqual([]);
+  });
+
+  it('토큰을 기다리는 동안 들어온 호출(새 setAuth·채널)도 큐로 가서 마지막 토큰으로 붙는다', async () => {
+    const env = makeEnv({ authDelayMs: 5 });
+    const c = new LazyClient(ENDPOINT, env.options) as unknown as AnyClient;
+    env.setToken('jwt-A'); void c.setAuth();                              // 로드 시점에 아직 진행 중일 비동기 토큰
+    c.channel('x').on('postgres_changes', pg('x'), () => {}).subscribe();
+    await new Promise((r) => setTimeout(r, 1));                            // 로드는 끝났고 토큰은 기다리는 중
+    env.setToken('jwt-B'); void c.setAuth('jwt-B');
+    c.channel('y').on('postgres_changes', pg('y'), () => {}).subscribe();
+    await until(() => env.sockets.length > 0);
+    env.sockets[0].open();
+    await flush(20);
+    expect(Object.fromEntries(env.serverTok)).toEqual({ 'realtime:x': 'jwt-B', 'realtime:y': 'jwt-B' });
+  });
+});
+
 describe('sbRealtimeLazy — 청크를 못 받으면', () => {
   it('구독 콜백에 CHANNEL_ERROR 를 주고, 다시 받아 재생하면 진짜와 같은 프레임으로 붙는다', async () => {
     const real = await scenario(RealClient as unknown as Ctor);
@@ -217,6 +300,35 @@ describe('sbRealtimeLazy — 청크를 못 받으면', () => {
       vi.doUnmock('@supabase/realtime-js/dist/module/RealtimeClient.js');
     }
   }, 20_000);
+
+  it('CHANNEL_ERROR 뒤 복구된 SUBSCRIBED 에 resubscribeStatus 가 재조회한다(끊긴 동안의 변경, PR #206 P3-1)', async () => {
+    vi.resetModules();
+    let failOnce = true;
+    vi.doMock('@supabase/realtime-js/dist/module/RealtimeClient.js', async (orig) => {
+      if (failOnce) { failOnce = false; throw new Error('Failed to fetch dynamically imported module'); }
+      return orig();
+    });
+    const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { RealtimeClient: Fresh } = await import('./sbRealtimeLazy');
+      const env = makeEnv();
+      const c = new Fresh(ENDPOINT, env.options as never) as unknown as AnyClient;
+      void c.setAuth('jwt-A');
+      let reloads = 0;
+      const statuses: string[] = [];
+      const rs = resubscribeStatus(() => { reloads++; });
+      c.channel('clock:A:r').on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states' }, () => {})
+        .subscribe((s) => { statuses.push(s); rs(s); });
+      await until(() => env.sockets.length > 0, 4000);   // 재시도 타이머(1초) 뒤 로드
+      env.sockets[0].open();
+      await flush(20);
+      expect(statuses).toEqual(['CHANNEL_ERROR', 'SUBSCRIBED']);
+      expect(reloads, '복구 SUBSCRIBED 에 재조회가 없다').toBe(1);
+    } finally {
+      errs.mockRestore();
+      vi.doUnmock('@supabase/realtime-js/dist/module/RealtimeClient.js');
+    }
+  }, 10_000);
 });
 
 describe('sbRealtimeLazy — 재시도는 20번 뒤에도 끊지 않는다(무인 클락 TV)', () => {
