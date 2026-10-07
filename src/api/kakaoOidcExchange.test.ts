@@ -6,7 +6,10 @@ import { describe, it, expect } from 'vitest';
 import { handle, makeLimiter, clientIp, SCOPE, type Deps } from '../../supabase/functions/kakao-oidc-exchange/logic.ts';
 
 const OK_ORIGIN = 'https://nuriholdem.com';
-const jwt = (payload: unknown) => ['eyJhbGciOiJSUzI1NiJ9', Buffer.from(JSON.stringify(payload)).toString('base64url'), 'c2ln'].join('.');
+// 가짜 JWT(예제 값, 서명 'sig') — 비밀 탐지기가 소스 글자를 토큰으로 오인하지 않게 실행할 때 조립한다.
+const b64u = (s: string) => Buffer.from(s).toString('base64url');
+const jwtRaw = (payloadText: string) => [b64u('{"alg":"RS256"}'), b64u(payloadText), 'c2ln'].join('.');
+const jwt = (payload: unknown) => jwtRaw(JSON.stringify(payload));
 const ID_TOKEN = jwt({ sub: '1', nonce: 'b'.repeat(64), nickname: '누리' });
 const tokenResp = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
@@ -125,7 +128,7 @@ describe('exchange — 코드 → id_token', () => {
     ['nonce 클레임 없음', jwt({ sub: '1' })],
     ['nonce 가 원문(해시 아님)', jwt({ sub: '1', nonce: 'raw-nonce-value' })],
     ['nonce 대문자 hex', jwt({ sub: '1', nonce: 'B'.repeat(64) })],
-    ['페이로드가 JSON 아님', 'eyJhbGciOiJSUzI1NiJ9.bm90LWpzb24.c2ln'],
+    ['페이로드가 JSON 아님', jwtRaw('not-json')],
   ])('%s → 400, id_token 을 돌려주지 않는다', async (_n, tok) => {
     const w = world({ postToken: async () => tokenResp(200, { id_token: tok }) });
     const r = await run(w, post({ action: 'exchange', code: 'C'.repeat(40) }));

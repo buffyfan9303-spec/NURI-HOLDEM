@@ -11,6 +11,10 @@ import type { Page, Route } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
+// 가짜 id_token(payload {"sub":"1"}, 서명 'sig') — 비밀 탐지기가 소스 글자를 토큰으로 오인하지 않게 실행할 때 조립한다.
+const b64u = (s: string) => Buffer.from(s).toString('base64url');
+const FAKE_ID_TOKEN = [b64u('{"alg":"RS256"}'), b64u('{"sub":"1"}'), 'c2ln'].join('.');
+
 const ON = process.env.E2E_KAKAO_LOGIN === 'on';
 const PORTONE = process.env.E2E_PORTONE === 'on';
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
@@ -95,7 +99,7 @@ test('🔴 켬 — 버튼 → 카카오 → /auth/kakao → signInWithIdToken(ka
     const b = r.request().postDataJSON() as Record<string, string>;
     fnBodies.push(b);
     if (b.action === 'start') return json(r, { url: `https://kauth.kakao.com/oauth/authorize?state=${b.state}` });
-    return json(r, { id_token: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln' });
+    return json(r, { id_token: FAKE_ID_TOKEN });
   });
   // 카카오 인가 화면 대신 바로 우리 콜백으로 돌려보낸다(동의했다고 치고)
   await page.route(/^https:\/\/kauth\.kakao\.com\//, (r) => {
@@ -120,7 +124,7 @@ test('🔴 켬 — 버튼 → 카카오 → /auth/kakao → signInWithIdToken(ka
   expect(fnBodies[1].code).toBe('E2E_KAKAO_CODE_123');
   expect(tokenBody, 'signInWithIdToken 이 불리지 않았다').not.toBeNull();
   expect(tokenBody!.provider).toBe('kakao');
-  expect(tokenBody!.id_token).toBe('eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln');
+  expect(tokenBody!.id_token).toBe(FAKE_ID_TOKEN);
   // Supabase 는 원문 nonce 를 sha256 hex 로 바꿔 id_token 의 nonce 와 비교한다 — 카카오에 보낸 해시와 같아야 한다
   expect(createHash('sha256').update(String(tokenBody!.nonce)).digest('hex')).toBe(fnBodies[0].nonceHash);
   await expect.poll(() => new URL(page.url()).pathname, { message: '콜백 주소(code)가 주소창에 남았다' }).toBe('/');
