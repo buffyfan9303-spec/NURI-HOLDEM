@@ -37,6 +37,18 @@ Deno.serve((req) => handle(req, {
     // auth.identities.provider_id = 카카오 id_token 의 sub = 회원번호
     return String((i.identity_data as Record<string, unknown> | undefined)?.sub ?? i.id ?? '');
   },
+  async withdrawBlocked(uid, self) {
+    // withdraw_my_account · admin_withdraw_user(20261006s2)의 거절 조건과 같게 둔다 — 그쪽 조건이 늘면 여기도 같이.
+    // 어긋나도 결과는 '계정은 남고 카카오 연결만 끊김'(데이터 피해 없음) 이거나 즉시 끊기 생략(트리거 큐가 백업)이다.
+    const [p, v] = await Promise.all([
+      admin.from('profiles').select('status,role').eq('id', uid).maybeSingle(),
+      admin.from('venues').select('id').eq('owner_id', uid).limit(1),
+    ]);
+    if (p.error || v.error) throw p.error ?? v.error;
+    if ((v.data?.length ?? 0) > 0) return true;                         // 매장 대표
+    if (self) return p.data?.status === 'banned' || p.data?.status === 'suspended';   // 제재 중 본인
+    return !p.data || p.data.role === 'admin';                           // 관리자 탈퇴: 없는 회원 · 운영자
+  },
   async unlink(kakaoId, adminKey) {
     const r = await fetch(UNLINK_URL, {
       method: 'POST',
@@ -44,8 +56,10 @@ Deno.serve((req) => handle(req, {
       body: new URLSearchParams({ target_id_type: 'user_id', target_id: kakaoId }),
       signal: AbortSignal.timeout(8000),
     });
-    await r.body?.cancel();   // 본문(회원번호·카카오 원문)은 읽지도 남기지도 않는다
-    return r.status;
+    // 성공 본문엔 회원번호가 있다 — 읽지 않는다. 실패 본문에서는 숫자 code 만 꺼내고 원문(msg)은 버린다.
+    if (r.ok) { await r.body?.cancel(); return { status: r.status, code: null }; }
+    const j = await r.json().catch(() => null) as { code?: unknown } | null;
+    return { status: r.status, code: typeof j?.code === 'number' ? j.code : null };
   },
   async record(kakaoId, userId, ok, status) {
     const { error } = await admin.rpc('kakao_unlink_record', { p_provider_id: kakaoId, p_user_id: userId, p_ok: ok, p_status: status });

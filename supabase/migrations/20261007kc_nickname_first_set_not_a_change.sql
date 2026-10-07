@@ -1,5 +1,5 @@
--- ⏳ 미적용 — 초안(home-team, 2026-10-07). 적용 판단·실행은 리드. 리허설: supabase/tests/20261007kc_rehearsal.sql
---    적용하면 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다.
+-- ✅ 적용 완료 2026-10-07(리드). 적용 전 라이브 롤백 리허설 PASS 5/5(supabase/tests/20261007kc_rehearsal.sql).
+--    적용 후 실측: md5(pg_get_functiondef('public.profiles_nickname_rules()')) = c60f98cd4ed9896899dafe76a15b6aaf (첫 설정 예외 포함 본문).
 select set_config('lock_timeout', '3s', true);
 select set_config('statement_timeout', '60s', true);
 -- 20261007kc — 소셜 가입 첫 동의 화면의 닉네임 설정은 30일 1회 변경으로 세지 않는다(critical-211 P3-3).

@@ -592,7 +592,8 @@ export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: 
 // ── 탈퇴 직전 카카오 연결 끊기(critical-211 P2-1) ──────────────────────────────
 // 카카오 정책상 탈퇴 과정에 연결 해제(unlink)가 들어가야 한다. 엣지 kakao-unlink 가 service role 로 대상의 카카오 회원번호를 읽어
 // 카카오 Admin 키로 끊는다 — 탈퇴 RPC 가 auth.identities 를 지우면 회원번호를 못 읽으므로 **RPC 전에** 끝까지 기다린다.
-// 카카오가 아닌 회원은 서버가 아무것도 안 한다(no-op). 실패해도 **던지지 않는다** — 탈퇴 권리가 우선이고,
+// 카카오가 아닌 회원, 그리고 탈퇴 RPC 가 거절할 회원(매장 대표·제재 중 본인·운영자 대상 — 엣지가 서버에서 먼저 확인,
+// critical-211 재반증 P3-B)은 서버가 아무것도 안 한다(skipped). 실패해도 **던지지 않는다** — 탈퇴 권리가 우선이고,
 // 못 끊은 회원번호는 서버 큐(20261007kb)가 남겨 크론이 재시도한다. 이 호출 자체가 안 닿아도 identity 삭제 트리거가 큐에 넣는다.
 async function unlinkKakaoBeforeWithdraw(userId?: string): Promise<void> {
   try {
