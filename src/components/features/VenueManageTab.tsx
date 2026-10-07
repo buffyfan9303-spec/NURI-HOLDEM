@@ -3343,12 +3343,15 @@ function StaffManager({ venueId, active = true }: { venueId: string; active?: bo
           </div>
         )}
 
-        {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
+        {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계)
+            🔴 2026-10-07 오너 실기기(Android): 줄을 누르면 글자가 선택되고 번호와 글이 두 줄로 갈라져 아래가 밀렸다.
+            정적 안내라 고를 글이 없다 → li 마다 select-none(설치형 PWA 는 index.css 가 li 요소를 직접 선택 가능으로 열어 ol 에 걸면 안 먹는다).
+            글은 span 으로 감싸 익명 flex 아이템을 없애고, 배지는 inline-flex 라 줄이 block 으로 풀려도 한 줄에 남는다. */}
         <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
           {(['상대가 일반 회원으로 가입', '닉네임이나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
-            <li key={t} className="flex items-center gap-2 text-2xs text-ink-muted">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
-              {t}
+            <li key={t} className="flex select-none items-center gap-2 text-2xs text-ink-muted">
+              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
+              <span>{t}</span>
             </li>
           ))}
         </ol>

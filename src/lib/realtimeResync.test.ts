@@ -15,4 +15,20 @@ describe('resubscribeStatus', () => {
     cb('SUBSCRIBED');
     expect(on).toHaveBeenCalledTimes(2);
   });
+
+  it('처음부터 못 붙었다가(오류 뒤) 첫 SUBSCRIBED 가 오면 재조회한다 — 실시간 청크 실패 후 복구(PR #206 P3-1)', () => {
+    for (const err of ['CHANNEL_ERROR', 'TIMED_OUT']) {
+      const on = vi.fn();
+      const cb = resubscribeStatus(on);
+      cb(err);
+      cb('SUBSCRIBED');
+      expect(on, err).toHaveBeenCalledTimes(1);
+      cb('SUBSCRIBED');
+      expect(on, err).toHaveBeenCalledTimes(2);
+    }
+    const on = vi.fn();
+    const cb = resubscribeStatus(on);
+    cb('CLOSED'); cb('SUBSCRIBED');   // CLOSED 는 끊김 표시가 아니다(제거·닫기)
+    expect(on).toHaveBeenCalledTimes(0);
+  });
 });

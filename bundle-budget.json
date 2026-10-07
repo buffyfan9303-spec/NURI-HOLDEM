@@ -8,9 +8,10 @@
   "_2026-09-28": "largestChunkGzipKb 117 → 119. VenueManageTab 청크 실측 118(+1KB): 장부 애드온 줄·설정 가격칸·정산/통계 애드온 집계 + 내 매장 결함 수리(영업일·서버시각·전환 경합·재연결). --update 미사용, 여유 1KB.",
   "_2026-10-06": "entryGzipKb 267 → 269. 정식 오픈(10-08) 법적 문서 묶음(PR #188·#193·#195 — 하단 창이 동의 정본 약관·처리방침·환불을 그대로 그림, 처리방침·약관 제3판, 매장 운영자 약관 게이트, 시행일 계산 legalDeploy, 재동의 판별) + 같은 날 main 에 들어간 보안·임시조치(#187·#196)가 합쳐진 CI 합성본 실측 267.765KB(+0.765 초과). 늘어난 것은 법정 고지 문장과 동의 판정이라 줄일 대상이 아니다. --update 미사용(여유 0% 재생산 방지), 여유 1.2KB. 오너에게 보고.",
   "_2026-10-07": "entryGzipKb 269 → 257 (처음으로 내림). 오너 2026-10-07 '첫 화면 번들 한도가 계속 차는 문제를 총체적으로 줄여라' — 감량 1차(PR A) 세 커밋: ① supabase storage-js·functions-js 를 첫 호출 때 불러오는 대리(−6.323KB) ② Speed Insights 를 렌더 전 import()·heroicons 별/하트 인라인(−1.078KB) ③ 첫 화면에 안 쓰는 lucide 아이콘 84개를 나중 청크로(−6.339KB). 같은 조건(운영 anon 공개값 env, mock 아님) 로컬 실측 267.928 → 254.188KB(−13.740). 여유는 약 2.8KB 만 둔다 — 넓게 두면 다시 조용히 찬다. 남은 큰 후보는 realtime-js 지연(PR B, 상한 −15.3KB). --update 미사용. 같은 날 검토 반영 뒤 재측정: main(#203·#204) 병합 254.406(+0.218) → 아이콘 청크 실패 재시도(?r=n, 검토 P2-1) 254.573KB(+0.167), 여유 2.427KB.",
+  "_2026-10-07b": "entryGzipKb 257 → 244. 감량 2차(PR B): supabase realtime-js·phoenix 를 첫 channel() 때 불러오는 기록·재생 대리(src/lib/sbRealtimeLazy.ts — 진짜와 같은 프레임·콜백 순서를 sbRealtimeLazy.test.ts 가 비교). 같은 조건(운영 anon 공개값 env, mock 아님) 로컬 실측 254.573 → 240.712KB(−13.861). 빠진 코드는 나중 청크 RealtimeClient-*.js(15.8KB gz)로 간다 — 홈은 부팅 직후 일정 구독을 열어 첫 화면 다음에 바로 받는다. 여유 약 3.3KB 만 둔다. --update 미사용. 같은 PR 의 재시도 공용화(src/lib/chunkRetry.ts — 상한 뒤 60초 재시도)·SW 내용 종류 검사 뒤 재측정 240.771KB(+0.059), 여유 3.229KB.",
   "totalJsGzipKb": 1080,
   "totalCssGzipKb": 36,
-  "entryGzipKb": 257,
+  "entryGzipKb": 244,
   "largestChunkGzipKb": 119,
   "externalStylesheets": 0
 }
