@@ -3,10 +3,11 @@
 //           응답은 id_token 만(access/refresh 없음) · 카카오 원문·비밀이 응답에 안 실림.
 // 실행: npx vitest run src/api/kakaoOidcExchange.test.ts
 import { describe, it, expect } from 'vitest';
-import { handle, makeLimiter, SCOPE, type Deps } from '../../supabase/functions/kakao-oidc-exchange/logic.ts';
+import { handle, makeLimiter, clientIp, SCOPE, type Deps } from '../../supabase/functions/kakao-oidc-exchange/logic.ts';
 
 const OK_ORIGIN = 'https://nuriholdem.com';
-const ID_TOKEN = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln';
+const jwt = (payload: unknown) => ['eyJhbGciOiJSUzI1NiJ9', Buffer.from(JSON.stringify(payload)).toString('base64url'), 'c2ln'].join('.');
+const ID_TOKEN = jwt({ sub: '1', nonce: 'b'.repeat(64), nickname: '누리' });
 const tokenResp = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
 function world(over: Partial<Deps> = {}) {
@@ -119,6 +120,19 @@ describe('exchange — 코드 → id_token', () => {
     expect(r.text).not.toMatch(/"AT"/);
   });
 
+  // critical-211 P3-1 — GoTrue 는 토큰·요청 양쪽에 nonce 가 없으면 비교를 건너뛴다. nonce 없는 인가 주소로 받은 코드를 막는 한 겹.
+  it.each([
+    ['nonce 클레임 없음', jwt({ sub: '1' })],
+    ['nonce 가 원문(해시 아님)', jwt({ sub: '1', nonce: 'raw-nonce-value' })],
+    ['nonce 대문자 hex', jwt({ sub: '1', nonce: 'B'.repeat(64) })],
+    ['페이로드가 JSON 아님', 'eyJhbGciOiJSUzI1NiJ9.bm90LWpzb24.c2ln'],
+  ])('%s → 400, id_token 을 돌려주지 않는다', async (_n, tok) => {
+    const w = world({ postToken: async () => tokenResp(200, { id_token: tok }) });
+    const r = await run(w, post({ action: 'exchange', code: 'C'.repeat(40) }));
+    expect(r.status).toBe(400);
+    expect(r.text).not.toContain(tok);
+  });
+
   it('네트워크 실패 → 502 고정 문장', async () => {
     const w = world({ postToken: async () => { throw new Error('ZZLEAK socket'); } });
     const r = await run(w, post({ action: 'exchange', code: 'C'.repeat(40) }));
@@ -145,6 +159,26 @@ describe('설정·남용', () => {
     expect((await run(w, post(START, OK_ORIGIN, '2.2.2.2'))).status).toBe(200);
     t = 60_000;
     expect((await run(w, post(START))).status).toBe(200);
+  });
+
+  // critical-211 P3-2 — x-forwarded-for 첫 값은 호출자가 마음대로 적는다. Cloudflare 가 채우는 cf-connecting-ip 를 키로 쓴다.
+  it('x-forwarded-for 를 매번 바꿔도 cf-connecting-ip 가 같으면 21번째부터 429', async () => {
+    const w = world({ allow: makeLimiter(20, () => 0) });
+    const spoof = (i: number) => new Request('https://x/functions/v1/kakao-oidc-exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: OK_ORIGIN, 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': `10.0.0.${i}, 203.0.113.7` },
+      body: JSON.stringify(START),
+    });
+    for (let i = 0; i < 20; i++) expect((await run(w, spoof(i))).status).toBe(200);
+    expect((await run(w, spoof(99))).status).toBe(429);
+  });
+
+  it('cf-connecting-ip 가 없으면 x-forwarded-for 첫 값으로 돌아가고 그 사실을 로그로 남긴다(IP 값은 안 남김)', () => {
+    const logs: unknown[][] = [];
+    const req = new Request('https://x', { headers: { 'x-forwarded-for': '198.51.100.9, 10.1.1.1' } });
+    expect(clientIp(req, (...a) => logs.push(a))).toBe('198.51.100.9');
+    expect(clientIp(new Request('https://x', { headers: { 'cf-connecting-ip': 'not an ip<>', 'x-forwarded-for': '198.51.100.9' } }))).toBe('198.51.100.9');
+    expect(JSON.stringify(logs)).not.toContain('198.51.100.9');
   });
 
   it('OPTIONS 는 허용 Origin 에만 CORS 를 연다', async () => {

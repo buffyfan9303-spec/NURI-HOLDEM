@@ -24,7 +24,7 @@ const { dupGuide, DUP_IDENTITY_GUIDE } = await import('../api/identity');
 const ROOT = join(__dirname, '..', '..');
 const src = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 /** 주석을 뺀 코드 — 설명문의 'provider' 글자가 거짓 실패·거짓 통과를 만들지 않게 */
-const code = (p: string) => src(p).split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+const code = (p: string) => src(p).split(/\r?\n/).map((l) => l.replace(/\/\/.*$/, '')).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
 
 const GATE_FILES = [
   'src/components/features/ConsentGateModal.tsx',
@@ -33,6 +33,7 @@ const GATE_FILES = [
   'src/lib/requireLogin.ts',
   'src/lib/legalVersion.ts',
   'src/contexts/AuthContext.tsx',
+  'src/lib/sanctionMessage.ts',   // 제재 판정 문장(critical-211 P2-2 에서 AuthContext 밖으로 옮김)
 ];
 
 describe('① 게이트 판정은 provider 를 보지 않는다', () => {

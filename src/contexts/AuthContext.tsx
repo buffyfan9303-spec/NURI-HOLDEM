@@ -7,6 +7,7 @@ import {
   updateMyProfile, changeMyPassword, claimDailyLoginPoint,
 } from '../api/auth';
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { sanctionMessage } from '../lib/sanctionMessage';
 import {
   type AuthGeneration, initialAuthGeneration, withOwner, withSignedOut, canApplyProfile,
 } from '../lib/authGeneration';
@@ -56,20 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sanctioned, setSanctioned] = useState<string | null>(null);
 
   // 프로필을 세팅하고, 하루 1회 접속 활동 점수(+1)를 적립해 점수를 반영한다.
-  // 제재 상태면 **왜 못 들어가는지**를 문장으로 돌려준다(2026-09-07). 아니면 null.
+  // 제재 상태면 **왜 못 들어가는지**를 문장으로 돌려준다(2026-09-07) — 기간과 **사유**까지(critical-211 P2-2, lib/sanctionMessage.ts).
   // 예전엔 조용히 signOut 만 해서, 회원은 '로그인되었습니다' 토스트를 본 뒤 그냥 로그아웃됐다 —
   // 비밀번호가 틀린 줄 알고 재시도만 반복하게 되고, 문의도 못 한다.
-  const sanctionMessage = (p: User): string | null => {
-    if (p.status === 'withdrawn') return '탈퇴한 계정입니다. 재가입은 고객센터로 문의해 주세요.';
-    if (p.status === 'banned') return '이용이 영구 제한된 계정입니다. 고객센터로 문의해 주세요.';
-    if (p.status === 'suspended') {
-      const until = p.suspendedUntil ? new Date(p.suspendedUntil) : null;
-      return until && !Number.isNaN(until.getTime())
-        ? `이용이 일시 정지된 계정입니다. ${until.toLocaleDateString()}까지 로그인할 수 없습니다. 문의는 고객센터로 부탁드립니다.`
-        : '이용이 정지된 계정입니다. 고객센터로 문의해 주세요.';
-    }
-    return null;
-  };
 
   // ── A04: 인증 세대 ────────────────────────────────────────────────────────────
   // 로그아웃·계정 전환 전에 나간 조회가 나중에 도착해 **사라진 계정을 되살리는** 것을 막는다.

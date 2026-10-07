@@ -542,6 +542,7 @@ export async function adminWithdrawUser(userId: string, reason: string): Promise
     console.warn('[sanction] notify email failed (function may be undeployed):', e);
   }
 
+  await unlinkKakaoBeforeWithdraw(userId);   // critical-211 P2-1 — identity 를 지우는 RPC 보다 먼저
   const { error } = await supabase.rpc('admin_withdraw_user', { p_user_id: userId, p_reason: reason });
   if (!error) return;
   const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message ?? '');
@@ -588,11 +589,27 @@ export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: 
   return { vouchers: v.count ?? 0, posts: p.count ?? 0 };
 }
 
+// ── 탈퇴 직전 카카오 연결 끊기(critical-211 P2-1) ──────────────────────────────
+// 카카오 정책상 탈퇴 과정에 연결 해제(unlink)가 들어가야 한다. 엣지 kakao-unlink 가 service role 로 대상의 카카오 회원번호를 읽어
+// 카카오 Admin 키로 끊는다 — 탈퇴 RPC 가 auth.identities 를 지우면 회원번호를 못 읽으므로 **RPC 전에** 끝까지 기다린다.
+// 카카오가 아닌 회원은 서버가 아무것도 안 한다(no-op). 실패해도 **던지지 않는다** — 탈퇴 권리가 우선이고,
+// 못 끊은 회원번호는 서버 큐(20261007kb)가 남겨 크론이 재시도한다. 이 호출 자체가 안 닿아도 identity 삭제 트리거가 큐에 넣는다.
+async function unlinkKakaoBeforeWithdraw(userId?: string): Promise<void> {
+  try {
+    // 15초 상한 — 엣지가 멈춰도 탈퇴가 붙잡히지 않는다(엣지 안의 카카오 호출 상한은 8초)
+    const { data, error } = await supabase.functions.invoke('kakao-unlink', { body: userId ? { userId } : {}, timeout: 15_000 });
+    if (error || (data as { queued?: boolean } | null)?.queued) console.warn('[kakao-unlink] 즉시 해제 못 함 — 서버 큐가 재시도한다');
+  } catch {
+    console.warn('[kakao-unlink] 호출 실패 — 서버 큐(identity 삭제 트리거)가 재시도한다');
+  }
+}
+
 // ── 회원 자가 탈퇴 ────────────────────────────────────────────────────────────
 // 개인정보(실명·전화·CI·생년월일·성별·통신사·이메일) 파기 + status='withdrawn' 익명화.
 // 매장 대표는 매장을 먼저 정리(킬스위치 삭제/대표 양도)해야 하며, 서버가 거부한다.
 export async function withdrawMyAccount(): Promise<void> {
   if (IS_MOCK) return;
+  await unlinkKakaoBeforeWithdraw();   // critical-211 P2-1 — identity 를 지우는 RPC 보다 먼저
   const { error } = await supabase.rpc('withdraw_my_account');
   if (error) throw new Error(error.message);
 }

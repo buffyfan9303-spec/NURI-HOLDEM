@@ -1,6 +1,5 @@
--- ⏳ 미적용 — 초안(home-team, 2026-10-07). 라이브 롤백 리허설만 했다(supabase/tests/20261007ka_rehearsal.sql — PASS 11/11,
---    마이그레이션 없이 돌리면 FAIL 0/2 · 23502). 적용 판단·실행은 리드.
---    적용하면 이 줄을 "✅ 적용 완료 + 실측값" 으로 바꾼다.
+-- ✅ 적용 완료 2026-10-07(리드). 적용 전 라이브 롤백 리허설 PASS 11/11(supabase/tests/20261007ka_rehearsal.sql ·
+--    마이그레이션 없이 돌리면 FAIL 0/2 · 23502). 적용 후 실측: profiles.email is_nullable=YES · profiles_email_key 유지.
 select set_config('lock_timeout', '3s', true);
 select set_config('statement_timeout', '60s', true);
 -- 20261007ka — 카카오 로그인(OIDC) 회원은 이메일이 없다 → profiles.email 의 NOT NULL 을 푼다.
