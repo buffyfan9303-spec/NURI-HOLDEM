@@ -133,6 +133,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'sheet-up': '바텀 시트 진입',
     'slide-down': '바텀 시트 퇴장',
     'dim-in': '모달 딤',
+    'nudge-down': '가운데 모달 퇴장의 본문 이동(slide-up 역방향 8px · 투명도는 래퍼 fade-out 한 겹) — M03 2026-10-08',
     'badge-pulse': '안 읽음 배지 — 전환 아님',
   };
   /** Element.animate(WAAPI) 를 부르는 파일 — 이유. */
