@@ -993,7 +993,7 @@ function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
       {cancelable && (
         <button
           type="button" onClick={fire} disabled={busy}
-          className="absolute inset-y-0 right-0 flex w-[76px] items-center justify-center bg-danger text-xs font-bold text-white active:opacity-80 disabled:opacity-60"
+          className="peer absolute inset-y-0 right-0 flex w-[76px] items-center justify-center bg-danger text-xs font-bold text-white active:opacity-80 disabled:opacity-60"
         >
           {busy ? '취소 중…' : '예약 취소'}
         </button>
@@ -1001,8 +1001,8 @@ function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
       <div
         className={[
           'relative bg-surface-low px-3 py-2 transition-transform duration-(--dur-fast) ease-out',
-          // PC: 호버 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응)
-          cancelable ? 'md:group-hover:translate-x-[-76px]' : '',
+          // PC: 호버·키보드 초점 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응). 초점은 보이지 않는 버튼에 가면 확인 없이 Enter 로 취소되므로 peer-focus 로 모든 폭에서 덮개를 비킨다(UP-19)
+          cancelable ? 'md:group-hover:translate-x-[-76px] peer-focus:translate-x-[-76px]' : '',
         ].join(' ')}
         style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
         onTouchStart={onTouchStart}

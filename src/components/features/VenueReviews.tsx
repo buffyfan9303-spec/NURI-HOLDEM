@@ -65,7 +65,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
   const doReply = async (r: VenueReview) => {
     setReplyBusy(r.id);
     try {
-      await replyToReview(r.id, replyDraft[r.id] ?? '');
+      await replyToReview(r.id, replyDraft[r.id] ?? r.ownerReply ?? ''); // 수정 안 한 채 저장해도 기존 답글 유지 — 서버가 빈 값이면 지운다
       toast.show('답글을 등록했습니다', 'success');
       setReplyOpen(null);
       setReviews(await getVenueReviews(venueId));
