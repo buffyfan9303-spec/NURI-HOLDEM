@@ -14,7 +14,7 @@ const { default: ICMCalculator } = await import('./ICMCalculator');
 
 const td = (html: string) =>
   [...(html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? '').matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-    .map((r) => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]*>/g, '')));
+    .map((r) => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1].split(/<[^>]*>/).join('')));
 
 beforeEach(() => { h.stacks = null; });
 
