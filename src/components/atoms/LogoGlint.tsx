@@ -25,8 +25,12 @@ function Glint({ textClassName }: { textClassName: string }) {
     const img = host.querySelector('img');
     if (img) gem.current?.setAttribute('href', img.currentSrc || img.src);
     // ⚠ 시작을 첫 유휴 구간 뒤로 미뤄 봤지만 CPU×4 에서 rAF 50ms 초과가 3회 모두 4회 그대로였다 — 홈 긴 작업이 유휴 뒤에도 이어진다(2026-10-08 실측). 그래서 고정 지연이다.
-    let t = setTimeout(() => { anim.current?.beginElement?.(); t = setTimeout(end, DUR + 50); }, DELAY);
-    return () => clearTimeout(t);
+    // 장식은 입력에 양보한다 — 첫 입력이 오면 바로 지운다. 마스크 래스터가 프레임을 붙잡는 저사양 기기에서 눌림(:active) 프레임이 밀리지 않게(PR #239 CI press-align ①).
+    let t: ReturnType<typeof setTimeout>;
+    const stop = () => { clearTimeout(t); end(); };
+    window.addEventListener('pointerdown', stop, { capture: true, passive: true, once: true });
+    t = setTimeout(() => { anim.current?.beginElement?.(); t = setTimeout(end, DUR + 50); }, DELAY);
+    return () => { clearTimeout(t); window.removeEventListener('pointerdown', stop, true); };
   }, []);
   if (!on) return null;
   // 라이트: 남색 NURI·짙은 금 HOLDEM 위 흰빛은 회색·베이지로 바랜다(검토 P3) → 두 테마 같은 색인 다이아에만 건다.

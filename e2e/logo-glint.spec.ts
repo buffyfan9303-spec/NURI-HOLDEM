@@ -4,8 +4,10 @@
 //   ① 레이아웃 0 영향 — 글린트가 있는 동안·지나가는 중·지운 뒤 헤더·로고·탭바 상자가 0px 도 안 바뀐다.
 //   ② 한 번만 — 끝나면 노드가 사라지고, 새로고침해도 같은 세션에선 다시 안 돈다.
 //   ③ reduced-motion — 아예 그리지 않는다(세션 표시도 안 남긴다).
+//   ④ 입력에 양보 — 재생 중 첫 터치가 오면 2 프레임 안에 노드가 없다(저사양 CI 에서 눌림 프레임이 래스터에 밀리지 않게).
 // ③ 만 있으면 글린트가 통째로 고장 나도 초록이다 — 그래서 ① 이 "실제로 생겼고 실제로 움직였다" 를 먼저 단언한다.
 // 음성 대조(2026-10-08): NuriClassicLogo 의 reduced-motion 판정 줄을 지우면 ③ 이, LogoGlint 의 setOn(false) 타이머를 지우면 ② 가 실패했다.
+// ④ 는 입력 양보 이전 빌드(90a36485)에서 3/3 실패(남은 노드 1), 수정 빌드에서 통과.
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 
@@ -67,6 +69,21 @@ test.describe('헤더 로고 글린트', () => {
       .filter((p) => p.getClientRects().length > 0).length)).toBe(0);
     await expect.poll(() => glintX(page), { timeout: 3_000 }).toBeGreaterThan(0); // 다이아(x 9.18~29) 위를 지나는 중
     await expect(glint).toHaveCount(0, { timeout: 5_000 });
+  });
+
+  // 장식은 입력에 양보한다 — 마스크 래스터가 프레임 간격을 늘리는 저사양 CI 에서 눌림(:active) 프레임이 밀려 press-align ① 이 act=0 으로 실패했다(PR #239).
+  // 첫 터치가 오면 글린트 노드는 2 프레임 안에 없어야 한다. touchCancel 로 끝내 탭(click)이 홈의 무엇도 열지 않게 한다.
+  test('재생 중 CDP touchStart → 2 rAF 안에 글린트 노드 0', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
+    await expect.poll(() => glintX(page), { timeout: 3_000 }).toBeGreaterThan(20); // 실제로 재생 중 — 끝난 뒤의 0 으로 거짓 통과하지 않게
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: 500 }] });
+    const left = await page.evaluate(() => new Promise<number>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(document.querySelectorAll('[data-testid="logo-glint"]').length)))));
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    expect(left, '첫 입력 뒤에도 글린트가 남아 눌림 프레임과 래스터를 다툰다').toBe(0);
   });
 
   // 장식이 앱을 넘어뜨리면 안 된다 — 청크를 못 받거나(끊김·배포 사이 옛 주소가 index.html 로 오는 경우) 그리다 터져도 헤더·탭바는 그대로다(PR #239 검토 P1).
