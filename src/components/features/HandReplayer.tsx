@@ -7,6 +7,7 @@ import type { ReplayData } from '../../lib/hand';
 import { type OutsResult } from './gto/equityEngine';
 import { equityAsync, outsAsync } from './gto/equityClient';
 import type { Card, Rank, Suit } from './gto/gto.types';
+import { showMyOuts } from './gto/outsHeadline';
 import Icon from '../atoms/Icon';
 
 const STREET_ACT = [['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const;
@@ -131,10 +132,11 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
     return () => { alive = false; };
   }, [canEquity, heroKey, villainKey, boardKey]);
 
-  const cur = traj && traj.length ? traj[traj.length - 1] : null;
-  // 내가 뒤지면 '내 아웃츠(역전 카드)', 앞서면 '상대 아웃츠(위험 카드)'를 보여준다.
-  const showOuts = cur && cur.hero < 0.5 ? heroOuts : villainOuts;
-  const outsIsHero = !!(cur && cur.hero < 0.5);
+  // 내가 지금 뒤지면(또는 동률) '내 아웃츠(역전 카드)', 앞서면 '상대 아웃츠(위험 카드)'.
+  //   ⚠ '지금'은 현재 패의 우열(standing)이다 — 리버까지의 지분(traj 마지막 값)으로 고르면 지금 뒤지는 강한 드로에서
+  //   상대 아웃츠를 보여 앞선 것처럼 읽혔다(REPLAYER-OUTS-SEMANTICS, 아웃츠 계산기와 같은 규칙).
+  const outsIsHero = !!heroOuts && showMyOuts(heroOuts.standing);
+  const showOuts = outsIsHero ? heroOuts : villainOuts;
 
   return (
     <div className="w-full max-w-md rounded-aura border card-aura p-3 space-y-3 sm:p-4">
@@ -234,8 +236,8 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
               </div>
               <p className="text-2xs text-ink-muted">
                 {outsIsHero
-                  ? (showOuts.next === 'river' ? '이 리버 카드가 뜨면 이깁니다(클린 아웃).' : '이 턴 카드가 뜨면 앞서게 됩니다.')
-                  : (showOuts.next === 'river' ? '이 리버 카드가 뜨면 역전당합니다(주의).' : '이 턴 카드가 뜨면 상대가 앞섭니다.')}
+                  ? (showOuts.next === 'river' ? '이 리버 카드가 뜨면 이깁니다(클린 아웃).' : '이 턴 카드가 뜨면 리버까지 내 승률이 50%를 넘습니다.')
+                  : (showOuts.next === 'river' ? '이 리버 카드가 뜨면 역전당합니다(주의).' : '이 턴 카드가 뜨면 리버까지 상대 승률이 50%를 넘습니다.')}
               </p>
             </div>
           )}

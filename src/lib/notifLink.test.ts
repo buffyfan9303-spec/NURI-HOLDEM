@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseStoreLink, notifGlyph, needsStoreAccess } from './notifLink';
+import { parseStoreLink, parseVenueLink, notifGlyph, needsStoreAccess } from './notifLink';
 
 const VID = '615376fa-ffc4-420b-85a0-b9847520c12f';
 const root = join(__dirname, '../..');
@@ -69,7 +69,7 @@ describe('생산자 → 소비자 계약', () => {
     expect(sql).toContain("'/support'");
     expect(app).toMatch(/link === '\/support'/);
     expect(sql).toContain("'/community/' ||");
-    expect(app).toMatch(/link\.match\(\/\^\\\/community\\\/\(\.\+\)\$\/\)/);
+    expect(app).toMatch(/const vid = parseVenueLink\(link\)/); // R12-01 — '/?venue=' 도 같은 해석기로
   });
   it('App 라우터와 알림 목록이 같은 해석기를 쓴다', () => {
     expect(app).toMatch(/const store = parseStoreLink\(link\)/);
@@ -111,6 +111,8 @@ describe('needsStoreAccess — 알림 목적지가 업주/직원 탭을 요구�
     ['approval', null, true, false],
     ['system', null, false, false],
     ['qna', '/community/abc', false, false],
+    ['approval', `/?venue=${VID}`, false, false], // R12-01 그룹 개설·가입 승인 — 매장 탭이 아니라 그룹 페이지
+    ['system', `/?venue=${VID}`, false, false], // 그룹 가입 신청
     ['comment', null, false, false],
     ['reminder', '/support', false, false],
   ];
@@ -122,5 +124,25 @@ describe('needsStoreAccess — 알림 목적지가 업주/직원 탭을 요구�
     const app = read('src/App.tsx');
     expect(app).toContain('needsStoreAccess({ type: n.type, link }, isAdmin)');
     expect(app).not.toMatch(/const storeDest = [^;]*n\.type === 'approval'/);
+  });
+});
+// R12-01 (audit12 chain-1008): 그룹 알림 3종은 link '/?venue=<그룹 id>' 로 저장된다. 앱 안 알림 패널에서 누르면
+//   라우터 어느 분기에도 안 걸려 '매장 운영자·직원 계정에서만…'(일반 회원)·내 매장 탭(업주)·제목 토스트로 떨어졌다.
+describe('parseVenueLink — 매장·그룹 페이지 목적지', () => {
+  it("'/community/<id>' 와 '/?venue=<uuid>' 를 같은 목적지로 읽는다", () => {
+    expect(parseVenueLink(`/community/${VID}`)).toBe(VID);
+    expect(parseVenueLink(`/?venue=${VID}`)).toBe(VID);
+    expect(parseVenueLink(` /?venue=${VID} `)).toBe(VID);
+  });
+  it('매장 목적지가 아니면 null — 내 매장 ?venue= · 깨진 id · 다른 경로', () => {
+    for (const l of [`/my-store?venue=${VID}`, '/?venue=../../x', '/?venue=', '/', '/rank', '', null, undefined, '/?tab=home']) {
+      expect(parseVenueLink(l), String(l)).toBeNull();
+    }
+  });
+  it('그룹 알림 마이그레이션이 만드는 link 는 전부 이 해석기로 열린다', () => {
+    const sql = read('supabase/migrations/20261002f_group_members_guard_and_notify.sql');
+    const links = [...sql.matchAll(/'(\/\?venue=)'\s*\|\|/g)].map((m) => m[1]);
+    expect(links.length).toBeGreaterThanOrEqual(3);
+    for (const l of links) expect(parseVenueLink(l + VID), l).toBe(VID);
   });
 });

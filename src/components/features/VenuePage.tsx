@@ -3,6 +3,7 @@ import { useVenueScope } from '../../lib/useVenueScope';
 import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
 import { onColorInkClass } from '../../lib/color';
+import { visitCountRows } from '../../lib/venueVisitRank';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import {
   naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, naverMaps, geocodeAddress, probeNaverAuth,
@@ -621,7 +622,7 @@ export default function VenuePage({
               )}
             </div>
           )}
-          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
+          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} viewerIsManager={isMyVenue || user?.role === 'admin'} /></div></>}
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}
@@ -1072,7 +1073,8 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   );
 }
 
-function VenueRankingPanel({ venueId }: { venueId: string }) {
+// viewerIsManager: QR 출석 전체(checkins RLS = 본인 OR 관리자)를 볼 수 있는 사람인가 — 아니면 장부 집계를 쓴다(UP-13b).
+function VenueRankingPanel({ venueId, viewerIsManager }: { venueId: string; viewerIsManager: boolean }) {
   const cached0 = readRankCache(venueId);
   const [cfg, setCfg] = useState<VenuePageConfig | null>(cached0?.cfg ?? null);
   const [metric, setMetric] = useState<RankBoardId | null>(cached0?.metric ?? null);
@@ -1103,7 +1105,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         for (const p of pc) bc[p.name.toLowerCase()] = p.buyins;
         // 출석왕 = QR 체크인 누적(유저별) — 체크인 기록이 있으면 장부 방문 대신 이걸 쓴다
         let ck: { name: string; count: number }[] = [];
-        if (ms.includes('visit_count')) {
+        if (ms.includes('visit_count') && viewerIsManager) {
           const list = await listVenueCheckins(venueId, '2020-01-01T00:00:00Z').catch(() => []);
           const agg = new globalThis.Map<string, { name: string; count: number }>();
           for (const e of list) {
@@ -1127,7 +1129,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     load();
     const unsub = subscribeRankings(venueId, load); // 실시간: 순위 입력 시 자동 반영
     return () => { active = false; unsub(); };
-  }, [venueId]);
+  }, [venueId, viewerIsManager]);
 
   // 보드 선택을 캐시에 유지(탭 떠났다 복귀해도 같은 보드)
   useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) writeRankCache(venueId, { ...e, metric }); }, [metric, venueId]);
@@ -1171,17 +1173,15 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
-    // 출석왕: QR 체크인 누적 — 체크인 기록이 1건이라도 있으면 그 기준(없으면 장부 방문 폴백)
-    if (cur === 'visit_count' && checkinRows.length > 0) {
-      return checkinRows
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.count }))
-        .filter((b) => b.value > 0)
-        .sort((a, b) => b.value - a.value);
+    // 출석왕: 매장 관리자는 QR 체크인 누적(기록이 있을 때), 그 외 모두는 장부 방문 집계 — 보는 사람과 무관하게 같은 보드(UP-13b)
+    if (cur === 'visit_count') {
+      return visitCountRows(checkinRows, playerCounts, viewerIsManager)
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.value }));
     }
-    // 바인왕/출석왕(폴백): 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
-    if (cur === 'buyin_count' || cur === 'visit_count') {
+    // 바인왕: 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
+    if (cur === 'buyin_count') {
       return playerCounts
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.buyins }))
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
@@ -1206,10 +1206,10 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     return base.filter((b) => b.value >= 0)
       // 동점은 비금전 규칙으로만 가른다(등수 점수 → 최고 등수 → 이름) — 상금 합산 동점결정은 2026-09-05 폐지.
       .sort((a, b) => (b.value - a.value) || (b.moneyPoints - a.moneyPoints) || (a.bestPosition - b.bestPosition) || a.nickname.localeCompare(b.nickname));
-  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, cfg]);
+  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, viewerIsManager, cfg]);
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
-  if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
+  if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0 && !(viewerIsManager && checkinRows.length > 0)) {
     return <EmptyState title="아직 등록된 순위가 없습니다" hint="매장이 순위를 등록하면 집계됩니다" />;
   }
 

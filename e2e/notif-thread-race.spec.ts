@@ -173,3 +173,18 @@ test.describe('M4-03 쪽지 대화 뒤로가기 — 한 번에 한 단계', () =
     await expect(dlg(page), '[뒤로] 버튼 뒤 뒤로가기가 죽은 칸을 소비했다(패널이 안 닫힘)').toHaveCount(0);
   });
 });
+
+// UP-08(2026-10-08) — 쪽지 행이 li onClick 뿐이라 키보드로는 대화를 열 수 없었다(tabIndex·role 0곳).
+//   행 전체가 button 이어야 Tab 으로 닿고 Enter 로 열린다. 옛 코드에선 행 안에 button 이 없어 locator 가 비어 실패한다.
+test('UP-08 쪽지 행을 키보드(초점 + Enter)로 열 수 있다', async ({ page }) => {
+  test.setTimeout(60_000);
+  const g = { x1: gate(), send: gate() };
+  g.x1.release();
+  await boot(page, g);
+
+  const btn = threadRow(page, '상대X1').getByRole('button');
+  await btn.focus();
+  await expect(btn, '행 button 이 초점을 받지 못했다').toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('X1 대화'), 'Enter 로 대화가 열리지 않았다').toBeVisible();
+});

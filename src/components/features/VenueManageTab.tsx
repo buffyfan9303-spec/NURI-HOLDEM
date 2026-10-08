@@ -253,8 +253,11 @@ const VenueEventRequestPanelM = memo(VenueEventRequestPanelL);
 const CalendarPanelL = lazyWithReload(() => import('./CalendarPanel'));
 const CalendarPanelM = memo(CalendarPanelL);
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, deepVenueId, onConsumeDeepVenue, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
-  schedules: Schedule[]; onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, deepVenueId, onConsumeDeepVenue, tabActive = true, homeNonce = 0, resVersion, onVenue, schedulesError = null, onRetrySchedules }: {
+  schedules: Schedule[];
+  /** R12-02 — App 의 포스터 목록 조회 실패. 있으면 게임 목록이 '등록된 게임 없음' 대신 오류·재시도를 말한다 */
+  schedulesError?: unknown; onRetrySchedules?: () => void;
+  onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
   /** 매장 설정 › 매장 페이지 '손님 화면' → 손님이 보는 매장 페이지(App 의 openVenueId). 없으면 버튼이 렌더되지 않는다 */
@@ -1542,7 +1545,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       resVersion={resVersion} onVenue={onVenue}
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
-                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
+                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} loadError={schedulesError} onRetry={onRetrySchedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
                   canSeeMoney={manageOk}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}

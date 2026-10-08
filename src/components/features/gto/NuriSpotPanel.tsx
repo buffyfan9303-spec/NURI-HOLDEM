@@ -127,11 +127,12 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   if ((Object.keys(hbRaw) as (keyof typeof hbRaw)[]).some((k) => hbRaw[k] !== hbRef.current[k])) hbRef.current = hbRaw;
   const hb = hbRef.current;
   // 빌런 B~E 의 **수**는 스팟(자리 목록)이 정본이고 슬롯 수가 따라간다(자리 단계에서 추가/삭제).
-  const { setExtraCount } = hb;
+  //   수가 어긋나면 **spot.extra 의 카드로** 슬롯을 다시 만든다(열기·가운데 삭제·인원 축소 세 경로가 여기 한 곳을 지난다).
+  const { followExtraSeats } = hb;
   const extraSlots = hb.extra.length;
   useEffect(() => {
-    if (extraSlots !== spot.extra.length) setExtraCount(spot.extra.length);
-  }, [setExtraCount, extraSlots, spot.extra.length]);
+    if (extraSlots !== spot.extra.length) followExtraSeats(spot.extra);
+  }, [followExtraSeats, extraSlots, spot.extra]);
   // 카드 그리드 → 스팟으로 단방향 반영. hb 가 정본이고 spot 은 그 그림자다.
   useEffect(() => {
     setSpot((s) => {
@@ -173,7 +174,7 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     //   아래 동기화 이펙트가 돌아 **연 스팟의 카드가 이전 스팟으로 덮인다.**
     //   교체 직후 동기화 이펙트는 문자열 비교가 같아 early-return 하므로 s.street 는 보존된다.
     setSpot(s);
-    hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
+    hb.setAll({ hero: s.hero, villain: s.villain, board: s.board, extra: s.extra.map((v) => v.cards) });
     // 작성 판은 새로 만든다(유지되는 판의 단계·확정 체크·저장 표시는 이전 스팟의 것이다).
     setAnalyzeKey((k) => k + 1);
     setSeen((v) => (v.has('analyze') ? v : new Set(v).add('analyze')));

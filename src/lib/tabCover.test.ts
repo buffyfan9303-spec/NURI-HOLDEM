@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  tabPaneReady, isSettled, waitSettled, SUB_PANEL, OWN_SCROLL_SCOPES, INSTANT_SUB_SCOPES, TAB_COVER_WAIT_MAX_MS,
+  tabPaneReady, isSettled, waitSettled, SUB_PANEL, OWN_SCROLL_SCOPES, TAB_COVER_WAIT_MAX_MS,
 } from './tabCover';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -149,17 +149,8 @@ describe('⑥ 하위 탭 25곳이 같은 전환(P2 스크롤)을 탄다 — goSu
   it('자기 스크롤 정책이 있는 곳(커뮤니티 섹션별 복원 · NURI SPOT 탭별 기억 · 알림 창 탭별 기억)만 공용 스크롤 맞춤에서 뺀다', () => {
     expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec', 'spot-tab', 'notif-tab', 'notif-filter']);
   });
-  it('복제본 자리 — 복제본의 content-visibility 행은 펼쳐 세우고, 내용 자리는 글자 칸 여럿의 중앙값으로만 보정한다(2026-10-03 게시판 1.5px·−3px)', () => {
-    // 결정적 재현은 e2e/tab-handoff-gate ④(역방향 포함 · PROBE 로 줄 높이를 키우면 원본이 2.6px 어긋남). 여기는 그 두 처방이 소스에서 빠지지 않게 잠근다.
-    const t = readFileSync(resolve(process.cwd(), 'src/lib/tabCover.ts'), 'utf-8').replace(/\/\/[^\n]*/g, '');
-    expect(t, '복제본 행이 건너뜀 상태로 배치돼 반 픽셀~1.5px 어긋난 값으로 판 전체를 옮긴다').toMatch(/\[class\*="cv-"\][\s\S]{0,160}setProperty\('content-visibility', 'visible', 'important'\)/);
-    expect(t, '기준점 하나(첫 요소)로 판 전체를 옮기면 그 요소만 어긋났을 때 멀쩡한 판이 끌려 올라간다').toMatch(/const ax = contentShift\(s\.anchors, dy\)/);
-    expect(t).not.toMatch(/s\.anchor\b/);
-  });
-  it('복제본 없이 한 프레임에 바꾸는 하위 탭은 알림 창 두 scope 뿐이다(오너 10-02 — 다른 하위 탭은 퇴장 페이드 유지)', () => {
-    expect([...INSTANT_SUB_SCOPES]).toEqual(['notif-tab', 'notif-filter']);
-    expect([...INSTANT_SUB_SCOPES].every((s) => s in SUB_PANEL)).toBe(true);
-  });
+  // (2026-10-08 8차 INSTANT-SWAP) 떠나는 판 복제본·알림 창 예외(INSTANT_SUB_SCOPES) 검사는 걷었다 — 모든 하위 탭이 한 프레임 교체다.
+  //   잠금은 src/components/transitionDevices.contract.test.ts (d) 'INSTANT-SWAP' 이 맡는다.
 });
 
 describe('④ App.tsx — 덮개는 없다 · 준비 표식은 남는다', () => {

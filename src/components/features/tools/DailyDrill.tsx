@@ -142,7 +142,8 @@ export default function DailyDrill() {
         </div>
       )}
 
-      <WeaknessReport />
+      {/* 리포트는 마운트 때 한 번 읽는다 — 답할 때마다(기록 저장 직후)·다음 문제마다 다시 읽게 key 로 새로 만든다(DRILL-REPORT-STALE). */}
+      <WeaknessReport key={`${done}-${ans || preAns ? 1 : 0}`} />
     </CalcCard>
   );
 }

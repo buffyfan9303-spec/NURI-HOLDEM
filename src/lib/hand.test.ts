@@ -31,3 +31,15 @@ describe('encodeReplay ↔ parseAttachments', () => {
     expect(parseAttachments('본문').replay).toBeNull();
   });
 });
+
+describe('parseAttachments — 깨진 escape(H03-01 형제)', () => {
+  // 본문은 사용자가 손으로 쓸 수 있다. 던지면 커뮤니티 목록 렌더가 통째로 오류 카드가 된다.
+  it('pot·액션의 잘못된 % 는 던지지 않고 원문을 남긴다', () => {
+    const body = 'x\n[[REPLAY:hero=As,Kd;pot=%;flop=%E0%A4%A]]';
+    expect(() => parseAttachments(body)).not.toThrow();
+    const r = parseAttachments(body).replay!;
+    expect(r.hero).toEqual(['As', 'Kd']);
+    expect(r.pot).toBe('%');
+    expect(r.actions.flop).toBe('%E0%A4%A');
+  });
+});

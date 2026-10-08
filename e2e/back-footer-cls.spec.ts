@@ -101,9 +101,9 @@ test('뒤로가기 탭 복원 — 푸터가 입력 없는 레이아웃 이동으
   expect(bad, bad.join('\n')).toEqual([]);
 });
 
-// 수정안 A(푸터를 탭마다 새로 마운트)의 자체 위험을 막는 짝 — 떠나기 직전 보이던 푸터 자리는 복제본이 첫 프레임에 지킨다.
-//   (tabCover handOffPane 이 `l.foot.el.isConnected` 를 요구하면, 새로 마운트돼 떨어져 나간 옛 푸터에서 복제본을 못 만든다)
-test('앞으로 탭 이동 — 보이던 푸터 자리를 복제본이 지킨다(4탭)', async ({ page }) => {
+// 2026-10-08 8차 INSTANT-SWAP — 떠나는 판·푸터 복제본을 걷었다(src/lib/tabCover.ts 8차 절). 판과 푸터는 같은 프레임에 새 판으로 바뀐다.
+//   옛 계약('보이던 푸터 자리를 복제본이 지킨다')은 복제본이 겹쳐 보이는 것 자체가 '블러·네모칸' 이었으므로 뒤집는다 — 복제본이 한 프레임도 서지 않는다.
+test('앞으로 탭 이동 — 푸터 복제본이 서지 않는다(한 프레임 교체 · 4탭)', async ({ page }) => {
   test.setTimeout(120_000);
   await stubLogin(page);
   await stabilizeBackstack(page);
@@ -123,7 +123,8 @@ test('앞으로 탭 이동 — 보이던 푸터 자리를 복제본이 지킨다
     });
     await tapTab(page, b);
     const cl = await page.evaluate(() => (window as unknown as { __cl: (number | null)[] }).__cl);
-    if (!cl.some((v) => v !== null && Math.abs(v - top0) <= 2)) bad.push(`홈>${b}: 복제본 ${JSON.stringify(cl)} vs 푸터 ${top0}`);
+    expect(cl.length, `홈>${b}: 누른 뒤 프레임을 못 모았다(측정 공허)`).toBeGreaterThan(0);
+    if (cl.some((v) => v !== null)) bad.push(`홈>${b}: 푸터 복제본이 섰다 ${JSON.stringify(cl)} (푸터 ${top0})`);
   }
   expect(bad, bad.join('\n')).toEqual([]);
 });

@@ -36,6 +36,10 @@ import ConsentSummary from './ConsentSummary';
 const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
 // 닉네임 확인 칸도 소셜 첫 동의에서만 보인다 — 같은 이유로 지연 로드.
 const SocialNicknameField = lazy(() => import('./SocialNicknameField'));
+// 칸이 도착하기 전 자리를 같은 높이로 비워 둔다(라벨+입력+안내 2줄 = 실측 109px, 360~412px 폭 동일). fallback 이 0px 이면 시트 정착(≈240ms) 뒤에
+// 도착한 칸이 '전체 동의'와 필수 체크 목록을 125px 밀어 손가락 아래 대상이 바뀐다(11회차 M11-01). 칸 마크업을 바꾸면 이 높이도 같이 —
+// e2e/consent-gate-nickname-reserve.spec.ts 가 도착 전후 '전체 동의' 위치로 잡는다. 상태 줄(M11-07)이 붙는 +20px 은 이 예약 밖이다.
+const NICK_RESERVE_H = 'h-[109px]';
 // 닉네임 칸이 쓰는 검사·저장·형식 규칙 — 가입 폼(AuthModal NicknameField)과 같은 함수다. 지연 칸에 props 로 넘기는 이유는 SocialNicknameField 머리말.
 const NICK_API = { check: checkNicknameAvailable, save: setMyNickname, valid: isValidDisplayName };
 
@@ -163,7 +167,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
         )}
 
         {mode === 'initial' && user && (
-          <Suspense fallback={null}><SocialNicknameField current={user.nickname ?? ''} onChange={setNick} api={NICK_API} /></Suspense>
+          <Suspense fallback={<div aria-hidden="true" className={NICK_RESERVE_H} />}><SocialNicknameField current={user.nickname ?? ''} onChange={setNick} api={NICK_API} /></Suspense>
         )}
 
         {/* 공개 약관 원문 — 로그인 여부와 무관하게 열리는 정적 페이지 */}
