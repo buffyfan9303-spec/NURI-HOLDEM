@@ -24,7 +24,7 @@
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_PREV_EFFECTIVE_DATE, LEGAL_PREV_ARCHIVE_URL } from '../../lib/legalVersion';
 import { RevisionHistory } from './RevisionBlocks';
-import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V2_ARCHIVE_URL } from '../../lib/legalDeploy';
+import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V2_ARCHIVE_URL, TERMS_V4_NOTICE_DATE, TERMS_V4_EFFECTIVE_DATE, TERMS_V3_ARCHIVE_URL } from '../../lib/legalDeploy';
 
 function Article({ n, title, children }: { n: number | string; title: string; children: React.ReactNode }) {
   return (
@@ -72,9 +72,24 @@ export default function TermsOfService() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {TERMS_V3_EFFECTIVE_DATE}(제3판) · 직전판(제2판) 시행일: {LEGAL_EFFECTIVE_DATE} · 제1판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
+        <p className="text-2xs text-ink-muted">시행일: {TERMS_V4_EFFECTIVE_DATE}(제4판, {TERMS_V4_NOTICE_DATE} 공지) · 제3판 시행일: {TERMS_V3_EFFECTIVE_DATE} · 제2판 시행일: {LEGAL_EFFECTIVE_DATE} · 제1판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           본 약관은 NURI HOLDEM 서비스 이용에 관한 기본적인 사항을 규정합니다.
+        </p>
+      </div>
+
+      {/* 제4판(audit12 UP-20 · 오너 2026-10-09) — 제11조제4항을 실제 처리(탈퇴 시 내용 유지·작성자 표시만 익명)에 맞춘다.
+          회원에게 불리한 변경이라 제16조제2항 30일 전 공지 · 제16조제3항 단서 재동의(legalVersion CONSENT_GATES [4, 시행일]). */}
+      <div data-testid="terms-v4-notice" className="mb-5 p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+        <p className="text-xs font-bold text-ink-primary">개정 안내 — 제4판을 {TERMS_V4_EFFECTIVE_DATE}부터 시행합니다({TERMS_V4_NOTICE_DATE} 공지)</p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          제11조제4항(탈퇴한 회원의 게시물)을 실제 처리에 맞추어 고쳤습니다. 탈퇴하면 게시글·댓글·장터 글 등의 내용은 남고 작성자 표시만 “탈퇴회원_(임의 문자)”로 바뀝니다.
+          내용까지 지우려면 탈퇴 전에 직접 삭제하시거나 고객센터에 요청해 주세요. 탈퇴 후 게시물의 노출 중단을 기대할 수 없게 되는 회원에게 불리한 변경이라 30일 전에 알려 드리며, 시행일 전까지는 제3판이 적용됩니다.
+        </p>
+        <p className="text-2xs text-ink-muted leading-relaxed">
+          이미 가입하신 회원께는 {TERMS_V4_EFFECTIVE_DATE}부터 서비스 화면에서 개정 약관에 대한 동의를 다시 여쭈며, 동의하지 않은 채 이용을 계속하신 것만으로 동의한 것으로 보지 않습니다.
+          동의하지 않으시면 「내 정보 → 보안 → 회원 탈퇴하기」에서 이용계약을 해지하실 수 있습니다.
+          {' '}(<a href={TERMS_V3_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="terms-v3-archive-link">제3판 원문 보기</a>)
         </p>
       </div>
 
@@ -300,7 +315,7 @@ export default function TermsOfService() {
           '회원이 작성한 게시물에 대한 저작권은 해당 회원에게 있습니다.',
           '회원은 회사에 대하여 게시물을 서비스의 운영, 전시, 전송, 배포 및 서비스 홍보 목적의 범위에서 이용할 수 있는 비독점적이고 무상인 이용을 허락합니다. 이 이용허락에는 화면 구성상 필요한 범위의 크기 조정, 부분 발췌, 배치 변경, 요약 표시가 포함됩니다.',
           '회사는 제2항의 범위를 넘어 게시물을 이용하고자 하는 경우 사전에 해당 회원의 동의를 받습니다.',
-          '회원이 게시물을 삭제하거나 이용계약을 해지한 경우 회사는 지체 없이 해당 게시물의 노출을 중단합니다. 다만 다른 회원이 정당하게 인용·저장한 부분과 법령에 따라 보존하여야 하는 기록은 그러하지 아니합니다.',
+          '회원이 게시물을 삭제한 경우 회사는 지체 없이 해당 게시물의 노출을 중단합니다. 회원이 이용계약을 해지(탈퇴)한 경우에는 게시글·댓글·장터 글 등 게시물의 내용은 서비스에 남고, 작성자 표시는 “탈퇴회원_(임의 문자)”로 바뀌며 닉네임과 프로필 사진은 지워집니다. 게시물의 내용까지 지우려는 회원은 탈퇴 전에 직접 삭제하거나 고객센터에 삭제를 요청할 수 있습니다. 탈퇴한 회원의 게시물도 제5조제7항부터 제10항까지의 절차에 따라 삭제를 요청할 수 있습니다. 다만 다른 회원이 정당하게 인용·저장한 부분과 법령에 따라 보존하여야 하는 기록은 그러하지 아니합니다.',
           '게시물로 인하여 제3자의 저작권·초상권·명예 등이 침해되어 회사가 제3자에게 손해를 배상한 경우, 회사는 해당 게시물을 작성한 회원에게 그 배상액과 대응에 소요된 비용의 상환을 청구할 수 있습니다.',
         ]} />
       </Article>
@@ -397,7 +412,7 @@ export default function TermsOfService() {
       <RevisionHistory doc="terms" />
 
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 약관 제3판은 {TERMS_V3_EFFECTIVE_DATE}부터 시행됩니다. 제2판은 {LEGAL_EFFECTIVE_DATE}부터, 제1판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 각각 다음 판의 시행일 전까지 적용되었습니다.
+        본 약관 제4판은 {TERMS_V4_EFFECTIVE_DATE}부터 시행됩니다. 제3판은 {TERMS_V3_EFFECTIVE_DATE}부터, 제2판은 {LEGAL_EFFECTIVE_DATE}부터, 제1판은 {LEGAL_PREV_EFFECTIVE_DATE}부터 각각 다음 판의 시행일 전까지 적용됩니다.
       </p>
     </div>
   );

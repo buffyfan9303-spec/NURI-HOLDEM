@@ -5,7 +5,7 @@
 // 이력 본문까지 **첫 화면 임계 경로**에 실린다(실측 +3.0KB gz). 버전·시행일(작다)과 이력(크다)을 분리한다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_VERSION } from './legalVersion';
 import { LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_NOTICE, LOCATION_TERMS_VERSION, PRIVACY_PRE_LOCATION_ARCHIVE_URL } from './locationTerms';
-import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_NOTICE_DATE, TERMS_V3_EFFECTIVE_DATE } from './legalDeploy';
+import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_NOTICE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V4_NOTICE_DATE, TERMS_V4_EFFECTIVE_DATE } from './legalDeploy';
 export type LegalDocKey = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
 
 export interface LegalRevision {
@@ -21,6 +21,14 @@ export interface LegalRevision {
 /** 문서별 개정 이력 — 최신이 위. 각 문서의 '부칙' 절이 이 데이터를 그대로 렌더한다. */
 export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
   terms: [
+    {
+      // audit12 UP-20 · 오너 2026-10-09 "약관 너가 처리해" — 문구를 실제 처리(20260925d _purge_private_records)에 맞춘다. 날짜는 legalDeploy TERMS_V4_*.
+      version: 4, effective: TERMS_V4_EFFECTIVE_DATE, notice: TERMS_V4_NOTICE_DATE,
+      changes: [
+        '제11조제4항을 실제 처리에 맞추어 고쳤습니다. 회원이 탈퇴하면 게시물의 노출을 중단한다고 적혀 있었으나, 실제로는 게시글·댓글·장터 글 등의 내용은 남기고 작성자 표시만 “탈퇴회원_(임의 문자)”로 바꾸며 닉네임과 프로필 사진을 지웁니다(개인정보처리방침 제3조, 계정 삭제 안내와 같습니다). 내용까지 지우려면 탈퇴 전에 직접 삭제하거나 고객센터에 삭제를 요청할 수 있고, 회원이 직접 삭제한 게시물은 종전처럼 지체 없이 노출을 중단합니다. 권리를 침해하는 게시물의 삭제 요청(제5조제7항부터 제10항까지)은 탈퇴한 회원의 게시물에도 그대로 적용됩니다.',
+        `탈퇴 후 게시물의 노출 중단을 기대할 수 없게 되어 회원에게 불리한 변경이므로, 제16조제2항에 따라 ${TERMS_V4_NOTICE_DATE}에 공지하고 30일이 지난 ${TERMS_V4_EFFECTIVE_DATE}부터 시행합니다. 시행일 전까지는 제3판이 적용됩니다. 이미 가입한 회원에게는 시행일부터 서비스 화면에서 개정 약관에 대한 동의를 다시 받으며(제16조제3항 단서), 동의하지 않은 채 계속 이용한 것만으로 동의한 것으로 보지 않습니다. 동의하지 않는 회원은 이용계약을 해지할 수 있습니다.`,
+      ],
+    },
     {
       // 약관 재검토 P2-2 · 2026-10-06 오너 결정(정식 오픈일에 공지·시행). 날짜는 legalDeploy TERMS_V3_*(배포일) 한 곳.
       version: 3, effective: TERMS_V3_EFFECTIVE_DATE, notice: TERMS_V3_NOTICE_DATE,
