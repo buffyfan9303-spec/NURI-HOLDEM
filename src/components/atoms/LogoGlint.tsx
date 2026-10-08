@@ -24,10 +24,8 @@ function Glint({ textClassName }: { textClassName: string }) {
     // 다이아는 래스터라 path 가 없다 — 옆 <img> 를 그대로 알파 마스크로 써서 빛이 다이아→NURI→HOLDEM 으로 흐르게 한다(이미 디코드된 같은 src).
     const img = host.querySelector('img');
     if (img) gem.current?.setAttribute('href', img.currentSrc || img.src);
-    // 시작은 첫 유휴 구간 뒤(상한 700ms) — 홈 데이터 렌더 긴 작업과 겹치면 SMIL(메인 스레드) 프레임이 끊긴다(CPU×4 rAF 145ms, 검토).
-    let t: ReturnType<typeof setTimeout>;
-    const go = () => { anim.current?.beginElement?.(); t = setTimeout(end, DUR + 50); };
-    t = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(go, { timeout: 700 }) : go()), DELAY);
+    // ⚠ 시작을 첫 유휴 구간 뒤로 미뤄 봤지만 CPU×4 에서 rAF 50ms 초과가 3회 모두 4회 그대로였다 — 홈 긴 작업이 유휴 뒤에도 이어진다(2026-10-08 실측). 그래서 고정 지연이다.
+    let t = setTimeout(() => { anim.current?.beginElement?.(); t = setTimeout(end, DUR + 50); }, DELAY);
     return () => clearTimeout(t);
   }, []);
   if (!on) return null;
