@@ -31,6 +31,9 @@ test.describe('헤더 로고 글린트', () => {
     await page.goto('/');
     await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
     const before = await shellBoxes(page);
+    // 시작 전 띠는 상자(x 9.18~) 밖에 있어야 한다 — 기본값이 비면 begin 전 항등 위치(다이아 한가운데)에 멈춰 보였다(PR #239 검토 P2)
+    expect(await page.evaluate(() => (document.querySelector('[data-testid="logo-glint"] linearGradient') as SVGLinearGradientElement)
+      .gradientTransform.baseVal.getItem(0).matrix.e)).toBeLessThanOrEqual(-18);
 
     await expect.poll(() => glintX(page), { timeout: 3_000 }).toBeGreaterThan(20); // 실제로 글자 위를 지나는 중
     const mid = await shellBoxes(page);
@@ -48,6 +51,50 @@ test.describe('헤더 로고 글린트', () => {
       await page.waitForTimeout(100);
     }
   });
+
+  // 360(갤럭시)·320 은 글자 층이 접히고 다이아만 남는다 — 빛은 접힌 글자 svg 안이 아니라 보이는 다이아 위로 지나가야 한다(PR #239 검토 P2).
+  test('좁은 폭 360 — 보이는 다이아 위로 지나가고, 숨은 PC 인스턴스는 아무것도 안 그린다', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    const glint = page.locator(GLINT);
+    await glint.first().waitFor({ state: 'attached', timeout: 10_000 });
+    await expect(glint).toHaveCount(1); // 헤더의 PC 인스턴스(display:none)는 빠진다
+    await expect(glint).toBeVisible();
+    const box = await glint.boundingBox();
+    expect(box && Math.round(box.width)).toBe(24); // 다이아만 남은 로고 상자(w-6)
+    // 마스크의 글자 몫은 보이는 글자 층과 같이 접힌다 — 다이아 몫만 남는다
+    expect(await page.evaluate(() => [...document.querySelectorAll('[data-testid="logo-glint"] mask path')]
+      .filter((p) => p.getClientRects().length > 0).length)).toBe(0);
+    await expect.poll(() => glintX(page), { timeout: 3_000 }).toBeGreaterThan(0); // 다이아(x 9.18~29) 위를 지나는 중
+    await expect(glint).toHaveCount(0, { timeout: 5_000 });
+  });
+
+  // 장식이 앱을 넘어뜨리면 안 된다 — 청크를 못 받거나(끊김·배포 사이 옛 주소가 index.html 로 오는 경우) 그리다 터져도 헤더·탭바는 그대로다(PR #239 검토 P1).
+  const failures: [string, (page: Page) => Promise<unknown>][] = [
+    ['청크 끊김', (page) => page.route(/\/assets\/LogoGlint-[^/]+\.js/, (r) => r.abort())],
+    ['청크 자리에 index.html', (page) => page.route(/\/assets\/LogoGlint-[^/]+\.js/, (r) =>
+      r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }))],
+    // React 가 <image> 속성을 setAttribute 로 쓰는 커밋 단계에서 던지게 한다 — 헤더 첫 화면에 SVG <image> 는 글린트 마스크뿐이다
+    ['그리다 오류', (page) => page.addInitScript(() => {
+      SVGImageElement.prototype.setAttribute = () => { throw new Error('glint-e2e'); };
+    })],
+  ];
+  for (const [name, inject] of failures) {
+    test(`${name} — 앱은 그대로, 글린트만 없다`, async ({ page }) => {
+      await inject(page);
+      let asked = 0;
+      page.on('request', (r) => { if (/\/assets\/LogoGlint-/.test(r.url())) asked++; });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/');
+      await expect.poll(() => asked, { timeout: 10_000 }).toBeGreaterThan(0); // 실패 경로를 실제로 탔다
+      await page.waitForTimeout(1_500);
+      await expect(page.getByText('일시적인 문제가 발생했습니다')).toHaveCount(0);
+      await expect(page.locator('header').first()).toBeVisible();
+      await expect(page.getByRole('img', { name: 'NURI HOLDEM' }).filter({ visible: true })).toHaveCount(1);
+      await expect(page.locator('nav').filter({ visible: true }).first()).toBeVisible();
+      await expect(page.locator(GLINT)).toHaveCount(0);
+    });
+  }
 
   test('reduced-motion — 글린트를 그리지 않는다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
