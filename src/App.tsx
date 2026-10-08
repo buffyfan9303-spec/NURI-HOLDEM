@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
 import { reloadBootTab, rememberTab, reloadSaved, saveForReload, ME_OPEN_KEY, ME_TAB_KEY } from './lib/reloadTab';
-import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
+import { parseStoreLink, parseVenueLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -1944,6 +1944,9 @@ export default function App() {
   // 목록을 못 불러온 것과 '대회가 없는 것'은 다르다 — 구분하지 않으면
   // 서비스가 죽은 날에도 사용자는 '대회가 없나 보다' 하고 조용히 떠난다.
   const [schedulesError, setSchedulesError] = useState<unknown>(null);
+  // H03-07 — 포스터 반복 등록 재시도가 '응답만 잃고 저장된 날짜' 를 찾을 때 쓰는 최신 목록(콜백 의존성 없이).
+  const schedulesNowRef = useRef<Schedule[]>([]);
+  useEffect(() => { schedulesNowRef.current = schedules; }, [schedules]);
 
   // 탭 청크 idle 프리로드 — 동일 동적 import는 Vite가 같은 청크로 캐시한다
   useEffect(() => {
@@ -2359,7 +2362,16 @@ export default function App() {
   useEffect(() => {
     const apply = () => {
       const code = readGtoHash(window.location.hash);
-      if (!code) { setGtoInit(null); return; }
+      if (!code) {
+        // 깨진 공유 링크(#gto=% 등 — 파서가 null 을 돌린다, #221)는 주소창에서 걷고 한 줄 알린다.
+        //   남겨 두면 새로고침·뒤로가기마다 같은 무반응이 되풀이된다.
+        if (window.location.hash.startsWith('#gto=')) {
+          try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* noop */ }
+          toast.show('공유 링크가 깨져 열 수 없습니다', 'info');
+        }
+        setGtoInit(null);
+        return;
+      }
       const { hero, villain, board } = decodeSpot(code);
       // ⚠ 해시는 '소비하는 즉시' 그 항목에서 걷어낸다(2026-08-28, ToolsPanel #tool= 과 같은 사고).
       //   패널이 그 위에 뒤로가기 겹(history 항목)을 하나 밀기 때문에, 여기 남겨 두면
@@ -2372,7 +2384,7 @@ export default function App() {
     apply();
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
-  }, []);
+  }, [toast]); // toast 는 안정 참조(ToastContext) — 다시 돌아도 해시는 이미 걷혀 있다
   const closeGto = useCallback(() => {
     setGtoInit(null);
     if (window.location.hash.startsWith('#gto=')) {
@@ -2478,7 +2490,8 @@ export default function App() {
     } else ptrSettle(-52, '0');
   };
   // 실패를 삼키면 '등록된 홀덤펍이 없습니다'·'결과가 없습니다'(빈 상태)로 위장된다 — 최소한 실패했다고 말한다
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); setVenuesErr(null); }).catch((e: unknown) => { setVenuesErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); }); }, [toast]);
+  // 받은 목록을 돌려준다(실패면 null — 안내 토스트는 여기서 이미 띄운다). 알림 라우터가 '방금 생긴 그룹' 판정에 쓴다.
+  const reloadVenues    = useCallback(() => getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); setVenuesErr(null); return v; }).catch((e: unknown) => { setVenuesErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); return null; }), [toast]);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsLoaded(true); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
@@ -3409,11 +3422,15 @@ export default function App() {
     if (sm) { openScheduleById(sm[1], opts); return; }
     // /community/:venueId — 목록에 없으면(문 닫음·삭제) 무반응으로 끝나던 자리다(F09 와 같은 원칙).
     //   venues 가 아직 로드 전이면 판정을 미루고 낙관적으로 연다(로드되면 VenuePage 가 채운다).
-    const cm = link.match(/^\/community\/(.+)$/);
-    if (cm) {
-      const vid = cm[1];
+    //   '/?venue=<id>'(그룹 알림 3종 — R12-01)도 같은 목적지다. 해석은 notifLink.parseVenueLink 한 곳.
+    const vid = parseVenueLink(link);
+    if (vid) {
       if (venuesLoaded && !venues.some((v) => v.id === vid)) {
-        toast.show('삭제되었거나 찾을 수 없는 매장입니다', 'info');
+        // 목록이 알림보다 낡았을 수 있다 — 방금 승인된 그룹은 부팅 때 받은 목록에 없다. 한 번 다시 받아 보고 판정한다.
+        reloadVenues().then((list) => {
+          if (list?.some((v) => v.id === vid)) startTransition(() => setOpenVenueId(vid));
+          else if (list) toast.show('삭제되었거나 찾을 수 없는 매장입니다', 'info');
+        });
       } else {
         startTransition(() => setOpenVenueId(vid));
       }
@@ -3491,7 +3508,7 @@ export default function App() {
     if (!link && linkedType) { toast.show('삭제되었거나 찾을 수 없는 게시글·매장입니다', 'info'); return; }
     if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded]);
+  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded, reloadVenues]);
 
   // ⚠ N04: 매장 Q&A·요강 댓글도 게시글 댓글과 **같은 계약**이다 — 성공을 기다려 돌려주고, 실패는 던진다.
   //   입력창을 비울지 말지는 CommentThread 가 이 Promise 로 판단한다.
@@ -3789,7 +3806,7 @@ export default function App() {
       .catch(() => { toast.show('반려에 실패했습니다', 'error'); reloadSchedules(); });
   }, [toast, reloadSchedules]);
 
-  const handleSubmitPoster = useCallback((data: PosterFormData) => {
+  const handleSubmitPoster = useCallback(async (data: PosterFormData) => {
     // 시상품 텍스트 → SeatVoucher 형태로 변환 (간단 파싱: 끝의 "N석" 인식)
     const seatsFromPrizes = data.prizes.map((p) => {
       const m = p.match(/^(.+?)\s*(\d+)\s*석$/);
@@ -3899,20 +3916,32 @@ export default function App() {
     });
     // 반복 등록: 매주 같은 요일/시간으로 N주 생성(1=반복 없음, 최대 12)
     const weeks = Math.max(1, Math.min(data.repeatWeeks ?? 1, 12));
-    const dates = Array.from({ length: weeks }, (_, i) => addDays(data.date, i * 7));
+    const allDates = Array.from({ length: weeks }, (_, i) => addDays(data.date, i * 7));
+    // 🔴 H03-07 — 부분 성공 뒤 같은 폼을 다시 누르면 **성공한 날짜까지** 다시 넣어 중복이 생겼다(서버엔 날짜·매장·제목
+    //   unique 도 멱등키도 없다). 이미 저장된 날짜는 빼고, 지난 시도의 실패 날짜는 다시 읽은 목록에 같은 행이 있으면
+    //   (응답만 잃고 저장된 경우) 보내지 않는다. 날짜별 정확히 1건.
+    // 첫 화면 번들 밖에 둔다(등록할 때만 받는다).
+    const { planRepeatDates } = await import('./lib/posterRepeatRetry');
+    const { send: dates, landed } = planRepeatDates(allDates, data.repeatSaved, data.repeatRetry, schedulesNowRef.current,
+      { venueId: venueIdToUse, ownerId: user.id, title: data.title, startTime: data.startTime });
+    const priorSaved = [...new Set([...(data.repeatSaved ?? []), ...landed])].filter((d) => allDates.includes(d));
     // ⚠ 예전엔 `Promise.all` + `.catch` 였다 — 3주 중 1주만 실패하면 **성공한 2건이 서버에만 있고
     //   화면에는 없는** 상태로 끝났다(reload 가 성공 경로에만 걸려 있었다). 부분 성공은 실패가 아니다.
     // 🔴 2026-09-20 — 여기서 판정한 **부분 성공을 폼까지 돌려준다.** 판정 자체는 이미 정확했는데
     //   폼이 그 결과를 안 기다려서 3주 중 1주만 성공해도 '등록되었습니다' 로 닫혔다.
     return Promise.allSettled(dates.map((dt) => createSchedule(mkPayload(dt))))
       .then(async (rs) => {
-        const ok = rs.filter((r) => r.status === 'fulfilled').length;
-        if (ok > 0) await reloadSchedules();          // 하나라도 나갔으면 반드시 다시 읽는다
-        if (ok === rs.length) { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); }
+        // 실패가 있어도 다시 읽는다 — 응답만 잃고 저장된 행을 다음 재시도가 목록에서 찾아야 한다.
+        if (rs.length > 0) await reloadSchedules();
+        const savedDates = [...priorSaved, ...dates.filter((_, i) => rs[i].status === 'fulfilled')];
+        const failedDates = dates.filter((_, i) => rs[i].status === 'rejected');
+        const ok = savedDates.length;
+        const total = allDates.length;
+        if (failedDates.length === 0) { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); }
         else if (ok === 0) toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error');
-        else toast.show(`${rs.length}주 중 ${ok}주만 등록되었습니다. 나머지를 다시 시도해 주세요.`, 'error');
+        else toast.show(`${total}주 중 ${ok}주만 등록되었습니다. 다시 누르면 남은 ${failedDates.length}주만 등록합니다.`, 'error');
         // 부분 성공은 **성공이 아니다** — 폼을 열어 둬 남은 주를 다시 시도할 수 있게 한다.
-        return { ok: ok === rs.length, saved: ok, total: rs.length };
+        return { ok: failedDates.length === 0, saved: ok, total, savedDates, failedDates };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, venues, toast, reloadSchedules]);
@@ -4875,6 +4904,9 @@ export default function App() {
           <ErrorBoundary inline resetKey="my-store">
           <VenueManageTabM
             schedules={schedules}
+            /* R12-02 — 조회 실패를 '등록된 게임이 없습니다 + 첫 게임 등록하기' 로 위장하지 않는다(홈과 같은 state). */
+            schedulesError={schedulesError}
+            onRetrySchedules={retrySchedulesCb}
             onOpenSchedule={handleScheduleSelect}
             deepSection={myStoreDeep}
             onConsumeDeepSection={handleConsumeMyStoreDeep}

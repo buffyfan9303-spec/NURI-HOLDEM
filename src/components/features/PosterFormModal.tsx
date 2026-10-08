@@ -32,6 +32,10 @@ export interface PosterSubmitResult {
   saved: number;
   /** 요청한 건수(반복 등록이면 주 수, 수정이면 1). */
   total: number;
+  /** H03-07 — 반복 등록에서 이번까지 서버에 들어간 날짜(재시도는 이 날짜를 다시 보내지 않는다). */
+  savedDates?: string[];
+  /** H03-07 — 이번 시도에서 실패로 끝난 날짜(응답만 잃었을 수 있어 다음 시도에 서버 목록과 대조한다). */
+  failedDates?: string[];
 }
 
 interface PosterFormModalProps {
@@ -82,6 +86,9 @@ export interface PosterFormData extends PosterSaveForm {
   events: Promotion[];
   /** 주간 반복 등록 횟수(생성 시에만 사용, 1=반복 없음) */
   repeatWeeks?: number;
+  /** H03-07 — 같은 폼에서 이미 저장된 반복 날짜 / 지난 시도에 실패한 날짜(재시도 때만 실린다). */
+  repeatSaved?: string[];
+  repeatRetry?: string[];
   /** 포스터별 커스텀 블라인드 표(비우면 기본 자동 생성 표시). 브레이크 행은 원문 label(W-15)을 가진다. */
   blindLevels?: PosterLevel[];
   /** 제출 때 폼이 만든 저장 부분(lib/posterPayload) — App 은 **이것만** 싣는다(W-02: 저장본 병합·바뀐 칸만). */
@@ -165,6 +172,10 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   /** 저장 진행 중 — 버튼을 잠가 **중복 제출로 포스터가 두 벌 생기는 것**을 막는다.
    *  종전에는 결과를 안 기다리고 곧바로 닫혀서 이 상태가 있을 자리조차 없었다(그게 결함이었다). */
   const [saving,     setSaving]     = useState(false);
+  // H03-07 — 더블 클릭: disabled 가 그려지기 전의 두 번째 submit 이 같은 날짜를 한 번 더 넣었다. 렌더와 무관한 ref 로 막는다.
+  const busyRef = useRef(false);
+  // H03-07 — 이 폼에서 이미 저장된 반복 날짜·지난 실패 날짜. 부분 성공 뒤 다시 누르면 남은 날짜만 보낸다.
+  const repeatDoneRef = useRef<{ saved: string[]; failed: string[] }>({ saved: [], failed: [] });
   // 레지마감: 레벨/시간 분리 입력 (둘 중 하나 이상 필수). 저장 시 'NLV HH:MM' 형태로 합쳐 regCloseTime 에 반영
   const [regLevel,   setRegLevel]   = useState('');
   const [regTime,    setRegTime]    = useState('');
@@ -264,7 +275,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
   // PL3: 등록 직후 프리셋 저장(부산물 authoring) — 체크 시 제출과 함께 게임 프리셋으로도 저장
   const [alsoPreset, setAlsoPreset] = useState(false);
-  useEffect(() => { if (open) { setAlsoPreset(false); setMoreOpen(false); } }, [open]);
+  useEffect(() => { if (open) { setAlsoPreset(false); setMoreOpen(false); repeatDoneRef.current = { saved: [], failed: [] }; } }, [open]);
 
   // ── 이미지 선택 ──────────────────────────────────────────────────────────
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,6 +298,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try { await submitOnce(); } finally { busyRef.current = false; }
+  };
+  const submitOnce = async () => {
     if (!form.title.trim())     return failAt(titleId, '게임 이름을 입력해 주세요');
     // 🔴 요구 C — native maxLength 를 우회한 programmatic 변경(자동완성·확장·테스트)을 여기서 막는다.
     //   단 **제목을 실제로 바꿨을 때만**이다. legacy 장문 포스터의 날짜만 고치는 저장은 통과해야 한다
@@ -339,13 +355,19 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     setSaving(true);
     let res: PosterSubmitResult | void;
     try {
+      const done = repeatDoneRef.current;
       res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl, saveParts: posterSaveParts(schedule ?? null, isEdit ? initial : null, form),
+        ...(!isEdit && { repeatSaved: done.saved, repeatRetry: done.failed }),
         ...(group && { groupId: group.id, groupName: group.name, feedRequest: feedReq }) });
     } catch {
       // onSubmit 이 던지는 경우까지 막는다 — 던져도 폼은 열린 채 남아야 한다.
       res = { ok: false, saved: 0, total: 1 };
     }
     setSaving(false);
+    if (res?.savedDates || res?.failedDates) {
+      const prev = repeatDoneRef.current;
+      repeatDoneRef.current = { saved: [...new Set([...prev.saved, ...(res.savedDates ?? [])])], failed: res.failedDates ?? [] };
+    }
     // 결과를 안 주는 호출부(구 계약)는 종전대로 낙관 처리한다.
     const ok = res == null || res.ok;
     if (!ok) return; // ⚠ 실패·부분 성공은 **닫지 않는다.** 구체적인 실패 문구는 App 이 이미 띄웠다.

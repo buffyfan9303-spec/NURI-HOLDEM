@@ -1,5 +1,18 @@
 # Google Play 도박 정책 대응
 
+> ## 🟢 2026-10-08 정정 — 아래 원문보다 우선
+> 1. **"앱 내 광고가 없습니다" 문장은 쓰지 않는다** — 매장 유료 노출(`AD`)·커뮤니티 광고 칸·클락 광고 기능이 있다. 아래 ① 블록과 영문 선언문의 해당 문장은 고쳐 두었다.
+> 2. **광고 신고 '예' + 도박 광고 9요건**: 요건 8 "App must not provide gambling or real money game, lottery, or tournament support or companion functionality" 와
+>    9 "App content must not promote or direct users to gambling or real money games, lotteries, or tournament services"
+>    ([공식, 2026-10-08 확인](https://support.google.com/googleplay/android-developer/answer/9877032)) 는 **도박 광고**를 싣는 앱의 조건이다.
+>    홀덤펍 유료 노출이 '도박 광고'로 분류되면 장부·대회 안내와 구조적으로 충돌한다 → 실행표 ③ 위험 R1(오너 결정).
+> 3. **Gamified loyalty programs — 지금 운영 중인 출석 카드 이벤트에 직접 적용된다.** 공식 요건: "Publish official rules for the program within the app",
+>    확률형이면 확률 공개, 추첨형이면 "fixed number of winners, fixed entry deadline, and prize award date". 현재 `EventPage.tsx` 하단에
+>    등급별 수량·확률(서버 실수량 기준)·참여권 지급 조건(출석 1회 1장·구매 불필요)·즉시 지급 안내가 있다(코드 확인). 이벤트 기간 표시는 화면 실측 미확인 → 실행표 ③ R2.
+> 4. **이용권 스위치 켜짐**: `identity_voucher_enabled = on`(2026-10-08 조회) — 원문의 "제출 시점에 이용권이 꺼져 있어 노출 안 됨" 전제는 **더 이상 맞지 않는다**.
+>    이용권이 홈 '이용권 · 출석' 카드와 이벤트 보상으로 보인다. 관광진흥법 §26조의2 지침 (a)(포인트 → 홀덤펍 입장료)와의 관계는 BLOCKED #1(법률 검토)로 남는다.
+
+
 <!-- 2026-09-04 조사 산출물. 각 주장은 1차 출처(Google/Play/IARC 공식 문서) 또는 파일:줄 근거를 달았고,
      blocker/high 주장은 별도 에이전트가 **반증을 시도**해 검증했다. 검증에서 뒤집힌 것은 아래 '적대적 검증'에 남겼다. -->
 
@@ -130,10 +143,10 @@ Google Play 실화폐 도박 정책의 적용 대상은 "온라인 카지노·�
 · 앱 안에서 돈을 걸거나 주고받는 기능이 없습니다. 참가비 수납과 상금 지급은 전적으로 각 매장이 현장에서 자신의 책임과 계산으로 처리하며, 회사는 그 과정에 관여하지 않고 이용자에게 어떠한 금전도 지급하지 않습니다.
 · 앱에 표시되는 참가비(바이인)·GTD·프라이즈풀은 매장이 등록한 상품 가격 정보이며(「전자상거래 등에서의 소비자보호에 관한 법률」상 가격 고지), 회사가 지급을 약속하는 금액이 아닙니다.
 · 활동점수와 매장 이용권은 활동 기록을 표시하기 위한 비현금 표시값입니다. 돈으로 살 수 없고, 돈으로 바꿀 수 없으며, 이용자 간 양도·매매가 금지됩니다.
-· 인앱 결제와 인앱 상품 판매가 없습니다. 앱 내 광고가 없습니다.
+· 인앱 결제와 인앱 상품 판매가 없습니다.
 · 만 19세 이상만 가입·이용할 수 있습니다(「청소년보호법」). 가입 시 연령 확인과 필수 동의 절차를 거칩니다.
 · 도박 문제로 어려움을 겪고 계시다면 한국도박문제예방치유원 헬프라인 1336(24시간·무료)에서 상담하실 수 있습니다.
-  불법 환전·사행성 행위 금지 서약: https://nuriholdem.com/legal/anti-gambling.html
+  사행성 행위 금지 서약: https://nuriholdem.com/legal/anti-gambling.html
 
 주요 기능 — 전국 홀덤펍 대회 일정 달력 · 대회 예약 · 라이브 블라인드 클락 · 매장 장부 및 운영 도구 · 커뮤니티 · 중고장터 · GTO 학습 도구(퀴즈·차트·계산기)
 
@@ -153,7 +166,7 @@ The app does NOT offer card game play, wagering, betting, virtual chips, or any 
 
 Buy-in and guaranteed-prize figures displayed in the app are price information for a service supplied by the venue, disclosed as required by the Korean Act on Consumer Protection in Electronic Commerce. They are not amounts the developer offers or guarantees.
 
-In-app "activity points" and "store vouchers" are non-monetary display values. They cannot be purchased with money, cannot be exchanged for money, and cannot be transferred or sold between users. The app contains no in-app purchases, no in-app billing, and no advertising SDK. Access is restricted to users aged 19 and over, with an age declaration and mandatory consent at sign-up, and the app links to a responsible-gaming notice (Korea Center on Gambling Problems helpline 1336) in its footer and legal pages.
+In-app "activity points" and "store vouchers" are non-monetary display values. They cannot be purchased with money, cannot be exchanged for money, and cannot be transferred or sold between users. The app contains no in-app purchases and no in-app billing; it uses no third-party advertising SDK (venues may buy a labeled promoted placement in the venue list). Access is restricted to users aged 19 and over, with an age declaration and mandatory consent at sign-up, and the app links to a responsible-gaming notice (Korea Center on Gambling Problems helpline 1336) in its footer and legal pages.
 
 Accordingly, the app does not enable or facilitate online casino games, sports betting, horse racing, lotteries, or daily fantasy sports, and does not enable users to wager or stake real money in-app to obtain a prize of real-world monetary value. It therefore falls outside the scope of the Real-Money Gambling, Games, and Contests policy. Comparable Korean apps for offline hold'em venues are published on Google Play under the Lifestyle category with a 19+ rating (for example com.khpl.app).
 

@@ -133,6 +133,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'sheet-up': '바텀 시트 진입',
     'slide-down': '바텀 시트 퇴장',
     'dim-in': '모달 딤',
+    'nudge-down': '가운데 모달 퇴장의 본문 이동(slide-up 역방향 8px · 투명도는 래퍼 fade-out 한 겹) — M03 2026-10-08',
     'badge-pulse': '안 읽음 배지 — 전환 아님',
   };
   /** Element.animate(WAAPI) 를 부르는 파일 — 이유. */
@@ -141,6 +142,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'src/lib/spring.ts': '시트 드래그 스프링',
     'src/components/atoms/Fold.tsx': '본문 안 펼침/접힘 한 벌(높이 0↔실측 + 누른 요소 제자리) — 판 교체가 아니라 판 **안**의 조건부 렌더 ~40곳(2026-09-29 M단계)',
     'src/components/atoms/ToastView.tsx': '성공 토스트 체크 아이콘 획 그리기(stroke-dashoffset, 아이콘 한 개·1회) — 지연 청크 안이라 첫 화면 CSS 0B(2026-10-08 M04)',
+    'src/components/features/gto/HandBoardPicker.tsx': '카드 슬롯 한 칸(36×48) 내려앉기 — 손으로 고른 순간만 transform·opacity 180ms, fill 없음(M06 2026-10-08 · 판 전환 아님)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
     const names = [...cssOutsideTheme().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);

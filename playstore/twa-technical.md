@@ -1,5 +1,21 @@
 # TWA 패키징 기술 준비
 
+> ## 🟢 2026-10-08 현재 상태 — 아래 2026-09-04 원문의 블로커 중 해결된 것
+> | 원문 항목 | 지금 |
+> |---|---|
+> | theme/background #151221(구 테마) | 해결 → 지금 테마 **#101823** 로 맞춤. 웹 manifest·twa-manifest·index.html 일치를 `src/manifestTwa.contract.test.ts` ①②가 잠근다 |
+> | shortcuts 5개 → Bubblewrap 이 자름 | 해결(4개) · twa 쪽도 같은 4개(계약 ④) |
+> | monochrome 아이콘 없음 | 해결(`public/icon-monochrome-512.png`, RGBA) |
+> | screenshots 필드 없음 | 해결(4장, 2026-10-08 현행 화면으로 재촬영) |
+> | targetSdk 36 | **확인** — Bubblewrap 1.25.0 템플릿 `targetSdkVersion 36`, 빌드한 APK 를 aapt2 로 읽어 `targetSdkVersion:'36'` (2026-10-08). Play: 2026-08-31 부터 신규·업데이트 API 36 이상, 연장 2026-11-01 ([공식](https://developer.android.com/google/play/requirements/target-sdk), 2026-10-01 갱신) |
+> | JDK 17 · SDK | 이 PC `~/.bubblewrap` 에 JDK 17.0.20.1 · platform 36 · build-tools 36.1.0 있음(2026-09-25 설치분) |
+> | orientation | twa-manifest 는 `default`(회전 허용 — 매장 운영주 태블릿), 웹 manifest 는 portrait-primary 유지 |
+> | 위치 권한 | twa `features.locationDelegation` **끔** → APK 에 위치 권한 없음(권한은 `POST_NOTIFICATIONS` 하나, aapt2 확인). 위치는 Chrome 의 사이트 권한으로만 묻는다 |
+> | assetlinks 지문 | 여전히 자리표시자 — 오너 몫(`PLAYSTORE.md` 3절). 자리표시자가 운영에 있어도 무해 |
+> | AdSense | 제거 상태 유지(광고 SDK 0). 원문의 "'광고 포함' 체크(AdSense 때문)" 근거는 사라졌고, 지금 '예'의 근거는 매장 유료 노출이다(`PLAYSTORE.md` ⛔2) |
+> 빌드: `npm run playstore:twa`(검증, 서명 없음) · 업로드용은 `--release --keystore …`(`scripts/playstore-twa.mjs` 머리말).
+
+
 <!-- 2026-09-04 조사 산출물. 각 주장은 1차 출처(Google/Play/IARC 공식 문서) 또는 파일:줄 근거를 달았고,
      blocker/high 주장은 별도 에이전트가 **반증을 시도**해 검증했다. 검증에서 뒤집힌 것은 아래 '적대적 검증'에 남겼다. -->
 

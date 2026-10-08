@@ -1,0 +1,53 @@
+{
+  "packageId": "com.nuriholdem.twa",
+  "host": "nuriholdem.com",
+  "name": "누리홀덤",
+  "launcherName": "누리홀덤",
+  "display": "standalone",
+  "orientation": "default",
+  "themeColor": "#101823",
+  "themeColorDark": "#101823",
+  "navigationColor": "#101823",
+  "navigationColorDark": "#101823",
+  "navigationDividerColor": "#101823",
+  "navigationDividerColorDark": "#101823",
+  "backgroundColor": "#101823",
+  "enableNotifications": true,
+  "startUrl": "/?source=twa",
+  "iconUrl": "https://nuriholdem.com/icon-512.png",
+  "maskableIconUrl": "https://nuriholdem.com/icon-maskable-512.png",
+  "monochromeIconUrl": "https://nuriholdem.com/icon-monochrome-512.png",
+  "webManifestUrl": "https://nuriholdem.com/manifest.webmanifest",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "upload"
+  },
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    { "name": "라이브", "shortName": "라이브", "url": "https://nuriholdem.com/?tab=live", "chosenIconUrl": "https://nuriholdem.com/icon-192.png" },
+    { "name": "커뮤니티", "shortName": "커뮤니티", "url": "https://nuriholdem.com/?tab=community", "chosenIconUrl": "https://nuriholdem.com/icon-192.png" },
+    { "name": "GTO", "shortName": "GTO", "url": "https://nuriholdem.com/?tab=tools", "chosenIconUrl": "https://nuriholdem.com/icon-192.png" },
+    { "name": "캘린더", "shortName": "캘린더", "url": "https://nuriholdem.com/?tab=calendar", "chosenIconUrl": "https://nuriholdem.com/icon-192.png" }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://nuriholdem.com/",
+  "minSdkVersion": 21,
+  "shareTarget": {
+    "action": "/?tab=community&shared=1",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": []
+}

@@ -24,6 +24,9 @@ import { msgOf } from '../../lib/dbError';
 
 interface MyPostersTabProps {
   schedules: Schedule[];
+  /** R12-02 — 포스터 목록 조회 실패(App 의 schedulesError). 목록이 비었을 때 '등록된 게임 없음' 대신 오류·재시도를 보인다. */
+  loadError?: unknown;
+  onRetry?: () => void;
   /** 내 매장 전환기에서 고른 매장(2026-09-28). 없으면 예전처럼 프로필 매장. */
   venueId?: string | null;
   onCreate: () => void;
@@ -44,7 +47,7 @@ interface MyPostersTabProps {
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, venueId: venueIdProp = null, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true, canSeeMoney = true }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, loadError = null, onRetry, venueId: venueIdProp = null, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true, canSeeMoney = true }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
@@ -110,7 +113,10 @@ export default function MyPostersTab({ schedules, venueId: venueIdProp = null, o
   // 제목·"+ 새 게임" 액션은 VenueManageTab의 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
     <div data-testid="my-posters" className="space-y-3">
-      {myPosters.length === 0 ? (
+      {myPosters.length === 0 && loadError ? (
+        // R12-02 — 조회 실패를 '없음'으로 위장하지 않는다. 여기서 '첫 게임 등록하기' 를 권하면 이미 있는 게임을 중복 등록한다.
+        <LoadErrorCard error={loadError} what="게임 목록" onRetry={onRetry} />
+      ) : myPosters.length === 0 ? (
         <EmptyState
           title="등록된 게임이 없습니다"
           hint="포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있습니다"

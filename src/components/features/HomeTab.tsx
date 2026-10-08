@@ -825,7 +825,8 @@ export default function HomeTab({
               {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
             </h3>
             <span data-testid="home-schedule-count" className="shrink-0 text-2xs text-ink-muted">
-              {useFallback ? '오늘·내일 예정 없음' : `대회 ${daySchedules.length}개`}
+              {/* R11-04 — 응답 전(뼈대)·실패(오류 카드)에는 건수를 말하지 않는다. '대회 0개' 는 사실일 때만. */}
+              {!loaded || failed ? '' : useFallback ? '오늘·내일 예정 없음' : `대회 ${daySchedules.length}개`}
             </span>
           </header>
           {!loaded ? (

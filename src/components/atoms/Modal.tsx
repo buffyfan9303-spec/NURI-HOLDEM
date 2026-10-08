@@ -524,7 +524,9 @@ export default function Modal({
           // shadow-dialog 를 대체하지만, dim(black/80) 위에서 외부 섀도는 사실상 비가시 — 순손실 없음.
           'card-elev relative w-full bg-surface-mid shadow-dialog',
           closing
-            ? (dragClosed ? '' : variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
+            // 가운데 모달: 투명도는 래퍼 fade-out(딤과 한 겹)만 — 본문은 열 때 올라온 8px 을 되짚어 내려가기만 한다.
+            //   예전엔 본문도 fade-out 이라 래퍼와 곱해져(o²) 중간에 본문이 딤보다 먼저 꺼졌다(라이트에서 회색 번짐).
+            ? (dragClosed ? '' : variant === 'sheet' ? 'animate-slide-down' : 'animate-nudge-down')
             // 시트는 아래에서 올라오고(sheet-up), 가운데 모달은 기존의 짧은 넛지(slide-up).
             // 열림과 닫힘이 같은 문법을 쓰게 맞춘 것 — 예전엔 닫힘만 100% 이동이라 짝이 안 맞았다.
             : (variant === 'sheet' ? 'animate-sheet-up' : 'animate-slide-up'),

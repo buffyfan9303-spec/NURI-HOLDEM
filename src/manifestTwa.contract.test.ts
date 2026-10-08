@@ -86,3 +86,50 @@ describe('TWA manifest — screenshots', () => {
     }
   });
 });
+
+// ── 2026-10-08 Play 출시 준비 — TWA 빌드 설정(playstore/twa/twa-manifest.json)과 웹·도메인 쪽의 일치 ──────────
+// 왜: Bubblewrap 은 색·아이콘·패키지명을 **빌드 시점에 APK 로 굽는다**. 웹 테마를 바꾸고 이 값을 놓치면
+//   앱을 켤 때마다 옛 색 스플래시가 먼저 뜬다(2026-10-08 실측: manifest #0A0A0A ↔ index.html #101823 — E+황동에서 4안 미드나이트 블루로
+//   바뀔 때 manifest 만 남았다). 패키지명이 assetlinks 와 다르면 Digital Asset Links 검증이 실패해 앱 위에 주소창이 뜬다.
+// 음성 대조: manifest theme_color 를 다른 값으로 바꾸면 ①이, twa packageId 를 바꾸면 ③이, twa shortcuts 를 5개로 늘리면 ④가 빨개진다.
+const indexHtml = readFileSync(join(ROOT, 'index.html'), 'utf-8');
+const twa = JSON.parse(readFileSync(join(ROOT, 'playstore/twa/twa-manifest.json'), 'utf-8'));
+const assetlinks = JSON.parse(readFileSync(join(ROOT, 'public/.well-known/assetlinks.json'), 'utf-8'));
+
+describe('TWA — 색이 현행 테마(index.html meta theme-color)와 같다', () => {
+  const meta = indexHtml.match(/<meta name="theme-color" content="(#[0-9A-Fa-f]{6})"/)?.[1];
+  it('① 웹 manifest 의 theme_color·background_color', () => {
+    expect(meta, 'index.html 에 meta theme-color 가 없다').toBeTruthy();
+    expect(manifest.theme_color.toUpperCase()).toBe(meta!.toUpperCase());
+    expect(manifest.background_color.toUpperCase()).toBe(meta!.toUpperCase());
+  });
+  it('② twa-manifest 의 스플래시·상태바·내비게이션 색', () => {
+    for (const k of ['themeColor', 'themeColorDark', 'backgroundColor', 'navigationColor', 'navigationColorDark']) {
+      expect(String(twa[k]).toUpperCase(), k).toBe(meta!.toUpperCase());
+    }
+  });
+});
+
+describe('TWA — 패키지·도메인·바로가기', () => {
+  it('③ packageId 가 assetlinks 의 package_name 과 같고, host 가 운영 도메인이다', () => {
+    expect(twa.packageId).toBe('com.nuriholdem.twa');
+    expect(assetlinks[0].target.package_name).toBe(twa.packageId);
+    expect(twa.host).toBe('nuriholdem.com');
+  });
+  it('④ shortcuts 가 웹 manifest 와 같은 탭을 같은 순서로 가리킨다(4개 이하)', () => {
+    expect(twa.shortcuts.length).toBeLessThanOrEqual(4);
+    expect(twa.shortcuts.map((s: { url: string }) => new URL(s.url).search))
+      .toEqual(manifest.shortcuts.map((s: { url: string }) => s.url.replace(/^\//, '')));
+  });
+  it('⑤ 아이콘 URL 이 public/ 에 실제로 있는 파일을 가리킨다(Bubblewrap 은 운영 URL 에서 받아 굽는다)', () => {
+    for (const k of ['iconUrl', 'maskableIconUrl', 'monochromeIconUrl']) {
+      const path = new URL(twa[k]).pathname;
+      expect(existsSync(join(ROOT, 'public', path.replace(/^\//, ''))), `${k} → ${path}`).toBe(true);
+    }
+  });
+  it('⑥ 서명 키·지문 같은 비밀은 저장소에 두지 않는다(경로·별칭만)', () => {
+    expect(twa.fingerprints).toEqual([]);
+    expect(Object.keys(twa.signingKey).sort()).toEqual(['alias', 'path']);
+    expect(existsSync(join(ROOT, 'playstore/twa/android.keystore'))).toBe(false);
+  });
+});

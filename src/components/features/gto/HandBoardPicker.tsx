@@ -7,12 +7,45 @@
 //
 // 2026-09-19: 빌런 B~E 슬롯(hb.extra). 상대가 A 뿐이면 라벨은 예전 그대로 '상대 핸드' 다 —
 // 아웃츠·리플레이 화면은 extra 가 [] 라 아무것도 달라지지 않는다.
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
-import type { Card } from './gto.types';
+import { cardId, type Card, type CardId } from './gto.types';
 import { extraIndexOf, type HandTarget, type UseHandBoard } from './useHandBoard';
 
 const EXTRA_LETTER = ['B', 'C', 'D', 'E'];
+
+/**
+ * M06(2026-10-08) — 그리드에서 **손으로 고른** 카드가 슬롯에 놓이는 순간만 짧게 '내려앉는다'.
+ *   · 슬롯 한 칸(36×48)의 transform·opacity 만 움직인다 — 레이아웃·크기·결과 숫자는 그대로다.
+ *   · 출발이 빠르고 끝이 부드러운 감속(out-quint) 180ms. fill 없음 → 끝나면 원래 스타일 그대로.
+ *   · 재생 조건은 `dealt`(onPick 이벤트에서만 바뀌는 값) 하나뿐이다 — 저장 복원·재계산·폴링·탭 재방문으로
+ *     카드 배열이 바뀌거나 다시 그려져도 재생하지 않는다.
+ *   · prefers-reduced-motion 이면 0. 카드를 빼거나 화면을 떠나면 진행 중인 애니를 취소한다.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- 회귀 테스트가 같은 값을 읽는다(한 벌)
+export const DEAL_KEYFRAMES: Keyframe[] = [
+  { transform: 'translateY(-6px) scale(0.9)', opacity: 0.4 },
+  { transform: 'none', opacity: 1 },
+];
+// eslint-disable-next-line react-refresh/only-export-components -- 위와 같은 이유
+export const DEAL_TIMING: KeyframeAnimationOptions = { duration: 180, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };
+
+function prefersReducedMotion(): boolean {
+  try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+/** 방금 손으로 고른 카드와 그 시각. 새 객체라 같은 카드를 뺐다 다시 골라도 새 재생이 된다.
+ *  at 이 오래됐으면(빼기로 뒤 카드가 당겨져 다른 슬롯에 나타난 경우 등) 재생하지 않는다. */
+type Dealt = { id: CardId; at: number } | null;
+/** 고른 뒤 이 시간 안에 슬롯에 나타날 때만 재생한다(같은 커밋이면 수 ms). */
+// eslint-disable-next-line react-refresh/only-export-components -- 회귀 테스트가 같은 값을 읽는다
+export const DEAL_FRESH_MS = 250;
+
+/** 재생 여부 — 순수 함수(회귀 테스트 대상). 손으로 고른 기록이 없거나·오래됐거나·움직임 줄이기면 false. */
+// eslint-disable-next-line react-refresh/only-export-components -- 회귀 테스트가 직접 부른다
+export function dealPlays(dealt: { at: number } | null, now: number, reduced: boolean): boolean {
+  return !!dealt && !reduced && now - dealt.at >= 0 && now - dealt.at <= DEAL_FRESH_MS;
+}
 
 /** 슬롯 라벨. `extraLabels` 는 자리 이름('CO')처럼 호출부가 덧붙일 말 — 없으면 글자만. */
 function labelOf(t: HandTarget, hb: UseHandBoard, extraLabels?: readonly string[]): string {
@@ -23,9 +56,21 @@ function labelOf(t: HandTarget, hb: UseHandBoard, extraLabels?: readonly string[
   return hb.extra.length > 0 ? '상대 A' : '상대 핸드';
 }
 
-function CardSlot({ card, active, label, onClick }: { card: Card | null; active: boolean; label: string; onClick: () => void }) {
+function CardSlot({ card, active, label, onClick, dealt }: {
+  card: Card | null; active: boolean; label: string; onClick: () => void;
+  /** 이 슬롯의 카드가 방금 손으로 고른 카드면 그 기록, 아니면 null. */
+  dealt: Dealt;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof el.animate !== 'function' || !dealPlays(dealt, performance.now(), prefersReducedMotion())) return;
+    const anim = el.animate(DEAL_KEYFRAMES, DEAL_TIMING);
+    return () => anim.cancel();
+  }, [dealt]);
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-label={card ? `${card.rank}${SUIT_LABEL[card.suit]} 제거` : `${label} 카드 넣기`}
@@ -51,7 +96,7 @@ function CardSlot({ card, active, label, onClick }: { card: Card | null; active:
   );
 }
 
-function Slots({ hb, target, label }: { hb: UseHandBoard; target: HandTarget; label: string }) {
+function Slots({ hb, target, label, dealt }: { hb: UseHandBoard; target: HandTarget; label: string; dealt: Dealt }) {
   const i = extraIndexOf(target);
   const cards = i !== null ? (hb.extra[i] ?? []) : target === 'hero' ? hb.hero : target === 'villain' ? hb.villain : hb.board;
   const active = hb.target === target;
@@ -72,6 +117,7 @@ function Slots({ hb, target, label }: { hb: UseHandBoard; target: HandTarget; la
             card={c}
             active={active && j === nextEmpty}
             label={label}
+            dealt={c && dealt && cardId(c) === dealt.id ? dealt : null}
             onClick={() => (c ? hb.removeAt(target, j) : hb.setTarget(target))}
           />
         ))}
@@ -94,17 +140,20 @@ export default function HandBoardPicker({ hb, hint, summary, villainLabels }: {
   const villainLabel = hb.extra.length > 0
     ? `상대 A${villainLabels?.[0] ? ` (${villainLabels[0]})` : ''}`
     : '상대 핸드';
+  // 고른 카드 기록은 **그리드 onPick 에서만** 쓴다 — 복원(hb.load)·재계산은 이 값을 건드리지 않는다.
+  const [dealt, setDealt] = useState<Dealt>(null);
+  const pick = (c: Card) => { setDealt({ id: cardId(c), at: performance.now() }); hb.place(c); };
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-        <Slots hb={hb} target="hero" label="내 핸드" />
-        <Slots hb={hb} target="villain" label={villainLabel} />
+        <Slots hb={hb} target="hero" label="내 핸드" dealt={dealt} />
+        <Slots hb={hb} target="villain" label={villainLabel} dealt={dealt} />
         {hb.extra.map((_, i) => {
           const t = (['v1', 'v2', 'v3', 'v4'] as const)[i];
-          return <Slots key={t} hb={hb} target={t} label={labelOf(t, hb, extraLabels)} />;
+          return <Slots key={t} hb={hb} target={t} label={labelOf(t, hb, extraLabels)} dealt={dealt} />;
         })}
       </div>
-      <Slots hb={hb} target="board" label="보드" />
+      <Slots hb={hb} target="board" label="보드" dealt={dealt} />
 
       {summary !== undefined && (
         <div className="flex min-h-9 items-center rounded-input bg-surface-high px-2.5" aria-live="polite">{summary}</div>
@@ -115,7 +164,7 @@ export default function HandBoardPicker({ hb, hint, summary, villainLabels }: {
         {hint ? <> · {hint}</> : null}
       </p>
 
-      <CardGridPicker usedIds={hb.usedIds} onPick={hb.place} />
+      <CardGridPicker usedIds={hb.usedIds} onPick={pick} />
 
       <div className="-mb-2 flex justify-end">
         {/* 2026-09-25 스윕: 글자 크기 그대로(54×16)라 터치 표적 미달 — 보이는 글자는 두고 누르는 상자를 44px 로(min-h · px-2 · -mr-2 로 오른쪽 정렬 유지). */}
