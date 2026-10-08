@@ -6,7 +6,8 @@
 // Play 폰 스크린샷 요건(2026 기준): PNG/JPEG · 각 변 320~3840px · 세로형 권장 · 2~8장.
 // 1080×1920(9:16)은 Play 가 예시로 드는 표준 해상도라 이걸 쓴다.
 //
-// 실행: node scripts/playstore-shots.mjs [--base https://nuriholdem.com]
+// 실행: node scripts/playstore-shots.mjs [--base https://nuriholdem.com] [--fixture] [--out <폴더>]
+// 가림 면 색은 현행 테마(2026-10-05 '4안 미드나이트 블루', src/index.css html.dark)의 배너 색을 따른다 — 옛 보라 면이 찍히면 앱과 다르게 보인다.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -22,21 +23,23 @@ const VENUE = 'f35b42d1-2d54-4905-95c1-1fda24e0f178';
 // 스토어 스크린샷은 마케팅 자료라 제3자 상호·로고·주소가 그대로 들어가면 안 된다.
 // --fixture 로 켜면 제휴 매장 식별정보를 가명으로 덮고 포스터 이미지를 가린다.
 const FIXTURE = process.argv.includes('--fixture');
-const OUT = resolve(FIXTURE ? 'playstore/screenshots' : 'playstore/screenshots-real');
+const OUT = resolve(arg('--out', FIXTURE ? 'playstore/screenshots' : 'playstore/screenshots-real'));
 mkdirSync(OUT, { recursive: true });
 
 // 찍을 화면 — 스토어에서 보일 순서대로. 첫 장이 가장 중요하다(목록에서 유일하게 보이는 장).
 const SHOTS = [
   // ⚠ 첫 장은 스토어 목록에서 유일하게 보이는 장이다. **반드시 내용이 차 있어야 한다.**
-  //   /?tab=browse 는 그날 예정 대회가 0건이면 '예정된 대회가 아직 없어요' 가 헤드라인으로 박힌다(실측).
-  //   대회 상세(포스터+정보)와 매장 페이지는 데이터에 상관없이 항상 차 있어 첫 장으로 안전하다.
-  { file: '01-detail', path: '/?tab=browse', click: true, desc: '대회 상세 — 포스터·바이인·구조' },
-  { file: '02-venue', path: '/?v=' + VENUE, wait: null, desc: '매장 페이지 — 대회·정보·체크인' },
-  { file: '03-home', path: '/?tab=home', wait: null, desc: '홈 — 배너·오늘의 대회' },
-  { file: '04-tools', path: '/?tab=tools', wait: null, desc: 'GTO 학습 도구' },
-  { file: '05-community', path: '/?tab=community', wait: null, desc: '커뮤니티' },
-  { file: '06-browse', path: '/?tab=browse', wait: null, desc: '일정 탐색 — 날짜별' },
-  { file: '07-market', path: '/?tab=market', wait: null, desc: '중고장터' },
+  // 2026-10-08 순서 재배치: 상금(GTD) 숫자가 크게 보이는 대회 상세는 첫 장에서 뺀다 — Play 도박 정책의 예시 위반
+  //   (현금 상금 대회에 'REGISTER!' 를 부르는 화면)과 겉모양이 닮아 보이는 것을 피한다(playstore/gambling-policy.md).
+  //   홈·GTO 도구는 데이터와 무관하게 내용이 차 있다. 라이브는 진행 중 대회가 0이면 빈 화면이라 맨 뒤(업로드 제외 후보).
+  { file: '01-home', path: '/?tab=home', wait: null, desc: '홈 — 배너·오늘의 대회' },
+  { file: '02-tools', path: '/?tab=tools', wait: null, desc: 'GTO 학습 도구' },
+  { file: '03-venue', path: '/?v=' + VENUE, wait: null, desc: '매장 페이지 — 대회·정보·체크인' },
+  { file: '04-community', path: '/?tab=community', wait: null, desc: '커뮤니티' },
+  { file: '05-browse', path: '/?tab=browse', wait: null, desc: '일정 탐색 — 날짜별' },
+  // /?tab=browse 는 그날 예정 대회가 0건이면 빈 안내가 헤드라인이 된다 — 행을 눌러 상세 모달을 연다.
+  { file: '06-detail', path: '/?tab=browse', click: true, desc: '대회 상세 — 포스터·참가비·구조' },
+  { file: '07-live', path: '/?tab=live', wait: null, desc: '라이브 — 진행 중인 대회' },
 ];
 
 const browser = await chromium.launch();
@@ -64,6 +67,7 @@ async function applyFixture(page) {
       [/ROTI\s*ARENA/gi, 'NURI ARENA'],
       [/로티\s*단독/g, '누리 단독'],
       [/야자수\s*서울센터/g, '누리 서울센터'],
+      [/로티/g, '누리'], // 위 구체 규칙 뒤의 나머지('로티 부스터데이' 등 대회명) — 2026-10-08 실측에서 가려지지 않았다
       [/남양주시[^,\n]*/g, '서울시 강남구 테헤란로 1길'],
       [/010-\d{3,4}-\d{4}/g, '010-0000-0000'],
     ];
@@ -87,7 +91,7 @@ async function applyFixture(page) {
       const src = img.currentSrc || img.src || '';
       const own = /\/(icon-|favicon|nuri-logo)/.test(src) || src.startsWith('data:');
       if (!own) {
-        img.style.background = 'linear-gradient(135deg,#5850EC 0%,#7C3AED 60%,#D946EF 100%)';
+        img.style.background = 'linear-gradient(135deg,#213956 0%,#355FA7 100%)';
         img.style.objectFit = 'cover';
         img.removeAttribute('srcset');
         img.src =
@@ -95,8 +99,7 @@ async function applyFixture(page) {
           encodeURIComponent(
             `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800">
                <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                 <stop offset="0" stop-color="#5850EC"/><stop offset="0.6" stop-color="#7C3AED"/>
-                 <stop offset="1" stop-color="#D946EF"/></linearGradient></defs>
+                 <stop offset="0" stop-color="#213956"/><stop offset="1" stop-color="#355FA7"/></linearGradient></defs>
                <rect width="600" height="800" fill="url(#g)"/>
                <text x="300" y="400" fill="#fff" font-size="52" font-weight="700"
                      text-anchor="middle" font-family="sans-serif">NURI HOLDEM</text>
@@ -108,7 +111,7 @@ async function applyFixture(page) {
     for (const el of document.querySelectorAll('*')) {
       const bg = getComputedStyle(el).backgroundImage;
       if (bg && bg.includes('url(') && /https?:/.test(bg)) {
-        el.style.backgroundImage = 'linear-gradient(135deg,#5850EC 0%,#7C3AED 60%,#D946EF 100%)';
+        el.style.backgroundImage = 'linear-gradient(135deg,#213956 0%,#355FA7 100%)';
       }
     }
   });

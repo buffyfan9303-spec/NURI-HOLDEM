@@ -5,7 +5,7 @@
 //   가입 때 동의한 16조 약관·처리방침(src/pages/legal/*.tsx)과 다른 문서를 푸터(법정 '초기 화면' 링크)가 보여 주고 있었다
 //   (조문 번호·매장 제공 여부·환불 대상까지 달랐다). 이제 세 탭은 **동의 화면·공개 주소(/legal/*.html)와 같은 컴포넌트**를 그린다 —
 //   텍스트 원본은 src/pages/legal/ 하나뿐이다. 이 파일에 약관·처리방침·환불 문장을 다시 쓰지 마라(legalConsistency.test 가 잠근다).
-//   위치기반서비스 이용약관만 아직 공개 정적 페이지가 없어 여기(LOCATION)에 원본이 있다.
+//   위치기반서비스 이용약관만 원본이 여기(LOCATION)에 있고, 공개 주소 /legal/location.html 은 그 문자열을 그대로 찍는다(2026-10-08).
 // 시행일은 src/lib/legalVersion.ts · src/lib/locationTerms.ts 가 단일 소스다 — 이 파일에 날짜를 박지 않는다.
 import { useState } from 'react';
 import Modal from '../atoms/Modal';
@@ -37,7 +37,8 @@ const BIZ = {
   locationOfficerPhone: LOCATION_OFFICER.phone,
 };
 
-const LOCATION = `제1조(목적)
+// 공개 정적 페이지(/legal/location.html — src/pages/legal/LocationTerms.tsx)가 이 문자열을 그대로 그린다(텍스트 원본 1개).
+export const LOCATION = `제1조(목적)
 이 약관은 ${BIZ.service}(이하 "회사")가 제공하는 위치기반서비스와 관련하여 회사와 개인위치정보주체(이하 "이용자")의 권리·의무 및 책임사항, 그 밖에 필요한 사항을 규정합니다.
 
 제2조(사업자 정보)
