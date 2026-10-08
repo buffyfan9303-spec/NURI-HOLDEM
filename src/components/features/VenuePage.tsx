@@ -717,6 +717,9 @@ function HeroSection({
   const onTouchEnd = (e: React.TouchEvent) => {
     const s = touchRef.current; touchRef.current = null;
     if (!s) return;
+    // 업주 편집 버튼(배경 변경·사진 추가·삭제)·file input 위의 손가락은 hero 탭이 아니다 — 그 버튼의 click 이 제 일을 해야 한다.
+    // 단 lg 전면 오버레이 버튼(data-hero-cover)은 hero 전체를 덮어 터치가 늘 그 위에서 시작·종료된다 — 예외로 두지 않으면 lg 터치 스와이프가 사라진다.
+    if ((e.target as Element).closest('button:not([data-hero-cover]), a, input, label')) return;
     const t = e.changedTouches[0];
     // 거의 안 움직였으면 스와이프가 아니라 **탭**이다 — 그 배너가 가리키는 대회로 보낸다.
     // (click 이벤트를 따로 듣지 않는 이유: 스와이프 끝에도 click 이 따라와 오작동한다.)
@@ -724,7 +727,12 @@ function HeroSection({
     const intent = heroTouchIntent(t.clientX - s.x, t.clientY - s.y, slides.length);
     if (intent === 'next') go(safeIdx + 1);
     else if (intent === 'prev') go(safeIdx - 1);
-    else if (intent === 'tap') onSlideTap?.(slides[safeIdx]);
+    else if (intent === 'tap' && onSlideTap) {
+      // touchend 뒤에 같은 좌표로 합성 click 이 따라온다. 상세가 그 click 보다 먼저 그려지면(청크가 데워진 두 번째 탭부터)
+      // 손가락 아래로 온 '포스터 확대 보기' 가 click 을 받아 확대까지 열렸다. 탭은 여기서 끝낸다(마우스·키보드는 lg 버튼 onClick).
+      if (e.cancelable) e.preventDefault();
+      onSlideTap(slides[safeIdx]);
+    }
   };
 
   // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
@@ -841,7 +849,7 @@ function HeroSection({
         <button
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
-          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
+          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`} data-hero-cover
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />
       )}
