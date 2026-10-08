@@ -1,6 +1,6 @@
 // 토스트 등장·퇴장·성공 체크 모션 계약(2026-10-08 M04).
-// ① 퇴장에 쓰는 translate 유틸(Tailwind v4)은 transform 이 아니라 CSS `translate` 속성이다 — 전환 목록에 없으면
-//    퇴장 첫 프레임에 8px 순간이동한다(종전 결함). ② 성공 체크 그리기는 동작 줄이기에서 꺼지고 언마운트 때 취소된다.
+// ① 퇴장에 쓰는 translate 유틸(Tailwind v4)은 빌드에서 CSS `translate` 속성으로 나온다 — 전환 목록에 명시돼 있어야 한다.
+// ② 성공 체크 그리기는 동작 줄이기에서 꺼지고 언마운트 때 취소된다.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 

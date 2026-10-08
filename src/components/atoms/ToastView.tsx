@@ -78,8 +78,8 @@ function ToastItem({ message, variant, action, durationMs, onDismiss, k, onOpen,
       style={{
         ...(k ? { transform: `translateY(${-10 * k}px) scale(${1 - k / 20})`, transformOrigin: 'bottom', ...(k > 2 && { opacity: 0, pointerEvents: 'none' as const }) } : null),
         // ── 등장·퇴장 모션(2026-10-08 M04) — 인라인 스타일인 이유: 이 파일은 지연 청크라 첫 화면 CSS 예산 0B 다.
-        // 🔴 퇴장의 translate-y-2 는 Tailwind v4 에서 **`translate` 속성**이다(transform 아님). 종전 transition-[transform,opacity]
-        //   는 translate 를 전환하지 않아 퇴장 첫 프레임에 8px 아래로 **순간이동**한 뒤 흐려졌다. 세 속성을 다 전환한다.
+        // 퇴장의 translate-y-2 는 Tailwind v4 빌드에서 CSS `translate` 속성으로 나온다(transform 아님) — 전환 목록에 translate 를 명시한다.
+        //   (2026-10-08 390 실측: 종전 목록에서도 순간이동은 관측되지 않았다 — 명시는 계약을 소스에 고정하는 용도다.)
         // 등장(slide-up 8px)과 퇴장(8px 아래)이 같은 축·같은 곡선(--ease)이다. 등장 0.32s → 0.22s(작은 알림은 짧게 — 손가락 반응을 늦추지 않는다),
         //   퇴장 0.22s 는 제거 예약(수명−300ms)보다 80ms 먼저 끝나 꼬리가 잘리지 않는다. 겹쳐 쌓기 재배치(transform)만 --dur-panel.
         // 동작 줄이기: index.css 의 !important(애니메이션 none·전환 0.01ms)가 인라인보다 이긴다 → 효과 0.
