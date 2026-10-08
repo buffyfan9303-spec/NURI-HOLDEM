@@ -10,6 +10,8 @@
 // 조건: Pixel 7 · DPR 3 · CPU 4배 · 출발 판을 끝까지 스크롤한 뒤 150px 위(자동 숨김 하단바 복귀) · CDP 터치 110ms 홀드.
 // 음성 대조(2026-09-26 실행): B1 빌드 → ① 라이트 has_missing_content FAIL · B2 빌드 → 전부 PASS.
 //   ② 히트테스트는 `[data-pane-leaving]{pointer-events:auto}` 를 주입한 B2 에서 빨개진다(입력을 삼키는 떠나는 판).
+// 🔵 2026-10-08 8차 INSTANT-SWAP(src/lib/tabCover.ts) — 떠나는 판·복제본을 걷었다. ①②③(빠진 타일·입력·잔여물)은 그대로 지키고,
+//   ④⑤⑥ 의 '떠나는 판이 선다' 는 '서지 않는다' 로 뒤집었다(옛 판이 새 판 위에서 걷히는 겹침이 오너가 본 '블러·네모칸').
 // 실행: E2E_BASE_URL=http://localhost:4782 npx playwright test e2e/tab-handoff-gate.spec.ts
 // ⑤(2026-09-27) 로딩 중 탭 — 복제본이 떠나는 판의 늦은 변화가 아니라 실제 커밋에 맞춰 서는가. 6edb9738 빌드 FAIL(PC 사이드바 이른 복제본 · 모바일 메뉴 복제본 0).
 import type { CDPSession, Page } from '@playwright/test';
@@ -284,7 +286,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
   //             프레임 간격으로 정규화한다(차 ÷ 간격/16.7ms — 2026-10-03 L-3, 느린 러너가 같은 페이드를 6.2 로 찍던 것). 규칙은 e2e/_cutNorm.ts 머리말.
   //     missing — 트레이스 has_missing_content 0 · hit — 복제본이 서 있는 동안 본문 중앙 입력이 복제본에 닿지 않는다 · stuck — 정착 뒤 남은 것 0
   // 음성 대조(2026-09-26 실행): 9433f190 빌드(하위 탭 즉시 교체) → leave 0/N · cut 9~17 로 FAIL, SUB-HANDOFF 빌드 → PASS.
-  test('④ 하위 탭 — 떠나는 판이 서고 걷힌다 · 한 프레임 컷 없음 · 빠진 타일 0 · 입력은 새 판', async ({ page }) => {
+  test('④ 하위 탭 — 떠나는 판이 서지 않는다(한 프레임 교체) · 빠진 타일 0 · 입력은 새 판', async ({ page }) => {
     const cdp = await boot(page, 'dark');
     await page.evaluate(installFadeSpy);
     await page.evaluate(installAlignSpy);
@@ -372,11 +374,9 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         const al = await alignVerdict(page, id, nsig, pre, post, onset, d);
         aligned += al.measured; bad.push(...al.bad);
         rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${al.row}${hit ? ' hit=' + hit : ''}`);
-        if (total > 3) {
-          changed += 1;
-          if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 메인 탭과 다른 전환)`);
-          if (cut > 6) bad.push(`${id} 한 프레임 컷 ${cut.toFixed(1)}(> 6) — 판이 한 번에 바뀌었다`);
-        }
+        // 2026-10-08 8차 INSTANT-SWAP — 판 교체는 한 프레임이다. 옛 계약(떠나는 판이 서고 컷 ≤ 6)을 뒤집는다: 떠나는 판이 서면 실패.
+        if (total > 3) changed += 1;
+        if (lv > 0) bad.push(`${id} 떠나는 판이 ${lv}번 섰다 — 두 판이 겹쳐 '블러·네모칸' 으로 보인다(8차 INSTANT-SWAP)`);
         if (hit) bad.push(`${id} +40ms 본문 입력이 떠나는 판에 닿았다(${hit})`);
         if (stuck.n || stuck.swap) bad.push(`${id} 정착 뒤 남았다: 떠나는 판 ${stuck.n} · data-tab-swap ${stuck.swap}`);
         await page.waitForTimeout(300);
@@ -399,7 +399,6 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     console.log(`[handoff-sub] taps=${taps} changed=${changed} aligned=${aligned} missing=${missing.length}\n  ${rows.join('\n  ')}`);
     expect(tapsTr.length, '트레이스에서 탭 표식을 못 찾았다').toBe(taps);
     expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다(데이터·선택자 확인)').toBeGreaterThanOrEqual(6);
-    expect(aligned, '자리 판정(A)으로 잰 복제본이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
     expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다').toEqual([]);
     expect(bad).toEqual([]);
   });
@@ -448,7 +447,7 @@ async function armCommitWatch(page: Page, btnSel: string, text: string | null, i
 
 test.describe('TAB-HANDOFF-GATE ⑤ — 로딩 중 탭', () => {
   test.describe.configure({ timeout: 240_000 });
-  test('⑤ 로딩 중 탭 — 복제본은 떠나는 판의 늦은 변화가 아니라 실제 커밋에 맞춰, 한 번, 마지막 모습으로 선다', async ({ page }) => {
+  test('⑤ 로딩 중 탭 — 커밋은 일어나고 복제본은 한 번도 서지 않는다(8차 INSTANT-SWAP)', async ({ page }) => {
     const bad: string[] = []; const rows: string[] = [];
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -457,9 +456,8 @@ test.describe('TAB-HANDOFF-GATE ⑤ — 로딩 중 탭', () => {
       const w = await page.evaluate(() => (window as unknown as { __h5: { clones: { same: boolean; late: number }[]; committed: boolean } }).__h5);
       rows.push(`${id} committed=${w.committed} clones=${JSON.stringify(w.clones)}`);
       if (!w.committed) bad.push(`${id} 커밋을 못 봤다 — 누른 것이 판을 바꾸지 않았다(선택자·데이터 확인)`);
-      else if (w.clones.length !== 1) bad.push(`${id} 복제본 ${w.clones.length}개(1이어야 한다 — 0 이면 컷)`);
-      else if (!w.clones[0].same) bad.push(`${id} 복제본이 실제 커밋과 다른 때 섰다(늦은 데이터 도착을 커밋으로 오인)`);
-      else if (late && w.clones[0].late !== 1) bad.push(`${id} 복제본이 커밋 직전 모습이 아니다(늦은 도착 ${w.clones[0].late}/1)`);
+      // 2026-10-08 8차 INSTANT-SWAP — 떠나는 판 복제본을 걷었다. 늦은 도착(late)이 있어도 복제본은 0개여야 한다.
+      else if (w.clones.length) bad.push(`${id} 복제본 ${w.clones.length}개(0 이어야 한다 — 판 교체는 한 프레임${late ? ' · 늦은 도착 주입' : ''})`);
     };
     const mouse = async (x: number, y: number) => { await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(70); await page.mouse.up(); };
     const touch = async (x: number, y: number) => {
@@ -519,7 +517,7 @@ test.describe('TAB-HANDOFF-GATE ⑤ — 로딩 중 탭', () => {
 test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
   test.describe.configure({ timeout: 300_000 });
   for (const [w, scheme] of [[390, 'dark'], [390, 'light'], [360, 'dark'], [360, 'light']] as const) {
-    test(`⑥ 내 정보 ${w} ${scheme} — 떠나는 판이 서고 걷힌다 · 컷 없음 · 재마운트·재조회 0`, async ({ page }) => {
+    test(`⑥ 내 정보 ${w} ${scheme} — 떠나는 판이 서지 않는다(한 프레임 교체) · 재마운트·재조회 0`, async ({ page }) => {
       await page.setViewportSize({ width: w, height: 800 });
       let consentReads = 0;
       page.on('request', (r) => { if (r.method() === 'GET' && /\/rest\/v1\/legal_consents\?/.test(r.url())) consentReads += 1; });
@@ -605,11 +603,9 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
         const al = await alignVerdict(page, id, nsig, pre, post, onset, d);
         aligned += al.measured; bad.push(...al.bad);
         rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${al.row}${hit ? ' hit=' + hit : ''}`);
-        if (total > 3) {
-          changed += 1;
-          if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 다른 하위 탭과 다른 전환)`);
-          if (cut > 6) bad.push(`${id} 한 프레임 컷 ${cut.toFixed(1)}(> 6)`);
-        }
+        // 2026-10-08 8차 INSTANT-SWAP — 판 교체는 한 프레임이다. 옛 계약(떠나는 판이 서고 컷 ≤ 6)을 뒤집는다: 떠나는 판이 서면 실패.
+        if (total > 3) changed += 1;
+        if (lv > 0) bad.push(`${id} 떠나는 판이 ${lv}번 섰다 — 두 판이 겹쳐 '블러·네모칸' 으로 보인다(8차 INSTANT-SWAP)`);
         if (hit) bad.push(`${id} +40ms 본문 입력이 떠나는 판에 닿았다(${hit})`);
         if (stuck.n || stuck.swap) bad.push(`${id} 정착 뒤 남았다: 떠나는 판 ${stuck.n} · data-tab-swap ${stuck.swap}`);
         if (name === '보안' && readsAfterSec < 0) { await page.waitForTimeout(1500); readsAfterSec = consentReads; }
@@ -618,8 +614,7 @@ test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
       const same = await page.evaluate(() => { const d = (window as unknown as { __dash: Element & { __keep?: boolean } }).__dash; return !!d?.isConnected && d.__keep === true; });
       console.log(`[handoff-me ${w} ${scheme}] changed=${changed} aligned=${aligned} consentReads=${consentReads} (after first 보안 ${readsAfterSec})\n  ${rows.join('\n  ')}`);
       expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
-      expect(aligned, '자리 판정(A)으로 잰 복제본이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
-      expect(same, 'keep-alive: 대시보드 판이 다시 마운트됐다').toBe(true);
+        expect(same, 'keep-alive: 대시보드 판이 다시 마운트됐다').toBe(true);
       expect(readsAfterSec, '보안 탭 진입을 못 쟀다').toBeGreaterThanOrEqual(0);
       expect(consentReads, 'keep-alive: 첫 보안 진입 뒤 약관 이력을 다시 불렀다').toBe(readsAfterSec);
       expect(bad).toEqual([]);

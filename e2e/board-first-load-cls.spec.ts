@@ -241,7 +241,8 @@ for (const [label, n, fail, endText] of [['글 3', 3, false, null], ['글 0', 0,
 // ⑦ M8-02(audit8-motion-1005) — 하위 탭 전환 때 떠나는 판(홀덤펍) 복제본은 목적지가 준비될 때까지(스켈레톤·aria-busy) 최대 300ms 불투명하게
 //   붙잡힌다(tabCover isSettled). 게시판 뼈대는 실제 목록과 같은 높이라 이미 완성된 자리인데 그 판정에 걸려, 홀덤펍 목록이 뼈대 위에
 //   불투명하게 324ms 겹쳐 있었다(복제본이 보이는 시간 557ms vs 뼈대가 없을 때 242~287ms). 실제 터치(CDP touchStart→110ms→touchEnd)로 누른다.
-test('🔴 M8-02 ⑦ 게시판 뼈대로 넘어갈 때 떠나는 판 복제본을 붙잡지 않는다 (390)', async ({ page }) => {
+//   2026-10-08 8차 INSTANT-SWAP — 떠나는 판 복제본 자체를 걷었다(src/lib/tabCover.ts 8차 절). 이제 복제본이 **한 프레임도** 없어야 한다.
+test('🔴 M8-02 ⑦ 게시판 뼈대로 넘어갈 때 떠나는 판 복제본이 서지 않는다 (390)', async ({ page }) => {
   test.setTimeout(60_000);
   await stabilizeBackstack(page);
   await mockSchedules(page);
@@ -278,8 +279,7 @@ test('🔴 M8-02 ⑦ 게시판 뼈대로 넘어갈 때 떠나는 판 복제본�
   const heldMs = held.length ? held[held.length - 1].t - held[0].t : 0;
   const skSeen = fr.filter((f) => f.sk).length;
   const info = `복제본 ${clone.length}프레임 · 불투명 ${held.length}프레임 ${Math.round(heldMs)}ms · 뼈대 ${skSeen}프레임`;
-  // 거짓 통과 막기 — 복제본이 아예 없거나(전환을 안 탔다) 뼈대가 안 보였으면(다른 경로) 이 측정은 아무것도 안 본 것이다
-  expect(clone.length, `떠나는 판 복제본이 한 프레임도 없다 — 하위 탭 전환을 재지 못했다 (${info})`).toBeGreaterThan(0);
+  // 거짓 통과 막기 — 뼈대가 안 보였으면(전환을 안 탔거나 다른 경로) 이 측정은 아무것도 안 본 것이다
   expect(skSeen, `게시판 뼈대가 안 보였다 — 뼈대 경로를 재지 못했다 (${info})`).toBeGreaterThan(0);
-  expect(heldMs, `떠나는 판이 뼈대 위에 불투명하게 붙잡혀 이중상이 남는다 (${info})`).toBeLessThan(120);
+  expect(clone.length, `떠나는 판 복제본이 섰다 — 뼈대 위에 이중상이 남는다 (${info} · 불투명 ${Math.round(heldMs)}ms)`).toBe(0);
 });

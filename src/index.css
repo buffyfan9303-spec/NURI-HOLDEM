@@ -1840,7 +1840,7 @@ main { max-width: 48rem; margin-inline: auto; }
    PC 컷인(vt-pc-in)·html[data-vt-dir] 분기 — startViewTransition 호출이 0(2026-09-26 전면 제거,
    transitionDevices.contract.test.ts (a))이라 `html[data-vt-dir]` 도 JS 에서 전혀 안 붙는 죽은 속성이었다.
    ::view-transition-old/new(root) 는 실제 View Transition 이 돌 때만 생기는 UA 의사요소라 함께 죽은 규칙.
-   판 전환 모션은 이제 src/lib/tabCover.ts(PANE-HANDOFF, 아래 [data-pane-leaving])가 전담한다. */
+   판 전환은 이제 src/lib/tabCover.ts 가 맡는다(2026-10-08 8차 INSTANT-SWAP — 한 프레임 교체 + 아래 스왑 프레임 정적화). */
 
 /* ── 메인 탭 판 교체(PANE-HANDOFF, 2026-09-26) — src/lib/tabCover.ts 6차 절 ─────────────────────────
    오너: "하단 메뉴로 메인 탭을 옮기면 모바일에서 본문이 검은색이 됐다가 올라온다."
@@ -1859,35 +1859,8 @@ main { max-width: 48rem; margin-inline: auto; }
 [data-swap-freeze] [data-menu-leave] {
   animation-play-state: paused;
 }
-/* ② 떠나는 판 — React 가 방금 준 display:none(inline)을 페이드 동안만 이기고, 떠나기 직전 화면 자리(--leave-*)에 fixed 로 선다.
-   새 판(in-flow)은 그 **아래**에서 제 모습으로 래스터된다. opacity .999 = 가려진 새 판 타일도 '보이는 타일'로 래스터하게 하는 값
-   (1 이면 가림 판정으로 새 판 래스터를 미룬다). will-change 는 퇴장 페이드가 시작될 때 층을 새로 만들지 않게 미리 세운다.
-   배경 = 지면 그림 한 벌(--grad-surface, fixed — body::before 와 같은 값) — 투명이면 새 판 글자가 첫 프레임부터 비친다.
-   z-35: 헤더·하단바(z-50)·FAB(z-40) 아래, 본문 위 — 새 판의 sticky 바(커뮤니티 섹션 바 z-30)보다도 위여야 대기 동안 옛 본문 위에
-   새 판 바가 겹치지 않는다(design-reviewer 실측 → 30 에서 35). 입력은 새 판이 받는다(pointer-events none).
-   떠나기 직전 화면에 걸쳐 있던 사업자 푸터는 복제본이 같은 규칙으로 선다(판 밖 형제라 새 판을 따라 내려가기 때문).
-   ⚠ 새 판에는 opacity/transform/filter 를 걸지 않는다(§0-a25 · e2e/mobile-tab-transition.spec.ts R3). */
-[data-pane-leaving] {
-  display: block !important;
-  position: fixed !important;
-  top: var(--leave-top);
-  left: var(--leave-left);
-  width: var(--leave-width);
-  margin: 0 !important;
-  z-index: 35;
-  pointer-events: none;
-  opacity: 0.999;
-  will-change: opacity;
-  background-color: rgb(var(--surface-base));
-  background-image: var(--grad-surface); /* body::before 와 같은 한 장(2026-10-04 블룸 삭제) */
-  background-attachment: fixed;
-}
-/* 판이 화면 아래까지 안 닿으면(짧은 판 · 문서 끝) 판 끝~푸터 사이 틈으로 새 판이 먼저 비친다 — 떠나는 판을 화면 바닥까지 늘려
-   그 틈도 지면 그림으로 덮는다(푸터 복제본은 DOM 순서상 그 위에 선다). */
-.tab-pane[data-pane-leaving] { min-height: calc(100lvh - var(--leave-top)); }
-/* 자손이 pointer-events:auto 를 스스로 켜면(캐러셀 버튼 등) 부모의 none 을 이긴다 — 떠나는 판의 버튼이 탭을 가로챘다
-   (tab-handoff-gate ② 실측: BUTTON@home LEAVING). 퇴장 동안은 자손까지 전부 끈다. */
-[data-pane-leaving] * { pointer-events: none !important; }
+/* ② (삭제됨 2026-10-08 8차 INSTANT-SWAP) 떠나는 판 [data-pane-leaving] 규칙 — 판 교체는 한 프레임이다(src/lib/tabCover.ts 8차 절).
+   옛 판이 새 판 위에서 걷히는 동안 두 판이 겹쳐 '블러'·'네모칸' 으로 보였다(오너 2026-10-08). */
 
 /* ── 모션 2단계 — 애플 웹의 '등장감'과 손맛 ─────────────────────────────────
    ① 스크롤 리빌(.reveal): 뷰포트에 들어오는 섹션이 살짝 떠오르며 나타난다.

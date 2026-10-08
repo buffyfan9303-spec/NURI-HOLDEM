@@ -1241,9 +1241,9 @@ export default function App() {
     //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다.)
     //   `_dir` 은 뒤로가기 경로(commitTab(t,'back'))의 호출 모양을 지키려고 남긴다 — 방향 연출은 없다.
     void _dir;
-    // 6차 PANE-HANDOFF(2026-09-26) — 떠나는 판의 화면 자리를 커밋 **전에** 적고 스왑 프레임 전환을 끈다(src/lib/tabCover.ts 6차 절).
-    //   커밋 뒤 layout effect 의 handOffPane 이 그 판을 제자리에 세웠다가 새 판 첫 프레임 뒤 걷는다.
-    notePaneLeaving(activeTabRef.current, t, !seenTabs.has(t));
+    // 커밋 **전에** 스왑 프레임 전환을 끈다(src/lib/tabCover.ts). 8차 INSTANT-SWAP(2026-10-08) — 판은 한 프레임에 바뀌고 떠나는 판 페이드는 없다.
+    //   커밋 뒤 layout effect 의 handOffPane 이 새 판 첫 프레임 다음에 정적화를 푼다.
+    notePaneLeaving(activeTabRef.current, t);
     if (seenTabs.has(t)) {
       setActiveTab(t);
       return;
@@ -1337,13 +1337,9 @@ export default function App() {
     //     '사용자가 확 긁었다' 로 읽지 않게 하는 기존 표식이고(2026-09-05), `notifyScrollNow` 는
     //     **예약된 옛 rAF 를 취소하고** 지금 Y 를 구독자 전원에게 즉시 준다.
     //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
-    // 6차 PANE-HANDOFF — 떠나는 판을 떠나기 직전 자리에 세우고(새 판 **위**, opacity .999), 새 판 첫 프레임 다음에 떠나는 판만 걷는다.
+    // 8차 INSTANT-SWAP(2026-10-08) — 새 판 첫 프레임 다음에 스왑 정적화를 푼다(떠나는 판 페이드는 걷었다 — src/lib/tabCover.ts 8차 절).
     //   새 판(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록·R3 계약 그대로.
-    // 🔴 M3-02(2026-10-04) — **아래 scrollTo 보다 먼저** 세운다. scrollTo 가 이 커밋의 스타일·레이아웃을 동기로 강제하는데,
-    //   그때 떠나는 판은 React 가 방금 준 display:none 이라 레이아웃 트리가 통째로 버려졌다가, 뒤이어 data-pane-leaving(display:block)
-    //   으로 다시 지어졌다(CPU4 트레이스: 떠나는 판 610요소 스타일 재계산 + 629객체 재배치가 같은 클릭 작업에 한 벌 더).
-    //   먼저 세우면 떠나는 판은 display:none 을 한 번도 거치지 않고 제자리 fixed 로만 바뀐다. 읽는 값은 이벤트 때 잰 자리뿐이라 순서는 무관하다.
-    handOffPane(activeTab);
+    handOffPane();
     // CONNECTIVITY-ALL 2 — 트레일 back 으로 돌아온 탭만 떠날 때 위치로(그 외는 맨 위). 이 layout effect 안이라
     //   첫 페인트 전에 정해진다.
     const back = backScrollRef.current;
