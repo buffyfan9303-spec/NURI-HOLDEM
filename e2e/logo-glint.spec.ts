@@ -8,17 +8,23 @@
 // ③ 만 있으면 글린트가 통째로 고장 나도 초록이다 — 그래서 ① 이 "실제로 생겼고 실제로 움직였다" 를 먼저 단언한다.
 // 음성 대조(2026-10-08): NuriClassicLogo 의 reduced-motion 판정 줄을 지우면 ③ 이, LogoGlint 의 setOn(false) 타이머를 지우면 ② 가 실패했다.
 // ④ 는 입력 양보 이전 빌드(90a36485)에서 3/3 실패(남은 노드 1), 수정 빌드에서 통과.
+// ① 의 셸 셀렉터(2026-10-09): 글린트 재생 구간에만 헤더·로고·탭바를 각각 1px 옮긴 빌드 사본에서 2/2 실패, 옮기지 않은 사본에서 통과.
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 
 const GLINT = '[data-testid="logo-glint"]';
 
-/** 홈 본문은 데이터가 들어오며 자라므로 빼고, 셸(헤더·헤더 버튼·로고·탭바)만 잰다. */
-const shellBoxes = (page: Page) => page.evaluate(() =>
-  [...document.querySelectorAll('header, header button, [aria-label="NURI HOLDEM"], nav')].map((e) => {
+/** 셸 헤더·하단 탭바 — 앱이 선언한 표지로만 고른다.
+ *  ⚠ 맨 `header`·`nav` 는 본문에도 있다(일정 섹션 HEADER · BusinessFooter 법정 링크 nav). 오늘 일정이 스켈레톤을 대신하며
+ *    푸터 nav 가 y 909→688 로 올라오자 글린트와 무관하게 '셸 상자 불변' 이 깨졌다(2026-10-09 CI, PR #244·#247 같은 줄). */
+const HEADER = '[data-stack-header]';
+const TABBAR = 'nav[aria-label="하단 내비게이션"]';
+/** 홈 본문은 데이터가 들어오며 자라므로 빼고, 셸(헤더·헤더 버튼·로고·탭바·탭 버튼)만 잰다. */
+const shellBoxes = (page: Page) => page.evaluate((sel) =>
+  [...document.querySelectorAll(sel)].map((e) => {
     const r = e.getBoundingClientRect();
     return [r.x, r.y, r.width, r.height].join(',');
-  }));
+  }), [HEADER, `${HEADER} button`, `${HEADER} [aria-label="NURI HOLDEM"]`, TABBAR, `${TABBAR} button`].join(', '));
 
 /** 보이는 로고 글린트의 그라디언트 이동량(SMIL animVal). 시작 전 null. */
 const glintX = (page: Page) => page.evaluate(() => {
@@ -33,6 +39,9 @@ test.describe('헤더 로고 글린트', () => {
     await page.goto('/');
     await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
     const before = await shellBoxes(page);
+    // 셀렉터가 셸을 실제로 잡았는가 — 못 잡으면 빈 배열끼리 같아 아래 불변 단언이 거짓 통과한다
+    await expect(page.locator(HEADER)).toHaveCount(1);
+    await expect(page.locator(TABBAR)).toHaveCount(1);
     // 시작 전 띠는 상자(x 9.18~) 밖에 있어야 한다 — 기본값이 비면 begin 전 항등 위치(다이아 한가운데)에 멈춰 보였다(PR #239 검토 P2)
     expect(await page.evaluate(() => (document.querySelector('[data-testid="logo-glint"] linearGradient') as SVGLinearGradientElement)
       .gradientTransform.baseVal.getItem(0).matrix.e)).toBeLessThanOrEqual(-18);
@@ -106,9 +115,9 @@ test.describe('헤더 로고 글린트', () => {
       await expect.poll(() => asked, { timeout: 10_000 }).toBeGreaterThan(0); // 실패 경로를 실제로 탔다
       await page.waitForTimeout(1_500);
       await expect(page.getByText('일시적인 문제가 발생했습니다')).toHaveCount(0);
-      await expect(page.locator('header').first()).toBeVisible();
+      await expect(page.locator(HEADER)).toBeVisible();
       await expect(page.getByRole('img', { name: 'NURI HOLDEM' }).filter({ visible: true })).toHaveCount(1);
-      await expect(page.locator('nav').filter({ visible: true }).first()).toBeVisible();
+      await expect(page.locator(TABBAR)).toBeVisible(); // 맨 nav 는 본문 푸터 nav 도 잡아 탭바가 없어도 통과했다
       await expect(page.locator(GLINT)).toHaveCount(0);
     });
   }
