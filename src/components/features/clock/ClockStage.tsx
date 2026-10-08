@@ -22,6 +22,7 @@ import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
 import type { ClockStageDecor } from './clockStageDecor';
+import { levelCueKey, useLevelCue, LEVEL_CUE_GLOW } from './levelCue';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, PRIZE_BAND_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
@@ -625,15 +626,20 @@ function PausedLabel({ g }: { g: ClockState }) {
  * 초당 갱신이 필요 없다(레벨은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
  * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
+/** M07 빛 판 — 글자 상자 안(inset-0, 레이아웃 0)·평소 투명. -z-10 은 부모 p 의 isolate 안에서만 글자 뒤로 간다. */
+const CUE_CLS = 'pointer-events-none absolute inset-0 -z-10 rounded-[0.5em] opacity-0';
 function LevelLine({ g }: { g: ClockState }) {
   useClockSecond(g);   // C4 — 아래 'K9' 주석 참고(lib/clockTick): DB 쓰기 없이 레벨 경계를 지나도 매초 실효 레벨을 다시 읽는다
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const isBreak = lvls[eff.index]?.kind === 'break';
+  // M07 — 레벨 경계에서 한 번만 글자 뒤 빛(levelCue.ts). relative isolate: 빛 판(-z-10)이 이 줄 안에서만 글자 뒤에 깔린다(레이아웃 0).
+  const cue = useLevelCue<HTMLSpanElement>(levelCueKey(g.venueId, g.gameSeq, eff.index));
   return (
-    <p data-testid="clk-level" className="whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
+    <p data-testid="clk-level" className="relative isolate whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
       style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #D9B25A)', ...(usePlate() ? PLATE : null) }}>
       {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
+      <span ref={cue} aria-hidden data-testid="clk-level-cue" className={CUE_CLS} style={LEVEL_CUE_GLOW} />
     </p>
   );
 }
@@ -798,6 +804,9 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   const lv = lvls[eff.index];
   const isBreak = lv?.kind === 'break';
   const next = (() => { for (let i = eff.index + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
+  // M07 — LevelLine 과 같은 키·같은 틱. CURRENT 블라인드(또는 BREAK) 뒤에 한 번만 빛이 번진다(숫자 크기·위치 불변).
+  const cue = useLevelCue<HTMLSpanElement>(levelCueKey(g.venueId, g.gameSeq, eff.index));
+  const cueGlow = <span ref={cue} aria-hidden data-testid="clk-cur-cue" className={CUE_CLS} style={LEVEL_CUE_GLOW} />;
   const num = (n: number) => n.toLocaleString();
   // 글자 크기를 **칸 폭에도** 묶는다(2026-09-13 검증자 실측 — 폰트 ON 에서 15,000/30,000 이 1920×1080 에서 NEXT 와 8px 겹치고
   //   프라이즈 열을 30px 침범, 200K/400K 는 99px 겹침·세로 TV 68px 잘림. 폴백 폰트에서도 6자리는 24px 겹치던 기존 결함).
@@ -837,17 +846,17 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
       <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center border-r border-white/[0.07] px-[2cqmin]">
         <p className={`${LABEL} ${LABEL_SIZE}`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
-          <p className="whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
-            {lv?.label || 'BREAK'}
+          <p className="relative isolate whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
+            {cueGlow}{lv?.label || 'BREAK'}
           </p>
         ) : (
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
             {/* data-testid: clock-blinds-fit.spec 앵커 — 예전엔 `.clk-cols .whitespace-nowrap` 의 0·1번째를 CURRENT·NEXT 로 잡았는데
                 2026-09-19 LevelLine(whitespace-nowrap)이 중앙 열에 들어오며 0번째가 LEVEL 이 되어 10건이 거짓 실패했다. */}
-            <p data-testid="clk-cur-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums"
+            <p data-testid="clk-cur-blinds" className="relative isolate whitespace-nowrap font-extrabold leading-none tabular-nums"
               style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #D9B25A)' }}>
-              {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
+              {cueGlow}{lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
                 행 높이는 부모가 고정하므로 이 줄의 유무가 타이머를 밀지 않는다. */}
