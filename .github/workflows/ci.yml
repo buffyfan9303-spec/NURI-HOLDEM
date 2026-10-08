@@ -214,7 +214,9 @@ jobs:
   ci-ok:
     name: build-and-e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    # 2026-10-08: 55→120. 집계 잡은 실행 시작부터 떠서 e2e 조각을 폴링한다 — PR 9개가 몰려 조각이 러너를 기다리는 동안
+    #   55분에 먼저 취소됐다(#230·#231·#233·#235, 조각은 전부 pass). 대기 시간까지 덮도록 늘린다.
+    timeout-minutes: 120
     permissions:
       actions: read
     steps:
