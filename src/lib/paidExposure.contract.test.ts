@@ -11,6 +11,7 @@ const PUBLIC_FILES = [
   'src/components/features/ScheduleCard.tsx',
   'src/components/features/ScheduleDetailModal.tsx',
   'src/components/features/ScheduleTable.tsx',
+  'src/components/features/VenuePage.tsx',
   'src/lib/scheduleSort.ts',
   'src/lib/homeRail.ts',
 ];
