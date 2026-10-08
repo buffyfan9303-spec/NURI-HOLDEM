@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
 import { reloadBootTab, rememberTab, reloadSaved, saveForReload, ME_OPEN_KEY, ME_TAB_KEY } from './lib/reloadTab';
-import { parseStoreLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
+import { parseStoreLink, parseVenueLink, needsStoreAccess, type StoreDeepSection } from './lib/notifLink';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -2359,7 +2359,16 @@ export default function App() {
   useEffect(() => {
     const apply = () => {
       const code = readGtoHash(window.location.hash);
-      if (!code) { setGtoInit(null); return; }
+      if (!code) {
+        // 깨진 공유 링크(#gto=% 등 — 파서가 null 을 돌린다, #221)는 주소창에서 걷고 한 줄 알린다.
+        //   남겨 두면 새로고침·뒤로가기마다 같은 무반응이 되풀이된다.
+        if (window.location.hash.startsWith('#gto=')) {
+          try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* noop */ }
+          toast.show('공유 링크가 깨져 열 수 없습니다', 'info');
+        }
+        setGtoInit(null);
+        return;
+      }
       const { hero, villain, board } = decodeSpot(code);
       // ⚠ 해시는 '소비하는 즉시' 그 항목에서 걷어낸다(2026-08-28, ToolsPanel #tool= 과 같은 사고).
       //   패널이 그 위에 뒤로가기 겹(history 항목)을 하나 밀기 때문에, 여기 남겨 두면
@@ -2372,7 +2381,7 @@ export default function App() {
     apply();
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
-  }, []);
+  }, [toast]); // toast 는 안정 참조(ToastContext) — 다시 돌아도 해시는 이미 걷혀 있다
   const closeGto = useCallback(() => {
     setGtoInit(null);
     if (window.location.hash.startsWith('#gto=')) {
@@ -2478,7 +2487,8 @@ export default function App() {
     } else ptrSettle(-52, '0');
   };
   // 실패를 삼키면 '등록된 홀덤펍이 없습니다'·'결과가 없습니다'(빈 상태)로 위장된다 — 최소한 실패했다고 말한다
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); setVenuesErr(null); }).catch((e: unknown) => { setVenuesErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); }); }, [toast]);
+  // 받은 목록을 돌려준다(실패면 null — 안내 토스트는 여기서 이미 띄운다). 알림 라우터가 '방금 생긴 그룹' 판정에 쓴다.
+  const reloadVenues    = useCallback(() => getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); setVenuesErr(null); return v; }).catch((e: unknown) => { setVenuesErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); return null; }), [toast]);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsLoaded(true); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
@@ -3409,11 +3419,15 @@ export default function App() {
     if (sm) { openScheduleById(sm[1], opts); return; }
     // /community/:venueId — 목록에 없으면(문 닫음·삭제) 무반응으로 끝나던 자리다(F09 와 같은 원칙).
     //   venues 가 아직 로드 전이면 판정을 미루고 낙관적으로 연다(로드되면 VenuePage 가 채운다).
-    const cm = link.match(/^\/community\/(.+)$/);
-    if (cm) {
-      const vid = cm[1];
+    //   '/?venue=<id>'(그룹 알림 3종 — R12-01)도 같은 목적지다. 해석은 notifLink.parseVenueLink 한 곳.
+    const vid = parseVenueLink(link);
+    if (vid) {
       if (venuesLoaded && !venues.some((v) => v.id === vid)) {
-        toast.show('삭제되었거나 찾을 수 없는 매장입니다', 'info');
+        // 목록이 알림보다 낡았을 수 있다 — 방금 승인된 그룹은 부팅 때 받은 목록에 없다. 한 번 다시 받아 보고 판정한다.
+        reloadVenues().then((list) => {
+          if (list?.some((v) => v.id === vid)) startTransition(() => setOpenVenueId(vid));
+          else if (list) toast.show('삭제되었거나 찾을 수 없는 매장입니다', 'info');
+        });
       } else {
         startTransition(() => setOpenVenueId(vid));
       }
@@ -3491,7 +3505,7 @@ export default function App() {
     if (!link && linkedType) { toast.show('삭제되었거나 찾을 수 없는 게시글·매장입니다', 'info'); return; }
     if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded]);
+  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded, reloadVenues]);
 
   // ⚠ N04: 매장 Q&A·요강 댓글도 게시글 댓글과 **같은 계약**이다 — 성공을 기다려 돌려주고, 실패는 던진다.
   //   입력창을 비울지 말지는 CommentThread 가 이 Promise 로 판단한다.
