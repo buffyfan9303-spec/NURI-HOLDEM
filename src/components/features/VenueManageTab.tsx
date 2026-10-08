@@ -1495,10 +1495,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               </div>
             )}
             {/* E3 M-1 — 레일 밖 메뉴의 인증 등급 배너(대시보드는 자기 판 안에 따로 그린다). 메뉴마다 새로 마운트하면 조회가 끝날 때
-                배너가 늦게 생겨 판 안이 밀린다 — 한 벌을 계속 마운트해 두고 레일 메뉴에서는 그리지만 않는다(off). */}
+                배너가 늦게 생겨 판 안이 밀린다 — 한 벌을 계속 마운트해 두고 레일 메뉴에서는 그리지만 않는다(off).
+                11회차 M11-02(2026-10-08) — 새로고침 직후엔 첫 조회가 끝날 때 배너가 끼어들어 본문이 72px 밀렸다(1440 5/5) → 대시보드처럼 reserve. */}
             {venueId && isOwner && (
               <div className="empty:hidden" style={renderSection === 'settings' ? { maxWidth: READ_W } : undefined}>
-                <VenueVerificationCard venueId={venueId} showVerification part="grade"
+                <VenueVerificationCard venueId={venueId} showVerification part="grade" reserve
                   off={!!dItem?.locked || renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher'} />
               </div>
             )}
