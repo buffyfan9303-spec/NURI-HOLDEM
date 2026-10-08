@@ -82,7 +82,7 @@
     "rollup-plugin-visualizer": "^7.1.1",
     "schema-dts": "^2.0.0",
     "secretlint": "^13.0.5",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "supabase": "^2.115.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
