@@ -13,7 +13,7 @@ import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats, composeLiveStats,
   countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
-  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, clockOwnerKey, type ClockLevelSnapshot,
+  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, clockOwnerKey, undoSkippedText, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, getVenueClocks, effectiveLevel,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
@@ -658,7 +658,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     return true;
   };
   // H03-06 후속(2026-10-08) — 쓰지 않은 것을 말없이 넘기면 업주는 되돌린 줄 안다(A 는 정지 그대로). 토스트는 5초간 남아 있어 B 에서도 눌린다.
-  const undoSkipped = () => toast.show('다른 게임으로 옮겨 실행취소하지 않았어요. 그 게임 클락에서 다시 조작해 주세요', 'info');
+  //   매장이 바뀐 경우는 '다른 매장' 으로 말한다(2026-10-09) — 문구 판정은 api/clock 의 undoSkippedText 한 곳.
+  const undoSkipped = (owner: string) => toast.show(undoSkippedText(owner, stateRef.current), 'info');
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -905,7 +906,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       persist({ running: false, remainingMs: frozen, endsAt: null });
       toast.show('클락을 일시정지했어요. 손님 화면에도 바로 반영됩니다', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: true, endsAt: new Date(now() + frozen).toISOString() })) undoSkipped(); } },
+        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: true, endsAt: new Date(now() + frozen).toISOString() })) undoSkipped(owner); } },
       });
     } else {
       const ms = Math.max(0, live.remainingMs || computeRemaining(live));
@@ -913,7 +914,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       persist({ running: true, endsAt: new Date(now() + ms).toISOString() });
       toast.show('클락을 재개했어요', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: false, remainingMs: ms, endsAt: null })) undoSkipped(); } },
+        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: false, remainingMs: ms, endsAt: null })) undoSkipped(owner); } },
       });
     }
   };
@@ -928,10 +929,11 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const undoLevel = () => {
     if (!levelUndo) return;
     // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원. 다른 게임으로 넘어갔으면 쓰지 않는다(H03-06).
-    const done = persistFor(levelUndoOwnerRef.current, levelUndoPatch(levelUndo));
+    const undoOwner = levelUndoOwnerRef.current;
+    const done = persistFor(undoOwner, levelUndoPatch(levelUndo));
     setLevelUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    if (!done) { undoSkipped(); return; }
+    if (!done) { undoSkipped(undoOwner); return; }
     toast.show('레벨 이동을 되돌렸습니다. 남은 시간까지 복원', 'info');
   };
   const setLevel = (delta: number) => {

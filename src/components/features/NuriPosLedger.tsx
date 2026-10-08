@@ -40,7 +40,7 @@ import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffS
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
-import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
+import { ledgerStartClockConfig, sessionEarlyOf, sessionEarlyBasis, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
@@ -3262,8 +3262,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       //   clockPatchFromSchedule(linkedSched) · withDerivedEarly 가 그 안에서 돈다(포스터 등록 기준 — 클락 #1).
       const cfg = ledgerStartClockConfig(baseCfg, linkedSched, inheritClockRef.current.patch,
         { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
-      const early = sessionEarlyOf(cfg);
-      earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin; earlyTiers = early.earlyTiers;
+      // H03-08 후속(2026-10-09) — 마운트 뒤 클락이 시작·진행됐으면(최신 행이 protect) 클락은 아래에서 덮이지 않는다.
+      //   그때 세션 얼리를 폼 cfg 로 만들면 장부 자동 얼리와 TV 얼리가 갈린다 → 그 클락 설정 한 벌로 계산한다(읽기 실패면 예전대로 cfg).
+      const earlyCfg = basisErr ? cfg : sessionEarlyBasis(basis, base.sessionDate, cfg);
+      const earlyFromClock = earlyCfg !== cfg;
+      const early = sessionEarlyOf(earlyCfg);
+      earlyDMin = early.earlyDoubleMin; earlySMin = early.earlySingleMin; earlyTiers = early.earlyTiers;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
       //   'paused' 로 읽어 시작도 안 한 대회가 TV 에 PAUSED 로 뜨고, '계속하기' 를 누르면 endsAt=now 로 1레벨이 통째로 건너뛰었다.
       // 🔴 2026-09-17: 여기서 쓰던 `clockState` 는 이 폼이 **마운트될 때 한 번** 읽은 스냅샷이다(:2185, 구독 없음).
@@ -3293,7 +3297,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           const action = clockStartAction(fresh, base.sessionDate);
           const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '', base.sessionDate);
           if (!row) {
-            formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
+            formToast.show(earlyFromClock
+              ? '진행 중인 클락이 있어 클락 설정은 덮어쓰지 않고, 장부 얼리를 그 클락 설정에 맞췄습니다'
+              : '진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
             return;
           }
           await saveClockState(row);
