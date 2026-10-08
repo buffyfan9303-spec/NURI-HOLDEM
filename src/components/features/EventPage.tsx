@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import BusinessFooter from './BusinessFooter';
+import EventVenueLogo from './EventVenueLogo';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -307,9 +308,12 @@ function Hero({ board, left, total, user, onLogin, av }: {
       <div aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent-400/15 blur-2xl" />
 
       <div className="relative flex items-center gap-2.5">
-        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
-          <Icon name="gift" size={17} />
-        </span>
+        {/* 참여권 매장 로고(2026-10-09) — 선물 타일과 **같은 상자**(h-9 w-9)에 둥글게. 없거나 못 불러오면 선물 타일 그대로. */}
+        <EventVenueLogo url={board.brand?.imageUrl} className="h-9 w-9 shrink-0 rounded-full">
+          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
+            <Icon name="gift" size={17} />
+          </span>
+        </EventVenueLogo>
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
           <h2 className="line-clamp-2 break-keep text-base font-bold leading-tight text-ink-primary">{board.title}</h2>

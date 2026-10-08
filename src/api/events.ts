@@ -42,6 +42,32 @@ export interface EventBoard {
   totalByTier: Record<string, number>;
   /** 등급별 이용권 장수('none' = 0) */
   voucherByTier: Record<string, number>;
+  /** 참여권 매장 로고 — event_board 응답에는 없다. getEventBoard 가 붙인다(eventBrand). */
+  brand?: EventBrand | null;
+}
+
+/** 이벤트의 매장 로고 = **참여권 매장**(event_campaigns.ticket_venue_id)의 venues.image_url(오너 2026-10-09 "로티아레나 출석 이벤트에 로티아레나 로고").
+ *  null = 모든 매장 출석 판 · 매장 사진 없음 · 손님에게 숨긴 매장(venues RLS 가 0행) · 조회 실패 — 화면은 로고 없이 종전 그대로다. */
+export interface EventBrand { name: string; imageUrl: string }
+// FK 가 둘(venue_id·ticket_venue_id)이라 컬럼 이름으로 고른다. 새 RPC·칸 없이 이미 열린 읽기(event_campaigns·venues anon select)만 쓴다.
+const BRAND_SELECT = 'v:venues!ticket_venue_id(name,image_url)';
+const brandOf = (v: unknown): EventBrand | null => {
+  const r = v as { name?: unknown; image_url?: unknown } | null | undefined;
+  return typeof r?.image_url === 'string' && r.image_url ? { name: String(r.name ?? ''), imageUrl: r.image_url } : null;
+};
+const brands = new Map<string, Promise<EventBrand | null>>();
+/** slug 의 로고 — 세션에 한 번만 묻는다(매장 사진은 거의 안 바뀐다). **던지지 않는다** — 로고 때문에 판이 안 뜨면 안 된다.
+ *  실패는 기억하지 않는다(다음 조회가 다시 묻는다). */
+export function eventBrand(slug: string): Promise<EventBrand | null> {
+  let p = brands.get(slug);
+  if (!p) {
+    p = Promise.resolve()
+      .then(() => supabase.from('event_campaigns').select(BRAND_SELECT).eq('slug', slug).maybeSingle())
+      .then(({ data, error }) => { if (error) throw error; return brandOf((data as { v?: unknown } | null)?.v); })
+      .catch(() => { brands.delete(slug); return null; });
+    brands.set(slug, p);
+  }
+  return p;
 }
 
 export interface OpenResult {
@@ -206,26 +232,30 @@ export interface EventListItem {
   slug: string; title: string; subtitle: string | null;
   state: ReturnType<typeof evaluateEvent>['state'];
   startsAt: string | null; endsAt: string | null;
+  /** 참여권 매장 로고(eventBrand 와 같은 값) — 같은 요청에 끼워 받는다 */
+  brand?: EventBrand | null;
 }
 export async function listEvents(nowMs: number = eventNow()): Promise<EventListItem[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('event_campaigns')
-    .select('slug,title,subtitle,status,hidden_at,starts_at,ends_at')
+    .select(`slug,title,subtitle,status,hidden_at,starts_at,ends_at,${BRAND_SELECT}`)
     .neq('status', 'draft')
     .order('starts_at', { ascending: false, nullsFirst: false })
     .limit(30);
   if (error) throw new Error(error.message);
   const rank: Record<string, number> = { live: 0, scheduled: 1 };
   const out: EventListItem[] = [];
-  for (const r of (data ?? []) as (EventCampaignRow & { title: string; subtitle: string | null })[]) {
+  for (const r of (data ?? []) as (EventCampaignRow & { title: string; subtitle: string | null; v?: unknown })[]) {
     if (!isEventSlug(r?.slug)) continue;
     const { state } = evaluateEvent(
       { status: r.status, hiddenAt: r.hidden_at ?? null, startsAt: r.starts_at, endsAt: r.ends_at },
       nowMs,
     );
     if (state === 'hidden') continue;   // 운영자가 내린 판은 목록에 없다
-    out.push({ slug: r.slug, title: r.title, subtitle: r.subtitle ?? null, state, startsAt: r.starts_at, endsAt: r.ends_at });
+    const brand = brandOf(r.v);
+    brands.set(r.slug, Promise.resolve(brand)); // 목록에서 판을 열면 로고를 다시 묻지 않는다
+    out.push({ slug: r.slug, title: r.title, subtitle: r.subtitle ?? null, state, startsAt: r.starts_at, endsAt: r.ends_at, brand });
   }
   return out.sort((a, b) => {
     const ra = rank[a.state] ?? 2, rb = rank[b.state] ?? 2;
@@ -241,9 +271,10 @@ export async function listEvents(nowMs: number = eventNow()): Promise<EventListI
 export async function getEventBoard(slug?: string): Promise<EventBoard | null> {
   if (IS_MOCK) return null;
   const s = slug ?? (await getCurrentEventSlug()) ?? CARD_EVENT_SLUG;
-  const { data, error } = await supabase.rpc('event_board', { p_slug: s });
+  // 로고는 보드와 **나란히** 묻는다(직렬이면 판이 한 왕복 늦게 뜬다). eventBrand 는 던지지 않는다.
+  const [{ data, error }, brand] = await Promise.all([supabase.rpc('event_board', { p_slug: s }), eventBrand(s)]);
   if (error) throw new Error(error.message);
-  const b = (data as EventBoard | null) ?? null;
+  const b = data ? { ...(data as EventBoard), brand } : null;
   rememberEventBoard(s, b);
   if (slug === undefined) lastCurrentSlug = s;
   // 다음 콜드 진입의 스켈레톤이 이 칸 수로 자리를 예약한다(홈이 받든 이벤트 판이 받든 같은 곳에 적는다).

@@ -13,6 +13,7 @@ import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import BusinessFooter from './BusinessFooter';
+import EventVenueLogo from './EventVenueLogo';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import type { EventListItem } from '../../api/events';
 import { peekEventList, fetchEventList } from '../../lib/eventListCache';
@@ -239,9 +240,12 @@ export default function EventListPage({ open, onClose, onSelect }: {
                   <button type="button" onClick={() => onSelect(ev.slug)} data-testid="event-list-item"
                     className={['flex w-full min-h-[44px] items-center gap-3 rounded-aura border card-aura px-3.5 py-3 text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]',
                       ev.state === 'live' ? 'ring-aura ring-aura-glow' : ''].join(' ')}>
-                    <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad">
-                      <Icon name="gift" size={18} />
-                    </span>
+                    {/* 참여권 매장 로고(2026-10-09) — 선물 타일과 같은 상자. 없거나 못 불러오면 선물 타일 그대로. */}
+                    <EventVenueLogo url={ev.brand?.imageUrl} className="h-10 w-10 shrink-0 rounded-full">
+                      <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad">
+                        <Icon name="gift" size={18} />
+                      </span>
+                    </EventVenueLogo>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-ink-primary">{ev.title}</span>
