@@ -333,6 +333,11 @@ export function levelUndoPatch(snap: ClockLevelSnapshot): Partial<ClockState> {
   return { currentIndex: snap.currentIndex, remainingMs: snap.remainingMs, endsAt: snap.endsAt, running: snap.running };
 }
 
+/** 클락 한 대의 주인 키(매장#게임). 무장해 둔 되돌리기·실행취소가 **다른 게임**에 쓰이지 않게 비교한다(H03-06). */
+export function clockOwnerKey(s: Pick<ClockState, 'venueId' | 'gameSeq'>): string {
+  return `${s.venueId}#${s.gameSeq}`;
+}
+
 /** 레벨 4필드만 갱신 — '백업 전진자' 전용 부분 업데이트.
  *
  *  왜 saveClockState(전 행 upsert)를 쓰면 안 되나: 백업 경로는 '아무도 보고 있지 않은 기기'가

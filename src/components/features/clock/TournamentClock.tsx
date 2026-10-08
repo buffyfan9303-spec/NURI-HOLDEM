@@ -13,7 +13,7 @@ import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats, composeLiveStats,
   countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
-  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
+  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, clockOwnerKey, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, getVenueClocks, effectiveLevel,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
@@ -559,7 +559,10 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 왜 서버가 아니라 클라이언트인가: 되돌리기는 '방금 잘못 누른 그 사람'의 즉시 취소라,
   // DB에 이력을 남기면 장부 리모컨·클락 화면·TV 사이에 누가 무엇을 되돌리는지 경합만 생긴다.
   const [levelUndo, setLevelUndo] = useState<ClockLevelSnapshot | null>(null);
+  const levelUndoOwnerRef = useRef('');   // 무장한 (매장#게임) — H03-06
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 게임·매장이 바뀌면 이전 게임의 되돌리기 버튼을 거둔다(H03-06).
+  useEffect(() => { setLevelUndo(null); }, [state.venueId, state.gameSeq]);
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
   // C10(2026-09-25) — 진행 중 블라인드 구조 수정 시트(레벨·엔트리·탈락·경과 보존).
   const [structOpen, setStructOpen] = useState(false);
@@ -646,6 +649,14 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     // 통계는 싣지 않는다(K1) — 카운트는 차분 RPC, live_stats 는 아래 장부 몫 작성기 하나.
     if (canManage) onSave(next, prev);
   }, [canManage, onChange, onSave]);
+  // 🔴 H03-06(2026-10-08) — ClockLive 는 게임 전환(switchGame)에도 **같은 인스턴스**로 남는다. 그래서 A 에서 무장한
+  //   [되돌리기]·토스트 [실행취소] 를 B 로 넘어가 누르면 persist 가 stateRef(=B) 에 A 의 레벨·시각을 병합해 저장했다.
+  //   무장 시점의 (매장, 게임) 키를 들고 있다가 지금 화면이 다른 게임이면 아무것도 쓰지 않는다.
+  const persistFor = (owner: string, patch: Partial<ClockState>): boolean => {
+    if (clockOwnerKey(stateRef.current) !== owner) return false;
+    persist(patch);
+    return true;
+  };
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -888,32 +899,37 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       // 🔴 C5(2026-09-25) — 남은 시간은 **누른 순간** 잰다. 예전엔 마지막 렌더(최대 1초 전)의 remaining 을 얼려
       //   정지할 때마다 최대 ~1초를 손님 몰래 돌려줬다(실측 P9: 회당 +0.2~0.95s).
       const frozen = Math.max(0, computeRemaining(live));
+      const owner = clockOwnerKey(live);
       persist({ running: false, remainingMs: frozen, endsAt: null });
       toast.show('클락을 일시정지했어요. 손님 화면에도 바로 반영됩니다', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => persist({ running: true, endsAt: new Date(now() + frozen).toISOString() }) },
+        action: { label: '실행취소', onClick: () => { persistFor(owner, { running: true, endsAt: new Date(now() + frozen).toISOString() }); } },
       });
     } else {
       const ms = Math.max(0, live.remainingMs || computeRemaining(live));
+      const owner = clockOwnerKey(live);
       persist({ running: true, endsAt: new Date(now() + ms).toISOString() });
       toast.show('클락을 재개했어요', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => persist({ running: false, remainingMs: ms, endsAt: null }) },
+        action: { label: '실행취소', onClick: () => { persistFor(owner, { running: false, remainingMs: ms, endsAt: null }); } },
       });
     }
   };
   // 레벨 이동 — 되돌리기 6초 무장 후 이동. 이동은 대상 레벨의 전체 분으로 타이머를 덮어쓰므로
   // (진행하던 시간이 사라지므로) 스냅샷 없이는 복구 수단이 아예 없다.
   const armLevelUndo = () => {
+    levelUndoOwnerRef.current = clockOwnerKey(stateRef.current);
     setLevelUndo(levelSnapshot(state));
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setLevelUndo(null), 6000);
   };
   const undoLevel = () => {
     if (!levelUndo) return;
-    persist(levelUndoPatch(levelUndo)); // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원
+    // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원. 다른 게임으로 넘어갔으면 쓰지 않는다(H03-06).
+    const done = persistFor(levelUndoOwnerRef.current, levelUndoPatch(levelUndo));
     setLevelUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (!done) return;
     toast.show('레벨 이동을 되돌렸습니다. 남은 시간까지 복원', 'info');
   };
   const setLevel = (delta: number) => {

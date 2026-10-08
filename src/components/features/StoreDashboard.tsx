@@ -177,6 +177,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const [monthDealers, setMonthDealers] = useState<DealerShift[]>([]);
   const [dealerErr, setDealerErr] = useState(false);
   const [shiftErr, setShiftErr] = useState(false);
+  // SP02(2026-10-08) — 오늘·월간 출근 조회가 플래그 하나를 같이 쓰면, 월간 실패 뒤 늦게 온 오늘 성공이 오류를 지워
+  //   인건비 요약이 monthShifts=[] 로 '총 인건비 N원'(딜러 몫만)을 정상값처럼 띄웠다. 월간은 따로 든다.
+  const [monthShiftErr, setMonthShiftErr] = useState(false);
   // 인건비는 급여 정산 화면과 같은 규칙(휴게·주휴·5인 가산 설정)으로 센다 — 두 화면의 합계가 달라지면 안 된다.
   const payRules = usePayRules(venueId);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
@@ -395,7 +398,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       getPendingBuyinRequests(venueId, d).then(guard(setPendingReqs)).catch(() => {}),
       // 독립 검증 B(2026-09-13): 출근 조회 실패를 삼키면 딜러 인건비만의 값이 '총 인건비 N만원' 으로 뜬다 — wageErr·dealerErr 와 같은 모양.
       getStaffSchedule(venueId, d, d).then(guard((ss: StaffShift[]) => { setShifts(ss); setShiftErr(false); })).catch(guard(() => { setShifts([]); setShiftErr(true); })),
-      getStaffSchedule(venueId, weekStartOf(mr.start), mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setShiftErr(true); })),
+      getStaffSchedule(venueId, weekStartOf(mr.start), mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setMonthShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setMonthShiftErr(true); })),
       getStaffWages(venueId).then(guard((w: StaffWage[]) => { setWages(w); setWageErr(false); })).catch(guard(() => { setWages([]); setWageErr(true); })),
       // F6: getDealerShifts 가 이제 실패를 던진다 — 빈 배열로 받으면 '딜러 인건비 0' 이 정상값처럼 보인다. wageErr 와 같은 모양.
       getDealerShifts(venueId, weekStartOf(mr.start), mr.end).then(guard((ds: DealerShift[]) => { setMonthDealers(ds); setDealerErr(false); })).catch(guard(() => { setMonthDealers([]); setDealerErr(true); })),
@@ -895,7 +898,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     wages: Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage])), dealers: monthDealers });
   const laborTotal = labor.total, laborHours = labor.netMin / 60, dealerPay = labor.dealerPay;
   // 시급이든 딜러 근무든 못 불러왔으면 합계는 숫자가 아니다 — '0만원' 이 정상값처럼 읽힌다(F6). 급여 설정도 같다.
-  const laborErr = wageErr || dealerErr || shiftErr || !!payRules.err;
+  const laborErr = wageErr || dealerErr || monthShiftErr || !!payRules.err;
 
   // ── 손님 유형 비중(오늘 명단) ──
   const typeCount: Record<string, number> = {};
@@ -928,7 +931,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               옆 '대회 클락'·'전주 대비'는 99px 라 PC 첫 줄 아래 72px 빈 홈이 생겼다. 그 상태(확인 중·실패·데이터 없음)에서만 두 이웃을
               줄 높이로 늘리고 본문을 세로 가운데 둔다 — 셋 다 빈 안내라 줄이 고르게 선다. 데이터가 오면 이웃은 제 높이로 돌아가지만
               줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
-          <DashCard more show={moreShown && caps.ledger && !clockCardHidden} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
+          <DashCard more show={moreShown && caps.ledger && !clockCardHidden} title="대회 클락" onClick={() => onGoto({ section: 'clock', gameSeq: clock?.gameSeq ?? MAIN_GAME_SEQ })} center={trendFill} stretch={trendFill}
             badge={clockActive
               ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
               : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
@@ -1114,7 +1117,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 </div>
                 {wageErr && <p className="text-2xs text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
                 {dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
-                {shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+                {monthShiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
                 {!laborErr && dealerPay > 0 && (
                   <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonShort(laborTotal - dealerPay)} · 딜러 {wonShort(dealerPay)}</p>
                 )}
@@ -1456,8 +1459,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             </div>
           )}
           <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            {/* 진행 클락(선택 게임) */}
-            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/2">
+            {/* 진행 클락(선택 게임) — SP16: 문자열 'clock' 은 직전 클락 게임(보통 메인)을 열었다. 보고 있는 게임으로 간다. */}
+            <button type="button" onClick={() => onGoto({ section: 'clock', gameSeq: widgetGame })} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/2">
               <div className="min-w-0">
                 <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '대회 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (

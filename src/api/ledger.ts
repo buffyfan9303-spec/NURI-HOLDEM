@@ -1378,11 +1378,12 @@ export async function deleteLedgerSession(venueId: string, date: string, gameSeq
 }
 
 // ── 명단(roster) ──────────────────────────────────────────────────────────────
-export async function getLedgerPlayers(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerPlayer[]> {
+/** gameSeq='all' — 그날 **모든 게임** 명단(통계 유형 필터용, SP13). 정렬은 게임 → 자리 순. */
+export async function getLedgerPlayers(venueId: string, date = today(), gameSeq: number | 'all' = MAIN_GAME_SEQ): Promise<LedgerPlayer[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.from('ledger_players')
-    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq)
-    .order('sort_order').order('created_at');
+  let q = supabase.from('ledger_players').select('*').eq('venue_id', venueId).eq('session_date', date);
+  if (gameSeq !== 'all') q = q.eq('game_seq', gameSeq);
+  const { data, error } = await q.order('game_seq').order('sort_order').order('created_at');
   if (error) throw error;
   return (data ?? []).map(rowToPlayer);
 }

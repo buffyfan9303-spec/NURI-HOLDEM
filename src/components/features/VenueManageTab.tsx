@@ -1713,13 +1713,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     } catch { return null; }
   });
   const [fetched, setFetched] = useState(false);
+  const pendingIdsRef = useRef<Set<string>>(new Set());
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
     const a = getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
       .catch(() => { if (!stale()) setClocks([]); });
-    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) { pendingIdsRef.current = new Set(r.map((x) => x.id)); setPending(r.length); } })
       .catch(() => { if (!stale()) setPending(0); });
     void Promise.all([a, b]).then(() => { if (!stale()) setFetched(true); });
   }, [venueId, biz]);
@@ -1731,11 +1732,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     const h = barRef.current?.offsetHeight ?? 0;
     setHold(h > 0 ? { venueId, nav: navKey, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
-    setClocks([]); setPending(0); setFetched(false);
+    setClocks([]); setPending(0); setFetched(false); pendingIdsRef.current = new Set();
   }, [venueId]);
   useEffect(() => { if (active) reload(); }, [active, reload]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
-  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  // 클라우드 리뷰(2026-10-08) — ownsId 없이 구독하면 DELETE(필터 불가)를 **모든 매장** 것까지 받아, 매일 만료 정리 때 매장 수만큼 재조회가 몰렸다.
+  //   이 바가 센 요청이 지워질 때만 다시 센다(대시보드·장부와 같은 조리법). INSERT·UPDATE 는 venue_id 필터로 그대로 받는다.
+  const ownsPending = useCallback((id: string) => pendingIdsRef.current.has(id), []);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsPending }); }, [venueId, reload, active, ownsPending]);
   const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
   const main = live[0];
   const mainRunning = !!main?.running;
@@ -2262,6 +2266,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //   같은 파일 StaffWageManager 와 같은 패턴 — 실패 중에는 저장을 막는다.
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [rankTick, setRankTick] = useState(0);
+  const rankKeyRef = useRef('');
+  useEffect(() => { rankKeyRef.current = `${venueId}|${date}`; }, [venueId, date]);   // 저장 뒤 조용한 재조회가 지금 화면 것인지 판정(H03-09)
   // S-10 — 메인을 ''(장부 마감 초안)·제목(게임 칩) 어느 쪽으로 들어와도 저장 이름 하나로 모은다.
   //   안 모으면 이미 저장된 칸이 아닌 빈 칸이 열려 다시 치고 저장 → 같은 대회가 두 벌이 된다. 조회 성공 뒤에만(실패 중 판단 금지).
   useEffect(() => {
@@ -2596,6 +2602,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
       clearRowsDraft(dkey);
       setDrafted(false);
       setRestorable(null);
+      // 🔴 H03-09(2026-10-08) — allEntries 는 마지막 조회본이라 저장 뒤 B→A 로 돌아오면 저장 **전** 명단(또는 빈 줄)이 다시 깔렸고,
+      //   그대로 저장하면 방금 저장분을 덮었다. 서버 정본을 **조용히** 다시 읽는다 — rankTick 은 '불러오는 중…' 으로 표를 접어 화면이 튄다.
+      //   그새 매장·날짜를 옮겼으면 버린다(지금 화면의 저장본을 남의 날짜 것으로 덮지 않게).
+      const savedKey = `${venueId}|${date}`;
+      void getVenueRankings(venueId, date).then(({ entries }) => { if (rankKeyRef.current === savedKey) setAllEntries(entries); }).catch(() => {});
       toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
       toast.show(msgOf(e, '저장에 실패했습니다'), 'error');

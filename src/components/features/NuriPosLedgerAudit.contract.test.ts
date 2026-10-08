@@ -31,7 +31,8 @@ describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스
     expect(LIB).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/api\/clock';/);
     expect(LIB).toMatch(/return \{ \.\.\.emptyClockState\(venueId, cfg, gameSeq\), title, sessionDate \};/);
     // F4-01(2026-10-04) — 장부 날짜를 넘겨야 클락이 장부와 연동된다(값 검사는 lib/chipRules.test.ts 'F4-01').
-    expect(code).toMatch(/const row = clockStartRow\(action, fresh, cfg, base\.venueId, base\.gameSeq, base\.title \?\? '', base\.sessionDate\);/);
+    // H03-08(2026-10-08) — 클락 설정 베이스는 쓰기 직전 다시 읽은 fresh.config 로 만든 freshCfg 다(마운트 스냅샷으로 되돌리지 않게).
+    expect(code).toMatch(/const row = clockStartRow\(action, fresh, freshCfg, base\.venueId, base\.gameSeq, base\.title \?\? '', base\.sessionDate\);/);
   });
 
   // 🔴 F2b (2026-09-17) — 새로 생긴 계약이다. 여기서 쓰던 clockState 는 폼 마운트 시 한 번 읽은 스냅샷이라

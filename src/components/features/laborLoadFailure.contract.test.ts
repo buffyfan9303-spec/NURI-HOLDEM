@@ -95,9 +95,10 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     expect(SD).not.toMatch(/getStaffSchedule\(venueId, d, d\)\.then\(guard\(setShifts\)\)\.catch\(\(\) => \{\}\)/);
     expect(SD).not.toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(setMonthShifts\)\)\.catch\(\(\) => \{\}\)/);
     expect(SD).toMatch(/getStaffSchedule\(venueId, d, d\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
-    expect(SD).toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setMonthShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
-    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr \|\| shiftErr( \|\| !!payRules\.err)?;/);
-    expect(SD).toMatch(/\{shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해/);
+    expect(SD).toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setMonthShifts\(ss\); setMonthShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthShifts\(\[\]\); setMonthShiftErr\(true\); \}\)\)/);
+    // SP02(2026-10-08) — 인건비는 **월간** 출근 오류만 본다. 오늘 조회 성공이 월간 실패를 지우면 안 된다(플래그 분리).
+    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr \|\| monthShiftErr( \|\| !!payRules\.err)?;/);
+    expect(SD).toMatch(/\{monthShiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해/);
     // '오늘 출근' 카드도 실패를 '배정 없음' 으로 그리지 않는다
     expect(SD).toMatch(/shifts\.length === 0 && !shiftErr \?/);
   });
@@ -114,7 +115,7 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     expect(SD).toMatch(/const \[dealerErr, setDealerErr\] = useState\(false\);/);
     expect(SD).toMatch(/getDealerShifts\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ds: DealerShift\[\]\) => \{ setMonthDealers\(ds\); setDealerErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthDealers\(\[\]\); setDealerErr\(true\); \}\)\)/);
     expect(SD).not.toMatch(/\.catch\(guard\(\(\) => setMonthDealers\(\[\]\)\)\)/);
-    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| shiftErr)?( \|\| !!payRules\.err)?;/);
+    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| monthShiftErr)?( \|\| !!payRules\.err)?;/);
     expect(SD).toMatch(/<Stat label="총 인건비" value=\{laborErr \? '—' : wonAmount\(laborTotal\)\[0\]\} unit=\{laborErr \? '' : wonAmount\(laborTotal\)\[1\]\} gold \/>/);
     expect(SD).toMatch(/\{dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해/);
     expect(SD).toMatch(/\{!laborErr && dealerPay > 0 &&/);

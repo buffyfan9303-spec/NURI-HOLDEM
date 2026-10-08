@@ -1187,10 +1187,14 @@ function StepBtn({ label, onStep }: { label: string; onStep: () => void }) {
     onStep();
     timer.current = setTimeout(() => run(Math.max(40, delay * 0.82)), delay);
   };
+  // SP15(2026-10-08) — 누른 채 시트가 닫히면 타이머가 페이지 수명 내내 돌았다. 언마운트·pointercancel 에서 멈춘다.
+  useEffect(() => stop, []);
   return (
     <button type="button" aria-label={label === '+' ? '증가' : '감소'}
       onPointerDown={() => { stop(); run(350); }}
-      onPointerUp={stop} onPointerLeave={stop} onContextMenu={(e) => e.preventDefault()}
+      // 키보드(Enter/Space)는 pointerdown 이 없어 증감이 0 이었다 — detail 0 = 키보드 클릭만 한 칸. 포인터 클릭은 위에서 이미 셌다.
+      onClick={(e) => { if (e.detail === 0) onStep(); }}
+      onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onContextMenu={(e) => e.preventDefault()}
       className="w-9 shrink-0 rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary hover:text-ink-primary active:bg-surface-float select-none touch-none">
       {label}
     </button>

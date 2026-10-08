@@ -28,7 +28,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { levelNumberAt, msToNextBreak } from './clockLevel';
+import { bbAt, levelNumberAt, msToNextBreak } from './clockLevel';
 
 const SRC = join(__dirname, '..');
 const CLOCK_DIR = join(SRC, 'components', 'features', 'clock');
@@ -74,7 +74,7 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
   // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 **단일 마크업**이 ClockStage 다 — 레벨 번호·휴식까지 계산이 전부 여기서 그려진다.
   it('🔴 ClockStage.tsx: import 1회 · levelNumberAt(lvls, eff.index) ×1 · msToNextBreak(g, eff.index, eff.remainingMs) ×2(레일·미니 보드)', () => {
     // 2026-09-19: CLOCK_PHASE_TV 는 상태 알약과 함께 보드에서 빠졌다(오너 지시 #9) — clockPhase 는 일시정지 타이머 색에 남는다.
-    expect(count(stage, /^import \{ clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(stage, /^import \{ bbAt, clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(stage, /\blevelNumberAt\(lvls, eff\.index\)/)).toBe(1);
     // 2026-09-25 #1: 세로 보드의 '미니 보드'(HeaderTimes compact)를 지웠다 — Next Break 가 하단 레일과 두 번 나왔다. 하단 레일 한 곳뿐이다.
     expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(1);
@@ -133,5 +133,22 @@ describe('함수 동작 회귀(단위) — cfg/levels 두 시그니처를 하나
   it('msToNextBreak: config/levels 가 없어도 던지지 않는다(null-safe)', () => {
     expect(msToNextBreak({ config: null }, 0, 1000)).toBeNull();
     expect(msToNextBreak({}, 0, 1000)).toBeNull();
+  });
+});
+
+describe('CLOCK-AVG-BB-STALE · bbAt', () => {
+  const lv = [{ kind: 'level' as const, bb: 200 }, { kind: 'level' as const, bb: 400 }, { kind: 'break' as const }, { kind: 'level' as const, bb: 800 }];
+  it('플레이 레벨은 그 레벨 BB, 브레이크는 직전 레벨 BB, 범위 밖·빈 구조는 안전', () => {
+    expect(bbAt(lv, 0)).toBe(200);
+    expect(bbAt(lv, 1)).toBe(400);
+    expect(bbAt(lv, 2)).toBe(400);
+    expect(bbAt(lv, 3)).toBe(800);
+    expect(bbAt(lv, 99)).toBe(800);
+    expect(bbAt([], 0)).toBe(0);
+  });
+  it('TV 하단 칸은 부모의 curBB 를 받지 않고 자기 실효 레벨로 잰다', () => {
+    const stage = readFileSync(join(__dirname, '../components/features/clock/ClockStage.tsx'), 'utf-8');
+    expect(stage).toMatch(/const curBB = bbAt\(g\.config\?\.levels \?\? \[\], eff\.index\);/);
+    expect(stage).not.toMatch(/<BottomMetrics g=\{g\} curBB=/);
   });
 });

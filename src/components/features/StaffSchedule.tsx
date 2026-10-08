@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 import { josa } from '../../lib/josa';
 import { useVenueScope } from '../../lib/useVenueScope';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { usePayRules } from '../../api/payrollRules';
 import { hoursText, shiftHoursNote, shiftMinutes } from '../../lib/staffPay';
 
@@ -44,6 +45,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tick, setTick] = useState(0); // 명부 저장 후 재조회
+  const [loadErr, setLoadErr] = useState<unknown>(null);
 
   const days = useMemo(() => monthDays(month), [month]);
   const { rules } = usePayRules(venueId);
@@ -55,11 +57,13 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
   const reload = () => {
     const k = `${venueId}|${from}|${to}`;
     getStaffSchedule(venueId, from, to)
-      .then((s) => { if (keyRef.current === k) setShifts(s); })
-      .catch(() => {})
+      .then((s) => { if (keyRef.current === k) { setShifts(s); setLoadErr(null); } })
+      // SP10(2026-10-08) — 실패를 삼키면 '근무 없음' 달력과 구분이 안 됐다. 실패는 실패로 보이고 다시 시도할 수 있게.
+      .catch((e) => { if (keyRef.current === k) setLoadErr(e); })
       .finally(() => { if (keyRef.current === k) setLoading(false); });
   };
-  useEffect(() => { setLoading(true); setSelDay(null); }, [venueId, from, to]);
+  // 매장·달이 바뀌면 이전 달 근무를 바로 거둔다(실패하면 이전 달 것을 들고 있었다).
+  useEffect(() => { setLoading(true); setSelDay(null); setShifts([]); setLoadErr(null); }, [venueId, from, to]);
   // 조회 + 실시간(직원 셀프 출퇴근/배정 변경 자동 반영). 숨은 판(내 매장 keep-alive)은 채널을 놓는다 —
   // 다시 보이면 이 효과만 다시 돌며 조용히 한 번 읽는다(로딩 표시·선택한 날은 그대로).
   useEffect(() => { if (!active) return; reload(); return subscribeStaffSchedule(venueId, reload); }, [venueId, from, to, active]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -301,6 +305,7 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
         )}
       </div>
       {loading && <p aria-busy="true" className="text-center text-2xs text-ink-muted">불러오는 중…</p>}
+      {!loading && loadErr != null && <LoadErrorCard error={loadErr} onRetry={() => { setLoading(true); reload(); }} what="근무 일정" compact />}
     </section>
   );
 }

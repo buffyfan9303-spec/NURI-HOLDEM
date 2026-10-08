@@ -176,6 +176,12 @@ export const gameLabel = (g: { gameSeq: number }) => (g.gameSeq > 1 ? `사이드
 /** levelNumberAt/msToNextBreak 이 실제로 읽는 것 — ClockLevel(api/clock)이 구조적으로 만족한다. */
 export interface ClockLevelKind { kind?: 'level' | 'break'; minutes?: number }
 
+/** index 시점의 BB — 브레이크면 직전 플레이 레벨의 BB, 없으면 0. TV 'Avg Stack N BB' 의 분모(CLOCK-AVG-BB-STALE, 2026-10-08). */
+export function bbAt(levels: (ClockLevelKind & { bb?: number })[], index: number): number {
+  for (let i = Math.min(index, levels.length - 1); i >= 0; i--) { const l = levels[i]; if (l.kind === 'level' && (l.bb ?? 0) > 0) return l.bb!; }
+  return 0;
+}
+
 /** 레벨 번호(브레이크 제외, 1부터) — index 까지 누적. */
 export function levelNumberAt(levels: ClockLevelKind[], index: number): number {
   let n = 0;

@@ -43,7 +43,8 @@ describe('F1 · 순위 편집기는 조회 실패 중에 저장하지 않는다'
     expect(RE).toMatch(/setLoading\(true\);\s*\n\s*return loadRankingsEffect\(\{\s*\n\s*fetch: \(\) => getVenueRankings\(venueId, date\),/);
     expect(RE).toMatch(/onSettled: \(\) => setLoading\(false\),\s*\n\s*\}\);\s*\n\s*\}, \[venueId, date, rankTick\]\);/);
     // 옛 인라인 then/catch/finally 체인이 남아 있지 않다(가드 없는 경로)
-    expect(RE).not.toMatch(/getVenueRankings\(venueId, date\)\s*\.then\(/);
+    // H03-09(2026-10-08) — 저장 뒤 조용한 재조회 한 곳만 예외: 그 응답도 (매장|날짜) 키가 같을 때만 반영한다.
+    expect(RE).not.toMatch(/getVenueRankings\(venueId, date\)\s*\.then\((?![^\n]*rankKeyRef\.current === savedKey)/);
   });
 
   it('🔴 실패 중에는 rows 를 빈 줄로 갈아끼우지 않는다 — 로더 effect 가 loadErr 에서 조기 반환', () => {

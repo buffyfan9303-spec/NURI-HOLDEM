@@ -172,3 +172,22 @@ describe('C04(연동판정) · clockLinked 가 게임 번호까지 맞춰 본다
     expect(m![0]).toContain('clock.gameSeq === gameSeq');
   });
 });
+
+describe('H03-08 · 장부 시작/수정이 실패하면 클락을 건드리지 않는다', () => {
+  const start = code.indexOf('const submitOnce = async');
+  const body = code.slice(start, code.indexOf('\n  };\n', start));
+  it('saveClockState 는 onSubmit 결과가 true 로 확인된 뒤에만 실행된다', () => {
+    expect(start, 'submitOnce 를 찾지 못했다').toBeGreaterThan(-1);
+    const submitAt = body.indexOf('const ok = await onSubmit(');
+    const runAt = body.indexOf('if (ok === true && syncClock) await syncClock();');
+    expect(submitAt, 'onSubmit 결과를 받지 않는다').toBeGreaterThan(-1);
+    expect(runAt, 'ok 확인 뒤 클락 동기화가 없다').toBeGreaterThan(submitAt);
+    // onSubmit 앞에서 즉시 실행되는 클락 쓰기(void IIFE) 금지
+    expect(body.slice(0, submitAt)).not.toMatch(/void \(async \(\) =>/);
+  });
+  it('handleOpen 은 LEDGER_ALREADY_OPEN·실패에서 false, 성공에서 true 를 돌려준다', () => {
+    const h = code.slice(code.indexOf('const handleOpen = async'), code.indexOf('const handleEditSave = async'));
+    expect(h).toMatch(/return true;/);
+    expect((h.match(/return false;/g) ?? []).length).toBe(2);
+  });
+});
