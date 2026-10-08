@@ -122,6 +122,47 @@ test.describe('헤더 로고 글린트', () => {
     });
   }
 
+  // 다이아만 보일 때(라이트 · <373) 빛이 다이아 위에 머무는 시간 — 글자까지 가는 범위·곡선 그대로면 82~101ms 라 '반짝' 으로 읽혔다(review-239b P3-a).
+  // 재생이 시작되면 SMIL 시계를 멈추고 시작점부터 10ms 씩 되감아 띠 위치를 읽는다(타이머·프레임 속도와 무관하게 결정적).
+  // 밝은 띠가 다이아(x 9.18~29.18) 위에 있는 구간은 이동량 −10~12 다(띠 기울기·정지점에서 계산한 평균 흰빛 기준 — 검토 실측 82~101ms 를 같은 기준으로 재현한 값).
+  // 음성 대조(2026-10-09): LogoGlint 의 '다이아만' 분기를 지우면 360·라이트가 ≈100ms 로 실패, 분기 조건을 항상 참으로 바꾸면 390 다크의 끝점 94 가 실패.
+  const shine = (page: Page) => page.evaluate(() => new Promise<{ ms: number; end: number }>((resolve) => {
+    const tick = () => {
+      const svg = [...document.querySelectorAll<SVGSVGElement>('[data-testid="logo-glint"]')].pop();
+      const a = svg?.querySelector('animateTransform') as SVGAnimationElement | null;
+      const g = svg?.querySelector('linearGradient') as SVGLinearGradientElement | null;
+      let start: number | null = null;
+      try { start = a ? a.getStartTime() : null; } catch { /* 아직 시작 전 */ }
+      if (!svg || !g || start === null) { requestAnimationFrame(tick); return; }
+      svg.pauseAnimations();
+      let ms = 0, end = 0;
+      for (let t = 0; t <= 850; t += 10) {
+        svg.setCurrentTime(start + t / 1000);
+        const x = g.gradientTransform.animVal.getItem(0).matrix.e;
+        if (x >= -10 && x <= 12) ms += 10;
+        end = x;
+      }
+      resolve({ ms, end });
+    };
+    tick();
+  }));
+  for (const [w, theme, gemOnly] of [[360, 'dark', true], [390, 'light', true], [390, 'dark', false]] as const) {
+    test(`${w} ${theme} — ${gemOnly ? '다이아만: 빛이 다이아 위에 400ms 이상' : '글자까지: 범위 그대로(끝 94)'}`, async ({ page }) => {
+      await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* 차단 환경 */ } }, theme);
+      await page.setViewportSize({ width: w, height: 844 });
+      await page.goto('/');
+      await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
+      const r = await shine(page);
+      if (gemOnly) {
+        expect(r.ms, '다이아 위 밝은 띠 체류(ms)').toBeGreaterThanOrEqual(400);
+        expect(r.ms).toBeLessThanOrEqual(500);
+        expect(r.end, '끝에서는 다이아를 벗어나 있어야 지울 때 튀지 않는다').toBeGreaterThan(16);
+      } else {
+        expect(r.end).toBeCloseTo(94, 0);
+      }
+    });
+  }
+
   test('reduced-motion — 글린트를 그리지 않는다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 390, height: 844 });

@@ -1,7 +1,7 @@
 /* NURI HOLDEM — Service Worker: 앱 셸 캐싱(빠른 재방문) + 웹 푸시 */
 /* eslint-disable no-undef */
 
-const CACHE = 'nuri-shell-v2'; // 버전 올리면 activate 에서 옛 캐시 전체 삭제(누적 정리)
+const CACHE = 'nuri-shell-v3'; // 버전 올리면 activate 에서 옛 캐시 전체 삭제(누적 정리) · v3(2026-10-09): 앱 아이콘·파비콘을 다이아로 — 같은 주소라 캐시 우선이면 옛 스페이드가 남는다
 // [DS] FONT-1: Pretendard dynamic subset 은 페이지당 woff2 수십 조각을 받는다 —
 // 60 상한이면 폰트가 앱 셸 자산을 밀어내며 캐시가 공회전하므로 상한을 함께 올린다.
 const CACHE_MAX_ENTRIES = 150; // 캐시 엔트리 상한 — 초과 시 오래된 것부터 삭제(무한 성장 방지)
