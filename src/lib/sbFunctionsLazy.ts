@@ -7,6 +7,8 @@
  * FunctionsClient 를 만들어 `invoke` 를 위임하면 요청이 그대로 같다(sbLazy.test.ts 가 헤더를 비교한다).
  * 오류 클래스는 작은 types 모듈에서 진짜를 그대로 다시 내보낸다(FunctionsHttpError 의 context 등 모양 동일).
  */
+import { retryableImport } from './retryImport';
+
 export {
   FunctionsError,
   FunctionsFetchError,
@@ -18,8 +20,8 @@ export {
 type RealMod = typeof import('@supabase/functions-js/dist/module/FunctionsClient.js');
 type RealClient = InstanceType<RealMod['FunctionsClient']>;
 
-let mod: Promise<RealMod> | undefined;
-const load = () => (mod ??= import('@supabase/functions-js/dist/module/FunctionsClient.js'));
+// 실패해도 다음 호출이 새 주소(?r=n)로 다시 받는다(retryImport.ts — 같은 주소 재시도는 브라우저가 실패를 캐시해 영영 못 받는다).
+const load = retryableImport(() => import('@supabase/functions-js/dist/module/FunctionsClient.js'));
 
 type Opts = ConstructorParameters<RealMod['FunctionsClient']>[1];
 
