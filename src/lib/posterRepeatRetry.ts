@@ -22,11 +22,13 @@ export function planRepeatDates(
   const retry = new Set(retryDates);
   const send: string[] = [];
   const landed: string[] = [];
+  // 서버는 assertScheduleTitle 로 trim 한 제목을 저장한다 — 폼 원문 그대로 비교하면 ' 데일리 ' 가 늘 빗나가 중복 insert.
+  const title = key?.title.trim();
   for (const d of new Set(dates)) {           // 같은 날짜가 두 번 들어와도 한 번만
     if (saved.has(d)) continue;
     if (key && retry.has(d) && serverRows.some((s) =>
       (s.venueId ?? '') === key.venueId && (s.ownerId ?? '') === key.ownerId
-      && s.title === key.title && s.startTime === key.startTime && dayOf(s.date) === d)) {
+      && s.title.trim() === title && s.startTime === key.startTime && dayOf(s.date) === d)) {
       landed.push(d);
       continue;
     }
