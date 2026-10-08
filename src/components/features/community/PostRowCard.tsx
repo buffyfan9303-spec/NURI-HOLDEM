@@ -26,10 +26,13 @@ import { SpotTableFeed } from './spotShare/SpotTable';
 
 const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
 
-export type PostRowData = { post: CommunityPost; selected?: boolean; mark?: string; titlePts?: number; hot?: boolean; promoted?: boolean; adSlot?: number };
-const samePostProps = (a: PostRowData, b: PostRowData) =>
+export type PostRowData = { post: CommunityPost; selected?: boolean; mark?: string; titlePts?: number; hot?: boolean; promoted?: boolean; adSlot?: number; nickToken?: string | null };
+// UP-18(2026-10-08): nickToken 을 비교에 넣는다 — 빠져 있으면 getNickColors 응답이 늦게 와도 카드가 다시 안 그려져
+//   포인트로 산 닉네임 색이 목록 카드에 끝내 안 보였다.
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 비교 함수를 직접 검증
+export const samePostProps = (a: PostRowData, b: PostRowData) =>
   a.post === b.post && a.selected === b.selected && a.mark === b.mark && a.titlePts === b.titlePts && a.hot === b.hot
-  && a.promoted === b.promoted && a.adSlot === b.adSlot;
+  && a.promoted === b.promoted && a.adSlot === b.adSlot && a.nickToken === b.nickToken;
 
 export const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', promoted = false, adSlot }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 나머지는 일반 글과 완전히 같다 */ promoted?: boolean; adSlot?: number }) {
   // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
