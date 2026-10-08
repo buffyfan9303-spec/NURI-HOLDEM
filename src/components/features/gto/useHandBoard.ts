@@ -54,8 +54,8 @@ export interface UseHandBoard {
    *   그 상태로 저장·공유하면 **이전 스팟의 에퀴티가 영구 스냅샷에 박힌다**.
    */
   setAll: (next?: HandBoardInit) => void;
-  /** 빌런 B~E 수를 맞춘다 — 늘면 빈 슬롯, 줄면 뒤부터 버린다. 스팟(자리 목록)이 정본이고 슬롯은 따라간다. */
-  setExtraCount: (n: number) => void;
+  /** 빌런 B~E 수를 스팟(자리 목록)에 맞춘다 — 수가 다르면 **스팟의 카드로** 슬롯을 다시 만든다(`followExtra`). */
+  followExtraSeats: (spotExtra: readonly { cards: readonly string[] }[]) => void;
   /** 빈 슬롯을 걷어낸 실제 카드(계산 엔진 입력용) */
   heroCards: Card[];
   villainCards: Card[];
@@ -102,6 +102,20 @@ export function initialHandBoard(init: HandBoardInit | undefined, boardSlots: nu
 }
 
 const EMPTY_PAIR = (): (Card | null)[] => [null, null];
+
+/**
+ * 빌런 B~E 슬롯을 스팟의 자리 목록에 맞춘다. 수가 같으면 null(카드 그리드가 정본이라 손대지 않는다),
+ * 다르면 **spot.extra 의 카드로** 다시 만든다.
+ * ⚠ 예전엔 수만 맞췄다(늘면 빈 칸, 줄면 뒤를 자름) — 저장 스팟을 열면 B~E 가 빈 칸으로 덮였고(GTO-SAVED-EXTRA),
+ *   가운데 상대를 지우면 살아남은 C 에 B 의 카드가 붙었다(GTO-REMOVE-EXTRA). 열기·삭제·인원 축소가 모두 여길 지난다.
+ */
+export function followExtra(
+  slots: readonly (readonly (Card | null)[])[],
+  spotExtra: readonly { cards: readonly string[] }[],
+): (Card | null)[][] | null {
+  if (slots.length === Math.min(EXTRA_TARGETS.length, spotExtra.length)) return null;
+  return initialHandBoard({ extra: spotExtra.map((v) => [...v.cards]) }, 0).extra;
+}
 
 /** @param boardSlots 보드 칸 수 — 아웃츠(플랍·턴)는 4, 리플레이(리버까지)는 5 */
 export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandBoard {
@@ -179,11 +193,9 @@ export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandB
     setTarget(s.target);
   }, [boardSlots]);
 
-  const setExtraCount = useCallback((n: number) => {
-    const count = Math.max(0, Math.min(EXTRA_TARGETS.length, n));
-    setExtra((prev) => (prev.length === count ? prev
-      : prev.length < count ? [...prev, ...Array.from({ length: count - prev.length }, EMPTY_PAIR)]
-        : prev.slice(0, count)));
+  const followExtraSeats = useCallback((spotExtra: readonly { cards: readonly string[] }[]) => {
+    const count = Math.min(EXTRA_TARGETS.length, spotExtra.length);
+    setExtra((prev) => followExtra(prev, spotExtra) ?? prev);
     // 사라진 빌런을 가리키던 대상은 내 핸드로 돌린다 — 없는 슬롯에 카드를 넣을 수 없다
     setTarget((t) => { const i = extraIndexOf(t); return i !== null && i >= count ? 'hero' : t; });
   }, []);
@@ -200,7 +212,7 @@ export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandB
   }), [heroCards, villainCards, boardCards, extraCards]);
 
   return {
-    hero, villain, board, extra, target, setTarget, usedIds, place, removeAt, clear, setAll, setExtraCount,
+    hero, villain, board, extra, target, setTarget, usedIds, place, removeAt, clear, setAll, followExtraSeats,
     heroCards, villainCards, boardCards, extraCards, ids,
   };
 }

@@ -1,7 +1,7 @@
 // F10 회귀 ⑪ — 저장 스팟 '다시 열기' 뒤 카드 그리드와 리포트가 **같은 스팟**이어야 한다.
 // vitest 환경이 `node` 라 훅을 렌더할 수 없어, `setAll` 이 쓰는 순수 규칙(initialHandBoard)을 잠근다.
 import { describe, it, expect } from 'vitest';
-import { initialHandBoard, parseCardId } from './useHandBoard';
+import { followExtra, initialHandBoard, parseCardId } from './useHandBoard';
 import { cardId } from './useDeepGto';
 import type { Card } from './gto.types';
 
@@ -84,5 +84,28 @@ describe('빌런 B~E 슬롯(extra)', () => {
   it('5명째부터는 버린다 — 빌런 A 포함 5명 상한', () => {
     const s = initialHandBoard({ ...SPOT_A, extra: [[], [], [], [], []] }, 5);
     expect(s.extra).toHaveLength(4);
+  });
+});
+
+// GTO-SAVED-EXTRA · GTO-REMOVE-EXTRA — 빌런 B~E 슬롯은 **스팟의 카드로** 다시 만든다(뒤를 자르거나 빈 칸을 덧붙이지 않는다).
+describe('followExtra — 슬롯 수가 스팟과 다르면 spot.extra 의 카드로 재구성', () => {
+  const slots = (xs: string[][]) => initialHandBoard({ extra: xs }, 5).extra;
+  const B = { cards: ['As', 'Ad'] }, C = { cards: ['Kh', 'Kd'] };
+
+  it('저장 3인 스팟 재열기(슬롯 0 → 2): B·C 카드 보존', () => {
+    const next = followExtra([], [B, C]);
+    expect(next?.map(ids)).toEqual([['As', 'Ad'], ['Kh', 'Kd']]);
+  });
+  it('가운데 상대(B) 삭제: 살아남은 C 는 KhKd 그대로(AsAd 가 붙으면 안 된다)', () => {
+    const next = followExtra(slots([['As', 'Ad'], ['Kh', 'Kd']]), [C]);
+    expect(next?.map(ids)).toEqual([['Kh', 'Kd']]);
+  });
+  it('상대 추가: 기존 카드 유지 + 빈 칸 하나', () => {
+    const next = followExtra(slots([['As', 'Ad']]), [B, { cards: [] }]);
+    expect(next?.map(ids)).toEqual([['As', 'Ad'], []]);
+    expect(next?.[1]).toEqual([null, null]);
+  });
+  it('수가 같으면 손대지 않는다(null) — 카드 그리드가 정본', () => {
+    expect(followExtra(slots([['As', 'Ad']]), [{ cards: [] }])).toBeNull();
   });
 });

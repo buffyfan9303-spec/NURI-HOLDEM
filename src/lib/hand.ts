@@ -71,6 +71,9 @@ export function encodeReplay(content: string, r: ReplayData | null): string {
   return `${content}\n\n[[REPLAY:${segs.join(';')}]]`;
 }
 
+// 본문은 사용자가 손으로 쓸 수 있다 — 깨진 % 는 던지지 않고 원문으로(던지면 커뮤니티 목록 전체가 오류 카드, H03-01).
+const safeDecode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
+
 /** 본문에서 핸드/리플레이 마커를 한 번에 분리한다. */
 export function parseAttachments(content: string): { text: string; hand: HandSel | null; replay: ReplayData | null } {
   const rm = content.match(REPLAY_MARKER);
@@ -86,8 +89,8 @@ export function parseAttachments(content: string): { text: string; hand: HandSel
       if (k === 'hero') r.hero = cards;
       else if (k === 'villain') r.villain = cards;
       else if (k === 'board') r.board = cards;
-      else if (k === 'pot') r.pot = decodeURIComponent(v);
-      else if (k === 'pre' || k === 'flop' || k === 'turn' || k === 'river') r.actions[k] = decodeURIComponent(v);
+      else if (k === 'pot') r.pot = safeDecode(v);
+      else if (k === 'pre' || k === 'flop' || k === 'turn' || k === 'river') r.actions[k] = safeDecode(v);
     }
     if (r.hero.length === 0 && r.board.length === 0) return { text, hand: null, replay: null };
     return { text, hand: null, replay: r };
