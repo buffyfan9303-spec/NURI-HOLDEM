@@ -6,6 +6,7 @@
 //    55,000원짜리 상금이 표에서만 '6만'으로 **반올림**돼 보였다.)
 import type { Schedule } from '../../api/schedules';
 import { regCloseText, buyInText, prizeMainText } from './ScheduleCard';
+import { paidShown } from '../../lib/paidExposure';
 
 function dayLabel(date: string): string {
   const d = new Date(`${date}T00:00:00`);
@@ -51,7 +52,7 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                   //   호버 하이라이트 자체는 그대로 둔다(즉시 반응 — 고밀도 표에선 오히려 또렷하다).
                   //   참고로 호버를 아예 없애면 145ms 라, 남은 비용 30ms 가 이 기능의 실제 값이다.
                   'cursor-pointer border-b border-border-subtle last:border-b-0',
-                  s.isPremium ? 'bg-accent-300/5 hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
+                  paidShown(s.isPremium) ? 'bg-accent-300/5 hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
                 ].join(' ')}
               >
                 {/* 일시·참가비·상금은 '의미상 한 덩어리인 값'이라 한 줄 유지(whitespace-nowrap),
@@ -76,7 +77,7 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                 </td>
                 <td className="px-3 py-2 align-top">
                   <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                    {s.isPremium && <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-bold leading-tight text-white">TOP</span>}
+                    {paidShown(s.isPremium) && <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-bold leading-tight text-white">TOP</span>}
                     {s.isCompetition && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-bold leading-tight text-accent-200">대회</span>}
                     <span className="min-w-0 break-keep wrap-anywhere font-bold text-ink-primary">{s.title}</span>
                     {/* 등록 마감 배지 — 카드와 같은 어휘·같은 포맷터. 데이터 있을 때만 */}

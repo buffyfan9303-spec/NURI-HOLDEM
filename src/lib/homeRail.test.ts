@@ -35,9 +35,10 @@ describe('rankRail — 추천 근거 순서', () => {
     }), 8).map((s) => s.id);
     expect(r).toEqual(['c', 'b', 'a']);
   });
-  it('부스트(업주가 산 노출)는 여전히 맨 앞이다', () => {
-    expect(rankRail([a, d], ctx({ reservedIds: new Set(['a']) }), 8).map((s) => s.id)).toEqual(['d', 'a']);
-    expect(railScore(d, ctx())).toBeGreaterThan(railScore(a, ctx({ reservedIds: new Set(['a']), visitsByVenue: new Map([['v-a', 9]]), live: new Map([['a', { alive: 1, levelNo: 1 }]]) })));
+  // 2026-10-09 오너 결정 "유료 광고 노출 하지마"(lib/paidExposure) — 부스트는 추천 순서에 점수를 주지 않는다.
+  it('유료 노출 꺼짐: 부스트(업주가 산 노출)는 점수가 0이라 내 예약이 앞선다', () => {
+    expect(rankRail([a, d], ctx({ reservedIds: new Set(['a']) }), 8).map((s) => s.id)).toEqual(['a', 'd']);
+    expect(railScore(d, ctx())).toBe(0);
   });
   it('오늘 이전·미승인·끝난 대회는 근거가 있어도 빠진다', () => {
     const past = sch('p', { date: '2026-09-16' });
