@@ -31,6 +31,8 @@ describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스
     expect(LIB).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/api\/clock';/);
     expect(LIB).toMatch(/return \{ \.\.\.emptyClockState\(venueId, cfg, gameSeq\), title, sessionDate \};/);
     // F4-01(2026-10-04) — 장부 날짜를 넘겨야 클락이 장부와 연동된다(값 검사는 lib/chipRules.test.ts 'F4-01').
+    // H03-08(2026-10-08) — 클락 설정 베이스는 마운트 스냅샷이 아니라 장부 저장 전에 다시 읽은 basis.config 로 만든 cfg 다.
+    //   후속(같은 날 독립 검증): 세션 얼리 분과 같은 cfg 한 벌이어야 한다(아래 NuriPosLedgerRace 'H03-08 후속').
     expect(code).toMatch(/const row = clockStartRow\(action, fresh, cfg, base\.venueId, base\.gameSeq, base\.title \?\? '', base\.sessionDate\);/);
   });
 

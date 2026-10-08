@@ -1716,13 +1716,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     } catch { return null; }
   });
   const [fetched, setFetched] = useState(false);
+  const pendingIdsRef = useRef<Set<string>>(new Set());
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
     const a = getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
       .catch(() => { if (!stale()) setClocks([]); });
-    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) { pendingIdsRef.current = new Set(r.map((x) => x.id)); setPending(r.length); } })
       .catch(() => { if (!stale()) setPending(0); });
     void Promise.all([a, b]).then(() => { if (!stale()) setFetched(true); });
   }, [venueId, biz]);
@@ -1734,11 +1735,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     const h = barRef.current?.offsetHeight ?? 0;
     setHold(h > 0 ? { venueId, nav: navKey, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
-    setClocks([]); setPending(0); setFetched(false);
+    setClocks([]); setPending(0); setFetched(false); pendingIdsRef.current = new Set();
   }, [venueId]);
   useEffect(() => { if (active) reload(); }, [active, reload]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
-  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  // 클라우드 리뷰(2026-10-08) — ownsId 없이 구독하면 DELETE(필터 불가)를 **모든 매장** 것까지 받아, 매일 만료 정리 때 매장 수만큼 재조회가 몰렸다.
+  //   이 바가 센 요청이 지워질 때만 다시 센다(대시보드·장부와 같은 조리법). INSERT·UPDATE 는 venue_id 필터로 그대로 받는다.
+  const ownsPending = useCallback((id: string) => pendingIdsRef.current.has(id), []);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsPending }); }, [venueId, reload, active, ownsPending]);
   const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
   const main = live[0];
   const mainRunning = !!main?.running;
@@ -2265,6 +2269,24 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //   같은 파일 StaffWageManager 와 같은 패턴 — 실패 중에는 저장을 막는다.
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [rankTick, setRankTick] = useState(0);
+  const rankKeyRef = useRef('');
+  useEffect(() => { rankKeyRef.current = `${venueId}|${date}`; }, [venueId, date]);   // 저장 뒤 조용한 재조회가 지금 화면 것인지 판정(H03-09)
+  // 🔴 H03-09 후속(2026-10-08 독립 검증) — 조용한 재조회가 setAllEntries 로 아래 줄 갈아끼우기 effect 를 다시 돌려,
+  //   저장 **뒤에** 고치던 칸을 서버본으로 되돌렸다(재조회 2.5초 지연 + 저장 0.3초 뒤 1위 수정 → '우승자' 로 복귀).
+  //   · quietSeqRef — 재조회 세대. 저장을 두 번 하면 앞 저장의 늦은 응답(낡은 명단)은 버린다. 정식 로더가 돌아도 버린다.
+  //   · keepRowsRef — 응답이 올 때 줄이 저장 직후 기준선과 다르면(사장님이 손댔으면) 그 응답으로는 줄을 갈아끼우지 않는다.
+  //     allEntries 는 그대로 갱신한다 — B→A 로 돌아올 때 최신 저장본이 깔리는 H03-09 본래 수정은 유지된다.
+  const quietSeqRef = useRef(0);
+  const keepRowsRef = useRef<RankingEntry[] | null>(null);
+  const rowsRef = useRef<Row[]>(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
+  //   ⚠ 줄을 두는 것은 저장 뒤 줄 갈아끼우기가 **없었을 때**(기준선이 저장본 그대로)만이다(critical 반례, 같은 날).
+  //     응답 전에 다른 게임 칩을 갔다 오면 effect 가 저장 **전** allEntries 로 줄·기준선을 다시 깐다 — 그 위의 입력을 남기면
+  //     그대로 저장할 때 방금 저장분을 덮는다(H03-09 원래 사고). 그때는 서버본으로 갈아끼우고, 입력은 초안 → '되살리기' 로 남는다.
+  const applyQuietEntries = (entries: RankingEntry[], savedBase: string) => {
+    if (baselineRef.current === savedBase && JSON.stringify(rowsRef.current) !== savedBase) keepRowsRef.current = entries;
+    setAllEntries(entries);
+  };
   // S-10 — 메인을 ''(장부 마감 초안)·제목(게임 칩) 어느 쪽으로 들어와도 저장 이름 하나로 모은다.
   //   안 모으면 이미 저장된 칸이 아닌 빈 칸이 열려 다시 치고 저장 → 같은 대회가 두 벌이 된다. 조회 성공 뒤에만(실패 중 판단 금지).
   useEffect(() => {
@@ -2356,6 +2378,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //   저장하면 B 의 저장본이 A 명단으로 교체된다(F1 과 같은 소실). effect 가 반환하는 cleanup(alive=false)이 이전 요청의
   //   성공·실패·finally 를 전부 버린다 — deps 가 바뀌면 React 가 cleanup 을 먼저 부른다(동작 검사: lib/rankingsLoad.test.ts).
   useEffect(() => {
+    quietSeqRef.current += 1; keepRowsRef.current = null;   // 이 조회가 정본 — 앞서 띄운 조용한 재조회 응답은 버린다(H03-09 후속)
     setLoading(true);
     return loadRankingsEffect({
       fetch: () => getVenueRankings(venueId, date),
@@ -2374,6 +2397,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //     전체 삭제 후 재삽입이라, 낡은 초안을 무심코 저장하면 이미 저장된 순위를 통째로 덮어쓴다.
   //     그래서 '되살리기' 버튼을 눌렀을 때만 올린다.
   useEffect(() => {
+    // 저장 뒤 조용한 재조회가 사장님이 손대던 줄 위로 도착했다 — 줄은 두고 allEntries 만 바뀐 채 넘어간다(H03-09 후속).
+    if (keepRowsRef.current === allEntries) { keepRowsRef.current = null; return; }
     // 실패 중에는 rows 를 갈아끼우지 않는다 — 빈 줄을 보여 주면 '아무것도 없네' 로 읽혀 새로 치게 만든다(F1).
     if (loading || loadErr) return;
     const mine = allEntries.filter((e) => (e.eventName ?? '') === eventName);
@@ -2599,6 +2624,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
       clearRowsDraft(dkey);
       setDrafted(false);
       setRestorable(null);
+      // 🔴 H03-09(2026-10-08) — allEntries 는 마지막 조회본이라 저장 뒤 B→A 로 돌아오면 저장 **전** 명단(또는 빈 줄)이 다시 깔렸고,
+      //   그대로 저장하면 방금 저장분을 덮었다. 서버 정본을 **조용히** 다시 읽는다 — rankTick 은 '불러오는 중…' 으로 표를 접어 화면이 튄다.
+      //   그새 매장·날짜를 옮겼으면 버린다(지금 화면의 저장본을 남의 날짜 것으로 덮지 않게).
+      //   세대 번호(quietSeqRef)가 바뀌었으면 — 그 뒤 또 저장했거나 정식 로더가 돌았으면 — 이 응답은 낡았다(역순 도착).
+      const savedKey = `${venueId}|${date}`, savedBase = baselineRef.current;
+      const seq = ++quietSeqRef.current;
+      void getVenueRankings(venueId, date).then(({ entries }) => { if (rankKeyRef.current === savedKey && quietSeqRef.current === seq) applyQuietEntries(entries, savedBase); }).catch(() => {});
       toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
       toast.show(msgOf(e, '저장에 실패했습니다'), 'error');

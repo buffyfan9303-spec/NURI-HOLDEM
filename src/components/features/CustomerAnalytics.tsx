@@ -42,9 +42,13 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   useEffect(reloadAliases, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const q = mq.trim();
-    if (!linking || q.length < 2) { setMcands([]); return; }
-    const t = setTimeout(() => { findUserForTransfer(q).then(setMcands).catch(() => setMcands([])); }, 280);
-    return () => clearTimeout(t);
+    // SP12(2026-10-08) — 이미 나간 A 검색의 늦은 응답이 B 검색어(또는 다른 장부명) 아래 후보로 붙으면, 누르는 순간 장부명이 엉뚱한 회원에 연결된다.
+    //   검색어·대상이 바뀌면 이전 후보를 즉시 거두고, 이전 요청의 응답은 버린다.
+    setMcands([]);
+    if (!linking || q.length < 2) return;
+    let alive = true;
+    const t = setTimeout(() => { findUserForTransfer(q).then((r) => { if (alive) setMcands(r); }).catch(() => { if (alive) setMcands([]); }); }, 280);
+    return () => { alive = false; clearTimeout(t); };
   }, [mq, linking]);
   const doLink = async (alias: string, t: TransferTarget) => {
     setBusy(true);

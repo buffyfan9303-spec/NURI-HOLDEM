@@ -16,7 +16,7 @@
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
 import { createContext, memo, useContext, useEffect, useReducer, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
-import { clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
+import { bbAt, clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
 import { useClockSecond } from '../../../lib/clockTick';
 import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
@@ -126,10 +126,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
     const im = e.currentTarget;
     if (logo && im.naturalHeight > 0) setLogoAr({ src: logo.src, ar: im.naturalWidth / im.naturalHeight });
   };
-  const lvls = g.config?.levels ?? [];
-  // 손님 기기라 DB 를 고치지 않고 '지금 진짜 레벨' 을 계산해 표시한다(DB 전진은 운영자 화면 책임).
-  const eff = effectiveLevel(g);
-  const curIdx = eff.index;
+  // (레벨·BB 는 초 틱을 가진 자식들 — LevelLine·BottomMetrics — 이 각자 실효 레벨로 잰다.)
   const ls = g.liveStats ?? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
@@ -141,9 +138,6 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   const totalPrize = prizeTotalOf(prizes);
   const hasCounts = !!g.liveStats
     || (ls.entries > 0 || ls.alive > 0 || ls.rebuys > 0 || ls.earlies > 0 || ls.addons > 0 || ls.eliminations > 0);
-  // BB 병기 — 브레이크 중엔 직전 플레이 레벨의 BB
-  let curBB = 0;
-  for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { curBB = l.bb; break; } }
   const buyIn = ls.buyInAmount ?? 0;
   const regLevel = g.config?.regCloseLevel ?? 0;
   // 리바이·애드온·얼리는 **각자** 판정한다(예전엔 셋이 한 조건에 묶여 '리바이 · 애드온' 한 줄이었고 얼리는 아예 없었다).
@@ -328,7 +322,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               </div>
             ) : <span />}
             {/* 하단 중앙 — 칩 경제 3종. QR(좌)·스폰서(우) 사이의 빈 폭을 실제 정보로 채운다. */}
-            <BottomMetrics g={g} curBB={curBB} />
+            <BottomMetrics g={g} />
             <div className="flex shrink-0 items-center justify-self-end gap-[2cqmin]">
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: adSize === 'lg' ? '9cqmin' : adSize === 'md' ? '7.2cqmin' : '5.5cqmin' }} />}
               {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
@@ -696,10 +690,12 @@ function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
  * 우측 세로 레일에 같이 두면 7줄이 되어 글자가 작아지고, 정작 화면 하단은 QR·스폰서만 남아 비었다.
  * 다음 휴식만 초당 갱신이라 이 컴포넌트에 틱을 가둔다 — 보드 전체를 매초 다시 그리지 않는다.
  */
-function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
+function BottomMetrics({ g }: { g: ClockState }) {
   useClockSecond(g);
   const ls = g.liveStats;
   const eff = effectiveLevel(g);
+  // BB 병기 — 이 칸의 초 틱과 **같은 실효 레벨**로 잰다. 부모(틱 없음)에서 받으면 레벨 경계 뒤 다음 상태 수신까지 이전 레벨 BB 였다.
+  const curBB = bbAt(g.config?.levels ?? [], eff.index);
   const brk = msToNextBreak(g, eff.index, eff.remainingMs);
   /** 값 없음(—)과 실제 0 을 구분한다 — 장부가 아직 안 붙은 클락에서 '총 칩 0' 은 거짓이다. */
   const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());

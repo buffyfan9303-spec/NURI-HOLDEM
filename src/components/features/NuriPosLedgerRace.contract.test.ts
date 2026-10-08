@@ -172,3 +172,39 @@ describe('C04(연동판정) · clockLinked 가 게임 번호까지 맞춰 본다
     expect(m![0]).toContain('clock.gameSeq === gameSeq');
   });
 });
+
+describe('H03-08 · 장부 시작/수정이 실패하면 클락을 건드리지 않는다', () => {
+  const start = code.indexOf('const submitOnce = async');
+  const body = code.slice(start, code.indexOf('\n  };\n', start));
+  it('saveClockState 는 onSubmit 결과가 true 로 확인된 뒤에만 실행된다', () => {
+    expect(start, 'submitOnce 를 찾지 못했다').toBeGreaterThan(-1);
+    const submitAt = body.indexOf('const ok = await onSubmit(');
+    const runAt = body.indexOf('if (ok === true && syncClock) await syncClock();');
+    expect(submitAt, 'onSubmit 결과를 받지 않는다').toBeGreaterThan(-1);
+    expect(runAt, 'ok 확인 뒤 클락 동기화가 없다').toBeGreaterThan(submitAt);
+    // onSubmit 앞에서 즉시 실행되는 클락 쓰기(void IIFE) 금지
+    expect(body.slice(0, submitAt)).not.toMatch(/void \(async \(\) =>/);
+  });
+  it('후속 — 세션 얼리 분과 클락 설정은 장부 저장 전에 읽은 같은 베이스(cfg 한 벌)에서 나온다', () => {
+    const submitAt = body.indexOf('const ok = await onSubmit(');
+    // 병합은 한 번만 — 세션용·클락용 두 벌을 따로 만들면 베이스가 갈린다
+    expect((body.match(/ledgerStartClockConfig\(/g) ?? []).length).toBe(1);
+    expect(body).toMatch(/const baseCfg = inheritClockRef\.current\.full \?\? \(basisErr \? clockState\?\.config : basis\?\.config\) \?\? defaultClockConfig\(\);/);
+    // 베이스 읽기는 장부 저장 전, 쓰기(saveClockState)는 저장 뒤
+    const readAt = body.indexOf('basis = await getClockState(base.venueId, base.gameSeq)');
+    expect(readAt, '장부 저장 전에 클락을 다시 읽지 않는다').toBeGreaterThan(-1);
+    expect(readAt).toBeLessThan(submitAt);
+    expect(body.slice(0, body.indexOf('syncClock = async'))).not.toMatch(/saveClockState\(/);
+    // 세션 얼리와 클락 행이 같은 cfg 를 쓴다
+    expect(body).toMatch(/earlyDMin = cfg\.earlyDoubleMin; earlySMin = cfg\.earlySingleMin;/);
+    expect(body).toMatch(/clockStartRow\(action, fresh, cfg,/);
+    // 읽기 실패면 클락은 쓰지 않는다 · 그사이 설정이 바뀌었으면 덮지 않는다
+    expect(body).toMatch(/if \(basisErr\) \{ formToast\.show\([^\n]*\); return; \}/);
+    expect(body).toMatch(/if \(JSON\.stringify\(fresh\?\.config \?\? null\) !== JSON\.stringify\(basis\?\.config \?\? null\)\) \{/);
+  });
+  it('handleOpen 은 LEDGER_ALREADY_OPEN·실패에서 false, 성공에서 true 를 돌려준다', () => {
+    const h = code.slice(code.indexOf('const handleOpen = async'), code.indexOf('const handleEditSave = async'));
+    expect(h).toMatch(/return true;/);
+    expect((h.match(/return false;/g) ?? []).length).toBe(2);
+  });
+});

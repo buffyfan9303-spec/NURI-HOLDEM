@@ -33,6 +33,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
   const [busy, setBusy] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archiveRows, setArchiveRows] = useState<SeasonStanding[]>([]);
+  const [archiveErr, setArchiveErr] = useState<string | null>(null);
+  const archiveReqRef = useRef<string | null>(null);
   const [hof, setHof] = useState<HallOfFameEntry[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -77,9 +79,12 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
     catch (e) { toast.show(msgOf(e, '종료 실패'), 'error'); } finally { setBusy(false); }
   };
   const openArchive = async (id: string) => {
-    if (archiveId === id) { setArchiveId(null); return; }
-    setArchiveId(id);
-    setArchiveRows(await getSeasonResults(id).catch(() => []));
+    if (archiveId === id) { setArchiveId(null); archiveReqRef.current = null; return; }
+    setArchiveId(id); setArchiveRows([]); setArchiveErr(null);
+    // SP11(2026-10-08) — 시즌 A 를 연 뒤 B 를 누르면 늦은 A 결과가 B 아래에 붙었고, 실패는 '기록 없음' 으로 보였다.
+    archiveReqRef.current = id;
+    try { const rows = await getSeasonResults(id); if (archiveReqRef.current === id) setArchiveRows(rows); }
+    catch (e) { if (archiveReqRef.current === id) setArchiveErr(msgOf(e, '시즌 기록을 불러오지 못했습니다')); }
   };
 
   const Row = ({ s }: { s: SeasonStanding }) => (
@@ -179,7 +184,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
                 </button>
                 {archiveId === s.id && (
                   <ul className="space-y-1.5 px-2 pb-2">
-                    {archiveRows.length === 0 ? <li className="py-2 text-center text-2xs text-ink-muted">기록 없음</li> : archiveRows.slice(0, 20).map((r) => <Row key={r.rank} s={r} />)}
+                    {archiveErr ? <li role="alert" className="py-2 text-center text-2xs text-danger-light">{archiveErr}</li>
+                      : archiveRows.length === 0 ? <li className="py-2 text-center text-2xs text-ink-muted">기록 없음</li> : archiveRows.slice(0, 20).map((r) => <Row key={r.rank} s={r} />)}
                   </ul>
                 )}
               </li>

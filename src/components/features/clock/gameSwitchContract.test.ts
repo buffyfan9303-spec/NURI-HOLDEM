@@ -36,3 +36,26 @@ describe('C04 · 게임 전환 응답에 isStaleResponse 세대 가드가 있다
     expect(body).toContain('isStaleResponse(');
   });
 });
+
+describe('H03-06 · 게임 A 에서 무장한 되돌리기·실행취소는 게임 B 에 쓰이지 않는다', () => {
+  it('persistFor 는 무장 시점의 (매장#게임) 키가 지금 stateRef 와 다르면 쓰지 않는다', () => {
+    expect(code).toMatch(/const persistFor = \(owner: string, patch: Partial<ClockState>\): boolean => \{\s*if \(clockOwnerKey\(stateRef\.current\) !== owner\) return false;/);
+  });
+  it('레벨 되돌리기·일시정지/재개 실행취소가 모두 persistFor 를 지난다(맨 persist 금지)', () => {
+    expect(code).toMatch(/persistFor\(levelUndoOwnerRef\.current, levelUndoPatch\(levelUndo\)\)/);
+    expect(code).not.toMatch(/\bpersist\(levelUndoPatch\(/);
+    const undos = code.match(/label: '실행취소', onClick: \(\) => [^\n]*/g) ?? [];
+    expect(undos.length).toBe(2);
+    for (const u of undos) expect(u).toContain('persistFor(owner,');
+  });
+  it('후속 — 쓰지 않았으면 말없이 넘기지 않고 안내한다(실행취소 2곳 · 레벨 되돌리기)', () => {
+    const undos = code.match(/label: '실행취소', onClick: \(\) => [^\n]*/g) ?? [];
+    expect(undos.length).toBe(2);
+    for (const u of undos) expect(u).toMatch(/if \(!persistFor\(owner, [^\n]*\)\) undoSkipped\(\);/);
+    expect(code).toMatch(/if \(!done\) \{ undoSkipped\(\); return; \}/);
+    expect(code).toMatch(/const undoSkipped = \(\) => toast\.show\('다른 게임으로 옮겨 실행취소하지 않았어요/);
+  });
+  it('게임·매장이 바뀌면 되돌리기 버튼을 거둔다', () => {
+    expect(code).toMatch(/useEffect\(\(\) => \{ setLevelUndo\(null\); \}, \[state\.venueId, state\.gameSeq\]\);/);
+  });
+});
