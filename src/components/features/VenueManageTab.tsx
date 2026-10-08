@@ -2277,8 +2277,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   const keepRowsRef = useRef<RankingEntry[] | null>(null);
   const rowsRef = useRef<Row[]>(rows);
   useEffect(() => { rowsRef.current = rows; }, [rows]);
-  const applyQuietEntries = (entries: RankingEntry[]) => {
-    if (JSON.stringify(rowsRef.current) !== baselineRef.current) keepRowsRef.current = entries;
+  //   ⚠ 줄을 두는 것은 저장 뒤 줄 갈아끼우기가 **없었을 때**(기준선이 저장본 그대로)만이다(critical 반례, 같은 날).
+  //     응답 전에 다른 게임 칩을 갔다 오면 effect 가 저장 **전** allEntries 로 줄·기준선을 다시 깐다 — 그 위의 입력을 남기면
+  //     그대로 저장할 때 방금 저장분을 덮는다(H03-09 원래 사고). 그때는 서버본으로 갈아끼우고, 입력은 초안 → '되살리기' 로 남는다.
+  const applyQuietEntries = (entries: RankingEntry[], savedBase: string) => {
+    if (baselineRef.current === savedBase && JSON.stringify(rowsRef.current) !== savedBase) keepRowsRef.current = entries;
     setAllEntries(entries);
   };
   // S-10 — 메인을 ''(장부 마감 초안)·제목(게임 칩) 어느 쪽으로 들어와도 저장 이름 하나로 모은다.
@@ -2622,9 +2625,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
       //   그대로 저장하면 방금 저장분을 덮었다. 서버 정본을 **조용히** 다시 읽는다 — rankTick 은 '불러오는 중…' 으로 표를 접어 화면이 튄다.
       //   그새 매장·날짜를 옮겼으면 버린다(지금 화면의 저장본을 남의 날짜 것으로 덮지 않게).
       //   세대 번호(quietSeqRef)가 바뀌었으면 — 그 뒤 또 저장했거나 정식 로더가 돌았으면 — 이 응답은 낡았다(역순 도착).
-      const savedKey = `${venueId}|${date}`;
+      const savedKey = `${venueId}|${date}`, savedBase = baselineRef.current;
       const seq = ++quietSeqRef.current;
-      void getVenueRankings(venueId, date).then(({ entries }) => { if (rankKeyRef.current === savedKey && quietSeqRef.current === seq) applyQuietEntries(entries); }).catch(() => {});
+      void getVenueRankings(venueId, date).then(({ entries }) => { if (rankKeyRef.current === savedKey && quietSeqRef.current === seq) applyQuietEntries(entries, savedBase); }).catch(() => {});
       toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
       toast.show(msgOf(e, '저장에 실패했습니다'), 'error');

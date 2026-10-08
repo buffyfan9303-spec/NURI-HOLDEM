@@ -6,7 +6,8 @@
 //   ② 연속 저장 두 번의 재조회가 역순으로 도착하면(앞 저장 응답이 나중) 앞 저장본이 화면에 깔렸다 — 세대 번호로 낡은 응답을 버린다.
 // 서버 흉내: save_venue_rankings 가 받은 명단을 '저장본'으로 들고, venue_rankings_public 은 **요청 시점**의 저장본을 지연해 돌려준다.
 // 전부 목킹 — 운영 쓰기 0. 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/rank-quiet-refetch-1008.spec.ts
-// 음성 대조: PR #224 판(320059ac) 빌드에서 ①·② FAIL, 이 수정 빌드에서 PASS(보고서 audit12/fix-224-followup.md).
+//   ③ (critical 반례) 응답 전에 다른 게임을 갔다 오면 낡은 줄 위의 입력은 남기지 않는다 — 서버본 + '되살리기'.
+// 음성 대조: PR #224 판(320059ac) 빌드에서 ①·② FAIL, cb673369 빌드에서 ③ FAIL, 이 수정 빌드에서 전부 PASS(보고서 audit12/fix-224-followup.md).
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
@@ -70,6 +71,26 @@ test('🔴 ① 저장 직후 고친 줄은 늦게 온 조용한 재조회가 되
   await expect(pane.getByText('B게임').first()).toBeVisible({ timeout: 5_000 });
   await pane.getByRole('button', { name: /메인\(기본\)/ }).click();
   await expect.poll(() => namesOf(page), { message: '메인으로 돌아왔는데 서버 저장본이 아니다(재조회 결과 미반영)' }).toEqual(['우승자', '준우승', '삼등']);
+});
+
+// critical 반례(verify-224b.md) — 응답 전에 B→메인으로 갔다 오면 effect 가 저장 **전** 명단(첫 저장이면 빈 줄)을 다시 깐다.
+//   그 위에 친 입력을 재조회가 남기면 그대로 저장할 때 방금 저장한 3명을 덮는다(H03-09 원래 사고). 서버본이 깔리고 입력은 '되살리기' 로.
+test('🔴 ③ 저장 → 응답 전 B → 메인 → 입력 → 재조회 도착: 서버 저장본이 깔리고 입력은 되살리기 후보로 남는다', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { srv, pane, nick } = await bootRanking(page, () => 4_000);
+  while (await nick.count() < 3) await pane.getByRole('button', { name: /줄 추가/ }).click();
+  for (const [i, n] of ['우승자', '준우승', '삼등'].entries()) await nick.nth(i).fill(n);
+  await pane.getByRole('button', { name: /순위 저장$/ }).click();
+  await expect.poll(() => srv.version, { message: '저장 RPC 가 나가지 않았다' }).toBe(1);
+  page.once('dialog', (d) => void d.accept('B게임'));
+  await pane.getByRole('button', { name: /직접 추가/ }).click();
+  await expect(pane.getByText('B게임').first()).toBeVisible({ timeout: 5_000 });
+  await pane.getByRole('button', { name: /메인\(기본\)/ }).click();
+  await nick.nth(0).fill('새입력');
+  expect(srv.served.length, '재조회가 이미 도착했다 — 반례 조건(응답 전 왕복·입력)이 아니다(전제)').toBe(0);
+  await expect.poll(() => srv.served.length, { message: '조용한 재조회가 응답되지 않았다(전제)', timeout: 10_000 }).toBeGreaterThan(0);
+  await expect.poll(() => namesOf(page), { message: '저장 전 명단 위의 입력이 남았다 — 그대로 저장하면 방금 저장분을 덮는다' }).toEqual(['우승자', '준우승', '삼등']);
+  await expect(pane.getByRole('button', { name: '되살리기' }), '입력분이 되살리기 후보로 남지 않았다').toBeVisible();
 });
 
 test('🔴 ② 연속 저장 두 번의 재조회가 역순으로 와도 앞 저장본이 깔리지 않는다', async ({ page }) => {

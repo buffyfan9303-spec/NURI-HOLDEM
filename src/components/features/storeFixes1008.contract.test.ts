@@ -17,10 +17,12 @@ describe('H03-09 · 순위 저장 뒤 저장본(allEntries)을 서버 정본으�
     expect(save).toMatch(/await saveVenueRankings\(/);
     // H03-09 후속 — 매장·날짜 키에 더해 재조회 세대(quietSeqRef)도 같아야 반영한다(두 번 저장의 역순 도착 차단).
     expect(save).toMatch(/const seq = \+\+quietSeqRef\.current;/);
-    expect(save).toMatch(/getVenueRankings\(venueId, date\)\.then\(\(\{ entries \}\) => \{ if \(rankKeyRef\.current === savedKey && quietSeqRef\.current === seq\) applyQuietEntries\(entries\); \}\)/);
+    expect(save).toMatch(/getVenueRankings\(venueId, date\)\.then\(\(\{ entries \}\) => \{ if \(rankKeyRef\.current === savedKey && quietSeqRef\.current === seq\) applyQuietEntries\(entries, savedBase\); \}\)/);
+    expect(save).toMatch(/const savedKey = `\$\{venueId\}\|\$\{date\}`, savedBase = baselineRef\.current;/);
   });
   it('후속 — 저장 뒤 손댄 줄은 조용한 재조회가 갈아끼우지 않는다(기준선과 다르면 keepRowsRef 표식)', () => {
-    expect(c).toMatch(/const applyQuietEntries = \(entries: RankingEntry\[\]\) => \{\s*if \(JSON\.stringify\(rowsRef\.current\) !== baselineRef\.current\) keepRowsRef\.current = entries;\s*setAllEntries\(entries\);/);
+    // 저장 뒤 줄 갈아끼우기가 없었을 때(기준선 === 저장 시점 기준선)만 둔다 — 칩을 오가 낡은 줄이 깔렸으면 서버본으로(critical 반례)
+    expect(c).toMatch(/const applyQuietEntries = \(entries: RankingEntry\[\], savedBase: string\) => \{\s*if \(baselineRef\.current === savedBase && JSON\.stringify\(rowsRef\.current\) !== savedBase\) keepRowsRef\.current = entries;\s*setAllEntries\(entries\);/);
     // 줄 갈아끼우기 effect 의 맨 앞에서 표식을 소비하고 빠진다
     expect(c).toMatch(/useEffect\(\(\) => \{\s*if \(keepRowsRef\.current === allEntries\) \{ keepRowsRef\.current = null; return; \}\s*if \(loading \|\| loadErr\) return;\s*const mine = allEntries\.filter/);
     // 정식 로더가 돌면 앞서 띄운 조용한 재조회는 낡은 것이 된다
