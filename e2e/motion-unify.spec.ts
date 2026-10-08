@@ -283,6 +283,9 @@ test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시�
   await page.route(/supabase\.co\/rest\/v1\//, (r) => r.continue({ headers: { ...r.request().headers(), authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY } }));
   await stubLogin(page);
   await mockSchedules(page);
+  // 2026-10-08 오픈 초기화로 운영 게시글이 0건 → 마지막 단계('게시글 상세')의 눌릴 행이 없어 빨개졌다. boot()(MU1~3)와 같이 글을 목킹한다.
+  //   위의 anon 통과 라우트보다 **뒤에** 걸어야 이긴다(나중 route 가 먼저 받는다).
+  await mockPosts(page);
   await page.addInitScript(RECORDER);
   await page.goto('/');
   await dismissOverlays(page);
