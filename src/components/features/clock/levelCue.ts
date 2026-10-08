@@ -77,6 +77,7 @@ export function useLevelCue<T extends HTMLElement>(cueKey: string) {
 /** 빛 판 스타일 — 글자색(currentColor)을 그대로 번지게 한다(브레이크=하늘, 레벨=accent). 평소 opacity 0.
  *  빛 판은 글자 상자(inset-0) 안에 있고 밖으로 번지는 부분은 box-shadow(잉크 넘침)라 scrollWidth·레이아웃에 잡히지 않는다. */
 export const LEVEL_CUE_GLOW = {
-  background: 'radial-gradient(closest-side, color-mix(in srgb, currentColor 30%, transparent), transparent)',
+  // 면은 옅은 단색 틴트(그라디언트 안의 currentColor 는 판 안쪽을 오히려 어둡게 보이게 했다 — 2026-10-08 1920 캡처), 번짐은 box-shadow.
+  background: 'color-mix(in srgb, currentColor 16%, transparent)',
   boxShadow: '0 0 0.7em 0.2em color-mix(in srgb, currentColor 22%, transparent)',
 } as const;
