@@ -75,14 +75,25 @@ function ToastItem({ message, variant, action, durationMs, onDismiss, k, onOpen,
       onClick={() => { if (!justOpened()) onDismiss(); }}
       title="탭하면 닫힘"
       // 뒤 토스트: 10px 씩 위로 비치고 5% 씩 작게, 넷째부터는 숨김(포커스·스크린리더에는 남는다 — 포커스하면 펼쳐진다)
-      style={k ? { transform: `translateY(${-10 * k}px) scale(${1 - k / 20})`, transformOrigin: 'bottom', ...(k > 2 && { opacity: 0, pointerEvents: 'none' }) } : undefined}
+      style={{
+        ...(k ? { transform: `translateY(${-10 * k}px) scale(${1 - k / 20})`, transformOrigin: 'bottom', ...(k > 2 && { opacity: 0, pointerEvents: 'none' as const }) } : null),
+        // ── 등장·퇴장 모션(2026-10-08 M04) — 인라인 스타일인 이유: 이 파일은 지연 청크라 첫 화면 CSS 예산 0B 다.
+        // 🔴 퇴장의 translate-y-2 는 Tailwind v4 에서 **`translate` 속성**이다(transform 아님). 종전 transition-[transform,opacity]
+        //   는 translate 를 전환하지 않아 퇴장 첫 프레임에 8px 아래로 **순간이동**한 뒤 흐려졌다. 세 속성을 다 전환한다.
+        // 등장(slide-up 8px)과 퇴장(8px 아래)이 같은 축·같은 곡선(--ease)이다. 등장 0.32s → 0.22s(작은 알림은 짧게 — 손가락 반응을 늦추지 않는다),
+        //   퇴장 0.22s 는 제거 예약(수명−300ms)보다 80ms 먼저 끝나 꼬리가 잘리지 않는다. 겹쳐 쌓기 재배치(transform)만 --dur-panel.
+        // 동작 줄이기: index.css 의 !important(애니메이션 none·전환 0.01ms)가 인라인보다 이긴다 → 효과 0.
+        transitionProperty: 'transform, translate, opacity',
+        transitionDuration: out ? 'var(--dur-base)' : 'var(--dur-panel)',
+        transitionTimingFunction: 'var(--ease)',
+        animationDuration: 'var(--dur-base)',
+      }}
       className={[
         // max-w: 모바일은 화면의 92%, PC 는 읽기 좋은 28rem 상한(끝없이 옆으로 길어지는 것 방지)
         'inline-flex shrink-0 items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
         // 앞(흐름) 토스트는 relative — 그래야 absolute 인 뒤 토스트들보다 위에 그려진다
         k ? 'absolute bottom-0 inset-x-0 mx-auto w-fit' : 'relative',
         'text-sm font-medium pointer-events-auto max-w-[92vw] sm:max-w-md cursor-pointer select-none',
-        'transition-[transform,opacity] duration-(--dur-panel)',
         COLOR[variant],
         out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
       ].join(' ')}
@@ -107,14 +118,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss, k, onOpen,
 
 function Icon({ variant }: { variant: ToastVariant }) {
   const common = 'w-4 h-4 shrink-0';
-  if (variant === 'success') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={common} aria-hidden>
-        <circle cx="8" cy="8" r="6.5" />
-        <polyline points="5,8 7,10 11,6" />
-      </svg>
-    );
-  }
+  if (variant === 'success') return <SuccessIcon className={common} />;
   if (variant === 'error') {
     return (
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={common} aria-hidden>
@@ -129,6 +133,28 @@ function Icon({ variant }: { variant: ToastVariant }) {
       <circle cx="8" cy="8" r="6.5" />
       <line x1="8" y1="7" x2="8" y2="11.5" />
       <circle cx="8" cy="5" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+// 성공 체크 — 토스트가 자리에 닿을 즈음(90ms) 체크 획을 200ms 에 그린다(2026-10-08 M04).
+//   서버 성공 뒤에만 뜨는 success 토스트의 아이콘을 꾸밀 뿐 상태·로직은 없다. 16px SVG 한 획의 페인트라 가볍다.
+//   WAAPI 인 이유: 지연 청크 안에서 끝나 첫 화면 CSS 에 키프레임을 싣지 않는다. 동작 줄이기면 그리지 않고 완성된 체크를 둔다.
+//   fill:'backwards' — 지연 동안 획이 비어 있다가 그려지고, 끝나면 애니메이션 효과가 빠져 정적 체크(원래 그림)로 남는다.
+//   언마운트(탭해서 닫기·수명 끝) 시 cancel — 상주 타이머·루프 없음.
+function SuccessIcon({ className }: { className: string }) {
+  const tick = useRef<SVGPolylineElement>(null);
+  useEffect(() => {
+    const el = tick.current;
+    if (!el?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const a = el.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+      { duration: 200, delay: 90, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' });
+    return () => a.cancel();
+  }, []);
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="8" cy="8" r="6.5" />
+      <polyline ref={tick} points="5,8 7,10 11,6" pathLength={1} strokeDasharray="1" />
     </svg>
   );
 }
