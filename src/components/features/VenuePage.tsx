@@ -1917,7 +1917,9 @@ function PostersPanel({
                 <p className="text-2xs font-bold text-ink-muted">공지</p>
                 <ul className="space-y-1.5">
                   {notices.slice(0, 3).map((n) => (
-                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-accent-400/50">
+                    // 2026-10-09 오너 "과한 디자인은 안 된다": 왼쪽 2px 강조색 띠 → 아래 포스터 카드와 같은 얇은 테두리.
+                    // 패딩은 테두리 두께 차(왼 −1px · 위·아래·오른 +1px)만큼 보정해 글자 위치를 그대로 둔다(e2e/venue-notice-card-1009).
+                    <li key={n.id} className="pl-[calc(0.625rem+1px)] pr-[calc(0.625rem-1px)] py-[calc(0.5rem-1px)] rounded-input bg-surface-high border border-border-subtle">
                       <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                       {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
                     </li>
