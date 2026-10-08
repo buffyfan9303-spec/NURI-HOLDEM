@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { LEGAL_VERSION, LEGAL_EFFECTIVE_ISO, legalConsentStage, legalRequiredSinceIso } from '../../lib/legalVersion';
-import { LEGAL_DEPLOY_ISO, TERMS_V3_NOTICE_ISO, TERMS_V3_EFFECTIVE_ISO, TERMS_V2_ARCHIVE_URL } from '../../lib/legalDeploy';
+import { LEGAL_DEPLOY_ISO, TERMS_V3_NOTICE_ISO, TERMS_V3_EFFECTIVE_ISO, TERMS_V2_ARCHIVE_URL, TERMS_V4_EFFECTIVE_ISO } from '../../lib/legalDeploy';
 
 const ROOT = path.join(__dirname, '../../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8');
@@ -17,10 +17,10 @@ const kst = (iso: string, hm = '12:00') => new Date(`${iso}T${hm}:00+09:00`);
 const prevDay = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
 describe('제3판 날짜 — 배포일(정식 오픈일) 한 곳', () => {
-  it('공지일 ≤ 시행일 · 둘 다 배포일 · 약관 동의 판 3', () => {
+  it('공지일 ≤ 시행일 · 둘 다 배포일 · 약관 동의 판 4(제4판 — terms4-1009.contract.test)', () => {
     expect(TERMS_V3_NOTICE_ISO <= TERMS_V3_EFFECTIVE_ISO).toBe(true);
     expect(TERMS_V3_EFFECTIVE_ISO).toBe(LEGAL_DEPLOY_ISO);
-    expect(LEGAL_VERSION).toBe(3);
+    expect(LEGAL_VERSION).toBe(4);
   });
 });
 
@@ -33,13 +33,16 @@ describe('재동의 — 제3판 시행일 KST 0시부터 제2판 동의자 차�
     expect(legalConsentStage(2, kst(TERMS_V3_EFFECTIVE_ISO, '00:00'))).toBe('required');
     expect(legalRequiredSinceIso(2, kst(TERMS_V3_EFFECTIVE_ISO))).toBe(TERMS_V3_EFFECTIVE_ISO);
   });
-  it('제1판·미상 동의자는 시행 전날에도 차단(제2판 시행 2026-09-29 이후) · 제3판 동의자는 언제나 ok', () => {
+  it('제1판·미상 동의자는 시행 전날에도 차단(제2판 시행 2026-09-29 이후) · 제3판 동의자는 제4판 시행 전까지 차단 없음', () => {
     expect(legalConsentStage(1, kst(prevDay(TERMS_V3_EFFECTIVE_ISO)))).toBe('required');
     expect(legalConsentStage(null, kst(prevDay(TERMS_V3_EFFECTIVE_ISO)))).toBe('required');
     expect(legalRequiredSinceIso(1, kst(prevDay(TERMS_V3_EFFECTIVE_ISO)))).toBe(LEGAL_EFFECTIVE_ISO);
     expect(legalRequiredSinceIso(1, kst(TERMS_V3_EFFECTIVE_ISO))).toBe(TERMS_V3_EFFECTIVE_ISO);
-    expect(legalConsentStage(3, kst(TERMS_V3_EFFECTIVE_ISO))).toBe('ok');
-    expect(legalConsentStage(3, kst('2027-12-31'))).toBe('ok');
+    // 제4판이 올라간 뒤: 제3판 동의자는 제4판 시행 전날까지 notice(차단 없음), 시행일부터 required. 제4판 동의자는 언제나 ok.
+    expect(legalConsentStage(3, kst(TERMS_V3_EFFECTIVE_ISO))).toBe('notice');
+    expect(legalRequiredSinceIso(3, kst(prevDay(TERMS_V4_EFFECTIVE_ISO), '23:59'))).toBeNull();
+    expect(legalConsentStage(3, kst(TERMS_V4_EFFECTIVE_ISO, '00:00'))).toBe('required');
+    expect(legalConsentStage(4, kst('2027-12-31'))).toBe('ok');
   });
   it('게이트 문구는 상수가 아니라 차단 사유의 시행일을 보여 준다', () => {
     const g = read('src/components/features/ConsentGateModal.tsx');
