@@ -38,26 +38,28 @@ describe('UP-17 오늘 곧 시작 — 이미 끝난 오늘 일정 제외', () =>
   });
 });
 
-describe('UP-14 전화번호 칩 — 기본 동작은 동기로 막는다', () => {
-  it('클립보드가 있으면 복사 Promise 가 끝나기 전에 preventDefault 가 불린다', () => {
-    const order: string[] = [];
-    let resolveWrite: () => void = () => {};
-    const clipboard = { writeText: vi.fn(() => new Promise<void>((r) => { resolveWrite = r; })) };
-    const e = { preventDefault: vi.fn(() => order.push('prevent')) };
-    const p = copyOrDial(e, '010-1234-5678', 'tel:01012345678', () => order.push('copied'), { clipboard, dial: vi.fn() });
-    // 여기는 아직 같은 동기 구간 — 클릭 디스패치 안에서 막혀야 효과가 있다
-    expect(e.preventDefault).toHaveBeenCalledTimes(1);
-    expect(order).toEqual(['prevent']);
-    resolveWrite();
-    return Promise.resolve(p).then(() => expect(order).toEqual(['prevent', 'copied']));
+describe('UP-14 전화번호 칩 — 탭 = 복사 + 전화(기본 tel: 를 막지 않는다)', () => {
+  it('복사가 성공해도 preventDefault 하지 않는다(tel: 기본 동작 유지) · 복사 토스트는 뜬다', async () => {
+    const onCopied = vi.fn();
+    const e = { preventDefault: vi.fn() };
+    await copyOrDial(e, '010-1234-5678', 'tel:01012345678', onCopied, { clipboard: { writeText: () => Promise.resolve() }, dial: vi.fn() });
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(onCopied).toHaveBeenCalledTimes(1);
   });
 
-  it('복사가 거부되면 tel: 로 보낸다', async () => {
+  it('writeText 가 영영 끝나지 않아도(인앱 웹뷰) 탭이 먹히지 않는다 — preventDefault 0회', () => {
+    const e = { preventDefault: vi.fn() };
+    copyOrDial(e, '010', 'tel:010', vi.fn(), { clipboard: { writeText: () => new Promise<void>(() => {}) }, dial: vi.fn() });
+    expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('복사가 거부돼도 이중 다이얼하지 않는다(tel: 은 이미 기본 동작으로 실행됨)', async () => {
     const dial = vi.fn();
     const onCopied = vi.fn();
     const e = { preventDefault: vi.fn() };
     await copyOrDial(e, '010', 'tel:010', onCopied, { clipboard: { writeText: () => Promise.reject(new Error('denied')) }, dial });
-    expect(dial).toHaveBeenCalledWith('tel:010');
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(dial).not.toHaveBeenCalled();
     expect(onCopied).not.toHaveBeenCalled();
   });
 
@@ -67,10 +69,10 @@ describe('UP-14 전화번호 칩 — 기본 동작은 동기로 막는다', () =
     expect(e.preventDefault).not.toHaveBeenCalled();
   });
 
-  it('ContactActions 의 두 칩이 모두 이 경로를 쓰고, await 뒤 preventDefault 가 남지 않는다', () => {
+  it('ContactActions 의 두 칩이 모두 이 경로를 쓰고, 칩 onClick 에 preventDefault 가 없다', () => {
     const t = src('src/components/features/ContactActions.tsx');
     expect(t.match(/copyOrDial\(e, /g)?.length).toBe(2);
-    expect(t).not.toMatch(/await navigator\.clipboard\.writeText\([^)]*\);\s*e\.preventDefault\(\)/);
+    expect(t).not.toMatch(/e\.preventDefault\(\)/);
   });
 });
 

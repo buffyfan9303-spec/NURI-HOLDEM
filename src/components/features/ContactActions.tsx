@@ -112,7 +112,7 @@ export function ContactRows({ contacts, label = '연락처' }: { contacts: { lab
             href={`tel:${c.phone.replace(/[^0-9+]/g, '')}`}
             title={c.label ? `${c.label} ${c.phone}` : c.phone}
             onClick={(e) => {
-              // UP-14 — 기본 동작은 동기로 막고 복사, 복사 거부 시 tel: 로 보낸다(lib/copyOrDial).
+              // UP-14 — 번호 복사 + tel: 기본 동작 유지(복사만 하고 전화를 막지 않는다, lib/copyOrDial).
               void copyOrDial(e, c.phone, e.currentTarget.href, () => toast.show(`${c.phone} 복사됨`, 'success'), browserCopyDeps());
             }}
             className="hit inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary"
@@ -139,7 +139,7 @@ export function PhoneRow({ phone, label = '연락처' }: { phone: string; label?
             key={n}
             href={`tel:${n.replace(/[^0-9+]/g, '')}`}
             onClick={(e) => {
-              // UP-14 — 기본 동작은 동기로 막고 복사, 복사 거부 시 tel: 로 보낸다(lib/copyOrDial).
+              // UP-14 — 번호 복사 + tel: 기본 동작 유지(복사만 하고 전화를 막지 않는다, lib/copyOrDial).
               void copyOrDial(e, n, e.currentTarget.href, () => toast.show(`${n} 복사됨`, 'success'), browserCopyDeps());
             }}
             className="hit inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
