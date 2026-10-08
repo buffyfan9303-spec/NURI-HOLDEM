@@ -74,6 +74,13 @@ export const DOCS = [
     consent: '매장 운영자 필수 동의',
     desc: 'NURI HOLDEM 매장 운영자 이용약관 — 매장 운영 도구의 이용 조건과 손님·직원 개인정보의 처리 위탁(개인정보 보호법 제26조)을 정합니다.',
   },
+  {
+    // 2026-10-08 Play 출시 준비 — 앱 하단 창에만 있던 위치 약관의 공개 주소. 원본은 LegalDocsModal.tsx 의 LOCATION(LocationTerms.tsx 가 그린다).
+    slug: 'location', export: 'locationTerms',
+    title: '위치기반서비스 이용약관',
+    consent: '선택 동의',
+    desc: 'NURI HOLDEM 위치기반서비스 이용약관 — 매장이 위치 확인 출석을 켠 경우의 출석 위치 확인에만 필요한 선택 동의 문서입니다.',
+  },
 ];
 
 // ── 1) 앱 컴포넌트를 SSR 번들로 만들어 그대로 렌더 ───────────────────────────

@@ -13,6 +13,7 @@
     "licenses": "node scripts/gen-licenses.mjs",
     "licenses:check": "node scripts/gen-licenses.mjs --check",
     "playstore:assets": "node scripts/playstore-shots.mjs --fixture && node scripts/playstore-feature.mjs",
+    "playstore:twa": "node scripts/playstore-twa.mjs",
     "bundle:budget": "node scripts/bundle-budget.mjs",
     "analyze": "node scripts/analyze.mjs",
     "bundle:budget:update": "node scripts/bundle-budget.mjs --update",
