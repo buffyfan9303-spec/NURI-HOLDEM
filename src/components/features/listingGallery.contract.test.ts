@@ -34,7 +34,8 @@ describe('UP-03 장터 상세 — 여러 장을 모두 볼 수 있다', () => {
     const src = readFileSync(resolve(__dirname, 'ListingDetailModal.tsx'), 'utf8');
     expect(src).toMatch(/<ListingGallery[\s\S]{0,80}images=\{listing\.images\}/);
     expect(src).toMatch(/<ImageLightbox[^>]*src=\{zoomSrc\}/);
-    expect(src).not.toMatch(/src=\{listing\.images\[0\]\}/);
+    // hero 는 갤러리 하나다(판매자 채팅 머리의 작은 썸네일은 images[0] 을 쓰는 게 맞아 여기서 보지 않는다).
+    expect(src).toMatch(/hasImage \? \([\s\S]{0,400}<ListingGallery/);
   });
 });
 
