@@ -307,9 +307,19 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
   const [applied, setApplied] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // UP-16(2026-10-08): 조회 실패를 '아직 지원자가 없습니다'로 보여 주던 것을 실패 카드+다시 시도로 가른다.
+  //   alive 가드 — 다른 글로 넘어간 뒤 도착한 이전 글의 지원서가 이 글에 칠해지지 않게 한다.
+  const [appsErr, setAppsErr] = useState<unknown>(null);
+  const [appsReload, setAppsReload] = useState(0);
   useEffect(() => {
-    if (canSeeApps) getDealerApplications(post.id).then(setApps).catch(() => {});
-  }, [post.id, canSeeApps]);
+    if (!canSeeApps) return;
+    let alive = true;
+    setApps([]); setAppsErr(null);
+    getDealerApplications(post.id)
+      .then((a) => { if (alive) setApps(a); })
+      .catch((e) => { if (alive) setAppsErr(e); });
+    return () => { alive = false; };
+  }, [post.id, canSeeApps, appsReload]);
 
   const apply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,7 +396,9 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
       {canSeeApps && (
         <section className="space-y-1.5">
           <p className="text-xs font-bold text-ink-secondary">받은 지원서 ({apps.length})</p>
-          {apps.length === 0 ? (
+          {appsErr ? (
+            <LoadErrorCard error={appsErr} what="받은 지원서" onRetry={() => setAppsReload((n) => n + 1)} compact />
+          ) : apps.length === 0 ? (
             <p className="rounded-input bg-surface-high px-3 py-3 text-center text-2xs text-ink-muted">아직 지원자가 없습니다</p>
           ) : (
             <ul className="space-y-1.5">

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react
 import GroupPosterSection from './GroupPosterSection';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
+import { mergeEarlyRows } from '../../lib/mergeEarlyRows';
 import { isAuthorShown } from '../../lib/postVisible';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
@@ -505,7 +506,8 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   useEffect(() => {
     let active = true;
     setMessages(null); setErr(null);
-    getGroupMessages(groupId, 80).then((m) => { if (active) setMessages(m.reverse()); }).catch((e) => { if (active) setErr(e); });
+    // UP-06(2026-10-08): 조회보다 먼저 구독·전송으로 받은 메시지를 덮지 않는다 — id 기준으로 합친다(최신이 뒤).
+    getGroupMessages(groupId, 80).then((m) => { if (active) setMessages((prev) => mergeEarlyRows(prev, m.reverse(), 'back')); }).catch((e) => { if (active) setErr(e); });
     const unsub = subscribeGroupMessages(groupId, (m) => setMessages((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m])));
     return () => { active = false; unsub(); };
   }, [groupId, reloadKey]);
