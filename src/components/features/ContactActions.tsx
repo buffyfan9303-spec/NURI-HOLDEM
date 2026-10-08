@@ -7,6 +7,7 @@
 // 있는데, 복제본에는 그 맥락이 따라오지 않는다. 그래서 컨트롤 자체를 공용으로 옮긴다.
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
+import { copyOrDial, browserCopyDeps } from '../../lib/copyOrDial';
 
 /** Tier1 행동 버튼 공통 규격 — 44px 히트영역, 남는 폭 균등 분할(flex-1) */
 const ACTION_BASE =
@@ -110,12 +111,9 @@ export function ContactRows({ contacts, label = '연락처' }: { contacts: { lab
             key={`${c.phone}-${i}`}
             href={`tel:${c.phone.replace(/[^0-9+]/g, '')}`}
             title={c.label ? `${c.label} ${c.phone}` : c.phone}
-            onClick={async (e) => {
-              try {
-                await navigator.clipboard.writeText(c.phone);
-                e.preventDefault();
-                toast.show(`${c.phone} 복사됨`, 'success');
-              } catch { /* 복사 실패 → tel: 링크 그대로 실행 */ }
+            onClick={(e) => {
+              // UP-14 — 기본 동작은 동기로 막고 복사, 복사 거부 시 tel: 로 보낸다(lib/copyOrDial).
+              void copyOrDial(e, c.phone, e.currentTarget.href, () => toast.show(`${c.phone} 복사됨`, 'success'), browserCopyDeps());
             }}
             className="hit inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary"
           >
@@ -140,13 +138,9 @@ export function PhoneRow({ phone, label = '연락처' }: { phone: string; label?
           <a
             key={n}
             href={`tel:${n.replace(/[^0-9+]/g, '')}`}
-            onClick={async (e) => {
-              // 클립보드 복사 성공 시 tel: 링크 막고 토스트 표시 / 실패 시 기본 tel: 링크 실행
-              try {
-                await navigator.clipboard.writeText(n);
-                e.preventDefault();
-                toast.show(`${n} 복사됨`, 'success');
-              } catch { /* 복사 실패 → tel: 링크 그대로 실행 */ }
+            onClick={(e) => {
+              // UP-14 — 기본 동작은 동기로 막고 복사, 복사 거부 시 tel: 로 보낸다(lib/copyOrDial).
+              void copyOrDial(e, n, e.currentTarget.href, () => toast.show(`${n} 복사됨`, 'success'), browserCopyDeps());
             }}
             className="hit inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
           >

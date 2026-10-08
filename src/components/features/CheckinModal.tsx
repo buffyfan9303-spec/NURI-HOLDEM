@@ -179,7 +179,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     } finally { if (!isStaleResponse(gen, mountGenRef.current)) setScBusy(false); }
   };
 
-  const copy = async () => { try { await navigator.clipboard.writeText(checkinUrl(venueId)); toast.show('출석 링크를 복사했습니다', 'success'); } catch { /* noop */ } };
+  const copy = async () => { try { await navigator.clipboard.writeText(checkinUrl(venueId)); toast.show('출석 링크를 복사했습니다', 'success'); } catch { toast.show('출석 링크를 복사하지 못했습니다. QR 코드를 보여 주세요', 'error'); } };
   const fmt = (iso: string) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const openPicker = (id: string) => { setSendTo((v) => (v === id ? null : id)); setConfirm(null); setCustomCount(''); };
   // Q2 — 방문 감사 사유 라벨·힌트를 정본(api/vouchers.ts VOUCHER_REASONS)에서 그대로 읽는다(복제 금지).
