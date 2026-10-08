@@ -1399,11 +1399,16 @@ function MyCommunitiesAction({ onSelectVenue, onCreated, version = 0 }: {
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // 세대 가드 — 늦게 온 응답(이전 계정·이전 호출)이 지금 목록을 덮지 않게 한다.
+  const gen = useRef(0);
   const reload = () => {
-    getMyOwnedCommunities().then(setOwned).catch(() => {});
-    getMyJoinedGroups().then(setJoined).catch(() => {});
+    const g = ++gen.current;
+    getMyOwnedCommunities().then((v) => { if (g === gen.current) setOwned(v); }).catch(() => {});
+    getMyJoinedGroups().then((v) => { if (g === gen.current) setJoined(v); }).catch(() => {});
   };
-  useEffect(() => { reload(); }, [version]);
+  // 계정이 바뀌면(로그인·로그아웃·A→B) 앞 계정의 운영·가입 목록부터 비우고 다시 읽는다(UP-11).
+  useEffect(() => { setOwned([]); setJoined([]); }, [user?.id]);
+  useEffect(() => { reload(); }, [version, user?.id]);
 
   if (!user) return null;
   const isOwner = user.role === 'venue_owner';

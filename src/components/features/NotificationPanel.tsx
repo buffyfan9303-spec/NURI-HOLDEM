@@ -502,13 +502,15 @@ export default function NotificationPanel({
               </li>
             ) : (
               threads.map((t) => (
-                <li
-                  key={t.otherId}
+                // 행 전체가 하나의 button — 키보드(Tab·Enter·Space)로 열린다(UP-08). li 는 목록 의미와 구분선만 맡는다.
+                <li key={t.otherId} className="relative border-b border-border-subtle last:border-b-0">
+                <button
+                  type="button"
                   onClick={() => openThread({ id: t.otherId, name: t.otherName, color: t.otherColor })}
                   className={[
-                    'relative flex items-center gap-3 px-4 py-3',
-                    'border-b border-border-subtle last:border-b-0',
+                    'flex w-full items-center gap-3 px-4 py-3 text-left',
                     'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
+                    'focus-visible:shadow-none focus-visible:outline-offset-[-2px]',
                   ].join(' ')}
                 >
                   {/* 미읽음: 알림 행과 동일 문법 — 좌측 2px 액센트 바 */}
@@ -541,6 +543,7 @@ export default function NotificationPanel({
                       ? <span className="h-2 w-2 rounded-full bg-accent-300" />
                       : <Icon name="chevron-right" size={14} className="text-ink-muted" />}
                   </span>
+                </button>
                 </li>
               ))
             )}
@@ -667,8 +670,10 @@ export default function NotificationPanel({
             </li>
           ) : (
             visible.map((n) => (
-              <li
-                key={n.id}
+              // 행 전체가 하나의 button — 키보드(Tab·Enter·Space)로 열린다(UP-08). li 는 목록 의미와 구분선만 맡는다.
+              <li key={n.id} className="relative border-b border-border-subtle last:border-b-0">
+              <button
+                type="button"
                 onClick={() => {
                   // 클릭한 그 알림은 즉시 읽음 — 뱃지가 이동 전에 바로 준다(닫힘 일괄 처리만 기다리지 않게)
                   if (!n.read) onMarkRead([n.id]);
@@ -691,9 +696,9 @@ export default function NotificationPanel({
                 className={[
                   // 행 문법 고정: 아바타 + 텍스트(제목 1줄 + 본문 2줄 예약) + 우측 고정폭 자리
                   // → 텍스트 길이와 무관하게 모든 행 높이 동일
-                  'relative flex items-center gap-3 px-4 py-3',
-                  'border-b border-border-subtle last:border-b-0',
+                  'flex w-full items-center gap-3 px-4 py-3 text-left',
                   'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
+                  'focus-visible:shadow-none focus-visible:outline-offset-[-2px]',
                 ].join(' ')}
               >
                 {/* 안읽음: 배경 틴트 대신 좌측 2px 액센트 바 하나 */}
@@ -748,6 +753,7 @@ export default function NotificationPanel({
                 <span className="w-4 shrink-0 flex items-center justify-center text-ink-muted" aria-hidden>
                   {onNavigate && <Icon name="chevron-right" size={14} />}
                 </span>
+              </button>
               </li>
             ))
           )}
