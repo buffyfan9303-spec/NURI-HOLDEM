@@ -14,7 +14,7 @@ export type VenueShareKind = keyof typeof TEXT;
 export default function VenueShareNote({ kind, className = '' }: { kind: VenueShareKind; className?: string }) {
   return (
     <p data-testid={`venue-share-note-${kind}`} className={`text-2xs leading-relaxed text-ink-muted ${className}`}>
-      {/* 링크를 두지 않는다 — 매장 페이지 첫 화면 행동 예산(e2e venue-ia ≤6)을 고지가 먹지 않게. 전문은 하단 푸터 '개인정보처리방침'. */}
+      {/* 링크를 두지 않는다 — 매장 페이지 첫 화면 행동 예산(e2e venue-ia ≤7)을 고지가 먹지 않게. 전문은 하단 푸터 '개인정보처리방침'. */}
       {TEXT[kind]} (개인정보처리방침 제9조)
     </p>
   );
