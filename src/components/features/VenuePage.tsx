@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { useVenueScope } from '../../lib/useVenueScope';
-import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
+import { venueScheduleList, notEnded, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
 import { heroTouchIntent } from '../../lib/heroTouch';
 import { onColorInkClass } from '../../lib/color';
@@ -228,6 +228,9 @@ export default function VenuePage({
 
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
   if (!venue) return null;
+
+  // 「예정 대회」·「진행 예정」 탭은 끝난 회차를 뺀다 — venueSchedules 는 지난 회차를 품은 채로 둔다(배너 매칭·폴백이 쓴다).
+  const upcomingSchedules = notEnded(venueSchedules);
 
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
@@ -627,12 +630,12 @@ export default function VenuePage({
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}
-              allPosters={venueSchedules}
+              allPosters={upcomingSchedules}
               notices={notices}
               onSelect={onSelectSchedule}
             />
           )}
-          {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} onSelect={onSelectSchedule} />}
+          {tab === 'schedules' && <SchedulesPanel schedules={upcomingSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
             <div className="space-y-3">
               <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />

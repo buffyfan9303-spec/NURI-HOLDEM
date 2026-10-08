@@ -1,5 +1,5 @@
 import type { Schedule } from '../api/schedules';
-import { startAtMs } from './scheduleStatus';
+import { startAtMs, scheduleStatus } from './scheduleStatus';
 
 /** browse 목록 기본 정렬 — 날짜+시각이 1차 키, 부스트(isPremium)는 동일 시각 내 tie-break.
  *
@@ -74,4 +74,14 @@ export function venueScheduleList<T extends Pick<Schedule, 'date' | 'startTime' 
   schedules: readonly T[], venueId: string,
 ): T[] {
   return schedules.filter((s) => s.venueId === venueId && s.approved).sort(compareByStartThenBoost);
+}
+
+/** 끝나지 않은 일정만 — 매장 페이지 「예정 대회」·「진행 예정」용(2026-10-09).
+ *  venueScheduleList 는 지난 회차까지 전부 내므로(포스터 배너 매칭·지난 회차 폴백이 쓴다) 소비처에서 이걸로 한 번 더 거른다.
+ *  끝남 판정은 앱 전체와 같은 scheduleStatus(시작 + 10시간, KST) — 날짜만 비교하면 자정을 넘기는 늦은 등록 대회가 일찍 사라진다.
+ *  진행 중(live)은 남긴다. 입력은 건드리지 않고 순서도 그대로 둔다. */
+export function notEnded<T extends Pick<Schedule, 'date' | 'startTime'>>(
+  schedules: readonly T[], now: number = Date.now(),
+): T[] {
+  return schedules.filter((s) => scheduleStatus(s.date, s.startTime, now) !== 'ended');
 }

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { upcomingSoon, venueScheduleList } from './scheduleSort';
+import { upcomingSoon, venueScheduleList, notEnded } from './scheduleSort';
 
 interface S { id: string; date: string; startTime: string; isPremium: boolean; approved: boolean; venueId: string }
 const mk = (id: string, date: string, startTime: string, over: Partial<S> = {}): S =>
@@ -68,6 +68,35 @@ describe('venueScheduleList · 매장 페이지 목록은 날짜·시작 시각 
   });
 });
 
+// 2026-10-09 운영 실측: 매장 페이지 「진행 예정」·「예정 대회(N)」에 지난 대회가 섞였다 — venueScheduleList 는 매장·승인만 거른다.
+// 끝남 = 시작 + 10시간(scheduleStatus, KST). NOW(10-02 20:00) 기준 4경계.
+describe('notEnded · 예정/진행 예정 탭에서 끝난 회차를 뺀다', () => {
+  const ids = (l: S[]) => l.map((s) => s.id);
+  it('어제 대회는 뺀다 (결함 재현 — venueScheduleList 만으로는 남는다)', () => {
+    const yesterday = mk('y', '2026-10-01', '19:00');
+    expect(ids(venueScheduleList([yesterday], 'v1'))).toEqual(['y']);
+    expect(ids(notEnded(venueScheduleList([yesterday], 'v1'), NOW))).toEqual([]);
+  });
+  it('오늘 진행 중인 대회는 남긴다', () => {
+    expect(ids(notEnded([mk('live', '2026-10-02', '19:00')], NOW))).toEqual(['live']);
+  });
+  it('오늘이지만 이미 끝난 대회는 뺀다 (날짜만 비교하면 남는다)', () => {
+    expect(ids(notEnded([mk('done', '2026-10-02', '09:00')], NOW))).toEqual([]);
+  });
+  it('내일 대회는 남긴다', () => {
+    expect(ids(notEnded([mk('t', '2026-10-03', '19:00')], NOW))).toEqual(['t']);
+  });
+  it('자정을 넘겨 진행 중인 어제 대회(시작+10h 이전)는 남긴다', () => {
+    const lateNow = Date.parse('2026-10-02T02:00:00+09:00'); // 어제 19:00 시작 → 06:00 까지 진행
+    expect(ids(notEnded([mk('overnight', '2026-10-01', '19:00')], lateNow))).toEqual(['overnight']);
+  });
+  it('순서를 보존하고 입력 배열을 바꾸지 않는다', () => {
+    const all = [mk('a', '2026-10-02', '19:00'), mk('old', '2026-10-01', '10:00'), mk('b', '2026-10-03', '10:00')];
+    expect(ids(notEnded(all, NOW))).toEqual(['a', 'b']);
+    expect(ids(all)).toEqual(['a', 'old', 'b']);
+  });
+});
+
 describe('배선 계약 — 화면이 이 함수를 쓴다', () => {
   const src = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
   it('BrowseSideRail 은 날짜 비교 대신 upcomingSoon 을 쓴다', () => {
@@ -78,5 +107,13 @@ describe('배선 계약 — 화면이 이 함수를 쓴다', () => {
   it('VenuePage 는 매장 일정 목록을 venueScheduleList 로 만든다', () => {
     const s = src('components/features/VenuePage.tsx');
     expect(s).toMatch(/venueScheduleList\(/);
+  });
+  it('VenuePage 의 「진행 예정」·「예정 대회」 패널은 끝난 회차를 뺀 목록(notEnded)만 받는다', () => {
+    const s = src('components/features/VenuePage.tsx');
+    expect(s).toMatch(/const upcomingSchedules = notEnded\(venueSchedules/);
+    expect(s).toMatch(/<SchedulesPanel schedules=\{upcomingSchedules\}/);
+    expect(s).toMatch(/allPosters=\{upcomingSchedules\}/);
+    expect(s).not.toMatch(/<SchedulesPanel schedules=\{venueSchedules\}/);
+    expect(s).not.toMatch(/allPosters=\{venueSchedules\}/);
   });
 });
