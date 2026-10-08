@@ -233,7 +233,6 @@ const EventListPage = lazyWithReload(() => import('./components/features/EventLi
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 import { readSeenCount, writeSeenCount } from './lib/seenCount';
 import { msgOf } from './lib/dbError';
-import { planRepeatDates } from './lib/posterRepeatRetry';
 /** 일정 탐색 목록이 지난 방문에 몇 줄이었나 — 스켈레톤 자리 예약용(홈의 nuri:upcoming-seen 과 같은 조리법). */
 const BROWSE_SEEN = 'nuri:browse-seen';
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
@@ -3807,7 +3806,7 @@ export default function App() {
       .catch(() => { toast.show('반려에 실패했습니다', 'error'); reloadSchedules(); });
   }, [toast, reloadSchedules]);
 
-  const handleSubmitPoster = useCallback((data: PosterFormData) => {
+  const handleSubmitPoster = useCallback(async (data: PosterFormData) => {
     // 시상품 텍스트 → SeatVoucher 형태로 변환 (간단 파싱: 끝의 "N석" 인식)
     const seatsFromPrizes = data.prizes.map((p) => {
       const m = p.match(/^(.+?)\s*(\d+)\s*석$/);
@@ -3921,6 +3920,8 @@ export default function App() {
     // 🔴 H03-07 — 부분 성공 뒤 같은 폼을 다시 누르면 **성공한 날짜까지** 다시 넣어 중복이 생겼다(서버엔 날짜·매장·제목
     //   unique 도 멱등키도 없다). 이미 저장된 날짜는 빼고, 지난 시도의 실패 날짜는 다시 읽은 목록에 같은 행이 있으면
     //   (응답만 잃고 저장된 경우) 보내지 않는다. 날짜별 정확히 1건.
+    // 첫 화면 번들 밖에 둔다(등록할 때만 받는다).
+    const { planRepeatDates } = await import('./lib/posterRepeatRetry');
     const { send: dates, landed } = planRepeatDates(allDates, data.repeatSaved, data.repeatRetry, schedulesNowRef.current,
       { venueId: venueIdToUse, ownerId: user.id, title: data.title, startTime: data.startTime });
     const priorSaved = [...new Set([...(data.repeatSaved ?? []), ...landed])].filter((d) => allDates.includes(d));
