@@ -111,6 +111,8 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
     const card = page.getByTestId('venue-card').filter({ hasText: 'E2E 목 광고 매장' });
     await expect(card, '유료 매장 카드가 없다 — mockPaidVenue 가 안 먹었다(측정 전제 없음)').toBeVisible({ timeout: 10_000 });
     await expect(card.locator('span', { hasText: /^AD$/ }), '유료 노출이 꺼졌는데 AD 배지가 붙었다').toHaveCount(0);
+    // 목록 위 정렬 안내도 같다 — '정렬: 인증 → 유료광고 → 팔로워순' 이 남아 있었다(독립 검증 2026-10-09). 유료 표시 글자 0.
+    await expect(page.locator('[data-tab="community"]').getByText('유료광고', { exact: true }), '유료 노출이 꺼졌는데 정렬 안내에 유료광고가 보인다').toHaveCount(0);
     await expect(card).toHaveJSProperty('tagName', 'BUTTON');
   });
 

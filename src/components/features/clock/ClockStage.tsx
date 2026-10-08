@@ -21,6 +21,7 @@ import { useClockSecond } from '../../../lib/clockTick';
 import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
+import { PAID_EXPOSURE_ON } from '../../../lib/paidExposure';
 import type { ClockStageDecor } from './clockStageDecor';
 import { levelCueKey, useLevelCue, LEVEL_CUE_GLOW } from './levelCue';
 import {
@@ -114,7 +115,11 @@ export interface ClockStageProps {
  * 보드 본체 — 상태 바 / 본문 3열 / 하단 레일.
  * 데이터를 읽지 않는다(구독·폴링·저장 0). 받은 ClockState 를 그리기만 한다.
  */
-export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm', ads = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
+export default function ClockStage({ g, venueName, headerRight, qr, sponsor: rawSponsor, adSize = 'sm', ads: rawAds = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
+  // 유료 노출 스위치(lib/paidExposure) — TV·운영자·관전 클락이 모두 이 보드를 그리므로 여기서 한 번 끈다.
+  //   등록 데이터와 관리자 광고 설정은 그대로 두고, 화면에만 안 건다(다시 켜면 그대로 돌아온다).
+  const sponsor = PAID_EXPOSURE_ON ? rawSponsor : null;
+  const ads = PAID_EXPOSURE_ON ? rawAds : NO_ADS;
   const pl = decor.plated ? PLATE : undefined;
   const logo = decor.logo;
   // 재점검 2회차 하-C — 세로로 긴 로고는 머리줄(높이 고정)에서 23×63px 로 읽히지 않았다. 폭/높이 < LOGO_TALL_AR 이면

@@ -34,6 +34,22 @@ describe('유료 노출 스위치(lib/paidExposure)', () => {
     expect(rawReads(readFileSync(f, 'utf8'))).toEqual([]);
   });
 
+  // 값 읽기만 막으면 고정 문구는 샌다 — 정렬 안내 '인증 → 유료광고 → 팔로워순' 이 그랬다(독립 검증 2026-10-09).
+  // 화면 글자(JSX 텍스트)로 쓴 유료 표시는 바로 앞에 스위치 가드가 있어야 한다.
+  it.each([...PUBLIC_FILES, 'src/components/features/clock/ClockStage.tsx'])('%s — 유료 표시 고정 문구는 스위치 가드 뒤에만 있다', (f) => {
+    const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const bare = [...code.matchAll(/>\s*(유료광고|유료 광고|광고|AD|TOP|프리미엄|스폰서|Sponsor)\s*</g)]
+      .filter((m) => !/paidShown\(|PAID_EXPOSURE_ON\s*&&/.test(code.slice(Math.max(0, m.index! - 400), m.index!)))
+      .map((m) => m[1]);
+    expect(bare).toEqual([]);
+  });
+
+  it('클락 스폰서·슬라이드 광고는 스위치를 거친다(ClockStage — TV·관전 클락 공용)', () => {
+    const src = readFileSync('src/components/features/clock/ClockStage.tsx', 'utf8');
+    expect(src).toMatch(/const sponsor = PAID_EXPOSURE_ON \? rawSponsor : null;/);
+    expect(src).toMatch(/const ads = PAID_EXPOSURE_ON \? rawAds : NO_ADS;/);
+  });
+
   it('커뮤니티 광고 칸은 스위치가 꺼져 있으면 조회하지 않는다', () => {
     const src = readFileSync('src/components/features/CommunityTab.tsx', 'utf8');
     expect(src).toMatch(/if \(!enableCategory \|\| !PAID_EXPOSURE_ON\) return;\s*loadAds\(\);/);
