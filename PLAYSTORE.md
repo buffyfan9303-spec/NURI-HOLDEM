@@ -21,9 +21,15 @@
 '게임'으로 고르면 홀덤 성격상 청소년이용불가 → GRAC 직접 심의·사행성 확인 경로가 열린다.
 이 앱에는 칩을 걸고 승패를 가리는 화면이 없다 — GTO 도구는 정답이 정해진 문제·계산기, 핸드 리플레이어는 기록 재생 뷰어다.
 
-### 2. 광고는 **사실대로** 신고한다 (2026-10-08 판단: '예')
+### 2. 광고는 **사실대로** 신고한다 — **결정됨(2026-10-09): 광고 포함 '아니요'**(유료 노출 끔 — ads 항목 PR)
 
-> ⚠️ 2026-09-04 판은 "광고 없음"이라고 했다. **지금은 사실이 아니다.**
+> 🟢 **2026-10-09 오너 결정: 유료 광고 노출을 하지 않는다.** 앱의 유료 노출(매장 '유료광고' 표시 등)은 **ads 항목 PR** 이 끈다.
+> 그래서 '광고 포함: **아니요**'로 낸다. 단 **그 PR 이 운영에 배포된 뒤에** 제출하고, 제출 직전 운영 화면에서 `AD`·'유료광고' 표시가 0인지 다시 본다 —
+> 켜진 채로 '아니요'를 내면 아래 10-08 판단대로 허위 신고가 된다. 도박 광고 요건(아래 🔴)도 유료 노출이 없으면 걸리지 않는다(실행표 ③ R1 해소).
+>
+> 아래는 **2026-10-08 판단(대체됨)** 의 기록이다.
+>
+> ⚠️ 2026-09-04 판은 "광고 없음"이라고 했다. **2026-10-08 기준으로는 사실이 아니었다.**
 > - 커뮤니티 매장 목록의 `AD`·'유료광고' 표시 매장(`venues.is_paid_ad`, 운영 1곳 — 2026-10-08 읽기 조회)
 > - 커뮤니티 광고 칸(`community_ads` — 승격 게시글, 지금 게재 0) · 클락 화면 광고(`clock_ads`, 0) · 홈 배너 외부 링크(1)
 > Play 의 광고 기준은 서드파티 SDK 가 아니어도 "다른 콘텐츠와 구분되지 않는 네이티브 광고"·자사 배너를 광고로 본다
@@ -57,6 +63,7 @@
 | 위치기반서비스 이용약관 | ✅ **신설** https://nuriholdem.com/legal/location.html (배포 후) — 원본은 `LegalDocsModal.tsx` 의 LOCATION | `npm run legal:check` |
 | 인앱 결제 | ✅ 없음(PortOne 은 본인인증 전용) | |
 | 스토어 자산 | ✅ 폰 스크린샷 7장(1080×1920, 24비트 PNG) · 피처 그래픽 1024×500 · 아이콘 512 | `npm run playstore:assets` |
+| 앱 아이콘 | ✅ **다이아로 교체(2026-10-09 결정)** — 앱 안 헤더와 같은 골드 다이아 · 바탕 #101823. PWA any/maskable/monochrome·파비콘·apple-touch·Play 512 | `node scripts/gen-favicons.mjs` → `public/icon-*`·`favicon*` + `playstore/app-icon-512.png` · `node scripts/playstore-feature.mjs` |
 
 ## 1. 스토어 자산 생성
 
@@ -79,6 +86,7 @@ node scripts/playstore-twa.mjs --release --keystore <업로드키.keystore> --ve
 
 - 작업 폴더는 **저장소 밖**(기본: OS 임시 폴더 `nuri-twa-build`)이다. 생성된 Gradle 프로젝트·키는 커밋되지 않는다(`.gitignore` 에 `*.keystore`·`*.jks`·`playstore/twa/*`).
 - ⚠ 이 PC 는 `NoDefaultCurrentDirectoryInExePath=1` 이라 맨손 `bubblewrap build` 가 `gradlew.bat` 을 못 찾는다 — 스크립트가 작업 폴더를 PATH 앞에 넣어 우회한다.
+- **업로드 키는 저장소 밖에서 만든다** — 저장소 폴더(OneDrive 동기화 포함) 안에서 `keytool` 을 실행하지 않는다(공개 저장소라 실수 한 번이 곧 유출).
 - 업로드 키 만들기(오너, 한 번): `keytool -genkeypair -v -keystore nuri-upload.keystore -alias upload -keyalg RSA -keysize 2048 -validity 10000`
   (keytool 위치: `~/.bubblewrap/jdk-extract/jdk-17.0.20.1+1/bin/keytool.exe`). **키 파일과 비밀번호를 잃으면 업데이트를 못 올린다** — 별도 백업 2곳.
 - 버전: 올릴 때마다 `--version-code` 를 1씩 올린다. 웹만 바뀌면 AAB 재업로드는 필요 없다(색·아이콘·바로가기·패키지 설정을 바꿀 때만).
@@ -104,12 +112,12 @@ Play Console → 앱 → **테스트 및 출시 → 앱 무결성 → 앱 서명
 ## 4. Play Console 입력 (오너)
 
 순서·화면 위치·정확한 입력값은 실행표 ②. 요약:
-1. 개발자 계정(조직 권장 — 개인 계정은 2023-11-13 이후 생성이면 **12명 × 14일 비공개 테스트** 필수,
-   [공식](https://support.google.com/googleplay/android-developer/answer/14151465))
+1. 개발자 계정 — **결정됨(2026-10-09): 조직 계정(D-U-N-S) 경로만.** 개인 계정은 쓰지 않는다
+   (개인 계정은 2023-11-13 이후 생성이면 **12명 × 14일 비공개 테스트** 필수, [공식](https://support.google.com/googleplay/android-developer/answer/14151465))
 2. 앱 만들기 — 이름 `store-listing.md` ①, 기본 언어 한국어, **앱**, 무료
 3. AAB 업로드(내부 테스트 → 비공개 → 프로덕션)
 4. 스토어 등록정보 — `store-listing.md`
-5. 앱 콘텐츠: 개인정보처리방침 · 앱 액세스(`app-access.md`) · 광고(예) · 콘텐츠 등급(`content-rating.md`) ·
+5. 앱 콘텐츠: 개인정보처리방침 · 앱 액세스(`app-access.md`) · 광고(**아니요** — ads 항목 PR 배포 뒤, ⛔2) · 콘텐츠 등급(`content-rating.md`) ·
    타겟층(만 18세 이상만) · 데이터 보안(`data-safety.md`) · 계정 삭제 URL
 6. 결제를 나중에 열면(부스트·유료 마크 등) 콘텐츠 등급의 '디지털 구매'와 데이터 보안을 **다시 제출**한다.
 

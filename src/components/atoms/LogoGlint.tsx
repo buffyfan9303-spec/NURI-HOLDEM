@@ -4,7 +4,7 @@ import { CLASSIC_HOLDEM, CLASSIC_NURI, CLASSIC_VIEWBOX } from './classicLogo';
 
 // 띠(기울기 ≈ 20°)는 x ≈ tx+2.5(위)~tx+27.3(아래)를 덮는다 → tx −18 이하·94 이상이면 로고 상자(x 9.18~95.94) 밖이다.
 // 이동 범위를 여기에 맞추고 길이를 850ms 로 줄였다 — 종전 −26→96·1.3s 는 앞 0.26s·뒤 0.44s 가 상자 밖이었다(PR #239 검토).
-const FROM = -18, TO = 94, DELAY = 350, DUR = 850, KEY = 'nuri-glint';
+const FROM = -18, TO = 94, GEM_TO = 22, DELAY = 350, DUR = 850, KEY = 'nuri-glint';
 
 function Glint({ textClassName }: { textClassName: string }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -24,6 +24,17 @@ function Glint({ textClassName }: { textClassName: string }) {
     // 다이아는 래스터라 path 가 없다 — 옆 <img> 를 그대로 알파 마스크로 써서 빛이 다이아→NURI→HOLDEM 으로 흐르게 한다(이미 디코드된 같은 src).
     const img = host.querySelector('img');
     if (img) gem.current?.setAttribute('href', img.currentSrc || img.src);
+    // 다이아만 보일 때(라이트 — 글자 몫을 마스크에서 뺀다 · <373 — 글자 층이 접힌다)는 같은 850ms 동안 다이아 몫만 등속으로 지난다.
+    // 글자까지 가는 범위·곡선 그대로면 빛이 다이아 위에 82~101ms(5~6프레임)만 있어 '반짝' 으로 읽혔다(review-239b P3-a).
+    // −18→22 등속: 밝은 띠가 다이아 위에 ≈450ms 있고, 끝(22)에서는 이미 다이아를 벗어나 노드를 지워도 튀지 않는다. 수명은 그대로다.
+    // 판정: 라이트이거나, 형제 글자 svg(호스트의 첫 svg)가 접혀 상자가 없을 때. 마스크 안 path 는 다크 390 에서도 상자가 없어 쓸 수 없다(실측).
+    const a = anim.current;
+    const textShown = !document.documentElement.classList.contains('light') && !!host.querySelector(':scope > svg')?.getClientRects().length;
+    if (a && !textShown) {
+      a.setAttribute('to', `${GEM_TO} 0`);
+      a.setAttribute('calcMode', 'linear');
+      a.removeAttribute('keySplines');
+    }
     // ⚠ 시작을 첫 유휴 구간 뒤로 미뤄 봤지만 CPU×4 에서 rAF 50ms 초과가 3회 모두 4회 그대로였다 — 홈 긴 작업이 유휴 뒤에도 이어진다(2026-10-08 실측). 그래서 고정 지연이다.
     // 장식은 입력에 양보한다 — 첫 입력이 오면 바로 지운다. 마스크 래스터가 프레임을 붙잡는 저사양 기기에서 눌림(:active) 프레임이 밀리지 않게(PR #239 CI press-align ①).
     let t: ReturnType<typeof setTimeout>;
