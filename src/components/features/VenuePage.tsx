@@ -718,7 +718,8 @@ function HeroSection({
     const s = touchRef.current; touchRef.current = null;
     if (!s) return;
     // 업주 편집 버튼(배경 변경·사진 추가·삭제)·file input 위의 손가락은 hero 탭이 아니다 — 그 버튼의 click 이 제 일을 해야 한다.
-    if ((e.target as Element).closest('button, a, input, label')) return;
+    // 단 lg 전면 오버레이 버튼(data-hero-cover)은 hero 전체를 덮어 터치가 늘 그 위에서 시작·종료된다 — 예외로 두지 않으면 lg 터치 스와이프가 사라진다.
+    if ((e.target as Element).closest('button:not([data-hero-cover]), a, input, label')) return;
     const t = e.changedTouches[0];
     // 거의 안 움직였으면 스와이프가 아니라 **탭**이다 — 그 배너가 가리키는 대회로 보낸다.
     // (click 이벤트를 따로 듣지 않는 이유: 스와이프 끝에도 click 이 따라와 오작동한다.)
@@ -848,7 +849,7 @@ function HeroSection({
         <button
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
-          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
+          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`} data-hero-cover
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />
       )}
