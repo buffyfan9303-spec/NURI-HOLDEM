@@ -51,12 +51,10 @@ describe('warmHiddenPane', () => {
     expect(warmHiddenPane('home')).toBe('skip');
     expect(home.seen).toHaveLength(0);
   });
-  it('아직 마운트 전 · 떠나는 중 · 판 교체 중이면 later — 버리지 말고 다음에 다시', () => {
+  it('아직 마운트 전 · 판 교체 중이면 later — 버리지 말고 다음에 다시', () => {
+    // (2026-10-08 8차 INSTANT-SWAP) '떠나는 중(data-pane-leaving)' 상태는 없어졌다 — 판 교체는 한 프레임이다.
     expect(warmHiddenPane('calendar')).toBe('later');
     const live = mk('live', true);
-    live.attrs.add('data-pane-leaving');
-    expect(warmHiddenPane('live')).toBe('later');
-    live.attrs.clear();
     htmlAttrs.add('data-tab-swap');
     expect(warmHiddenPane('live')).toBe('later');
     expect(live.seen).toHaveLength(0);

@@ -5,13 +5,13 @@
 //       이 앱에서 스냅샷 교차는 라이트·다크 지면 휘도 차 때문에 열기·닫기 어느 쪽이든 ±10~33 번쩍였고(flick 실측 3회),
 //       모바일에서는 삼성 인터넷이 스냅샷을 세로로 눌렀다(1862bb49). 경로마다 따로 고치다 한쪽이 남는 일이 반복됐다.
 //   (b) 메인 탭은 **한 입구(commitTab)** 로만 바뀐다 — 그래야 모든 진입(하단바·뒤로가기·알림 링크·로그인 뒤 복원)이
-//       판 교체 규칙(스왑 프레임 정적화 + 떠나는 판 페이드, src/lib/tabCover.ts 6차 절)을 똑같이 탄다.
+//       판 교체 규칙(스왑 프레임 정적화 + 한 프레임 교체, src/lib/tabCover.ts 8차 절)을 똑같이 탄다.
 //       직접 setActiveTab 은 그 규칙을 건너뛴다(2026-09-26 로그인 뒤 탭 복원이 실제로 그랬다).
 //   (c) 화면 전환 키프레임·WAAPI 는 아래 목록뿐이다. 새 장치를 더하려면 이 목록에 **이유와 함께** 올려라 —
 //       조용히 늘어나는 것을 막는 것이 목적이다(같은 전환이 두 방식으로 구현되면 그 자체가 결함).
 //   (d) 하위 탭도 메인 탭과 **같은 장치·같은 수치**다(오너 2026-09-26 "메인 카테고리 이동 때의 부드러운 모션을 하위 탭에서도 동일하게").
-//       goSubTab 한 입구가 커밋 전에 handOffSubPanel 을 부르고, 메인(handOffPane)·하위(handOffSubPanel)가 **같은 퇴장 함수**
-//       (fadeAfterFirstFrame — 떠나는 판만 240ms 페이드, 새 판 무효과)를 쓴다. 탭 레일(SegmentedTabs·UnderlineTabs·SlidingPill·tablist)을
+//       goSubTab 한 입구가 커밋 전에 handOffSubPanel 을 부르고, 메인(handOffPane)·하위(handOffSubPanel) 모두 **한 프레임 교체**다
+//       (2026-10-08 8차 INSTANT-SWAP — 떠나는 판 240ms 페이드를 걷었다: 두 판이 겹쳐 '블러'·'네모칸' 으로 보였다). 탭 레일(SegmentedTabs·UnderlineTabs·SlidingPill·tablist)을
 //       그리는 화면은 goSubTab 을 쓰거나, 판이 아니라 카드 안 입력·차트만 바꾸는 컨트롤이면 아래 목록에 이유와 함께 올린다.
 // 음성 대조(2026-09-26 실행): (a) src 에 startViewTransition 호출 한 줄 · (b) App.tsx 에 setActiveTab('home') 한 줄 ·
 //   (c) index.css 에 새 @keyframes 한 개를 넣으면 각각 빨개진다(되돌린 뒤 해시 대조).
@@ -79,13 +79,13 @@ describe('(b) 메인 탭은 commitTab 한 입구로만 바뀐다', () => {
       if (at > start && at < end) return;
       outside.push(`App.tsx:${i + 1} ${line.trim().slice(0, 90)}`);
     });
-    expect(outside, 'commitTab 을 건너뛰는 탭 전환 — 스왑 프레임 정적화·떠나는 판 페이드·첫 방문 트랜지션을 잃는다. commitTab(t) 을 불러라').toEqual([]);
+    expect(outside, 'commitTab 을 건너뛰는 탭 전환 — 스왑 프레임 정적화·첫 방문 트랜지션을 잃는다. commitTab(t) 을 불러라').toEqual([]);
   });
   it('commitTab 은 커밋 전에 notePaneLeaving 을, 탭 layout effect 는 handOffPane 을 부른다', () => {
     const body = app.slice(app.indexOf('const commitTab = useCallback('), app.indexOf('const commitTab = useCallback(') + 2500);
     expect(body.indexOf('notePaneLeaving(')).toBeGreaterThan(0);
     expect(body.indexOf('notePaneLeaving(')).toBeLessThan(body.indexOf('setActiveTab('));
-    expect(app).toMatch(/handOffPane\(activeTab\)/);
+    expect(app).toMatch(/handOffPane\(\)/);
   });
   it('부팅 링크(?tab·?nl) 정리는 탭 이력 effect 와 같은 layout 단계이고 그보다 먼저 선언된다', () => {
     // 이력 effect 가 먼저 돌면 `?nl=/admin` 칸을 밀어 넣어, 권한 없는 회원이 홈으로 되돌아갈 때 주소에 ?nl= 이 남는다
@@ -139,7 +139,6 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
   const WAAPI_FILES: Record<string, string> = {
     'src/components/atoms/Modal.tsx': '시트 드래그 닫기 뒤 제자리 복귀',
     'src/lib/spring.ts': '시트 드래그 스프링',
-    'src/lib/tabCover.ts': '떠나는 판 퇴장 페이드 — 메인 탭·하위 탭 공용(판 교체 규칙의 유일한 모션, fadeAfterFirstFrame 한 곳)',
     'src/components/atoms/Fold.tsx': '본문 안 펼침/접힘 한 벌(높이 0↔실측 + 누른 요소 제자리) — 판 교체가 아니라 판 **안**의 조건부 렌더 ~40곳(2026-09-29 M단계)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
@@ -170,12 +169,16 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     expect(h).toBeLessThan(c);
     expect(c).toBeLessThan(a);
   });
-  it('메인·하위가 같은 퇴장 함수(fadeAfterFirstFrame)를 쓰고, 퇴장 애니(.animate)는 그 한 곳뿐이다', () => {
+  it('8차 INSTANT-SWAP — 메인·하위 판 교체는 한 프레임이다: 떠나는 판을 새 판 위에 겹쳐 걷는 장치(복제·퇴장 애니)가 없다', () => {
+    // 오너 2026-10-08 "블러 처리되며 이동, 뒤에 살짝 네모칸" — 떠나는 판이 새 판 위에서 0.999→0 으로 걷히는 ~300ms 동안 두 판이 겹쳐 보였다.
     const fn = (name: string) => { const i = tc.indexOf(`export function ${name}(`); expect(i, `${name} 정의가 없다`).toBeGreaterThan(0); const rest = tc.slice(i); return rest.slice(0, rest.search(/\n}\r?\n/)); };
-    expect(fn('handOffPane')).toMatch(/fadeAfterFirstFrame\(/);
-    expect(fn('handOffSubPanel')).toMatch(/fadeAfterFirstFrame\(/);
-    expect((tc.match(/\.animate\(/g) ?? []).length, '퇴장 페이드가 두 벌이 됐다 — fadeAfterFirstFrame 하나로').toBe(1);
-    expect(tc).toMatch(/const LEAVE_FADE_MS = 240;/);
+    expect(fn('handOffPane'), '메인 탭 — 새 판 첫 프레임 뒤 스왑 정적화 해제만 한다').toMatch(/afterFirstFrame\(releaseSwap\)/);
+    expect(fn('handOffSubPanel'), '하위 탭 — 커밋 뒤 첫 프레임 다음 스왑 정적화 해제').toMatch(/afterFirstFrame\(releaseSwap\)/);
+    expect(tc, '판 전환에 WAAPI 애니가 돌아왔다 — 떠나는 판 페이드는 겹침·상자를 만든다').not.toMatch(/\.animate\(/);
+    expect(tc, '떠나는 판 복제본이 돌아왔다').not.toMatch(/cloneNode\(|data-pane-leaving/);
+    const cssCode = read('src/index.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(cssCode, 'index.css 에 떠나는 판 규칙([data-pane-leaving])이 돌아왔다').not.toMatch(/data-pane-leaving/);
+    expect(cssCode, '스왑 프레임 정적화(빠진 타일 방지)는 남아야 한다').toMatch(/\[data-swap-freeze\], \[data-swap-freeze\] \* \{/);
   });
   it('SlidingPill 은 판 교체 중(html[data-tab-swap]) 미끄러짐을 새 판 첫 프레임 뒤로 미룬다(스왑 프레임에 합성 애니 0)', () => {
     expect(codeOnly(read('src/components/atoms/SlidingPill.tsx'))).toMatch(/hasAttribute\('data-tab-swap'\)/);
@@ -199,7 +202,7 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
       .map((f) => f.slice(ROOT.length + 1).replace(/\\/g, '/'));
     expect(hits.length, '탭 레일 파일을 못 찾았다(공허한 초록 방지)').toBeGreaterThan(15);
     const bypass = hits.filter((f) => !(f in NOT_SUBTAB) && !/goSubTab\(/.test(codeOnly(read(f))));
-    expect(bypass, '하위 탭을 goSubTab 없이 바꾼다 — 메인 탭과 같은 판 교체(떠나는 판 페이드)를 잃는다. goSubTab(scope, …) 으로 감싸고 SUB_PANEL 에 판 표식을 올려라').toEqual([]);
+    expect(bypass, '하위 탭을 goSubTab 없이 바꾼다 — 메인 탭과 같은 판 교체(스왑 정적화·P2 스크롤)를 잃는다. goSubTab(scope, …) 으로 감싸고 SUB_PANEL 에 판 표식을 올려라').toEqual([]);
     expect(Object.keys(NOT_SUBTAB).filter((f) => !hits.includes(f)), '목록에 있는데 더는 탭 레일이 없다 — 목록에서 빼라').toEqual([]);
   });
 });
