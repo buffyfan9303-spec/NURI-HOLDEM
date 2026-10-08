@@ -5,9 +5,28 @@
  * ⚠ 라이트: 크림 'NURI'(#F1EADB)는 밝은 헤더(#F2F5FA) 위 대비 약 1.1 로 사라진다 → 라이트에서만 본문 잉크로 바꾼다(종전 워드마크도 ink-primary 였다).
  *   'HOLDEM' 은 라이트에서 업적 금색 토큰(--achieve)으로 바꾼다(원본 골드는 흰 헤더 위 1.9:1 → 6.4:1, 0908bd74). 다이아(래스터)만 두 테마 같은 색이다.
  * 정적 셸(index.html 의 #nuri-c 스프라이트)이 같은 path·같은 상자를 쓴다 — 형태를 바꾸면 둘 다.
+ *
+ * 글린트(2026-10-08 오너 "메인에 최고의 모션 딱 1개"): 첫 표시 때 글자 위로 빛 한 줄기가 한 번 지나간다.
+ *   글자 모양을 마스크로 쓰고 그 안의 그라디언트만 SMIL 로 옮긴다 — 레이아웃·transform·opacity 를 건드리지 않아
+ *   합성층이 생기지 않는다(삼성 밝기 점프 부류 회피). 세션당 1회·reduced-motion/숨은 탭이면 아예 안 그린다.
+ *   끝나면 노드를 지워 정착 DOM 이 종전과 같다.
  */
+import { lazy, Suspense } from 'react';
 import BrandDiamond from './BrandDiamond';
 import { CLASSIC_HOLDEM, CLASSIC_NURI, CLASSIC_VIEWBOX } from './classicLogo';
+
+// 모듈 평가 때 한 번 정한다 — 헤더의 PC·모바일 두 인스턴스가 같은 판정을 쓰고, 탭 재방문·재마운트에도 다시 안 돈다.
+const GLINT_ON = (() => {
+  try {
+    if (typeof window === 'undefined' || document.visibilityState !== 'visible') return false;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+    if (sessionStorage.getItem('nuri-glint')) return false;
+    sessionStorage.setItem('nuri-glint', '1');
+    return true;
+  } catch { return false; }
+})();
+// 첫 화면 임계 경로에 싣지 않는다 — 켜진 세션만 작은 청크를 받는다(시작이 어차피 350ms 뒤라 기다림 0).
+const Glint = GLINT_ON ? lazy(() => import('./LogoGlint')) : null;
 
 export default function NuriClassicLogo({ className = '', textClassName = '', priority = false }: {
   /** 높이(h-*)와 반응형 접기 */
@@ -24,6 +43,7 @@ export default function NuriClassicLogo({ className = '', textClassName = '', pr
         <path fill="currentColor" transform={CLASSIC_NURI.transform} d={CLASSIC_NURI.d} />
         {/* 'HOLDEM' — 다크는 원본 골드(#D9BA79), 라이트는 업적 금색 토큰(#7A591C, 흰 헤더 위 약 6.4:1). 원본 골드는 라이트에서 약 1.9:1 이었다(2026-10-06). */}
         <path style={{ fill: `var(--holdem, ${CLASSIC_HOLDEM.fill})` }} transform={CLASSIC_HOLDEM.transform} d={CLASSIC_HOLDEM.d} />
+        {Glint && <Suspense fallback={null}><Glint /></Suspense>}
       </svg>
     </span>
   );
