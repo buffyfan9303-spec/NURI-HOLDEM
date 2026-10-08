@@ -139,6 +139,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   //   매장 전환 때 올린 번호에 걸리지 않아 B 화면에 A 클락이 떴다(관리자 전환 경로). await 뒤마다 지금 매장을 확인한다.
   const venueNow = useRef(venueId);
   venueNow.current = venueId; // 렌더 중 대입 — effect 한 틱 사이 응답이 새지 않게
+  // PR #244 ③ 검증 P2(2026-10-09) — 무장한 실행취소의 '지금 화면' 기준. 매장 전환은 ClockLive 를 언마운트해 그 stateRef 가 A 로 굳으므로
+  //   ClockLive 자신의 stateRef 만으로는 매장이 바뀐 것을 못 본다(토스트 onClick 이 B 화면에서 A 에 썼다). 부모의 지금 (매장, 게임) 을 읽힌다.
+  const ownerNow = useCallback(() => ({ venueId: venueNow.current, gameSeq: curGameSeqRef.current }), []);
   const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
@@ -351,7 +354,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} expect={slotHint(state.sessionDate)} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
       <ClockLive
         venueName={venueName}
-        state={state} canManage={canManage} active={active}
+        state={state} canManage={canManage} active={active} ownerNow={ownerNow}
         onChange={(s) => setState(s)}
         onSave={saveLive}
         onReload={reloadState}
@@ -467,8 +470,8 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expe
 /** K1 — 모바일 미리보기의 고정 캔버스 폭(px). PC 미리보기(1024: 748 · 1440: 570)와 같은 급이라 '그대로 축소' 가 된다. */
 const STAGE_CANVAS_W = 720;
 
-function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, onOpenSettings, onEnd, active = true }: {
-  state: ClockState; canManage: boolean; venueName?: string;
+function ClockLive({ state, canManage, venueName, ownerNow, onChange, onSave, onReload, onOpenSettings, onEnd, active = true }: {
+  state: ClockState; canManage: boolean; venueName?: string; ownerNow: () => Pick<ClockState, 'venueId' | 'gameSeq'>;
   onChange: (s: ClockState) => void; onSave: (next: ClockState, prev: ClockState) => void; onReload: () => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
@@ -652,14 +655,16 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 🔴 H03-06(2026-10-08) — ClockLive 는 게임 전환(switchGame)에도 **같은 인스턴스**로 남는다. 그래서 A 에서 무장한
   //   [되돌리기]·토스트 [실행취소] 를 B 로 넘어가 누르면 persist 가 stateRef(=B) 에 A 의 레벨·시각을 병합해 저장했다.
   //   무장 시점의 (매장, 게임) 키를 들고 있다가 지금 화면이 다른 게임이면 아무것도 쓰지 않는다.
+  //   2026-10-09 — 기준은 부모의 지금 (매장, 게임)(ownerNow) **과** 이 인스턴스의 stateRef 둘 다. 매장 전환은 이 인스턴스를 언마운트해
+  //   stateRef 가 A 로 굳으므로 ownerNow 가 막고, 게임 전환 응답 전(curGameSeq 는 이미 B·state 는 아직 A)도 ownerNow 가 막는다.
   const persistFor = (owner: string, patch: Partial<ClockState>): boolean => {
-    if (clockOwnerKey(stateRef.current) !== owner) return false;
+    if (clockOwnerKey(ownerNow()) !== owner || clockOwnerKey(stateRef.current) !== owner) return false;
     persist(patch);
     return true;
   };
   // H03-06 후속(2026-10-08) — 쓰지 않은 것을 말없이 넘기면 업주는 되돌린 줄 안다(A 는 정지 그대로). 토스트는 5초간 남아 있어 B 에서도 눌린다.
   //   매장이 바뀐 경우는 '다른 매장' 으로 말한다(2026-10-09) — 문구 판정은 api/clock 의 undoSkippedText 한 곳.
-  const undoSkipped = (owner: string) => toast.show(undoSkippedText(owner, stateRef.current), 'info');
+  const undoSkipped = (owner: string) => toast.show(undoSkippedText(owner, ownerNow()), 'info');
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
