@@ -48,6 +48,13 @@ describe('H03-06 · 게임 A 에서 무장한 되돌리기·실행취소는 게�
     expect(undos.length).toBe(2);
     for (const u of undos) expect(u).toContain('persistFor(owner,');
   });
+  it('후속 — 쓰지 않았으면 말없이 넘기지 않고 안내한다(실행취소 2곳 · 레벨 되돌리기)', () => {
+    const undos = code.match(/label: '실행취소', onClick: \(\) => [^\n]*/g) ?? [];
+    expect(undos.length).toBe(2);
+    for (const u of undos) expect(u).toMatch(/if \(!persistFor\(owner, [^\n]*\)\) undoSkipped\(\);/);
+    expect(code).toMatch(/if \(!done\) \{ undoSkipped\(\); return; \}/);
+    expect(code).toMatch(/const undoSkipped = \(\) => toast\.show\('다른 게임으로 옮겨 실행취소하지 않았어요/);
+  });
   it('게임·매장이 바뀌면 되돌리기 버튼을 거둔다', () => {
     expect(code).toMatch(/useEffect\(\(\) => \{ setLevelUndo\(null\); \}, \[state\.venueId, state\.gameSeq\]\);/);
   });

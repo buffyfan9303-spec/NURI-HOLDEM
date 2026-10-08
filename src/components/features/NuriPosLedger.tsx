@@ -3246,8 +3246,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     let earlyTiers = base.earlyTiers;   // W-04 — 진행 중 클락이면 기존 창 그대로(아래 분기에서만 다시 계산)
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
+      // 🔴 H03-08 후속(2026-10-08 독립 검증) — 세션 얼리 분(장부 자동 판정)과 클락 설정(TV 얼리 표시)은 **같은 베이스**여야 한다.
+      //   예전엔 세션 쪽은 마운트 스냅샷(clockState.config), 클락 쪽은 쓰기 직전 다시 읽은 config 로 따로 만들어,
+      //   폼이 열린 동안 클락 레벨이 바뀌었거나 마운트 조회가 실패(clockState=null → 기본 레벨)했으면 두 값이 갈렸다.
+      //   → 장부 저장 **전에** 클락을 다시 읽기만 하고(쓰기는 여전히 장부 성공 뒤), 그 config 하나로 둘 다 계산한다.
+      //   읽기가 실패하면 세션 얼리는 예전처럼 스냅샷으로 계산하되 클락은 쓰지 않는다(조회 실패를 '클락 없음'으로 읽으면 진행 중 대회가 0 으로 덮인다).
+      let basis: ClockState | null = null, basisErr: unknown = null;
+      try { basis = await getClockState(base.venueId, base.gameSeq); } catch (e) { basisErr = e; }
       // PL3: '지난 게임 그대로 열기'로 불러온 완성 클락 설정이 있으면 그게 베이스(빈 기본값보다 우선)
-      const baseCfg = inheritClockRef.current.full ?? clockState?.config ?? defaultClockConfig();
+      const baseCfg = inheritClockRef.current.full ?? (basisErr ? clockState?.config : basis?.config) ?? defaultClockConfig();
       // PL1a+b: 연동 포스터의 구조(레벨·레지레벨·애드온)와 상금(원 정규형)을 클락에 함께 병합 —
       // '클락 설정 단계가 일상 운영에서 사라진다'(§13-B 최고 ROI 두 곳 중 ②). 폼에서 고친 값이 우선.
       const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
@@ -3272,14 +3279,19 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       //   → 장부 저장이 **성공(true)** 한 뒤에만 돈다(아래 submitOnce 끝). 클락 베이스도 쓰기 직전 다시 읽은 fresh.config 다 —
       //     폼이 열려 있던 동안 클락 판에서 고친 설정을 마운트 때 스냅샷(clockState)으로 되돌리지 않는다.
       syncClock = async () => {
+        if (basisErr) { formToast.show(ledgerErrorText(basisErr, '클락 설정 저장에 실패했습니다'), 'error'); return; }
         try {
+          // 장부 저장 동안 그새 시작·수정됐을 수 있다 — 쓰기 직전 한 번 더 읽어 진행 흔적은 지금 행으로 판정한다.
           const fresh = await getClockState(base.venueId, base.gameSeq);
+          // 설정이 그사이 바뀌었으면 세션 얼리와 같은 베이스(basis)가 아니다 — 덮지 않는다(남이 고친 설정을 되돌리지 않게).
+          if (JSON.stringify(fresh?.config ?? null) !== JSON.stringify(basis?.config ?? null)) {
+            formToast.show('클락 설정이 그사이 바뀌어 덮어쓰지 않았습니다. 클락 판에서 확인해 주세요', 'error');
+            return;
+          }
           // W-14 — 지난 날 멈춘 채 남은 클락(연결 장부 날짜·마지막 쓰기가 오늘이 아님)은 포스터 설정으로 새로 채운다.
           //   오늘 대회로 돌고 있거나 멈춘 클락은 예전처럼 보호한다(clockHasProgress). 판정은 lib/ledgerStart 한 곳.
           const action = clockStartAction(fresh, base.sessionDate);
-          const freshCfg = ledgerStartClockConfig(inheritClockRef.current.full ?? fresh?.config ?? defaultClockConfig(), linkedSched, inheritClockRef.current.patch,
-            { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
-          const row = clockStartRow(action, fresh, freshCfg, base.venueId, base.gameSeq, base.title ?? '', base.sessionDate);
+          const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '', base.sessionDate);
           if (!row) {
             formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
             return;
