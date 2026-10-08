@@ -17,7 +17,7 @@ import {
 } from './legalVersion';
 import { existsSync, readdirSync } from 'node:fs';
 import { LEGAL_HISTORY } from './legalHistory';
-import { TERMS_V3_EFFECTIVE_DATE } from './legalDeploy';
+import { TERMS_V4_EFFECTIVE_DATE } from './legalDeploy';
 
 const ROOT = path.join(__dirname, '../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8');
@@ -64,7 +64,7 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
       // 처리방침은 2026-10-06 부터 자기 판(PRIVACY_VERSION)을 따로 센다 — 처리방침 변경은 재동의가 아니라 공지다.
       // 약관 동의 판(LEGAL_VERSION)은 이용약관의 판이다(제3판은 이용약관만 바뀌었다). 서약·마케팅 문서는 제2판(공통 개정)이 최신이다.
       const [ver, eff] = doc === 'privacy' ? [PRIVACY_VERSION, PRIVACY_EFFECTIVE_DATE]
-        : doc === 'terms' ? [LEGAL_VERSION, TERMS_V3_EFFECTIVE_DATE] : [2, LEGAL_EFFECTIVE_DATE];
+        : doc === 'terms' ? [LEGAL_VERSION, TERMS_V4_EFFECTIVE_DATE] : [2, LEGAL_EFFECTIVE_DATE];
       expect(rows[0].version, `${doc}: 최신 이력이 현재 버전이 아니다`).toBe(ver);
       expect(rows[0].effective).toBe(eff);
       for (const r of rows) expect(r.changes.length, `${doc} 제${r.version}판: 변경 내용이 비었다`).toBeGreaterThan(0);
@@ -90,7 +90,7 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
 
   it('DB의 current_legal_version() 과 LEGAL_VERSION 이 같다', () => {
     // 어긋나면 재동의 게이트가 닫히지 않는다(동의해도 낮은 버전이 기록돼 다시 뜬다).
-    // 가장 나중(파일명 순) 마이그레이션의 정의가 라이브 값이다(20260830m → 20261006o 제3판).
+    // 가장 나중(파일명 순) 마이그레이션의 정의가 라이브 값이다(20260830m → 20261006p 제3판 → 20261009a 제4판).
     const defs = readdirSync(path.join(ROOT, 'supabase/migrations')).sort()
       .map((n) => read(`supabase/migrations/${n}`)).filter((t) => /create or replace function public\.current_legal_version/.test(t));
     const sql = defs[defs.length - 1] ?? '';
