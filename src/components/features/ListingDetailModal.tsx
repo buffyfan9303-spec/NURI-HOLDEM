@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
+import ImageLightbox from '../atoms/ImageLightbox';
+import ListingGallery from './ListingGallery';
 import type { ListingStatus, MarketplaceListing, ListingLikeState } from '../../api/marketplace';
 import { updateListingStatus, getListingLikeState, toggleListingLike, nextLikeState, incrementListingView } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime, BROKER_NOTICE } from './MarketplaceTab';
@@ -56,7 +58,20 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
     return () => { alive = false; };
   }, [open, listing]);
 
+  // 확대해 볼 사진 인덱스(null=닫힘) — 게시글 상세(PostDetailModal zoomIdx)와 같은 방식으로 ImageLightbox 를 재사용한다.
+  // openedAt: 매물 카드를 탭해 시트를 연 손가락의 뒤늦은 click 이 곧바로 사진 확대로 새지 않게 400ms 를 무시한다(PostDetailModal 과 같은 값).
+  //   zoom 은 어느 매물의 몇 번째 사진인지 함께 든다 — 다른 매물로 바뀌거나 닫히면(아래 zoomSrc 판정) 확대 뷰가 남지 않는다.
+  const [zoom, setZoom] = useState<{ id: string; idx: number } | null>(null);
+  // 시트가 닫히면 확대 상태도 버린다 — 같은 매물을 다시 열 때 확대 뷰가 저절로 떠 있지 않게(렌더 중 이전 값 비교, effect 없이).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) { setPrevOpen(open); if (!open) setZoom(null); }
+  const openedAt = useRef(0);
+  useEffect(() => {
+    if (open) openedAt.current = performance.now();
+  }, [open, listing?.id]);
+
   if (!listing) return null;
+  const zoomSrc = open && zoom && zoom.id === listing.id ? (listing.images[zoom.idx] ?? null) : null;
 
   // 찜 토글 — 낙관적 반영 후 서버 권위값으로 확정, 실패하면 원복.
   const onToggleLike = async () => {
@@ -104,9 +119,10 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       {/* ── 헤더 (이미지가 있으면 이미지, 없으면 슬림 헤더) ───────── */}
       {hasImage ? (
         <div className="relative">
-          <div className="aspect-square sm:aspect-4/3 overflow-hidden bg-surface-mid">
-            <img src={listing.images[0]} alt={listing.title} className="w-full h-full object-cover" />
-          </div>
+          {/* UP-03 — 예전엔 images[0] 한 장만 그려 2장째부터는 어떤 화면에서도 볼 수 없었다(기능 소실).
+              key: 다른 매물로 갈아끼우면 넘겨 둔 위치(scrollLeft)·현재 장을 처음부터 시작한다. */}
+          <ListingGallery key={listing.id} images={listing.images} title={listing.title}
+            onZoom={(i) => { if (performance.now() - openedAt.current < 400) return; setZoom({ id: listing.id, idx: i }); }} />
           <CloseButton onClose={onClose} />
           {isSold && <SoldOverlay />}
         </div>
@@ -318,6 +334,10 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         listing={listing}
       />
     </Modal>
+    {/* Modal 밖에 두는 이유(PostDetailModal 과 같다): 시트 본문은 transform 이 걸려 fixed 자손을 가둔다. */}
+    {zoomSrc && (
+      <ImageLightbox key={zoomSrc} src={zoomSrc} alt={`${listing.title} 사진`} onClose={() => setZoom(null)} />
+    )}
     <ReportModal open={reportOpen} onClose={() => setReportOpen(false)}
       target={{ type: 'listing', id: listing.id, ownerId: listing.sellerId, summary: listing.title }} />
     </>

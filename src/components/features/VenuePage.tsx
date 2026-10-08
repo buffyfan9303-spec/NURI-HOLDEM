@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore
 import { useVenueScope } from '../../lib/useVenueScope';
 import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
+import { heroTouchIntent } from '../../lib/heroTouch';
 import { onColorInkClass } from '../../lib/color';
 import { visitCountRows } from '../../lib/venueVisitRank';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
@@ -717,11 +718,13 @@ function HeroSection({
     const s = touchRef.current; touchRef.current = null;
     if (!s) return;
     const t = e.changedTouches[0];
-    const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { go(safeIdx + (dx < 0 ? 1 : -1)); return; }
     // 거의 안 움직였으면 스와이프가 아니라 **탭**이다 — 그 배너가 가리키는 대회로 보낸다.
     // (click 이벤트를 따로 듣지 않는 이유: 스와이프 끝에도 click 이 따라와 오작동한다.)
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) onSlideTap?.(slides[safeIdx]);
+    // UP-12: 판정은 lib/heroTouch — 1장이어도 탭은 열리고, 넘기기만 2장 이상이다.
+    const intent = heroTouchIntent(t.clientX - s.x, t.clientY - s.y, slides.length);
+    if (intent === 'next') go(safeIdx + 1);
+    else if (intent === 'prev') go(safeIdx - 1);
+    else if (intent === 'tap') onSlideTap?.(slides[safeIdx]);
   };
 
   // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
@@ -766,8 +769,8 @@ function HeroSection({
   return (
     <div
       className="relative w-full overflow-hidden h-36 sm:h-48 md:h-56"
-      onTouchStart={slides.length > 1 ? onTouchStart : undefined}
-      onTouchEnd={slides.length > 1 ? onTouchEnd : undefined}
+      onTouchStart={slides.length > 0 ? onTouchStart : undefined}
+      onTouchEnd={slides.length > 0 ? onTouchEnd : undefined}
     >
       {slides.length > 0 ? (
         // 슬라이드 트랙(자동 + 스와이프)
