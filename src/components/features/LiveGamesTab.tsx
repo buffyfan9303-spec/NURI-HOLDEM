@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, fieldCounts, type ClockState } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { levelNumberAt } from '../../lib/clockLevel';
+import { upcomingToday } from '../../lib/liveUpcoming';
 import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -139,9 +140,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
     const liveSchedIds = new Set<string>();
     for (const g of games ?? []) { const s = matchSchedule(g, schedules); if (s) liveSchedIds.add(s.id); }
     const today = new Date().toLocaleDateString('en-CA');
-    return schedules
-      .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
-      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    // UP-17 — 이미 끝난 오늘 일정(시작 + 10시간 경과)은 '아직 클락 전' 이 아니다. 판정은 lib/liveUpcoming 정본.
+    return upcomingToday(schedules, liveSchedIds, today);
   }, [games, schedules]);
 
   // 정렬 — 기본(클락 순) / 남은인원 많은 순 / 시작 시간 빠른 순 / 거리순(지역 근사)

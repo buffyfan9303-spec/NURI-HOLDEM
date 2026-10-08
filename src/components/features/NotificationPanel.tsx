@@ -250,13 +250,16 @@ export default function NotificationPanel({
     const q = query.trim();
     if (q.length < 2) { setResults([]); setSearching(false); return; }
     setSearching(true);
+    // UP-09 — cleanup 이 디바운스만 지우면, 이미 떠난 옛 검색(A)의 늦은 응답이 최신 검색(B) 결과를 덮고
+    //   searching 도 잘못 끈다. 이 effect 세대가 끝나면(alive=false) 응답을 버린다.
+    let alive = true;
     const t = setTimeout(() => {
       findUserForTransfer(q)
-        .then(setResults)
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .then((r) => { if (alive) setResults(r); })
+        .catch(() => { if (alive) setResults([]); })
+        .finally(() => { if (alive) setSearching(false); });
     }, 300);
-    return () => clearTimeout(t);
+    return () => { alive = false; clearTimeout(t); };
   }, [msgView, query]);
 
   // ── 차단 — 기존 user_blocks 재사용(피드·검색과 동일 동선) ──
