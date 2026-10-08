@@ -48,8 +48,11 @@ export function decodeSpot(code: string): DecodedSpot {
   };
 }
 
-/** location.hash 에서 `#gto=` 코드 추출. 없으면 null. */
+/** location.hash 에서 `#gto=` 코드 추출. 없거나 깨졌으면 null.
+ *  ⚠ 던지면 App 최상위 ErrorBoundary 까지 올라가 앱 전체가 오류 화면이 된다(H03-01, `#gto=%`). */
 export function readGtoHash(hash: string): string | null {
   const m = (hash ?? '').match(/#gto=([^&]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
+  // 정상 코드는 최대 20자(4-4-10). escape 여유를 둬도 200자를 넘을 일이 없다.
+  if (!m || m[1].length > 200) return null;
+  try { return decodeURIComponent(m[1]); } catch { return null; }
 }

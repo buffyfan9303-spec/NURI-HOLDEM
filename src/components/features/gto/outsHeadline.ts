@@ -5,6 +5,10 @@
 //   드로잉 데드는 **승률이 정확히 0** 일 때만이다(플랍·턴 승률은 전수계산이라 0 비교가 정확하다).
 import type { Standing } from './equityEngine';
 
+/** 내 아웃츠를 보일까(아니면 상대 아웃츠=위험 카드)? **지금 패의 우열**로 고른다 — 리버까지의 지분이 아니다(G2).
+ *  동률은 '무엇이 뜨면 내가 이기나' 가 궁금한 자리라 내 쪽. 아웃츠 계산기·핸드 리플레이어가 같이 쓴다. */
+export const showMyOuts = (standing: Standing | undefined): boolean => standing !== 'ahead';
+
 export function outsHeadline(mine: boolean, outs: number, standing: Standing, heroEquity: number, next: 'turn' | 'river'): string {
   if (!mine) return outs === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다. 이 카드가 뜨면 상대 승률이 50%를 넘습니다';
   if (outs > 0) return '이 카드가 뜨면 리버까지 승률이 50%를 넘습니다';

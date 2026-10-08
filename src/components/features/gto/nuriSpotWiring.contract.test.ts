@@ -95,9 +95,10 @@ describe('요구 A · 작성 화면에서 에퀴티 배선과 빈도 막대가 �
 
 // ── 빌런 B~E (2026-09-19) — 배선 셋 ──────────────────────────────────────────
 describe('빌런 B~E 배선', () => {
-  it('슬롯 수는 스팟(자리 목록)이 정본이다 — hb.setExtraCount 가 spot.extra.length 를 따라간다', () => {
-    // 이게 빠지면 자리 단계에서 상대를 추가해도 카드 단계에 슬롯이 안 생기고, 지우면 유령 슬롯의 카드가 승률에 남는다
-    expect(code).toMatch(/if \(extraSlots !== spot\.extra\.length\) setExtraCount\(spot\.extra\.length\);/);
+  it('슬롯 수는 스팟(자리 목록)이 정본이다 — 수가 다르면 hb 가 spot.extra 의 **카드로** 슬롯을 다시 만든다', () => {
+    // 이게 빠지면 자리 단계에서 상대를 추가해도 카드 단계에 슬롯이 안 생기고, 지우면 유령 슬롯의 카드가 승률에 남는다.
+    // 수만 넘기면(옛 setExtraCount) 저장 스팟 재열기에서 B~E 가 비고, 가운데 삭제에서 C 에 B 카드가 붙는다(GTO-SAVED/REMOVE-EXTRA).
+    expect(code).toMatch(/if \(extraSlots !== spot\.extra\.length\) followExtraSeats\(spot\.extra\);/);
   });
 
   // 🔴 2026-09-22 요구 A — 'VerdictLine 이 evaluation 을 그대로 읽는가' 계약은 **대상이 사라져**

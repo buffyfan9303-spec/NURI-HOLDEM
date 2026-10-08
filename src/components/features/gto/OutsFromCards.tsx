@@ -18,7 +18,7 @@ import Icon from '../../atoms/Icon';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { equityAsync, outsAsync } from './equityClient';
 import type { OutsResult, Standing } from './equityEngine';
-import { outsHeadline } from './outsHeadline';
+import { outsHeadline, showMyOuts } from './outsHeadline';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard, type HandBoardInit } from './useHandBoard';
 import { cardId, type Card } from './gto.types';
@@ -81,7 +81,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
       const st: Standing = ho?.standing ?? 'tied';
       // 동률은 별도 상태다 — '앞선다'로 접으면 상대 아웃(위험 카드)을 보여 주게 되어 뜻이 뒤집힌다.
       //   동률일 때 알고 싶은 것은 "무엇이 뜨면 내가 이기나" 이므로 내 아웃을 센다.
-      const showMine = st !== 'ahead';
+      const showMine = showMyOuts(st);
       const picked = showMine ? ho : vo;
       setHeroEquity(eq.hero);
       setStanding(st);

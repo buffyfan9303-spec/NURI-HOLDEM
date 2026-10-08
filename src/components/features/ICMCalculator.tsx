@@ -260,7 +260,8 @@ export default function ICMCalculator({ initialMode = 'equity', variant = 'full'
   //   옛 딜 계산기는 금액 입력만 상정해 정수로 반올림했다. 여기서는 상금 입력을 기대 지분 모드와 공유하므로
   //   % 구조(합계 ≈100)일 때는 소수 1자리 — 정수로 깎으면 30.55 가 31 이 돼 기대 지분 모드의 값과 어긋나 보인다.
   const money = (n: number) => (looksPct ? n.toFixed(1) : fmt(n));
-  const dealTable = (
+  //   0칩·빈 칸이면 chopTable 과 같은 이유로 표 전체를 내지 않는다(H03-02 — 위 경고문과 금액 표가 함께 보였다).
+  const dealTable = hasNonPositive ? null : (
     <>
       <div className="overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60">
         <table className="w-full text-xs tabular-nums">

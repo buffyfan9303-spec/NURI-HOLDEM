@@ -15,7 +15,7 @@
 //
 // 이 도구는 이 앱에 남은 **유일한 외부 생성형 AI 기능**이다(오너 지시 2026-09-11).
 import { CHIP_HIT } from './chip';
-import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { Fold } from '../../atoms/Fold';
 import { Skeleton } from '../../atoms/Skeleton';
@@ -69,10 +69,13 @@ export default function TdaRulesTool() {
     [data, asked],
   );
 
+  // 요청 세대 — 앞 질문의 늦은 답이 뒤 질문 아래에 붙거나, 앞 요청의 finally 가 뒤 요청 진행 중에 busy 를 끄지 않게(TDA-REQUEST-RACE).
+  const reqRef = useRef(0);
   const ask = useCallback(async (text: string) => {
     const t = text.trim();
     if (!t || !data) return;
-    setAsked(t); setAnswer(''); setAiErr(null);
+    const gen = ++reqRef.current;
+    setAsked(t); setAnswer(''); setAiErr(null); setBusy(false); // 앞 요청의 busy 는 이제 이 요청이 정한다
     const found = searchTda(data.rules, t, 6);
     if (found.length === 0) { setAiErr('관련 규칙을 찾지 못했습니다. 다른 말로 물어봐 주세요.'); return; }
     if (!user) { setAiErr('AI 답변은 로그인 후 이용할 수 있습니다. 아래 규칙 원문은 그대로 보실 수 있습니다.'); return; }
@@ -80,11 +83,11 @@ export default function TdaRulesTool() {
     try {
       // 서버에는 **키만** 간다 — 원문 조립은 tda-assist 가 자기 rules.json 으로 한다.
       const out = await askTdaAssist(t, found.map(({ rule }) => tdaRuleKey(rule)));
-      setAnswer(out);
+      if (gen === reqRef.current) setAnswer(out);
     } catch (e) {
       // AI 가 실패해도 규칙은 아래에 그대로 있다 — '아무것도 못 얻는 실패'로 끝내지 않는다.
-      setAiErr(msgOf(e, 'AI 답변을 받지 못했습니다. 아래 규칙 원문을 확인해 주세요.'));
-    } finally { setBusy(false); }
+      if (gen === reqRef.current) setAiErr(msgOf(e, 'AI 답변을 받지 못했습니다. 아래 규칙 원문을 확인해 주세요.'));
+    } finally { if (gen === reqRef.current) setBusy(false); }
   }, [data, user]);
 
   const sections = useMemo(() => (data ? ['전체', ...Array.from(new Set(data.rules.map((r) => r.section)))] : ['전체']), [data]);
@@ -123,8 +126,8 @@ export default function TdaRulesTool() {
 
         <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-3.5">
           {EXAMPLES.map((ex) => (
-            <button key={ex} type="button" onClick={() => { setQ(ex); ask(ex); }}
-              className={`${CHIP_HIT} min-h-[32px] rounded-chip border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300`}>
+            <button key={ex} type="button" onClick={() => { setQ(ex); ask(ex); }} disabled={busy}
+              className={`${CHIP_HIT} disabled:opacity-50 min-h-[32px] rounded-chip border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300`}>
               {ex}
             </button>
           ))}
