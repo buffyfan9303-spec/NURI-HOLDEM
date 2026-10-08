@@ -190,6 +190,11 @@
   --animate-dim-in: dim-in 0.32s cubic-bezier(0.45, 0, 0.55, 1);         /* = 가운데 모달 slide-up(index.css 0.32s) */
   /* 시트 닫기의 딤 — 시트(slide-down 0.2s)보다 **먼저** 걷힌다(voucher-close −45 → 0, flick.cjs 실측). */
   --animate-dim-out: fade-out 0.05s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  /* 가운데 모달 닫기의 본문 — slide-up(+8px 에서 올라옴)의 역방향. 투명도는 래퍼 fade-out 한 겹만 맡는다(본문까지 겹치면 o² 로 먼저 꺼진다). */
+  --animate-nudge-down: nudge-down 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  @keyframes nudge-down {
+    to { transform: translateY(8px); }
+  }
 
   @keyframes badge-pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
@@ -1832,7 +1837,7 @@ main { max-width: 48rem; margin-inline: auto; }
    ① 아래 :is(...) 무효화 목록(keep-alive 재방문 깜빡임 방지)
    ② prefers-reduced-motion 블록의 animation:none 목록
    (.animate-scale-in 은 tailwind 에 정의가 없는 죽은 셀렉터라 제거, .anim-pop 은 뚫려 있던 유일한 구멍이라 등록) */
-.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .anim-pop, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out):not(.fixed):not(.fixed *) {
+.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .anim-pop, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out, .animate-nudge-down):not(.fixed):not(.fixed *) {
   animation: none !important;
 }
 
@@ -1954,7 +1959,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   /* .animate-sheet-up 이 빠져 있어 0.01ms 로만 줄었고, 첫 프레임이 from(translateY 100%)으로 그려져 딤만 있는 검은 한 프레임이 났다(2026-09-29 실측 휘도 −19.7~−23.3). */
-  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-sheet-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
+  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-sheet-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out, .animate-nudge-down,
   .skeleton, .anim-pop { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
