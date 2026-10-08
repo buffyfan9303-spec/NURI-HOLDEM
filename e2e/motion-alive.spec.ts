@@ -78,7 +78,10 @@ for (const scheme of SCHEMES) for (const [name, paid, sel] of [
     expect(pairs.length, '같은 문구의 프레임 쌍이 없다').toBeGreaterThan(30);
     const still = pairs.filter(([p, x]) => Math.abs(x.tx - p.tx) < 0.01).length;
     expect(still / pairs.length, `정지 프레임 ${still}/${pairs.length}`).toBeLessThan(0.1);
-    const moved = Math.abs(f[f.length - 1].tx - f[0].tx);
+    // 총 이동 = 같은 문구 쌍의 왼쪽 이동량 합. 처음·끝 프레임의 차(순 이동)로 재면 안 된다 —
+    //   안내 줄은 한 바퀴(약 56px)가 1배속 2초(28px/s)와 맞아떨어져, 2초 창이 한 바퀴를 꼭 돌면 끝 위치가 처음 위치로 돌아와 0.1~5px 로 나온다
+    //   (부하에서 100회 중 2회, 줄이 멀쩡히 흐르는데도 빨개짐). 한 바퀴를 돌아 오른쪽으로 되감기는 프레임은 합에서 빠진다. 임계(5px)는 그대로다.
+    const moved = pairs.reduce((sum, [p, x]) => sum + Math.max(0, p.tx - x.tx), 0);
     expect(moved, `2초 동안 총 이동 ${moved.toFixed(1)}px`).toBeGreaterThan(5);
   });
 }

@@ -296,7 +296,17 @@ test('🔴 L8 동의 시트 버튼 높이 ≥ 44px(동의 · 동의하지 않고
   await page.goto(`/?checkin=${VENUE}`);
   await expect(page.getByTestId('location-consent-sheet')).toBeVisible({ timeout: 20_000 });
   for (const id of ['location-consent-agree', 'location-consent-decline', 'location-consent-terms']) {
-    const h = await page.getByTestId(id).evaluate((el) => el.getBoundingClientRect().height);
+    // 시트가 올라오는 동안(sheet-up)에는 getBoundingClientRect 의 top/bottom 이 float32 로 어긋나 44px 가 43.99994 로 나온다(부하에서 60회 중 5회).
+    //   자리(top)가 6프레임 연속 멎은 뒤에 잰다 — 임계(44)는 그대로다.
+    const h = await page.getByTestId(id).evaluate((el) => new Promise<number>((res) => {
+      let last = -1; let still = 0;
+      const tick = () => {
+        const r = el.getBoundingClientRect();
+        if (r.top === last) { if (++still >= 6) return res(r.height); } else { still = 0; last = r.top; }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }));
     expect(h, `${id} 높이 ${h}px`).toBeGreaterThanOrEqual(44);
   }
 });
