@@ -50,8 +50,20 @@ export function notifGlyph(n: { type: NotificationType; link?: string | null }):
   const store = parseStoreLink(l);
   if (store) return SECTION_GLYPH[store.section];
   if (l === '/rank') return 'trophy';
-  if (l.startsWith('/community/')) return 'store';
+  if (parseVenueLink(l)) return 'store';
   return TYPE_GLYPH[n.type] ?? 'bell';
+}
+
+/** 매장·그룹 페이지 목적지면 그 id, 아니면 null.
+ *  '/community/<id>' 와 '/?venue=<uuid>' 를 같은 목적지로 읽는다 — 그룹 알림 3종(개설 승인·가입 신청·가입 승인, 20261002f)이
+ *  '/?venue=' 로 저장돼 있어 서버를 고쳐도 이미 쌓인 행은 못 고친다(R12-01). 그래서 해석을 여기서 넓힌다. */
+export function parseVenueLink(link: string | null | undefined): string | null {
+  const l = (link ?? '').trim();
+  const cm = l.match(/^\/community\/(.+)$/);
+  if (cm) return cm[1];
+  const qm = l.match(/^\/\?(.*)$/);
+  const v = qm ? new URLSearchParams(qm[1]).get('venue') : null;
+  return v && UUID_RE.test(v) ? v : null;
 }
 
 // 일반 화면(매장 권한이 필요 없는 목적지) — type 이 approval 이어도 매장 판정에 걸리면 안 된다(순위 인증 승인 알림: approval + /rank).
@@ -63,5 +75,6 @@ export function needsStoreAccess(n: { type: NotificationType; link?: string | nu
   if (l.startsWith('/my-store') || l === '/staff-schedule') return true;
   if (isAdmin) return false;
   if (l === '/admin') return true;
+  if (parseVenueLink(l)) return false; // 그룹 개설 승인(approval + /?venue=)은 매장 탭이 아니라 그룹 페이지로 간다
   return n.type === 'approval' && !GENERAL_LINKS.has(l);
 }

@@ -10,7 +10,7 @@
 // 버튼들의 공통 부모(relative)에 이 컴포넌트를 한 번 두고, 활성 버튼에
 // `data-pill-active` 를 표시한다. activeKey 가 바뀌면 활성 버튼을 측정해
 // width/height 는 즉시 최종값으로 박고, **transform(translate+scale) 전용 FLIP**으로
-// 미끄러진다(전환은 --ease 단일 곡선) — 애니메이션 구간이 전부 컴포지터에서 돈다.
+// 미끄러진다(전환은 --ease-out-ui 170ms — 아래 flip 주석) — 애니메이션 구간이 전부 컴포지터에서 돈다.
 //
 //  <div ref={ref} className="relative ...">
 //    <SlidingPill containerRef={ref} activeKey={value} className="bg-accent-300/15 rounded-full" />
@@ -127,8 +127,10 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
         pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
         void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
         // Play: transform 만 전환
-        // v2: 화면 안에서 자리를 옮기는 것은 --ease-move(양끝 감속) — 출발이 급한 감속 곡선은 '튀어나가는' 느낌을 준다(헌법 §1)
-        pill.style.transition = 'transform var(--dur-base) var(--ease-move), opacity var(--dur-fast) var(--ease)';
+        // 2026-10-08 오너 "소메뉴 이동이 너무 느리다" — 판이 한 프레임에 바뀐 뒤(#218) 알약만 늦게 따라왔다.
+        //   종전 --ease-move(양끝 감속)·.22s 는 첫 60ms 가 거의 정지라 누른 뒤 60ms 출발·226ms 도착이었다(review-218 P3-1).
+        //   출발이 빠른 감속 곡선(--ease-out-ui)·170ms 로 — 알약만 바꾸고 공용 토큰(--ease-move·--dur-base)은 그대로 둔다.
+        pill.style.transition = 'transform 170ms var(--ease-out-ui), opacity var(--dur-fast) var(--ease)';
         pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
       };
       // 판 교체 중(html[data-tab-swap] — src/lib/tabCover.ts 6·7차)이면 FLIP 전체(크기·Invert·Play)를 새 판 첫 프레임이 나간 **뒤로** 미룬다.
