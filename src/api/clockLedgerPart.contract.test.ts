@@ -9,6 +9,7 @@
 // 음성 대조: ledger.ts ledgerCounts 의 `.trim()` 을 빼면 '이름 공백' 케이스가, chipRules.earlyTierIndexAt 의 `mins < min` 을 `<=` 로 되돌리면
 //   'W-27 반열림' 케이스가, clock.ts rebuyOrdOf 의 trim 을 빼면 'W-10 계단' 케이스가 빨개진다.
 // 2026-09-30 KW-1a: SQL 정본이 20260930e(얼리 단계·반열림·계단 스택)로 옮겨졌다. JS 쪽은 화면 작성기와 **같은 함수**(ledgerLiveStats)로 잰다.
+// 2026-10-09 roti-1009 C-1: SQL 정본이 20261009s(시작 전 도착 = 가장 이른 얼리 단계)로 옮겨졌다. 픽스처 18케이스(+3 · case 2 기대값 뒤집음).
 // 실행: npx vitest run src/api/clockLedgerPart.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -41,13 +42,14 @@ export function jsLedgerPart(buyins: Row[], session: Sess, config: Partial<Clock
 }
 
 const sqlBody = () => {
-  const s = readFileSync(join(__dirname, '../../supabase/migrations/20260930e_chip_rules_early_tiers.sql'), 'utf8').replace(/\r\n/g, '\n');
+  const s = readFileSync(join(__dirname, '../../supabase/migrations/20261009s_early_prestart_first_tier.sql'), 'utf8').replace(/\r\n/g, '\n');
   const m = s.match(/_clock_ledger_part\(p_buyins jsonb, p_session jsonb, p_config jsonb\)[\s\S]*?as \$fn\$([\s\S]*?)\$fn\$;/);
   return m?.[1] ?? '';
 };
 // R1 로 전 케이스 일치를 확인한 본문+픽스처의 해시. 2026-09-29 는 라이브 읽기 전용 SELECT,
 //   2026-09-30(KW-1a, 20260930e) 은 PGlite(Postgres 17 WASM) 에 §2 본문 그대로 만들어 15케이스 jsonb = 비교(scratchpad/kw1a/r1-pglite.mjs).
-const SQL_BODY_SHA = '90e39d7764962f49';
+//   2026-10-09(roti-1009 C-1, 20261009s) 는 PGlite 0.5.8(PG 18.3 WASM)로 18/18 · 옛 본문 20260930e 는 같은 픽스처에서 3케이스 diff(음성 대조).
+const SQL_BODY_SHA = '9ec428e6330ce25b';
 
 describe('K3 장부 몫 — JS 식 == 픽스처 == SQL 식', () => {
   for (const c of fx.cases as unknown as { name: string; buyins: Row[]; session: Sess; config: Partial<ClockConfig>; expect?: Record<string, unknown> }[]) {
