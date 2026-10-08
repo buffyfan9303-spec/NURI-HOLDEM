@@ -12,6 +12,11 @@ import { stabilizeBackstack, stubLogin } from './_session';
 
 declare global { interface Window { __cls: number } }
 
+// ⚠ 서비스워커를 막아야 한다 — 허용하면 SW 가 activate·claim 한 뒤(느린 CI 러너, 게이트가 늦게 뜨는 경우)의 청크 요청이
+//   SW 를 거쳐 page.route 에 안 보인다. 그러면 붙잡기가 안 걸려 '청크를 요청하지 않았다' 로 실패한다(2026-10-08 CI e2e(1) 3폭 모두).
+//   프로필 응답을 3초 늦춰 재현했고, 막으면 통과한다. lazy-chunk-retry-1008·mystore-followup-1003 도 같은 이유로 막는다.
+test.use({ serviceWorkers: 'block' });
+
 for (const width of [360, 390, 412]) {
   test(`🔴 동의 게이트 — 닉네임 칸이 시트 정착 뒤 도착해도 '전체 동의' 가 밀리지 않는다 (${width}px · M11-01)`, async ({ page }) => {
     test.setTimeout(60_000);
