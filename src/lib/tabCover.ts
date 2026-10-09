@@ -265,7 +265,7 @@ const SWAP_GUARD_MS = 1500;
 //   🔴 막 시작값을 0.6 위로 올리거나, 막을 판 준비까지 붙잡거나, 떠나는 판을 겹치지 마라 — 각각 5차·8차 증상이 돌아온다.
 //     잠금: src/components/transitionDevices.contract.test.ts (d) · e2e/tab-instant-swap.spec.ts · e2e/pill-flash.spec.ts.
 // ─────────────────────────────────────────────────────────────────────────────
-export const FADE_FROM = 0.55;
+export const FADE_FROM = 0.4; // 10-09 22:40 0.55→0.4 — 반복 빛(SpotHeroSheen)이 지나가는 밝은 GTO 에서 홈으로 갈 때 0.55 막이 첫 프레임을 홈보다 8 어둡게 해 flicker-gate:133 이 걸렸다. 부드러움은 남기는 하한(계약 ≥0.4)
 export const FADE_MS = 220;
 export const FADE_EASE = 'cubic-bezier(.22,.61,.36,1)';
 /** 걷기를 한 프레임(60Hz)만큼 진행한 자리에서 시작한다 — 아래 coverAt 주석. */
@@ -322,8 +322,8 @@ function coverAt(r: Rect | null, z: string, bg: string, host: Element): () => vo
   return () => {
     if (my !== fadeGen) return;
     if (typeof el.animate !== 'function') { hideFade(); return; }
-    s.opacity = '0'; // 애니가 끝난 프레임에 정지값(0.55)으로 되돌아 번쩍이지 않게 — 도는 동안은 애니가 이긴다
-    // delay −FADE_LEAD_MS — 첫 걷기 프레임이 정지값(0.55)을 한 번 더 그리지 않게 한 프레임만큼 진행한 자리에서 시작한다
+    s.opacity = '0'; // 애니가 끝난 프레임에 정지값(FADE_FROM)으로 되돌아 번쩍이지 않게 — 도는 동안은 애니가 이긴다
+    // delay −FADE_LEAD_MS — 첫 걷기 프레임이 정지값(FADE_FROM)을 한 번 더 그리지 않게 한 프레임만큼 진행한 자리에서 시작한다
     //   (막 ≥0.5 = 커밋 프레임 하나. CPU 4배 실측에서 시작 프레임까지 세면 4프레임이 나와 A5(≤3)를 넘었다).
     const a = el.animate([{ opacity: from }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS });
     a.onfinish = () => { if (my === fadeGen) hideFade(); };

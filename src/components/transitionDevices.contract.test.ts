@@ -144,7 +144,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'src/components/atoms/ToastView.tsx': '성공 토스트 체크 아이콘 획 그리기(stroke-dashoffset, 아이콘 한 개·1회) — 지연 청크 안이라 첫 화면 CSS 0B(2026-10-08 M04)',
     'src/components/features/gto/HandBoardPicker.tsx': '카드 슬롯 한 칸(36×48) 내려앉기 — 손으로 고른 순간만 transform·opacity 180ms, fill 없음(M06 2026-10-08 · 판 전환 아님)',
     'src/components/features/clock/levelCue.ts': '클락 레벨 경계 1회 빛(M07) — 레벨이 바뀔 때만 한 번, 타이머 로직과 무관(2026-10-08)',
-    'src/lib/tabCover.ts': '9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 메인·하위 판 교체 뒤 판 밖 지면색 막 한 장의 opacity 만 0.55→0 220ms. 앱의 유일한 판 전환 연출((d) 가 값·대상을 잠근다)',
+    'src/lib/tabCover.ts': '9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 메인·하위 판 교체 뒤 판 밖 지면색 막 한 장의 opacity 만 0.4→0 220ms. 앱의 유일한 판 전환 연출((d) 가 값·대상을 잠근다)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
     const names = [...cssOutsideTheme().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);

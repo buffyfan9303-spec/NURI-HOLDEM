@@ -167,7 +167,7 @@ describe('④ App.tsx — 덮개는 없다 · 준비 표식은 남는다', () =>
   });
 });
 
-// 9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 판 교체 뒤 판 밖 지면색 막 한 장이 0.55 에서 곧바로 걷힌다.
+// 9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 판 교체 뒤 판 밖 지면색 막 한 장이 0.4(FADE_FROM) 에서 곧바로 걷힌다.
 //   프레임 순서(첫 rAF 정지값 → 둘째 rAF 에서 정적화 해제와 같이 걷기)·건너뛰기(첫 마운트·동작 줄이기·전면 판)·연타를 node 가짜 DOM 으로 잰다.
 //   화면 프레임(휘도·겹침)은 e2e/tab-instant-swap.spec.ts · pill-flash.spec.ts 가 잰다.
 describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
@@ -250,14 +250,14 @@ describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
     flush();
     expect(el.animate).toHaveBeenCalledTimes(1);
   });
-  it('연타 — 걷히는 중인 막이 있으면 지금 값에서 이어 걷는다(0.55 로 다시 짙어지는 맥박 없음 · P3-2)', () => {
+  it('연타 — 걷히는 중인 막이 있으면 지금 값에서 이어 걷는다(FADE_FROM 으로 다시 짙어지는 맥박 없음 · P3-2)', () => {
     notePaneLeaving('home', 'community'); handOffPane(); flush(); flush();
     const el = fade()!;
     expect(el.animate).toHaveBeenCalledTimes(1);
     animOp = '0.2'; // 첫 이동의 걷기가 0.2 까지 왔다
     notePaneLeaving('community', 'tools'); handOffPane(); flush();
     animOp = null;
-    expect(Number(el.style.opacity), '0.55 로 다시 깔렸다 — 탭마다 맥박').toBe(0.2);
+    expect(Number(el.style.opacity), 'FADE_FROM 으로 다시 깔렸다 — 탭마다 맥박').toBe(0.2);
     flush();
     expect(el.animate).toHaveBeenLastCalledWith([{ opacity: 0.2 }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -16 });
     // 걷기가 끝난 뒤의 다음 이동은 다시 FADE_FROM 부터
