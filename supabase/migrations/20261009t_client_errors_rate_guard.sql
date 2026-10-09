@@ -1,4 +1,6 @@
--- ⏳ 미적용(2026-10-09 초안 · store-team). 적용·리허설·커밋 판단은 nuri-lead. 적용 경로: MCP execute_sql 로 이 파일 전문(nuri-migration §0).
+-- ✅ 적용 완료 2026-10-09 19:12 KST(리드). 리허설 PASS 9/9(T1~T9 · T8 통과 59/막힘 21) · 음성 대조(이 파일 없이) FAIL 4/9(T2·T3·T4·T6·T7 통과됨).
+--    적용 후 실측: client_errors_insert WITH CHECK 에 NOT (user_id IS DISTINCT FROM (SELECT auth.uid())) · anon INSERT created_at=false · user_id·message=true.
+-- (작성 당시) 미적용(2026-10-09 초안 · store-team). 적용·리허설·커밋 판단은 nuri-lead. 적용 경로: MCP execute_sql 로 이 파일 전문(nuri-migration §0).
 --
 -- 요구: audit-open-1009 r1-result.json SEC-01(P2) — client_errors 속도 제한 우회 · user_id 위조.
 --   라이브(2026-10-09 읽기 전용 조회, fix-db/q/a1_client_errors.out.json):
