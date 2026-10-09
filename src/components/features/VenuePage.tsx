@@ -5,6 +5,7 @@ import { goSubTab } from '../../lib/subTabTransition';
 import { heroTouchIntent } from '../../lib/heroTouch';
 import { onColorInkClass } from '../../lib/color';
 import { visitCountRows } from '../../lib/venueVisitRank';
+import { paidShown } from '../../lib/paidExposure';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import {
   naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, naverMaps, geocodeAddress, probeNaverAuth,
@@ -404,7 +405,7 @@ export default function VenuePage({
               <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
                 {venue.region}
               </span>
-              {venue.isPaidAd && (
+              {paidShown(venue.isPaidAd) && (
                 <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
                   프리미엄
                 </span>

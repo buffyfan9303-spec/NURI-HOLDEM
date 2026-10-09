@@ -1,5 +1,6 @@
 import type { Schedule } from '../api/schedules';
 import { startAtMs, scheduleStatus } from './scheduleStatus';
+import { paidShown } from './paidExposure';
 
 /** browse 목록 기본 정렬 — 날짜+시각이 1차 키, 부스트(isPremium)는 동일 시각 내 tie-break.
  *
@@ -14,7 +15,7 @@ export function compareByStartThenBoost(
   b: Pick<Schedule, 'date' | 'startTime' | 'isPremium'>,
 ): number {
   return (a.date + a.startTime).localeCompare(b.date + b.startTime)
-    || Number(b.isPremium) - Number(a.isPremium);
+    || Number(paidShown(b.isPremium)) - Number(paidShown(a.isPremium));
 }
 
 /**
@@ -62,7 +63,7 @@ export function upcomingSoon<T extends Pick<Schedule, 'date' | 'startTime' | 'is
   return schedules
     .map((s) => ({ s, at: startAtMs(s.date, s.startTime) }))
     .filter((x): x is { s: T; at: number } => x.s.approved && x.at !== null && x.at > nowMs)
-    .sort((a, b) => a.at - b.at || Number(b.s.isPremium) - Number(a.s.isPremium))
+    .sort((a, b) => a.at - b.at || Number(paidShown(b.s.isPremium)) - Number(paidShown(a.s.isPremium)))
     .slice(0, max)
     .map((x) => x.s);
 }

@@ -13,6 +13,7 @@ import { currentUser } from './_session';
 import { mustAffect } from './_mustAffect';
 import { gateError } from './_gateError';
 import type { UserRole } from './auth';
+import { PAID_EXPOSURE_ON } from '../lib/paidExposure';
 
 // 매장 상태 (관리자 게시물 관리) — active 외에는 공개 목록에서 숨김. 모두 active로 복구 가능.
 export type VenueStatus = 'active' | 'inactive' | 'suspended' | 'hidden';
@@ -207,11 +208,12 @@ export async function getVenues(): Promise<Venue[]> {
     const { MOCK_VENUES } = await import('../mock/data');
     return MOCK_VENUES;
   }
-  // 정렬: 유료광고 우선 → 관리자가 지정한 노출 순서(display_order) → 팔로워순
-  const { data, error } = await supabase.from('venues').select('*')
+  // 정렬: (유료 노출이 켜져 있을 때만) 유료광고 우선 → 관리자가 지정한 노출 순서(display_order) → 팔로워순
+  let q = supabase.from('venues').select('*')
     .eq('approved', true)
-    .eq('status', 'active')
-    .order('is_paid_ad', { ascending: false })
+    .eq('status', 'active');
+  if (PAID_EXPOSURE_ON) q = q.order('is_paid_ad', { ascending: false });
+  const { data, error } = await q
     .order('display_order', { ascending: true })
     .order('follower_count', { ascending: false });
   if (error) throw error;
