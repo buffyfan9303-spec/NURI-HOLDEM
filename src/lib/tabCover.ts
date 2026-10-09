@@ -255,6 +255,13 @@ const SWAP_GUARD_MS = 1500;
 //   · 막은 **커밋 순간** 정지값으로 깔고(클릭 때 깔면 옛 판을 먼저 흐린다), 페이드는 **새 판 첫 프레임 다음**(releaseSwap 과 같은 콜백)에
 //     시작한다 — 스왑 프레임에 합성 애니가 돌면 새 판 타일 래스터를 안 기다려 빠진 타일(다크=검정)이 나온다(6차 원인).
 //   · 동작 줄이기 · 숨은 문서 · 전면 판(html[data-overlay]) 열림 · 앱 첫 마운트(이동이 아님)에는 막 0 — 8차 한 프레임 교체 그대로.
+//   · 막은 **방금 누른 버튼이 든 줄**(하단바·하위 탭 레일·판 안 단계 알약)을 덮지 않는다(design-reviewer 2026-10-09 P2-1·P2-2 —
+//     첫 판은 하단바와 내 매장 단계 알약까지 0.2초 절반 밝기로 흐렸다. 09-26 오너 "알약을 누르면 검정이 됐다가 다시 나온다" 와 같은 자리).
+//     ① 막은 앱 셸(`[data-app-shell]`, relative z-1 — 쌓임 맥락) **안**에 붙는다. body 에 붙이면 셸 전체(z=1) 위라 셸 안 하단바(z-50)까지 덮었다.
+//     ② 모바일 아래끝은 하단바 윗변(navTop). ③ 하위 탭은 누른 줄(pressRow)을 판에서 빼고 남은 쪽만 덮는다 — 레일이 판 **안**에 있어
+//        subPanelOf 가 레일을 못 찾는 내 매장 단계 알약([data-mystore-rail] ⊂ [data-mystore-secpanel])도 여기서 잡힌다.
+//     잠금: e2e/pane-fade-press-row.spec.ts(막 rect ∩ 누른 줄 = 0 · 누른 줄 밝기 하강).
+//   · 연타 — 걷히는 중인 막이 있으면 지금 값에서 이어 걷는다(0.55 로 다시 깔면 탭마다 맥박 — 같은 판정 P3-2).
 //   🔴 막 시작값을 0.6 위로 올리거나, 막을 판 준비까지 붙잡거나, 떠나는 판을 겹치지 마라 — 각각 5차·8차 증상이 돌아온다.
 //     잠금: src/components/transitionDevices.contract.test.ts (d) · e2e/tab-instant-swap.spec.ts · e2e/pill-flash.spec.ts.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -270,15 +277,22 @@ let fadeGen = 0;
 /** 메인 탭 이동이 시작됐다(notePaneLeaving) — 첫 마운트·같은 탭 재렌더의 handOffPane 은 막을 깔지 않는다. */
 let mainArmed = false;
 
-const fadeNode = (): HTMLElement => {
-  if (fadeEl?.isConnected) return fadeEl;
-  const d = document.createElement('div');
-  d.setAttribute('aria-hidden', 'true');
-  d.setAttribute('data-pane-fade', '');
-  // will-change — 정지값으로 깔리는 커밋 프레임부터 막이 제 층이다. 걷기 시작 때 승격되면 그 순간 아래 판 전체를 막 없이 다시 래스터해야 한다.
-  d.style.cssText = 'position:fixed;pointer-events:none;display:none;opacity:0;will-change:opacity;';
-  document.body.appendChild(d);
-  return (fadeEl = d);
+const SHELL = '[data-app-shell]';
+/** 막을 붙일 자리 — 판과 같은 쌓임 맥락. 셸 안 판(메인 탭·그 안 하위 탭·셸 안 시트)은 셸, body 로 포털된 전면 판 안 하위 탭만 body.
+ *  셸에 붙으면 z 는 셸 안에서 겨룬다 — 판 위(45)·헤더·하단바(z-50)·시트(z-55+) 아래. 옛 덮개 자리(5a3674d3^ App.tsx)와 같다. */
+const hostFor = (el: Element | null): Element => (el ? el.closest(SHELL) : document.querySelector(SHELL)) ?? document.body;
+const fadeNode = (host: Element): HTMLElement => {
+  if (!fadeEl?.isConnected) {
+    const d = document.createElement('div');
+    d.setAttribute('aria-hidden', 'true');
+    d.setAttribute('data-pane-fade', '');
+    // will-change — 정지값으로 깔리는 커밋 프레임부터 막이 제 층이다. 걷기 시작 때 승격되면 그 순간 아래 판 전체를 막 없이 다시 래스터해야 한다.
+    d.style.cssText = 'position:fixed;pointer-events:none;display:none;opacity:0;will-change:opacity;';
+    fadeEl = d;
+  }
+  // fixed 라 셸의 흐름에 안 낀다(자식이 하나 늘어도 레이아웃 0). 다른 맥락의 판이면 그쪽으로 옮긴다.
+  if (fadeEl.parentNode !== host) host.appendChild(fadeEl);
+  return fadeEl;
 };
 const hideFade = (): void => {
   if (!fadeEl) return;
@@ -292,14 +306,18 @@ const isPc = (): boolean => window.matchMedia('(min-width: 1024px)').matches;
  * 커밋 순간 — 막을 r 자리에 정지값(FADE_FROM)으로 깐다(애니가 아니다 — 스왑 프레임 래스터 대기를 깨지 않는다).
  * 돌려준 함수를 새 판 첫 프레임 **다음**에 부르면 FADE_MS 동안 0 으로 걷고 숨긴다. 새 이동이 오면(연타) 이전 막은 버린다.
  */
-function coverAt(r: Rect | null, z: string, bg: string): () => void {
+function coverAt(r: Rect | null, z: string, bg: string, host: Element): () => void {
   const my = ++fadeGen;
+  // 연타 — 걷히는 중인 막(이전 이동)이 있으면 지금 값에서 이어 걷는다. 0.55 로 다시 깔면 0.3초 5탭에 막이 다섯 번 짙어졌다 옅어진다(맥박 — P3-2).
+  //   다 걷힌(≤0.02) 막은 이어 갈 것이 없다 — 새 이동으로 FADE_FROM 부터.
+  const cur = fadeEl?.isConnected && fadeEl.style.display !== 'none' ? Number(getComputedStyle(fadeEl).opacity) || 0 : 0;
+  const from = cur > 0.02 ? Math.min(FADE_FROM, cur) : FADE_FROM;
   hideFade();
   if (!r || r.bottom - r.top < 1 || r.width < 1 || fadeOff()) return () => {};
-  const el = fadeNode();
+  const el = fadeNode(host);
   const s = el.style;
   s.top = `${r.top}px`; s.left = `${r.left}px`; s.width = `${r.width}px`; s.height = `${r.bottom - r.top}px`;
-  s.zIndex = z; s.background = bg; s.opacity = String(FADE_FROM); s.display = 'block';
+  s.zIndex = z; s.background = bg; s.opacity = String(from); s.display = 'block';
   window.setTimeout(() => { if (my === fadeGen) hideFade(); }, SWAP_GUARD_MS); // 안전망 — rAF 가 멈춰도 막이 눌러앉지 않는다
   return () => {
     if (my !== fadeGen) return;
@@ -307,24 +325,66 @@ function coverAt(r: Rect | null, z: string, bg: string): () => void {
     s.opacity = '0'; // 애니가 끝난 프레임에 정지값(0.55)으로 되돌아 번쩍이지 않게 — 도는 동안은 애니가 이긴다
     // delay −FADE_LEAD_MS — 첫 걷기 프레임이 정지값(0.55)을 한 번 더 그리지 않게 한 프레임만큼 진행한 자리에서 시작한다
     //   (막 ≥0.5 = 커밋 프레임 하나. CPU 4배 실측에서 시작 프레임까지 세면 4프레임이 나와 A5(≤3)를 넘었다).
-    const a = el.animate([{ opacity: FADE_FROM }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS });
+    const a = el.animate([{ opacity: from }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS });
     a.onfinish = () => { if (my === fadeGen) hideFade(); };
   };
 }
 
-/** 메인 탭 막 자리 — 모바일: 헤더 밑 전폭 ~ 화면 아래 · PC: GNB 밑 · 콘텐츠 열 폭 · 판 아래끝까지(좌우 채움·푸터는 안 덮는다 — 2026-09-19 '좌우 깜빡'). */
+/**
+ * 모바일 하단바 윗변 — 막 아래끝 상한(방금 누른 탭이 든 줄을 덮지 않는다). 하단바가 그 자리에 **실제로 그려질 때만** —
+ * 없음(PC lg:hidden)·자동 숨김(화면 밖)·전면 판이 그 위를 덮음(히트 테스트가 하단바가 아님)이면 Infinity(그 판은 끝까지 덮는다).
+ * 막은 pointer-events:none 이라 히트 테스트에 안 걸린다.
+ */
+function navTop(): number {
+  const nav = document.querySelector('nav[aria-label="하단 내비게이션"]');
+  if (!nav) return Infinity;
+  const q = nav.getBoundingClientRect();
+  if (q.height < 1 || q.top >= window.innerHeight) return Infinity;
+  const hit = document.elementFromPoint(q.left + q.width / 2, Math.min(q.bottom, window.innerHeight) - 2);
+  return hit && nav.contains(hit) ? q.top : Infinity;
+}
+/** 메인 탭 막 자리 — 모바일: 헤더 밑 전폭 ~ 하단바 위 · PC: GNB 밑 · 콘텐츠 열 폭 · 판 아래끝까지(좌우 채움·푸터는 안 덮는다 — 2026-09-19 '좌우 깜빡'). */
 function mainRect(): Rect | null {
   if (document.documentElement.hasAttribute('data-overlay')) return null;
   const p = [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((e) => e.style.display !== 'none' && e.getClientRects().length > 0);
   if (!p) return null;
   const bottomOf = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().bottom ?? 0;
   const top = Math.max(0, bottomOf('[data-stack-header]'), isPc() ? bottomOf('[data-stack-tabbar]') : 0);
-  if (!isPc()) return { top, left: 0, width: window.innerWidth, bottom: window.innerHeight };
+  if (!isPc()) return { top, left: 0, width: window.innerWidth, bottom: Math.min(window.innerHeight, navTop()) };
   const r = p.getBoundingClientRect();
   return { top, left: r.left, width: r.width, bottom: Math.min(window.innerHeight, Math.max(r.bottom, top)) };
 }
-/** 하위 탭 막 자리 — 판의 화면 영역만(레일·알약·헤더·PC GNB·판을 품은 스크롤 상자 밖은 안 덮는다). 옛 하위 덮개(5a3674d3^)의 자리 규칙. */
-function subRect(sp: { rail: Element | null }, root: Element): Rect | null {
+/**
+ * 방금 누른 버튼이 든 줄 — 누른 요소에서 위로 올라가며 **한 줄**(높이 ≤ 누른 요소의 1.75배+8)·**한 열**(폭 ≤ 1.75배+8)로 남는 동안 넓힌 상자 중 큰 쪽.
+ * 판(root)이나 판을 품은 조상 앞에서 멈춘다. 커밋 뒤 안 보이면(떠난 판 안의 바로가기 버튼) 줄이 아니다 — null.
+ * 예: 내 매장 단계 알약(32~44px 칸) → tablist → [data-mystore-rail](46~50px) 까지가 한 줄이고, 단계 머리를 품은 래퍼에서 멈춘다.
+ */
+function pressRow(press: Element | null, root: Element): DOMRect | null {
+  if (!press?.isConnected || press.getClientRects().length === 0) return null;
+  const p = press.getBoundingClientRect();
+  let row = p, col = p, inRow = true, inCol = true;
+  for (let n = press.parentElement; n && n !== root && !n.contains(root) && (inRow || inCol); n = n.parentElement) {
+    const q = n.getBoundingClientRect();
+    if (inRow) { if (q.height <= p.height * 1.75 + 8) row = q; else inRow = false; }
+    if (inCol) { if (q.width <= p.width * 1.75 + 8) col = q; else inCol = false; }
+  }
+  return row.width * row.height >= col.width * col.height ? row : col;
+}
+/** r 에서 줄 q 를 뺀 네 쪽(아래·위·오른쪽·왼쪽) 중 가장 넓은 쪽 — 판 맨 위 가로 레일이면 그 아래, 판 옆 세로 열이면 그 옆. 안 겹치면 r 그대로. */
+function clipOut(r: Rect, q: DOMRect | null): Rect | null {
+  const right = r.left + r.width;
+  if (!q || q.right <= r.left || q.left >= right || q.bottom <= r.top || q.top >= r.bottom) return r;
+  const area = (x: Rect) => Math.max(0, x.width) * Math.max(0, x.bottom - x.top);
+  const best = [
+    { ...r, top: q.bottom },
+    { ...r, bottom: q.top },
+    { ...r, left: q.right, width: right - q.right },
+    { ...r, width: q.left - r.left },
+  ].reduce((a, b) => (area(b) > area(a) ? b : a));
+  return area(best) < 1 ? null : best;
+}
+/** 하위 탭 막 자리 — 판의 화면 영역만(레일·누른 줄·헤더·PC GNB·하단바·판을 품은 스크롤 상자 밖은 안 덮는다). 옛 하위 덮개(5a3674d3^)의 자리 규칙. */
+function subRect(sp: { rail: Element | null }, root: Element, press: Element | null): Rect | null {
   const r = root.getBoundingClientRect();
   const sc = scroller(root);
   const box = sc?.getBoundingClientRect();
@@ -334,8 +394,9 @@ function subRect(sp: { rail: Element | null }, root: Element): Rect | null {
   const q = sp.rail?.isConnected ? sp.rail.getBoundingClientRect() : null;
   if (q && q.right > r.left && q.left < r.right) top = Math.max(top, q.bottom);
   top = Math.max(top, r.top);
-  const bottom = Math.min(window.innerHeight, box ? box.bottom : Infinity, r.bottom);
-  return bottom - top < 1 ? null : { top, left: r.left, width: r.width, bottom };
+  const bottom = Math.min(window.innerHeight, box ? box.bottom : Infinity, r.bottom, navTop());
+  // 레일이 판 **안**이면(내 매장 단계 알약 · 설정 하위 탭) 위 레일 판정에 안 걸린다 — 누른 줄을 직접 뺀다(P2-2).
+  return bottom - top < 1 ? null : clipOut({ top, left: r.left, width: r.width, bottom }, pressRow(press, root));
 }
 /** 판이 속한 전면 화면(fixed 오버레이)의 z-index — 막이 그 위·그 영역에만 깔리게. 없으면 메인 막과 같은 45. */
 function zFor(el: Element): string {
@@ -403,7 +464,7 @@ export function handOffPane(): void {
   if (armed) fadeGen++; // 연타 — 아직 걷기를 시작 안 한 이전 막은 지금 버린다(다음 rAF 에서 이 이동의 막이 덮는다)
   let fadeOut = () => {};
   requestAnimationFrame(() => {
-    if (armed) fadeOut = coverAt(mainRect(), '45', 'rgb(var(--surface-base))');
+    if (armed) fadeOut = coverAt(mainRect(), '45', 'rgb(var(--surface-base))', hostFor(null));
     requestAnimationFrame(() => { releaseSwap(); fadeOut(); });
   });
 }
@@ -475,7 +536,8 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   };
   const t = target instanceof Element ? target : null;
   const inEvent = !!(globalThis as { event?: Event }).event;
-  holdSwap(cancel, t?.closest('button, a, [role="button"], [role="tab"]'));
+  const press = t?.closest('button, a, [role="button"], [role="tab"]') ?? null;
+  holdSwap(cancel, press);
   if (!root) { afterFirstFrame(releaseSwap); return; }
   const key0 = shownPanes(root);
   const keyed = key0 !== '';
@@ -496,7 +558,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     else if (rail && recs.every((r) => rail.contains(r.target))) return; // 레일만 바뀜 — 판 변화를 태스크 끝까지 기다린다
     flush(); // P2 스크롤 — 커밋과 같은 순간(첫 페인트 전)
     cancel();
-    const fadeOut = coverAt(subRect(sp!, root), zFor(root), bgFor(root)); // 9차 — 커밋 순간 막(P2 스크롤 뒤 자리)
+    const fadeOut = coverAt(subRect(sp!, root, press), zFor(root), bgFor(root), hostFor(root)); // 9차 — 커밋 순간 막(P2 스크롤 뒤 자리 · 누른 줄 제외)
     afterFirstFrame(() => { releaseSwap(); fadeOut(); });
   });
   mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });

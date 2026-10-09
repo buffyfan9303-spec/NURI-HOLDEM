@@ -190,7 +190,9 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     // 오너 2026-10-09 "블러모션을 없애라고 했더니 너무 딱딱해졌어". 5차(막 1.0 + 준비 대기 = 검정 깜빡임)·8차(떠나는 판 겹침 = 블러·네모칸)로 돌아가지 않게.
     expect((tc.match(/\.animate\(/g) ?? []).length, 'tabCover.ts 의 WAAPI 는 막 걷기 한 곳뿐이다').toBe(1);
     const call = tc.slice(tc.indexOf('.animate('), tc.indexOf('.animate(') + 160);
-    expect(call, '막 걷기 keyframe 은 opacity 만(FADE_FROM → 0) · 길이 FADE_MS · 곡선 FADE_EASE').toMatch(/^\.animate\(\[\{ opacity: FADE_FROM \}, \{ opacity: 0 \}\], \{ duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS \}\)/);
+    expect(call, '막 걷기 keyframe 은 opacity 만(from → 0) · 길이 FADE_MS · 곡선 FADE_EASE').toMatch(/^\.animate\(\[\{ opacity: from \}, \{ opacity: 0 \}\], \{ duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS \}\)/);
+    // from = FADE_FROM, 연타로 걷히는 중인 막이 있으면 그 값(더 낮다 — 맥박 방지 P3-2). FADE_FROM 위로는 못 간다.
+    expect(tc, '막 시작값(from)은 FADE_FROM 이하다').toMatch(/const from = cur > 0\.02 \? Math\.min\(FADE_FROM, cur\) : FADE_FROM;/);
     expect(Number(/const FADE_LEAD_MS = (\d+);/.exec(tc)?.[1]), '앞당김은 한 프레임까지(더 당기면 첫 프레임이 이미 거의 걷힌 컷이다)').toBeLessThanOrEqual(20);
     expect(tc, '막 이외에는 아무것도 움직이지 않는다 — filter·blur·transform 금지').not.toMatch(/\bfilter\s*[:=]|blur\(|transform|translate\(|scale\(/);
     const from = Number(/export const FADE_FROM = ([\d.]+);/.exec(tc)?.[1]);
@@ -198,7 +200,11 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     expect(from, '시작값이 너무 낮으면 다시 딱딱하다').toBeGreaterThanOrEqual(0.4);
     const ms = Number(/export const FADE_MS = (\d+);/.exec(tc)?.[1]);
     expect(ms).toBeGreaterThanOrEqual(160); expect(ms).toBeLessThanOrEqual(260);
-    expect(tc, '막은 판 밖 형제(body 의 fixed 한 장)이고 입력을 받지 않는다').toMatch(/data-pane-fade[\s\S]{0,200}position:fixed;pointer-events:none;/);
+    expect(tc, '막은 판 밖 fixed 한 장이고 입력을 받지 않는다').toMatch(/data-pane-fade[\s\S]{0,200}position:fixed;pointer-events:none;/);
+    // P2-1(design-reviewer 2026-10-09) — 막을 body 에 붙이면 앱 셸(relative z-1) 맥락 밖이라 셸 안 하단바(z-50)·누른 탭까지 흐린다.
+    expect(tc, '막은 판과 같은 쌓임 맥락(앱 셸)에 붙는다 — body 직속 고정 금지').not.toMatch(/document\.body\.appendChild\(/);
+    expect(tc).toMatch(/const hostFor = \(el: Element \| null\): Element => \(el \? el\.closest\(SHELL\) : document\.querySelector\(SHELL\)\) \?\? document\.body;/);
+    expect(codeOnly(read('src/App.tsx')), '막이 붙는 셸 표식').toMatch(/<div data-app-shell="" className="relative z-1 /);
     const cover = tc.slice(tc.indexOf('function coverAt('), tc.indexOf('function mainRect('));
     expect(cover.length).toBeGreaterThan(200);
     expect(cover, '막은 판 준비를 기다리지 않는다(waitSettled·isSettled 금지 — 5차 원인)').not.toMatch(/waitSettled|isSettled|tabPaneReady/);

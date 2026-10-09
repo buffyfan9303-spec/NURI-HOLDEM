@@ -178,9 +178,12 @@ describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
   let frames: FrameRequestCallback[];
   let html: Map<string, string>;
   let reduced: boolean;
+  /** 걷기 애니가 도는 중의 computed opacity(가짜 DOM 에는 애니가 없어 직접 넣는다). null 이면 인라인 값. */
+  let animOp: string | null;
   const flush = () => { const f = frames; frames = []; f.forEach((cb) => cb(0)); };
   beforeEach(() => {
-    connected = new Set(); created = []; frames = []; html = new Map(); reduced = false;
+    connected = new Set(); created = []; frames = []; html = new Map(); reduced = false; animOp = null;
+    vi.stubGlobal('getComputedStyle', (e: El) => ({ opacity: animOp ?? e.style.opacity }));
     const pane = { style: { display: '' }, getClientRects: () => ({ length: 1 }), getBoundingClientRect: () => ({ top: 60, bottom: 2000, left: 0, right: 390, width: 390 }) };
     vi.stubGlobal('document', {
       hidden: false,
@@ -246,5 +249,20 @@ describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
     expect(Number(el.style.opacity)).toBe(FADE_FROM);
     flush();
     expect(el.animate).toHaveBeenCalledTimes(1);
+  });
+  it('연타 — 걷히는 중인 막이 있으면 지금 값에서 이어 걷는다(0.55 로 다시 짙어지는 맥박 없음 · P3-2)', () => {
+    notePaneLeaving('home', 'community'); handOffPane(); flush(); flush();
+    const el = fade()!;
+    expect(el.animate).toHaveBeenCalledTimes(1);
+    animOp = '0.2'; // 첫 이동의 걷기가 0.2 까지 왔다
+    notePaneLeaving('community', 'tools'); handOffPane(); flush();
+    animOp = null;
+    expect(Number(el.style.opacity), '0.55 로 다시 깔렸다 — 탭마다 맥박').toBe(0.2);
+    flush();
+    expect(el.animate).toHaveBeenLastCalledWith([{ opacity: 0.2 }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -16 });
+    // 걷기가 끝난 뒤의 다음 이동은 다시 FADE_FROM 부터
+    el.style.display = 'none';
+    notePaneLeaving('tools', 'home'); handOffPane(); flush();
+    expect(Number(el.style.opacity)).toBe(FADE_FROM);
   });
 });
