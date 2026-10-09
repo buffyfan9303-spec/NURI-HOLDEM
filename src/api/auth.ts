@@ -586,6 +586,8 @@ export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: 
     supabase.from('store_vouchers').select('id', { count: 'exact', head: true }).eq('holder_user_id', uid).eq('status', 'active'),
     supabase.from('community_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
   ]);
+  // R2P-01: 조회 실패를 0/0 으로 돌려주면 확인창이 '잃을 것 없음'으로 보인다 — 던져서 화면의 '확인하지 못했습니다' 분기로 보낸다.
+  if (v.error || p.error) throw new Error('탈퇴 전 내 데이터 요약을 불러오지 못했습니다');
   return { vouchers: v.count ?? 0, posts: p.count ?? 0 };
 }
 
