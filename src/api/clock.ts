@@ -338,14 +338,6 @@ export function clockOwnerKey(s: Pick<ClockState, 'venueId' | 'gameSeq'>): strin
   return `${s.venueId}#${s.gameSeq}`;
 }
 
-/** H03-06 후속(2026-10-09) — 무장한 실행취소를 쓰지 않았을 때의 안내. 매장이 바뀐 경우까지 '다른 게임으로 옮겨' 라 하면
- *  업주는 같은 매장의 다른 게임을 찾는다 — 주인 키(owner)의 매장이 지금 화면과 다르면 '다른 매장' 으로 말한다. */
-export function undoSkippedText(owner: string, now: Pick<ClockState, 'venueId' | 'gameSeq'>): string {
-  return owner.startsWith(`${now.venueId}#`)
-    ? '다른 게임으로 옮겨 실행취소하지 않았어요. 그 게임 클락에서 다시 조작해 주세요'
-    : '다른 매장으로 바뀌어 실행취소하지 않았어요. 그 매장 클락에서 다시 조작해 주세요';
-}
-
 /** 레벨 4필드만 갱신 — '백업 전진자' 전용 부분 업데이트.
  *
  *  왜 saveClockState(전 행 upsert)를 쓰면 안 되나: 백업 경로는 '아무도 보고 있지 않은 기기'가

@@ -72,16 +72,56 @@ const theme = (image: string, display: Record<string, unknown> = {}) => ({
 const rootBg = (page: Page) => page.locator('[data-amb-root]').first().evaluate((el) => getComputedStyle(el).getPropertyValue('--clk-bg'));
 
 // ── N-1 세로 TV 상금 띠 ─────────────────────────────────────────────────────
-// 🔴 R2M-01(2026-10-09) — 오너 결정 2026-09-30 ⑥(B-024) '세로 TV 는 시상·추가 페이지·광고 미표시 유지'.
-//   N-1(2026-10-03)이 세로 띠를 세웠던 것을 되돌렸다 → 세로 화면에는 상금 띠도 짧은 띠도 PRIZE POOL 도 없다.
-//   음성 대조: 띠를 되살린 빌드(수정 전)에서 1080×1920 이 FAIL.
-for (const [w, h] of [[1080, 1920], [768, 1024], [390, 844]] as const) {
-  test(`R2M-01 세로 ${w}×${h} — 상금·추가 페이지 띠가 없다(오너 결정 ⑥)`, async ({ page }) => {
-    await openTv(page, { w, h, prizes: table(3, 1_000_000) });
-    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('clk-prizes-band')).toHaveCount(0);
-    await expect(page.getByTestId('clk-prizes-short')).toHaveCount(0);
-    await expect(page.getByText(/prize pool/i).filter({ visible: true }), '가로용 왼쪽 열은 세로에서 숨어 있다 — 보이는 PRIZE POOL 은 0').toHaveCount(0);
+for (const [w, h] of [[1080, 1920], [390, 844]] as const) {
+  test(`N-1 세로 ${w}×${h} — 상금이 띠로 보이고 자릿수 7~10·등수 3~200 어디서도 넘치지 않는다`, async ({ page }) => {
+    test.setTimeout(180_000);
+    let prizes: Prize[] = table(3, 1_000_000);
+    await openTv(page, { w, h, prizes });
+    await page.unroute(/\/rest\/v1\/clock_states/);
+    await page.route(/\/rest\/v1\/clock_states/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([row(prizes)]) }));
+    const out: string[] = [];
+    for (const n of [3, 10, 15, 20, 200]) {
+      for (const amt of [1_000_000, 9_999_999_999]) {
+        prizes = table(n, amt);
+        await page.reload();
+        await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+        const band = page.getByTestId('clk-prizes-band');
+        await expect(band, `세로 ${w}×${h} 에 상금 띠가 없다(${n}줄·${amt})`).toBeVisible();
+        await expect(page.getByTestId('clk-prize-total-band')).toBeVisible();
+        const m = await page.evaluate(() => {
+          const q = (s: string) => document.querySelector<HTMLElement>(`[data-testid="${s}"]`)!;
+          const b = q('clk-prizes-band').getBoundingClientRect();
+          const t = q('clk-timer').getBoundingClientRect();
+          const stage = document.querySelector<HTMLElement>('[data-amb-root]')!;
+          const sr = stage.getBoundingClientRect();
+          // 보이는 장의 줄들 — 띠 밖으로 나가거나 자기 칸을 넘치면(scrollWidth) 잘림이다
+          const sheet = q('clk-prizes-band').querySelector<HTMLElement>('[data-prize-sheet]:not([aria-hidden])')!;
+          let worst = 0, outside = 0;
+          for (const li of sheet.querySelectorAll<HTMLElement>('li')) {
+            worst = Math.max(worst, li.scrollWidth - li.clientWidth);
+            for (const sp of li.querySelectorAll<HTMLElement>('span')) {
+              const r = sp.getBoundingClientRect();
+              if (r.left < b.left - 0.5 || r.right > b.right + 0.5) outside++;
+            }
+          }
+          const tot = q('clk-prize-total-band');
+          return {
+            overflowX: worst, outside, totalClip: tot.scrollWidth - tot.clientWidth,
+            timerBandGap: b.top - t.bottom, bandInStage: b.bottom <= sr.bottom + 0.5 && b.top >= sr.top,
+            stageOverflow: stage.scrollHeight - stage.clientHeight, timerH: t.height,
+          };
+        });
+        out.push(`${n}줄·${String(amt).length}자리 ${JSON.stringify(m)}`);
+        expect(m.overflowX, `줄이 칸을 넘친다 ${n}·${amt}`).toBeLessThanOrEqual(1);
+        expect(m.outside, `글자가 띠 밖 ${n}·${amt}`).toBe(0);
+        expect(m.totalClip, '총액이 잘린다').toBeLessThanOrEqual(1);
+        expect(m.timerBandGap, '띠가 타이머를 덮는다').toBeGreaterThan(0);
+        expect(m.bandInStage, '띠가 화면 밖').toBe(true);
+        expect(m.stageOverflow, '보드가 화면을 넘친다').toBeLessThanOrEqual(1);
+      }
+    }
+    console.log(`[N-1 ${w}x${h}]\n${out.join('\n')}`);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/n1-${w}x${h}-200rows-10digit.png` });
   });
 }
 
@@ -347,7 +387,7 @@ const textOverlaps = (page: Page) => page.evaluate(() => {
   return { overlaps: out, outside, tier: vis('clk-prizes-band') ? 'full' : vis('clk-prizes-short') ? 'short' : 'none', stage: `${Math.round(sr.width)}×${Math.round(sr.height)}` };
 });
 
-test('중-1 세로 6화면(768×1024 · 1080×1200 · 1080×1440 · 360×640 · 390×844 · 1080×1920) — 글자 겹침 0 · 보드 밖 0 · 상금 띠 없음', async ({ page }) => {
+test('중-1 세로 6화면(768×1024 · 1080×1200 · 1080×1440 · 360×640 · 390×844 · 1080×1920) — 상금 띠가 있어도 글자 겹침 0 · 보드 밖 0', async ({ page }) => {
   test.setTimeout(180_000);
   const out: string[] = [];
   await openTv(page, { w: 1080, h: 1920, prizes: table(20, 9_999_999_999) });
@@ -359,7 +399,7 @@ test('중-1 세로 6화면(768×1024 · 1080×1200 · 1080×1440 · 360×640 · 
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/m1-${w}x${h}.png` });
     expect.soft(m.overlaps, `${w}×${h} 글자 겹침: ${m.overlaps.join(', ')}`).toEqual([]);
     expect.soft(m.outside, `${w}×${h} 보드 밖 글자`).toBe(0);
-    expect.soft(m.tier, `${w}×${h} 세로에는 상금 띠가 없어야 한다(R2M-01·오너 결정 ⑥)`).toBe('none');
+    if (h / w >= 1.9) expect.soft(m.tier, `${w}×${h} 은 충분히 길어 전체 띠가 서야 한다`).toBe('full');
   }
   console.log(`[중-1]\n${out.join('\n')}`);
 });

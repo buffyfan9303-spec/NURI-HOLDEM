@@ -6,7 +6,7 @@ import { useToast } from '../atoms/Toast';
 import { listGamePresets, saveGamePreset, deleteGamePreset, presetBuyInWon, presetFilledCount, type GamePreset, type GamePresetData } from '../../api/presets';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerSession, getLedgerSessionList, type LedgerSessionListItem } from '../../api/ledger';
-import { presetFromSchedule, presetFromRound, isMoneyUnit } from '../../lib/gameInherit';
+import { presetFromSchedule, presetFromRound } from '../../lib/gameInherit';
 import { manToWon, presetPrizeWon, wonToMan } from '../../lib/units';
 import BlindLevelsEditor from './clock/BlindLevelsEditor';
 import Icon from '../atoms/Icon';
@@ -150,7 +150,7 @@ export default function PresetManager({ venueId, active = true }: { venueId: str
         </div>
         {/* PL2b: 순위별 상금 에디터 — 죽은 필드(타입만 있고 UI 없음) 복구. 매장이 가장 자주 재입력·오기록하던 항목.
             입력 만원 · 저장 원(amountWon)+만원(구형 호환) — 포스터·클락·순위에 올바른 단위로 주입된다. */}
-        <Field label="순위별 상금 (만원·T 등 단위 그대로 · 포스터/클락에 그대로 적용)">
+        <Field label="순위별 상금 (만원 · 포스터/클락에 그대로 적용)">
           <div className="space-y-1.5">
             {(d.rankingPrizes ?? []).map((r, i) => (
               <div key={i} className="flex items-center gap-1.5">
@@ -162,11 +162,10 @@ export default function PresetManager({ venueId, active = true }: { venueId: str
                 <input type="number" inputMode="numeric" value={r.amount || ''} onChange={(e) => {
                   const man = Number(e.target.value) || 0;
                   const next = [...(d.rankingPrizes ?? [])];
-                  // LC-F1 — T·GP 등 돈이 아닌 행은 단위를 지키고 원 환산을 붙이지 않는다(W-25·§28).
-                  next[i] = isMoneyUnit(r.unit) ? { ...next[i], amount: man, unit: '만원', amountWon: manToWon(man) } : { rank: next[i].rank, amount: man, unit: r.unit };
+                  next[i] = { ...next[i], amount: man, unit: '만원', amountWon: manToWon(man) };
                   set({ rankingPrizes: next });
-                }} className="input w-full text-sm tabular-nums" aria-label={`${i + 1}번째 상금(${isMoneyUnit(r.unit) ? '만원' : r.unit})`} />
-                <span className="shrink-0 text-2xs text-ink-muted">{isMoneyUnit(r.unit) ? '만원' : r.unit}</span>
+                }} className="input w-full text-sm tabular-nums" aria-label={`${i + 1}번째 상금(만원)`} />
+                <span className="shrink-0 text-2xs text-ink-muted">만원</span>
                 <button type="button" onClick={() => set({ rankingPrizes: (d.rankingPrizes ?? []).filter((_, x) => x !== i) })}
                   className="shrink-0 px-1.5 text-ink-muted hover:text-danger-light" aria-label="상금 행 삭제">✕</button>
               </div>
