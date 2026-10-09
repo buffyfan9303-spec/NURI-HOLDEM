@@ -6,7 +6,7 @@
 //   · 레지 마감 "N LV" = N레벨이 끝나고 **뒤 브레이크까지** 등록 가능 = N+1레벨이 시작하는 순간 마감.
 //   · 리엔트리 스택은 회차별 배열(없으면 기존 단일값), 애드온 엔트리 값은 게임별(기본 0).
 //
-// 서버 `_clock_ledger_part`(supabase/migrations/20260930e_*.sql)가 같은 식을 SQL 로 쓴다 —
+// 서버 `_clock_ledger_part`(supabase/migrations/20261009s_*.sql — 20260930e 의 후속)가 같은 식을 SQL 로 쓴다 —
 // 두 쪽은 공용 픽스처 src/api/clockLedgerPart.fixtures.json 으로 묶여 있다(clockLedgerPart.contract.test.ts).
 // ⚠ 이 파일은 api/ 를 import 하지 않는다(업주 장부 청크를 첫 화면으로 끌고 오지 않게 — regStatus 머리말과 같은 이유).
 
@@ -70,9 +70,13 @@ export function earlyTierWindows(tiers: readonly EarlyTier[] | null | undefined,
   return normalizeEarlyTiers(tiers).map((t) => ({ min: windowEndMinute(levels, t.level), chips: t.chips }));
 }
 
-/** 경과 분 → 얼리 단계 번호(0 = 가장 이른 단계) · -1 = 얼리 아님. 반열림 `0 ≤ m < min`. */
+/** 경과 분 → 얼리 단계 번호(0 = 가장 이른 단계) · -1 = 얼리 아님. 반열림 `m < min`.
+ *  시작 전(m < 0) 도착은 **가장 이른 단계**다 — "N레벨 시작 전" 창에는 대회 시작 전도 들어간다(roti-1009 C-1).
+ *  예전 `m < 0 → 얼리 아님` 은 장부 결제창(클락 대기 = 1LV → 더블)과 QR 승인(시각 판정 → 0)을 갈랐고,
+ *  클락이 돌며 대회 시작 시각이 채워지면(markTournamentStart) 그 전에 받은 바인의 얼리를 소급해서 지웠다.
+ *  서버 `_clock_ledger_part`(20261009s)가 같은 규칙이다 — 픽스처 clockLedgerPart.fixtures.json 으로 묶여 있다. */
 export function earlyTierIndexAt(mins: number, windows: readonly EarlyTierWindow[]): number {
-  if (!(mins >= 0)) return -1;
+  if (Number.isNaN(mins)) return -1;   // 날짜가 깨진 행 — 판정 불가
   for (let i = 0; i < windows.length; i++) if (windows[i].min > 0 && mins < windows[i].min) return i;
   return -1;
 }

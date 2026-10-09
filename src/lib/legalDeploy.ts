@@ -42,3 +42,15 @@ export const TERMS_V3_NOTICE_DATE = LEGAL_DEPLOY_DATE;
 export const TERMS_V3_EFFECTIVE_DATE = LEGAL_DEPLOY_DATE;
 /** 제3판 시행 전까지 적용된 제2판 원문 보존본(origin/main 의 /legal/terms.html) — 배포일 폴더. 배포일이 바뀌면 같은 커밋에서 폴더도 옮긴다(테스트가 존재를 잠근다). sitemap 미포함·noindex. */
 export const TERMS_V2_ARCHIVE_URL = `/legal/archive/${LEGAL_DEPLOY_ISO}/terms.html`;
+
+/** 이용약관 제4판(제11조제4항 — 탈퇴한 회원의 게시물을 실제 처리대로: 내용은 남고 작성자 표시만 '탈퇴회원_…').
+ *  원천: audit12/triage-user.md#UP-20 · 오너 2026-10-09 "약관 너가 처리해". 정식 오픈 뒤라 배포일 일괄 시행(10-06 결정)과 달리 **약관 제16조대로** 한다:
+ *  탈퇴 후 노출 중단을 기대할 수 없게 되는 **회원에게 불리한 변경** → 제16조제2항 "적용일 30일 전부터 서비스 내에 공지",
+ *  제16조제3항 단서 "불리한 변경에는 동의 간주를 적용하지 않으며 … 적용일부터 … 동의를 다시 받습니다" → legalVersion CONSENT_GATES [4, 시행일].
+ *  공지일이 늦어지면(리드의 공지 등록일) 시행일도 같이 옮긴다 — 간격 30일 이상은 terms4-1009.contract.test 가 잠근다. */
+export const TERMS_V4_NOTICE_ISO = '2026-10-09';
+export const TERMS_V4_EFFECTIVE_ISO = '2026-11-09';
+export const TERMS_V4_NOTICE_DATE = koDate(TERMS_V4_NOTICE_ISO);
+export const TERMS_V4_EFFECTIVE_DATE = koDate(TERMS_V4_EFFECTIVE_ISO);
+/** 제4판 시행 전까지 적용되는 제3판 원문 보존본(origin/main a724d093 의 /legal/terms.html). 경로의 날짜는 **보존본을 뜬 날**이다. sitemap 미포함·noindex. */
+export const TERMS_V3_ARCHIVE_URL = '/legal/archive/2026-10-09/terms.html';

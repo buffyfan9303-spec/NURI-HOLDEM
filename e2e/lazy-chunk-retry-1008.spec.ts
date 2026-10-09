@@ -13,6 +13,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 test.use({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
 
@@ -105,7 +106,7 @@ test('R11-01 스토리지 클라이언트(storage-js)를 못 받아도 망이 �
   // 청크 이름(dist-*)이 흔해 내용으로 거른다 — 이 패키지의 첫 클래스 이름.
   const chunk = await blockChunk(context, /\/assets\/dist-[^/?]+\.js(\?.*)?$/, 'IcebergError');
   const BASE = { id: '00000000-0000-4000-8000-0000000000f1', email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true,
-    status: 'active', agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3, activity_points: 10, badges: [], avatar_color: '#8B5CF6', avatar_url: null };
+    status: 'active', agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: LEGAL_VERSION, activity_points: 10, badges: [], avatar_color: '#8B5CF6', avatar_url: null };
   const st = { patch: 0, posts: 0 };
   await stabilizeBackstack(page);
   await stubLogin(page);

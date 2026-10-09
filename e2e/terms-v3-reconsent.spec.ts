@@ -8,7 +8,7 @@
 // 운영 DB 에 쓰지 않는다 — 세션·프로필은 stubLogin(page.route).
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
-import { TERMS_V3_EFFECTIVE_ISO, TERMS_V3_EFFECTIVE_DATE } from '../src/lib/legalDeploy';
+import { TERMS_V3_EFFECTIVE_ISO, TERMS_V3_EFFECTIVE_DATE, TERMS_V4_EFFECTIVE_ISO, TERMS_V4_EFFECTIVE_DATE } from '../src/lib/legalDeploy';
 
 const prevDay = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
@@ -43,4 +43,17 @@ test('③ 양성 대조 — 시행일이어도 제3판 동의 회원에게는 �
   const gate = await open(page, `${TERMS_V3_EFFECTIVE_ISO}T00:10:00+09:00`, 3);
   await page.waitForTimeout(1500);
   await expect(gate).toHaveCount(0);
+});
+
+// 제4판(제11조제4항, audit12 UP-20) — 회원에게 불리한 변경이라 공지 30일 뒤 시행일부터 제3판 동의자 차단(제16조제3항 단서).
+test('④ 제4판 시행 전날 23:50 KST — 제3판 동의 회원은 차단 게이트 없이 앱을 쓴다', async ({ page }) => {
+  const gate = await open(page, `${prevDay(TERMS_V4_EFFECTIVE_ISO)}T23:50:00+09:00`, 3);
+  await page.waitForTimeout(1500);
+  await expect(gate, '제4판 시행 전인데 재동의 차단 게이트가 떴다').toHaveCount(0);
+});
+
+test('⑤ 제4판 시행일 00:10 KST — 제3판 동의 회원에게 게이트가 뜨고 제4판 시행일을 말한다', async ({ page }) => {
+  const gate = await open(page, `${TERMS_V4_EFFECTIVE_ISO}T00:10:00+09:00`, 3);
+  await expect(gate, '제4판 시행일이 지났는데 재동의 게이트가 없다').toBeVisible({ timeout: 10_000 });
+  await expect(gate).toContainText(`개정 약관이 ${TERMS_V4_EFFECTIVE_DATE}부터 시행되었습니다.`);
 });
