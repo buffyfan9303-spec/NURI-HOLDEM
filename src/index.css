@@ -2160,6 +2160,15 @@ html.light .text-green-400  { color: #15803D; }
 html.light .text-orange-400 { color: #9A3412; }  /* 종전 #B45309 는 surface-high 위 4.47(관리자 '정지 중', 재점검 1회차 L1-12) → 6.50 */
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #2F5E9C; }
+/* R2P-05 꺼진 스위치 트랙(라이트) — surface-float 트랙은 흰 손잡이와 1.27, 카드(surface-high)와 1.08 이라 꺼진 상태가 안 보였다(WCAG 1.4.11 3:1 미달).
+   공용 스위치 atom 이 없어 소비처 7곳(내 정보 3 · 체크인 위치 · 장부 알림 · 홈 배너 · 운영 스위치)이 같은 마크업 두 갈래를 쓴다 —
+   ① 버튼 자체가 트랙(rounded-full) ② 버튼의 직계 자식 span 이 트랙. 그 둘의 '꺼짐'만 입력 경계 토큰(border-strong)으로 칠한다.
+   흰 손잡이 대비 ≈4.0 · 보조 면 3.37 · 흰 카드 3.97(토큰 주석의 실측값). 다크·켜짐은 이 규칙에 걸리지 않는다. */
+html.light [role="switch"][aria-checked="false"].rounded-full:is(.bg-surface-float, .bg-surface-high),
+html.light [role="switch"][aria-checked="false"] > .rounded-full.bg-surface-float {
+  background-color: rgb(var(--border-strong));
+  border-color: rgb(var(--border-strong));
+}
 html.light .text-pink-300 { color: #BE185D; }
 /* 어두운 포스터 위 배지(M-01, 2026-10-01) — 위 딥 톤 보정은 **밝은 지면**을 전제한다. 포스터·그라데이션 위에서는
    딥 톤이 오히려 1.9:1 로 묻혔다(MTT 1.87 · GTD 1.96). 이미지 위 배지 줄에 data-on-dark 를 붙이면 그 줄만 밝은 파스텔을 유지한다.
