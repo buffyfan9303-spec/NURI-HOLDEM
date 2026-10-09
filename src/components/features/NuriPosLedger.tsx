@@ -2652,11 +2652,15 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
               : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
-          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 truncate">
-            {cur.kind === 'break'
-              ? (cur.label || 'BREAK')
-              : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{formatCountdown(rem)}</span>
+          {/* 라벨(블라인드)과 남은 시간은 따로 — 긴 브레이크 라벨('BREAK 10 MINS & REG …')이 한 말줄임 안에서 시간까지 잘라 먹었다(390, review-251 P2-②).
+              시간은 줄지 않고(shrink-0) 라벨만 말줄임한다. */}
+          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 flex min-w-0 items-baseline">
+            <span data-testid="ledger-clock-level" className="min-w-0 truncate">
+              {cur.kind === 'break'
+                ? (cur.label || 'BREAK')
+                : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+            </span>
+            <span data-testid="ledger-clock-remaining" className={clock.running ? 'ml-2 shrink-0 text-emerald-300' : 'ml-2 shrink-0 text-accent-300'}>{formatCountdown(rem)}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
