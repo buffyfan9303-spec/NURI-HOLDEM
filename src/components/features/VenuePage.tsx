@@ -62,6 +62,7 @@ import { msgOf } from '../../lib/dbError';
 import { requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
 import VenueShareNote from './VenueShareNote';
 import { LinkifiedText } from './LinkifiedText';
+import { linkify } from '../../lib/linkify';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -167,6 +168,21 @@ export default function VenuePage({
     return () => { alive = false; };
   }, [venue?.id]);
   const orderedTabs = tabOrder ?? TABS;
+
+  // 매장 공지(venue_notices) — **매장마다 한 번만** 받아 포스터 탭·커뮤니티 탭이 같은 목록을 본다(2026-10-09 PR #258 독립 검증 P2).
+  //   종전엔 포스터 탭 판(PostersPanel)이 열릴 때마다 새로 받아(탭 왕복 3번 = 요청 3번) 늦게 온 공지가 오늘 대회 카드를 +160px 밀었다.
+  //   null = 아직 안 왔다. 요청 매장 = 응답 매장(useVenueScope) — 늦게 온 앞 매장 공지가 지금 매장에 그려지지 않는다.
+  const [venueNotices, setVenueNotices] = useState<VenueNotice[] | null>(null);
+  const noticeRun = useVenueScope(venue?.id ?? '');
+  const reloadNotices = useCallback(
+    () => noticeRun('notices', getVenueNotices, setVenueNotices, () => setVenueNotices((cur) => cur ?? [])),
+    [noticeRun],
+  );
+  useEffect(() => {
+    setVenueNotices(null);
+    if (!venue?.id) { noticeRun.cancel('notices'); return; }
+    void reloadNotices();
+  }, [venue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 탭 전환에 방향성 View Transition 을 건다(2026-08-29 오너 지적:
@@ -639,14 +655,14 @@ export default function VenuePage({
               key={venue.id}
               todayPosters={todayPosters}
               allPosters={upcomingSchedules}
-              venueId={venue.id}
+              notices={venueNotices}
               onSelect={onSelectSchedule}
             />
           )}
           {tab === 'schedules' && <SchedulesPanel schedules={upcomingSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
             <div className="space-y-3">
-              <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />
+              <VenueNoticeBoard venueId={venue.id} notices={venueNotices} onReload={reloadNotices} canManage={isMyVenue || user?.role === 'admin'} />
               {/* 모든 커뮤니티 공통 구성(그룹과 동일): 실시간 채팅 | 게시판 */}
               <VenueCommunitySection
                 venueId={venue.id}
@@ -1894,18 +1910,15 @@ function splitNoticeContent(content: string): { title: string; body: string } {
 }
 
 function PostersPanel({
-  todayPosters, allPosters, venueId, onSelect,
+  todayPosters, allPosters, notices: noticesIn, onSelect,
 }: {
   todayPosters: Schedule[];
   allPosters: Schedule[];
-  venueId: string;
+  /** VenuePage 가 매장마다 한 번 받은 매장 공지(null = 아직 안 옴). 이 판은 조회하지 않는다 — 탭을 다시 열어도 요청 0. */
+  notices: VenueNotice[] | null;
   onSelect?: (s: Schedule) => void;
 }) {
-  // 요청 매장 = 응답 매장 — 늦게 온 앞 매장 공지가 지금 매장 포스터 탭에 그려지지 않게(VenueNoticeBoard 와 같은 가드).
-  const [notices, setNotices] = useState<VenueNotice[]>([]);
-  const run = useVenueScope(venueId);
-  // 매장이 바뀌면 부모가 key 로 이 판을 새로 만든다(옛 매장 공지가 잠깐도 남지 않게) — 여기서 비우는 효과는 두지 않는다.
-  useEffect(() => { run('notices', getVenueNotices, setNotices); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const notices = noticesIn ?? [];
   // 금일 포스터가 있으면 기본 열림, 없으면 접힘
   const [open, setOpen] = useState(todayPosters.length > 0);
   const dows = ['일', '월', '화', '수', '목', '금', '토'];
@@ -1941,26 +1954,6 @@ function PostersPanel({
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
         <Fold open={open}>
           <div className="px-3 py-3 space-y-3 border-t border-accent-400/20">
-            {/* 공지글 (있을 때만) */}
-            {notices.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-2xs font-bold text-ink-muted">공지</p>
-                <ul className="space-y-1.5">
-                  {notices.slice(0, 3).map((n) => {
-                    const { title, body } = splitNoticeContent(n.content);
-                    return (
-                    // 2026-10-09 오너 "과한 디자인은 안 된다": 왼쪽 2px 강조색 띠 → 아래 포스터 카드와 같은 얇은 테두리.
-                    // 패딩은 테두리 두께 차(왼 −1px · 위·아래·오른 +1px)만큼 보정해 글자 위치를 그대로 둔다(e2e/venue-notice-card-1009).
-                    <li key={n.id} data-testid="venue-poster-notice" className="pl-[calc(0.625rem+1px)] pr-[calc(0.625rem-1px)] py-[calc(0.5rem-1px)] rounded-input bg-surface-high border border-border-subtle">
-                      <p className="text-xs font-semibold text-ink-primary wrap-break-word"><LinkifiedText text={title} /></p>
-                      {body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5 whitespace-pre-line wrap-break-word"><LinkifiedText text={body} /></p>}
-                    </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
             {/* 금일 포스터 목록 */}
             {todayPosters.length === 0 ? (
               <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다</p>
@@ -1992,6 +1985,28 @@ function PostersPanel({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* 공지글 (있을 때만) — 금일 포스터 목록 **아래**(2026-10-09 PR #258 P2): 공지가 늦게 와도 오늘 대회 카드(TODAY)가 밀리지 않는다.
+                본문에 링크·전화가 있으면 두 줄 말줄임을 풀어 링크가 잘려 숨지 않게 한다(숨은 링크에 키보드 포커스가 가던 P3). */}
+            {notices.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-2xs font-bold text-ink-muted">공지</p>
+                <ul className="space-y-1.5">
+                  {notices.slice(0, 3).map((n) => {
+                    const { title, body } = splitNoticeContent(n.content);
+                    const bodyHasLink = linkify(body).some((t) => t.kind !== 'text');
+                    return (
+                    // 2026-10-09 오너 "과한 디자인은 안 된다": 왼쪽 2px 강조색 띠 → 아래 포스터 카드와 같은 얇은 테두리.
+                    // 패딩은 테두리 두께 차(왼 −1px · 위·아래·오른 +1px)만큼 보정해 글자 위치를 그대로 둔다(e2e/venue-notice-card-1009).
+                    <li key={n.id} data-testid="venue-poster-notice" className="pl-[calc(0.625rem+1px)] pr-[calc(0.625rem-1px)] py-[calc(0.5rem-1px)] rounded-input bg-surface-high border border-border-subtle">
+                      <p className="text-xs font-semibold text-ink-primary wrap-break-word"><LinkifiedText text={title} /></p>
+                      {body && <p data-testid="venue-poster-notice-body" className={['text-2xs text-ink-muted mt-0.5 whitespace-pre-line wrap-break-word', bodyHasLink ? '' : 'line-clamp-2'].join(' ')}><LinkifiedText text={body} /></p>}
+                    </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </div>
         </Fold>
@@ -2034,17 +2049,20 @@ function PostersPanel({
 }
 
 // 매장 공지 — 업주 + 관리자만 작성/삭제, 누구나 열람
-function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: boolean }) {
+function VenueNoticeBoard({ venueId, notices: noticesIn, onReload, canManage }: {
+  venueId: string;
+  /** VenuePage 가 매장마다 한 번 받은 목록(null = 아직 안 옴) — 커뮤니티 탭을 다시 열어도 다시 받지 않는다. */
+  notices: VenueNotice[] | null;
+  /** 등록·삭제 뒤 다시 받기 — 요청 매장 = 응답 매장 가드(review-store-link-1002b A4)는 VenuePage 의 useVenueScope 가 쥔다. */
+  onReload: () => Promise<void>;
+  canManage: boolean;
+}) {
   const toast = useToast();
-  const [notices, setNotices] = useState<VenueNotice[]>([]);
+  const notices = noticesIn ?? [];
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — 늦게 온 앞 매장 공지가 지금 매장 페이지에 그려지지 않게
-  const run = useVenueScope(venueId);
-  const reload = () => run('notices', getVenueNotices, setNotices);
-  useEffect(() => { reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reload = () => { void onReload(); };
 
   const submit = async () => {
     if (!draft.trim()) return;

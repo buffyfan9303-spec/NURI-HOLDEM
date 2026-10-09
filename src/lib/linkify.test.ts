@@ -86,4 +86,14 @@ describe('linkify', () => {
     expect(join(t)).toBe(s);
     expect(t[0]).toEqual({ kind: 'text', text: '<img src=x onerror=alert(1)> ' });
   });
+
+  // PR #258 독립 검증 P3 — URL 모양으로 잡혔지만 safeHttpHref 가 거부한 토막(점 없는 호스트)은 **글자**로 남는다.
+  //   linkify 의 `if (!href) continue` 를 지우면 href 없는 url 토막이 생겨 이 단언이 빨개진다.
+  it('URL 모양이지만 안전 검사에서 떨어진 주소(https://localhost/x)는 링크가 아니라 글자다', () => {
+    const s = '내부 주소 https://localhost/x 는 링크가 아니다';
+    const t = linkify(s);
+    expect(join(t)).toBe(s);
+    expect(links(t)).toEqual([]);
+    expect(t).toEqual([{ kind: 'text', text: s }]);
+  });
 });

@@ -8,6 +8,9 @@
 // VEN-03(P3): 포스터 탭 '금일 포스터' 안에 플랫폼 약관 공지(marketplace_notices)가 매장 공지처럼 나왔다.
 //   계약 ⑥ 그 자리에는 이 매장 공지(venue_notices)가 나오고 플랫폼 공지 제목은 매장 페이지 어디에도 없다.
 // 음성 대조(2026-10-09, origin/main 4d9253e8 같은 목 — scratchpad venue.cjs): 소개 링크 0개 · 공지 링크 0개 · 플랫폼 공지 노출 → ①⑤⑥ 실패.
+// PR #258 독립 검증(2026-10-09) P2·P3 — 계약 ⑦ 매장 공지는 매장마다 한 번만 받는다(포스터↔소개↔커뮤니티 왕복에도 GET 1회).
+//   ⑧ 공지가 600ms 넘게 늦게 와도 금일 포스터의 오늘 대회 카드(TODAY) 위치가 0px 변한다. ⑨ 포스터 탭 공지 본문의 링크·전화가 말줄임에 잘려 숨지 않는다.
+//   음성 대조: 0a37cc62(포스터 탭 판이 열릴 때마다 공지를 받고 공지가 TODAY 위에 있던 판) — GET 3회 · TODAY 밀림 · 전화 링크가 잘림.
 // ⚠ 운영 DB 무접촉 — 매장·일정·공지는 page.route 로 답한다. 로그인 없음.
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
@@ -31,7 +34,7 @@ const PLATFORM_TITLE = '이용약관 제4판 개정 안내(플랫폼 공지)';
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const single = (r: Route) => (r.request().headers()['accept'] ?? '').includes('pgrst.object');
 
-async function open(page: Page, theme: 'dark' | 'light') {
+async function open(page: Page, theme: 'dark' | 'light', opt: { onNoticeGet?: () => Promise<void> } = {}) {
   await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* 저장소 차단 */ } }, theme);
   await stabilizeBackstack(page);
   const row = {
@@ -57,9 +60,11 @@ async function open(page: Page, theme: 'dark' | 'light') {
   await page.route(/\/rest\/v1\/marketplace_notices/, (r) => r.request().method() === 'GET'
     ? r.fulfill(json([{ id: 'p1', type: 'pinned', title: PLATFORM_TITLE, body: '플랫폼 공지 본문', author_name: '운영', created_at: '2026-10-08T00:00:00Z', board: 'all', sort_order: 3 }]))
     : r.fallback());
-  await page.route(/\/rest\/v1\/venue_notices/, (r) => r.request().method() === 'GET'
-    ? r.fulfill(json([{ id: 'vn1', venue_id: VID, author_id: OWNER, author_name: '링크 매장', content: VENUE_NOTICE, created_at: '2026-10-08T20:19:23Z' }]))
-    : r.fallback());
+  await page.route(/\/rest\/v1\/venue_notices/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    await opt.onNoticeGet?.();
+    return r.fulfill(json([{ id: 'vn1', venue_id: VID, author_id: OWNER, author_name: '링크 매장', content: VENUE_NOTICE, created_at: '2026-10-08T20:19:23Z' }]));
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?venue=${VID}`);
   const dlg = page.getByRole('dialog', { name: /매장 페이지/ });
@@ -149,4 +154,47 @@ test('🔴 VEN-03 포스터 탭에는 매장 공지만 · VEN-02 매장 공지�
   // 한글이 바로 붙은 URL 은 한글 앞에서 끊긴다 — 링크 글자에 '에서' 가 섞이지 않는다
   await expect(content.locator('a[href^="http"]')).toHaveText('http://www.rotiarena.com');
   await expect(dlg.getByText(PLATFORM_TITLE)).toHaveCount(0);
+});
+
+test('🔴 매장 공지 — 탭 왕복에도 GET 1회 · 600ms 늦게 와도 TODAY 카드 0px · 포스터 탭 공지 링크가 잘려 숨지 않는다 (390)', async ({ page }) => {
+  test.setTimeout(90_000);
+  let gets = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((res) => { release = res; });
+  // 공지 응답을 붙잡아 둔다 — TODAY 위치를 잰 뒤에 놓아 준다(그 전에 600ms 이상 기다린다 = '늦게 오는 공지').
+  const dlg = await open(page, 'dark', { onNoticeGet: async () => { gets += 1; await gate; } });
+
+  await dlg.getByRole('tab', { name: '포스터' }).click();
+  const toggle = dlg.getByRole('button', { name: /금일 포스터/ });
+  await expect(toggle).toBeVisible({ timeout: 15_000 });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const today = dlg.getByText('TODAY', { exact: true });
+  await expect(today).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(700); // 아코디언 펼침이 끝나고, 공지는 아직 붙잡혀 있다(600ms 넘게 늦는 공지)
+  const topOf = () => today.evaluate((el) => el.getBoundingClientRect().top);
+  const before = await topOf();
+  release();
+  const notice = dlg.getByTestId('venue-poster-notice');
+  await expect(notice, '금일 포스터에 이 매장 공지가 없다').toHaveCount(1, { timeout: 15_000 });
+  await page.waitForTimeout(700);
+  const after = await topOf();
+  console.log(`[notice-once] TODAY top ${before} → ${after} · GET ${gets}`);
+  expect.soft(Math.abs(after - before), `늦게 온 공지가 오늘 대회 카드를 ${after - before}px 밀었다`).toBeLessThan(0.5);
+
+  // ⑨ 공지 본문의 링크·전화가 말줄임 밖(잘린 줄)에 숨지 않는다 — 각 <a> 가 자기 문단 상자 안에 그려진다.
+  const clipped = await notice.evaluate((li) => [...li.querySelectorAll('a')].filter((a) => {
+    const ar = a.getBoundingClientRect(); const pr = (a.closest('p') as HTMLElement).getBoundingClientRect();
+    return ar.bottom > pr.bottom + 0.5 || ar.top < pr.top - 0.5;
+  }).map((a) => a.textContent));
+  expect.soft(clipped, `말줄임에 잘려 숨은 링크: ${clipped.join(', ')}`).toEqual([]);
+  await expect(notice.locator('a[href="tel:01052488587"]')).toBeVisible();
+
+  // ⑦ 탭 왕복 — 소개 → 포스터 → 커뮤니티. 공지는 다시 받지 않는다.
+  await dlg.getByRole('tab', { name: '매장 소개' }).click();
+  await dlg.getByRole('tab', { name: '포스터' }).click();
+  await expect(dlg.getByTestId('venue-poster-notice')).toHaveCount(1, { timeout: 15_000 });
+  await dlg.getByRole('tab', { name: '커뮤니티' }).click();
+  await expect(dlg.getByTestId('venue-notice-content')).toHaveCount(1, { timeout: 15_000 });
+  await page.waitForTimeout(500);
+  expect.soft(gets, `매장 공지 GET 이 ${gets}번 나갔다 — 탭을 열 때마다 다시 받는다`).toBe(1);
 });
