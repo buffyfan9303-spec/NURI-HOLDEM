@@ -1014,9 +1014,13 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
                     // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
                     // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base">
-                    {count![tab]}
-                  </span>
+                    // 🔴 2026-10-09 숫자는 DOM 글자가 아니라 ::after(content: attr(data-count))로 그린다.
+                    //   글자 노드로 두면 진행 중 대회가 있을 때 버튼 textContent 가 '1라이브' 가 되어
+                    //   하단바 버튼을 글자로 정확히 찾는 e2e(flicker-gate·tab-handoff-gate·tab-instant-swap·
+                    //   pane-fade-press-row)가 운영에 클락이 도는 시간마다 전부 깨졌다(main CI 37926571456).
+                    //   접근성 이름은 버튼 aria-label('라이브, 진행 중 대회 N개')이 이미 말하므로 화면 표시만 남긴다.
+                    data-count={count![tab]}
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base after:content-[attr(data-count)]" />
                 )}
               </span>
               {/* §T1 규칙 2: 사다리 밖 임의 px 금지. text-[11px] 는 절대 px 이라 html{font-size:17px}
