@@ -28,6 +28,9 @@ interface NotificationPanelProps {
   open: boolean;
   onClose: () => void;
   notifications: AppNotification[];
+  /** 알림 조회 실패(R2P-02) — 목록이 비었을 때 '새 알림이 없습니다' 대신 실패 카드를 그린다(쪽지 목록과 같은 원칙) */
+  loadError?: unknown;
+  onRetry?: () => void;
   /** 1초 후 자동 읽음 처리 */
   onMarkRead: (ids: string[]) => void;
   /** 알림 클릭 시 해당 페이지로 이동 */
@@ -64,7 +67,7 @@ const NOTIF_BODY_MAX = '46rem';
 // ── 메인 ────────────────────────────────────────────────────────────────────
 
 export default function NotificationPanel({
-  open, onClose, notifications, onMarkRead, onNavigate, onUnreadMessagesChange, onInternalLink,
+  open, onClose, notifications, loadError, onRetry, onMarkRead, onNavigate, onUnreadMessagesChange, onInternalLink,
 }: NotificationPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -366,6 +369,8 @@ export default function NotificationPanel({
     : notifications;
 
   const inSubView = mode === 'messages' && msgView !== 'list';
+  // 목록 자리에 실패 카드가 서 있는가(아래 두 목록의 실패 분기와 같은 조건)
+  const listErrShown = mode === 'notifs' ? loadError != null && notifications.length === 0 : !inSubView && threadsErr != null && threads.length === 0;
 
   return (
     <>
@@ -491,7 +496,8 @@ export default function NotificationPanel({
             바닥 160px(빈 상태 안내문 실측 159.5 — 빈 화면은 종전보다 커지지 않는다) · 상한 NOTIF_BODY_MAX(약 10행) · 카드 max-h(화면 가용 높이)가
             차례로 자른다. 탭을 옮겨도 같은 식이라 높이가 바뀌지 않는다. 넘치는 목록은 이 안에서 스크롤 — overscroll-contain 으로 끝에서 뒤 화면이
             같이 굴러가지 않는다. 쪽지 대화·새 쪽지(하위 화면)는 탭이 아니라 화면 이동이라 상한 높이를 다 쓴다. */}
-        <div data-notif-body="" className="flex min-h-0 flex-col" style={{ height: inSubView ? NOTIF_BODY_MAX : `max(160px, ${Math.max(threads.length * NOTIF_ROW_REM.thread, notifications.length * NOTIF_ROW_REM.notif)}rem)`, maxHeight: NOTIF_BODY_MAX }}>
+        {/* 실패 카드(R2P-02)는 빈 상태(160px)보다 키가 커서 그릇이 아래를 잘랐다 — 실패를 보일 때는 내용 높이로 둔다(상한은 그대로). */}
+        <div data-notif-body="" className="flex min-h-0 flex-col" style={{ height: inSubView ? NOTIF_BODY_MAX : listErrShown ? 'auto' : `max(160px, ${Math.max(threads.length * NOTIF_ROW_REM.thread, notifications.length * NOTIF_ROW_REM.notif)}rem)`, maxHeight: NOTIF_BODY_MAX }}>
         {/* ── 쪽지: 스레드 목록 ── */}
         {mode === 'messages' && msgView === 'list' && (
           <ul ref={listRef} onScroll={rememberScroll} data-notif-panel="" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
@@ -666,7 +672,10 @@ export default function NotificationPanel({
         {/* ── 알림 목록(기존 UI 전량 유지) — 높이는 위 본문 그릇이 정한다 ── */}
         {mode === 'notifs' && (
         <ul ref={listRef} onScroll={rememberScroll} data-notif-panel="" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          {visible.length === 0 ? (
+          {loadError != null && notifications.length === 0 ? (
+            // 실패가 빈 상태보다 먼저다 — 이미 받은 목록이 있으면(재조회 실패) 보던 목록은 그대로 둔다.
+            <li className="p-3" data-testid="notif-load-error"><LoadErrorCard error={loadError} what="알림" onRetry={onRetry} compact /></li>
+          ) : visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
               <Icon name="bell" size={32} strokeWidth={1.5} />
               <p className="text-xs">새 알림이 없습니다</p>

@@ -9,8 +9,10 @@ export interface PrefillFields {
   title: string; cash: number; card: number; target: number; dealers: string; event: string; discs: DiscountPreset[];
 }
 
-/** 지금 폼 값 중 비어 있는 칸만, prefill 이 값을 가진 경우에 한해 채울 값을 돌려준다(없으면 빈 객체). */
-export function fillEmptyFromPrefill(cur: PrefillFields, p: Partial<LedgerSession>): Partial<PrefillFields> {
+/** 지금 폼 값 중 비어 있는 칸만, prefill 이 값을 가진 경우에 한해 채울 값을 돌려준다(없으면 빈 객체).
+ *  posterLinked — 포스터가 연결된 폼이면 할인은 채우지 않는다: 포스터 할인이 정본이고(할인 없는 포스터면 빈 칸이 맞다),
+ *  직전 게임은 **다른 포스터**의 레벨 자동 할인일 수 있어 오늘 바인 금액·엔트리를 틀리게 만든다(PIPE-F2). */
+export function fillEmptyFromPrefill(cur: PrefillFields, p: Partial<LedgerSession>, posterLinked = false): Partial<PrefillFields> {
   const out: Partial<PrefillFields> = {};
   if (!cur.title.trim() && p.title?.trim()) out.title = p.title;
   if (!cur.cash && p.buyinAmount) out.cash = p.buyinAmount;
@@ -18,6 +20,6 @@ export function fillEmptyFromPrefill(cur: PrefillFields, p: Partial<LedgerSessio
   if (!cur.target && p.targetEntries) out.target = p.targetEntries;
   if (!cur.dealers.trim() && p.dealers?.trim()) out.dealers = p.dealers;
   if (!cur.event.trim() && p.eventMemo?.trim()) out.event = p.eventMemo;
-  if (cur.discs.length === 0 && p.discounts?.length) out.discs = p.discounts;
+  if (!posterLinked && cur.discs.length === 0 && p.discounts?.length) out.discs = p.discounts;
   return out;
 }

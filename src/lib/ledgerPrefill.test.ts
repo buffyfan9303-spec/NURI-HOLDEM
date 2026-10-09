@@ -15,6 +15,12 @@ describe('fillEmptyFromPrefill', () => {
     const typed = { ...EMPTY, title: '내가 친 이름', cash: 50000, dealers: '박딜러' };
     expect(fillEmptyFromPrefill(typed, PREV)).toEqual({ card: 80000, target: 30, event: '얼리 보너스', discs: PREV.discounts });
   });
+  it('🔴 PIPE-F2 포스터가 연결된 폼은 직전 게임 할인을 채우지 않는다 — 다른 포스터의 레벨 자동 할인이 오늘 바인에 걸린다', () => {
+    const linked = fillEmptyFromPrefill(EMPTY, PREV, true);
+    expect(linked.discs).toBeUndefined();
+    expect(linked.title).toBe('데일리 딥스택');   // 나머지 빈 칸은 그대로 채운다
+    expect(fillEmptyFromPrefill(EMPTY, PREV, false).discs).toBe(PREV.discounts);   // 포스터 없는 장부는 기존 동작
+  });
   it('직전 설정이 비어 있는 칸은 건드리지 않는다', () => {
     expect(fillEmptyFromPrefill(EMPTY, { title: '  ', buyinAmount: 0, discounts: [] })).toEqual({});
   });

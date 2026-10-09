@@ -302,10 +302,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor: raw
                 · 0.6 ~ 0.8 — 짧은 띠: 총상금 + 상위 3등 한 줄
                 · 0.8 초과(정사각에 가까움) — 띠 없음(가로 보드 3열이 펴지는 5/4 전까지 상금이 안 보이는 것은 종전과 같다)
               e2e clock-recheck1-1003 이 세로 비 1.11~2.05 여섯 화면에서 겹침 0 을 단언한다. */}
-          {(prizes.length > 0 || extras.length > 0 || ads.length > 0) && (
-            <PrizeColumn band prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} extras={extras} ads={ads} />
-          )}
-          {prizes.length > 0 && <PrizeShortBand prizes={prizes} totalPrize={totalPrize} />}
+          {/* 🔴 R2M-01(2026-10-09 2회차 점검) — 위 N-1 띠(전체·짧은 띠)를 걷어냈다. 오너 결정(2026-09-30 ⑥, B-024):
+              '세로 TV 는 시상·추가 페이지·광고 미표시 유지'. N-1 은 이 결정을 확인하지 않고 되돌린 것이었다. 가로 보드는 그대로다. */}
 
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
           {/* 12cqmin: 하단이 이제 보조가 아니라 **지표 레일**이다(총 칩·평균 스택·다음 휴식).
@@ -359,30 +357,6 @@ function LogoTall({ logo, onLoad }: { logo: NonNullable<ClockStageDecor['logo']>
  *  여백(padding)을 쓰면 받침이 칸 높이를 먹어 로고가 36% 작아졌다(빨강 '작게' 261.7×52.3 → 167.5×33.5, 검토 중-3) → 링은 상자 **밖**에 그려 크기 손실 0. */
 function logoPlate(plate: string | null) {
   return plate ? { background: plate, boxShadow: `0 0 0 0.5cqmin ${plate}`, borderRadius: '1.6cqmin' } : undefined;
-}
-
-/** 짧은 상금 띠 — 총상금 + 상위 3등 한 줄. 덜 긴 세로 화면(폭/높이 0.6~0.8) 전용. 테스트 앵커 clk-prizes-short. */
-function PrizeShortBand({ prizes, totalPrize }: { prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null }) {
-  const pl = usePlate() ? PLATE : undefined;
-  const top = prizes.slice(0, 3);
-  return (
-    <aside data-testid="clk-prizes-short"
-      className="hidden [@container(min-aspect-ratio:601/1000)_and_(max-aspect-ratio:4/5)]:flex shrink-0 flex-col gap-[0.6cqmin] border-t border-white/6 px-[3cqmin] py-[1cqmin]"
-      style={pl}>
-      <p className="flex items-baseline justify-between gap-[2cqmin]">
-        <span className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</span>
-        {totalPrize && <span data-testid="clk-prize-total-short" className="font-black leading-none tabular-nums" style={{ fontSize: 'clamp(18px, 3.6cqmin, 60px)', color: 'var(--clk-prize, #F5C451)' }}>{prizeAmountText(totalPrize)}</span>}
-      </p>
-      <ul className="grid grid-cols-3 gap-x-[2cqmin]">
-        {top.map((p, i) => (
-          <li key={i} className="flex min-w-0 items-baseline justify-between gap-[0.8cqmin] whitespace-nowrap">
-            <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: 'max(9px,1.7cqmin)', ...DIM }}>{prizePlaceText(p.place)}</span>
-            <span className="min-w-0 truncate font-extrabold tabular-nums" style={{ fontSize: 'max(10px,2cqmin)', color: 'var(--clk-prize, #F5C451)' }}>{prizeAmountText(p)}</span>
-          </li>
-        ))}
-      </ul>
-    </aside>
-  );
 }
 
 /** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다.
