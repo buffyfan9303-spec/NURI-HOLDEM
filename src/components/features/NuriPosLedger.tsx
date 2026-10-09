@@ -50,7 +50,7 @@ import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
-import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
+import { discountsFromPromotions, ledgerLabelOf, linkedPosterDiscounts } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useVenueScope } from '../../lib/useVenueScope';
@@ -2969,18 +2969,22 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
   // F-1(store-link-1002) — 직전 게임 설정은 폼이 그려진 뒤 도착한다. 도착하면 **빈 칸만** 채운다(업주가 이미 친 칸은 덮지 않는다).
   const prefillDone = useRef(false);
+  // PIPE-F1/F2 — 자동으로 채운 할인 칸(포스터·직전 게임)과 직전 게임이 채운 게임명. 업주가 손댄 값과 구별해,
+  //   포스터를 연결하면 자동 값만 그 포스터 것으로 바꾸고(linkedPosterDiscounts) 직전 게임명은 오늘 포스터 자동 연동을 막지 않는다.
+  const autoDiscsRef = useRef<DiscountPreset[] | null>(null);
+  const prefillTitleRef = useRef<string | null>(null);
   useEffect(() => {
     if (mode !== 'open' || !prefilled) { prefillDone.current = false; return; }
     if (prefillDone.current) return;
     prefillDone.current = true;
-    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base);
-    if (f.title !== undefined) setTitle(f.title);
+    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base, !!(schedId || base.scheduleId));
+    if (f.title !== undefined) { prefillTitleRef.current = f.title; setTitle(f.title); }
     if (f.cash !== undefined) setCash(f.cash);
     if (f.card !== undefined) setCard(f.card);
     if (f.target !== undefined) setTarget(f.target);
     if (f.dealers !== undefined) setDealers(f.dealers);
     if (f.event !== undefined) setEvent(f.event);
-    if (f.discs !== undefined) setDiscs(f.discs);
+    if (f.discs !== undefined) { autoDiscsRef.current = f.discs; setDiscs(f.discs); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, prefilled]);
   const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
@@ -2994,8 +2998,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [todayPick, setTodayPick] = useState<Schedule[]>([]); // 당일 포스터 2개+ — 침묵 대신 선택 칩(§13-B)
   // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
   // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
+  // PIPE-F2 — 예전엔 직전 게임 설정(prefilled)이 포스터 목록보다 **먼저** 오면 자동 연동을 통째로 건너뛰어(도착 순서 의존),
+  //   오늘 포스터 대신 어제 게임명·할인으로 장부가 열렸다. 막는 것은 업주가 직접 친 게임명과 게임관리 '이 포스터로 새 장부'(base.scheduleId,
+  //   아래 seed 상속이 맡는다)뿐이다 — 직전 게임이 채운 게임명은 오늘 포스터가 덮는다.
   useEffect(() => {
-    if (mode !== 'open' || prefilled || autoLinked || schedId || title.trim()) return;
+    if (mode !== 'open' || base.scheduleId || autoLinked || schedId || (title.trim() && title !== prefillTitleRef.current)) return;
     const todays = schedules.filter((s) => s.date === base.sessionDate);
     if (todays.length === 1) {
       setAutoLinked(true);
@@ -3069,6 +3076,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     //   비어 있으면 '장부를 연 시각'이 기준이 돼 개설 17:30·스타트 19:00 대회의 19:05 첫 바인이 얼리가 아니게 됐다.
     //   (포스터에 시간이 없으면 클락이 처음 돌 때 서버 기준 시각으로 채운다 — api/clock noteTournamentStart.)
     if (sc.startTime) { const iso = isoAt(base.sessionDate, sc.startTime); if (iso) setStartISO(iso); }
+    // PIPE-F1 — 포스터 할인(할인액이 붙은 프로모션)도 바로 장부 할인 칸으로(오너 A-055 "이벤트·얼리·할인이 장부에 바로").
+    //   예전엔 '포스터 할인 가져오기'를 눌러야만 들어가, 안 누르면 로티 깐부전 1LV 바인이 5만·0.5엔트리 대신 10만·1엔트리로 기록됐다.
+    //   새 장부만 — 수정 폼은 바인이 자리번호로 할인을 참조하므로 버튼(덧붙이기)만 쓴다.
+    if (mode === 'open') {
+      const d = linkedPosterDiscounts(sc.promotions, discs, autoDiscsRef.current);
+      if (d) { autoDiscsRef.current = d; setDiscs(d); }
+    }
   };
   // A1(2026-09-28) — 게임관리 '이 포스터로 새 장부'(seed)로 들어온 경우도 같은 상속을 한 번 적용한다.
   //   예전엔 seed 가 제목·단가·유형만 실어 와서, 제출 때 폼의 스택(기본 50,000)이 포스터 스택을 덮었다(:병합 순서 cfg).
@@ -3336,7 +3350,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <h3 className="text-sm font-bold text-ink-primary">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b></p>
           {prefilled && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />직전 게임 설정을 불러왔습니다. 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
+          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택·할인 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
           {/* PL1a: 당일 포스터 2개+ — 자동연동이 침묵하던 케이스에 선택 칩(§13-B '자동화는 항상 되거나, 왜 안 되는지 보이거나') */}
           {!autoLinked && !schedId && todayPick.length >= 2 && (
             <div className="mt-1.5">
@@ -3494,7 +3508,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <button type="button" onClick={importPosterDiscs}
               className="flex w-full items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-2 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/15">
               <Icon name="copy" size={13} className="shrink-0" />
-              포스터 할인 가져오기 ({posterDiscs.length}개)
+              {/* 새 장부는 포스터를 연결할 때 이미 채웠다(PIPE-F1) — 지웠거나 고친 뒤 다시 덧붙이는 버튼 */}
+              포스터 할인 {mode === 'open' ? '다시 ' : ''}가져오기 ({posterDiscs.length}개)
               <span className="min-w-0 flex-1 truncate text-right font-normal text-ink-muted">
                 {posterDiscs.map((p) => `${ledgerLabelOf(p)} −${wonToMan(p.discountWon ?? 0)}만`).join(' · ')}
               </span>
