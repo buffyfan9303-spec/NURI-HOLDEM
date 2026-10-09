@@ -48,7 +48,7 @@ function fontContract(html: string) {
 }
 
 /** 페이지별 본문 이미지 수 — 0장이 돼도 조용히 통과하지 않게 수로 고정한다(사용설명서는 텍스트판 — 2026-07 오너 요청). */
-const PAGES: [string, number][] = [['about.html', 4], ['guide/owner.html', 10], ['guide/manual.html', 0]];
+const PAGES: [string, number][] = [['about.html', 4], ['guide/owner.html', 10], ['guide/manual.html', 0], ['guide/user.html', 0]];
 
 describe.each(PAGES)('%s', (page, imgCount) => {
   const html = stripComments(read(page));
@@ -78,7 +78,7 @@ describe.each(PAGES)('%s', (page, imgCount) => {
 const FOOTER_SRC = readFileSync(resolve(__dirname, 'components/features/BusinessFooter.tsx'), 'utf-8');
 const BIZ_VALUES = [...FOOTER_SRC.matchAll(/\['(?:상호|사업자등록번호|대표자|사업장 주소|전화번호|고객센터)', '([^']+)'\]/g)].map((m) => m[1]);
 
-describe.each(['about.html', 'guide/owner.html', 'guide/manual.html'])('%s — 법정 고지', (page) => {
+describe.each(['about.html', 'guide/owner.html', 'guide/manual.html', 'guide/user.html'])('%s — 법정 고지', (page) => {
   const text = textOf(read(page)).replace(/\s+/g, ' ');
   it('③ 사업자 정보(앱 푸터와 같은 값) · 만 19세 · 1336 이 페이지 안에 있다', () => {
     expect(BIZ_VALUES, 'BusinessFooter 에서 사업자 값 6개를 읽지 못했다').toHaveLength(6);
