@@ -12,7 +12,6 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './components/atoms/Toast';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import { initErrorLog } from './lib/errorLog';
-import { SpeedInsights } from '@vercel/speed-insights/react';
 import { initMonitoring, initMotionTelemetry } from './lib/monitoring';
 
 // 초기 테마 클래스는 ThemeProvider 가 마운트 시 적용한다.
@@ -58,6 +57,24 @@ if ('serviceWorker' in navigator) {
  *  운영 도메인과 Vercel 프리뷰(*.vercel.app)만 참. localhost 는 거짓. */
 const onVercel = /(^|\.)nuriholdem\.com$|\.vercel\.app$/.test(location.hostname);
 
+// Vercel Speed Insights — **실기기 필드 데이터**. 2026-09-15 오너 승인(예산 상향 포함).
+//   왜 필요했나: 안드로이드 dvh 흔들림을 **오너가 눈으로 볼 때까지 아무도 몰랐다**.
+//   PC 하네스는 주소창이 없어 구조적으로 못 잡고, E2E 는 실기기가 아니다. 지금 유일한 필드 모니터링 수단이 오너 한 분이라 그걸 대체한다.
+//
+// 2026-10-07 번들 감축 PR A ②: 예전엔 <SpeedInsights /> 컴포넌트를 정적 import 해 첫 화면(vendor-react)에 ~1KB gz 를 실었다.
+//   그 컴포넌트가 하는 일은 첫 커밋 뒤 useEffect 에서 injectSpeedInsights({ framework: 'react' }) 로 defer 스크립트 한 줄을
+//   붙이는 것뿐이다(@vercel/speed-insights 2.0.0 dist/react 원문 — basePath·configString 은 process.env 라 브라우저에선 없다).
+//   그래서 같은 함수를 **렌더 전에** import() 로 바로 부른다. 아래 GA 처럼 유휴 시간까지 미루지 **않는다** —
+//   LCP·CLS·INP 를 재는 물건이라 늦게 띄우면 재려던 것이 이미 지나가 있다. 작은 청크 하나를 받는 시간만큼만 다르고,
+//   실제 계측 스크립트(/_vercel/speed-insights/script.js)는 예전과 같이 defer 로 붙는다(동일 출처 — CSP 무변경).
+//   ⚠ vercel.json 의 마지막 rewrite 가 모든 경로를 index.html 로 보내므로 HTML 이 200 으로 돌아오면 조용히 죽는다 —
+//     배포 후 content-type 이 application/javascript 인지 실측할 것.
+//   계측 스크립트는 **Vercel 에만 존재**하는 경로라 로컬 프리뷰·dev 에서 켜면 404 콘솔 오류가 난다
+//   (e2e/auth-smoke.spec.ts '콘솔 오류 0' — 2026-09-15 실측) → 잴 곳에서만 켠다.
+if (onVercel) {
+  import('@vercel/speed-insights').then((m) => m.injectSpeedInsights({ framework: 'react' })).catch(() => {});
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
@@ -66,26 +83,7 @@ createRoot(document.getElementById('root')!).render(
             <AuthProvider>
               <BlockProvider>
                 <App />
-                {/* Vercel Speed Insights — **실기기 필드 데이터**. 2026-09-15 오너 승인(예산 상향 포함).
-                    왜 필요했나: 안드로이드 dvh 흔들림을 **오너가 눈으로 볼 때까지 아무도 몰랐다**.
-                    PC 하네스는 주소창이 없어 구조적으로 못 잡고, E2E 는 실기기가 아니다.
-                    지금 유일한 필드 모니터링 수단이 오너 한 분이라 그걸 대체한다.
-
-                    이 파일 아래쪽 GA 처럼 지연 주입하지 **않는다**. 이건 LCP·CLS·INP 를 재는 물건이라
-                    늦게 띄우면 재려던 것이 이미 지나가 있다(버퍼된 엔트리로 일부는 따라잡지만
-                    INP 처럼 상호작용 시점에 달린 값은 못 따라잡는다). 스크립트는 defer 로 붙는다.
-
-                    스크립트 출처는 **동일 출처** 라서 CSP 의 script-src self · connect-src self 안에 들어온다
-                    (vercel.json 을 고치지 않은 이유다). 단 vercel.json 의 마지막 rewrite 가
-                    모든 경로를 index.html 로 보내므로 **HTML 이 200 으로 돌아오면 조용히 죽는다**
-                    (이 프로젝트가 이미 당한 함정). 배포 후 content-type 을 실측해서 확인할 것 —
-                    text/html 이면 동작하지 않는 것이고, 그때는 rewrite 예외를 추가해야 한다. */}
-                {/* 계측 스크립트는 **Vercel 에만 존재**하는 동일 출처 경로다(/_vercel/…).
-                    로컬 프리뷰(vite preview)·dev 에는 그 경로가 없어 **404 콘솔 오류**가 난다 —
-                    e2e/auth-smoke.spec.ts 가 '탭 이동 중 콘솔 오류 0' 을 요구하므로 게이트가 빨개진다
-                    (2026-09-15 실측: 546 passed / 1 failed. 운영은 200 application/javascript 로 정상).
-                    잴 곳에서만 켠다 — 로컬에서 켜 봐야 보낼 곳도 없다. */}
-                {onVercel && <SpeedInsights />}
+                {/* Vercel Speed Insights 는 위 onVercel 아래에서 렌더 전에 주입한다(2026-10-07 — 이유는 거기 주석). */}
               </BlockProvider>
             </AuthProvider>
           </ToastProvider>

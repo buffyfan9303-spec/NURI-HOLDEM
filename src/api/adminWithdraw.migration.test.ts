@@ -59,6 +59,7 @@ describe('adminWithdrawUser — 확인 → 메일 → RPC, 그리고 실패는 �
       'read:venues',
       'read:profiles',
       'fn:notify-sanction',
+      'fn:kakao-unlink',   // critical-211 P2-1 — identity 를 지우는 RPC 직전에 카카오 연결 끊기
       'rpc:admin_withdraw_user:{"p_user_id":"u-1","p_reason":"불법 환전 알선"}',
     ]);
     expect(calls.some((c) => c.startsWith('patch:'))).toBe(false);
@@ -68,6 +69,7 @@ describe('adminWithdrawUser — 확인 → 메일 → RPC, 그리고 실패는 �
     ownedVenues = [{ id: 'v-1' }];
     await expect(adminWithdrawUser('u-1', '사유')).rejects.toThrow(/매장 대표/);
     expect(calls).not.toContain('fn:notify-sanction');
+    expect(calls).not.toContain('fn:kakao-unlink');   // 탈퇴되지 않을 회원의 카카오 연결을 끊지 않는다
     expect(calls.some((c) => c.startsWith('rpc:'))).toBe(false);
   });
 
@@ -75,6 +77,7 @@ describe('adminWithdrawUser — 확인 → 메일 → RPC, 그리고 실패는 �
     targetRole = 'admin';
     await expect(adminWithdrawUser('u-1', '사유')).rejects.toThrow(/관리자 계정/);
     expect(calls).not.toContain('fn:notify-sanction');
+    expect(calls).not.toContain('fn:kakao-unlink');   // 탈퇴되지 않을 회원의 카카오 연결을 끊지 않는다
     expect(calls.some((c) => c.startsWith('rpc:'))).toBe(false);
   });
 

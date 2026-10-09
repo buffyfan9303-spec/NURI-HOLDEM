@@ -15,6 +15,8 @@ import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
 // 위치 약관 제3판 시행일 = 정식 오픈일(2026-10-06 오너 결정) — 날짜를 스펙에 박지 않고 단일 소스에서 읽는다.
 import { LEGAL_DEPLOY_DATE } from '../src/lib/legalDeploy';
+import { pinBeforeGeoRequired, pinAfterGeoRequired } from './_geoClock';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const VENUE = '11111111-2222-3333-4444-555555555555';
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
@@ -65,8 +67,9 @@ async function openSheet(page: Page) {
   return sheet;
 }
 
-test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이 된다', async ({ page }) => {
+test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이 된다(시행일 전)', async ({ page }) => {
   test.setTimeout(60_000);
+  await pinBeforeGeoRequired(page);
   const calls = await setup(page, { state: 'unset' });
   const sheet = await openSheet(page);
   expect(calls.checkIn, '동의를 묻기 전에 check_in 이 나갔다').toEqual([]);
@@ -83,6 +86,17 @@ test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이
   expect(calls.setConsent).toEqual([{ p_granted: false, p_terms_version: 3 }]);
   expect(calls.checkIn[0], '거절했는데 좌표가 나갔다').toEqual({ p_venue_id: VENUE });
   await expect(page.getByText('검증 홀덤 출석 완료!', { exact: false })).toBeVisible();
+});
+
+test('🔴 L1b 시행일 뒤 — 같은 시트에 필수 매장 안내가 뜨고, 거절 버튼은 출석을 약속하지 않는다(L1 의 짝)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await pinAfterGeoRequired(page);
+  const calls = await setup(page, { state: 'unset' });
+  const sheet = await openSheet(page);
+  expect(calls.checkIn, '동의를 묻기 전에 check_in 이 나갔다').toEqual([]);
+  await expect(page.getByTestId('location-consent-required'), '시행일 뒤인데 필수 매장 안내가 없다').toHaveText('이 매장은 위치 확인 출석 매장입니다. 동의하지 않으면 이 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 되지 않습니다. 매장에서 출석 요청을 보내면 업주 승인으로 출석할 수 있습니다.');
+  await expect(page.getByTestId('location-consent-decline')).toHaveText('동의하지 않음');
+  await expect(sheet).toContainText('동의하고 출석');
 });
 
 test('🔴 L2 수락 — 동의(제3판)를 저장하고 좌표를 실어 check_in', async ({ page, context }) => {
@@ -109,13 +123,24 @@ test('🔴 L3 닫기 — 저장하지 않고 이번 출석만 좌표 없이', as
   expect(calls.checkIn[0]).toEqual({ p_venue_id: VENUE });
 });
 
-test('🔴 L4 이미 동의 안 함 — 다시 묻지 않고 좌표 없이 출석', async ({ page }) => {
+test('🔴 L4 이미 동의 안 함(시행일 전) — 다시 묻지 않고 좌표 없이 출석', async ({ page }) => {
   test.setTimeout(60_000);
+  await pinBeforeGeoRequired(page);
   const calls = await setup(page, { state: 'denied', terms_version: 3 });
   await page.goto(`/?checkin=${VENUE}`);
   await expect.poll(() => calls.checkIn.length, { timeout: 20_000 }).toBe(1);
   expect(calls.checkIn[0]).toEqual({ p_venue_id: VENUE });
   await expect(page.getByTestId('location-consent-sheet')).toHaveCount(0);
+});
+
+test('🔴 L4b 이미 동의 안 함(시행일 뒤) — 위치 확인 출석 매장이면 다시 묻고, 고르기 전에는 check_in 이 나가지 않는다(L4 의 짝)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await pinAfterGeoRequired(page);
+  const calls = await setup(page, { state: 'denied', terms_version: 3 });
+  await openSheet(page);
+  await expect(page.getByTestId('location-consent-required')).toBeVisible();
+  expect(calls.checkIn, '다시 묻는 동안 check_in 이 먼저 나갔다').toEqual([]);
+  expect(calls.setConsent, '고르기 전에 동의 여부를 저장했다').toEqual([]);
 });
 
 test('🔴 L5 내 정보 › 보안 — 상태 · 이용 내역 열람 · 철회', async ({ page }) => {
@@ -203,7 +228,7 @@ test('🔴 L7 로그인 안 된 딥링크 — 로그인 → 로그인 시트 퇴
   const user = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'verify@example.test', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' };
   await page.route(/\/auth\/v1\/token\?grant_type=password/, (r) => r.fulfill(json({ access_token: token, refresh_token: 'stub', token_type: 'bearer', expires_in: 3600, expires_at: exp, user })));
   await page.route(/\/auth\/v1\/user(\?|$)/, (r) => r.fulfill(json(user)));
-  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: 3, activity_points: 10, badges: [] })));
+  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({ id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정', role: 'user', approved: true, status: 'active', agreed_to_terms: true, consented_legal_version: LEGAL_VERSION, activity_points: 10, badges: [] })));
   await page.route(/\/rest\/v1\/rpc\/claim_daily_login_point/, (r) => r.fulfill(json(10)));
 
   await page.goto(`/?checkin=${VENUE}`);
@@ -271,7 +296,17 @@ test('🔴 L8 동의 시트 버튼 높이 ≥ 44px(동의 · 동의하지 않고
   await page.goto(`/?checkin=${VENUE}`);
   await expect(page.getByTestId('location-consent-sheet')).toBeVisible({ timeout: 20_000 });
   for (const id of ['location-consent-agree', 'location-consent-decline', 'location-consent-terms']) {
-    const h = await page.getByTestId(id).evaluate((el) => el.getBoundingClientRect().height);
+    // 시트가 올라오는 동안(sheet-up)에는 getBoundingClientRect 의 top/bottom 이 float32 로 어긋나 44px 가 43.99994 로 나온다(부하에서 60회 중 5회).
+    //   자리(top)가 6프레임 연속 멎은 뒤에 잰다 — 임계(44)는 그대로다.
+    const h = await page.getByTestId(id).evaluate((el) => new Promise<number>((res) => {
+      let last = -1; let still = 0;
+      const tick = () => {
+        const r = el.getBoundingClientRect();
+        if (r.top === last) { if (++still >= 6) return res(r.height); } else { still = 0; last = r.top; }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }));
     expect(h, `${id} 높이 ${h}px`).toBeGreaterThanOrEqual(44);
   }
 });

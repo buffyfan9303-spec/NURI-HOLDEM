@@ -20,6 +20,7 @@ import { useBusinessDate } from '../../lib/businessDate';
 import { kstToday } from '../../lib/kst';
 import { useVenueScope } from '../../lib/useVenueScope';
 import { msgOf } from '../../lib/dbError';
+import { playerTypeMap, playerTypeKey } from '../../lib/ledgerPlayerType';
 import { josa } from '../../lib/josa'; // F4-07 — '3.0로' → '3.0으로'(숫자는 읽는 소리로)
 
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -113,7 +114,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
     if (!hasLoaded.current) setLoading(true);
     Promise.all([
       getLedgerRange(venueId, range.from, range.to),
-      tabPeriod === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
+      // SP13 — 사이드 게임 명단까지(유형 제외 필터가 사이드 바인도 분류해야 한다).
+      tabPeriod === 'day' ? getLedgerPlayers(venueId, date, 'all') : Promise.resolve([] as LedgerPlayer[]),
       // 데이터와 기간을 한 커밋에 — 이 순서가 위 주석의 '두 번 튐'을 한 번으로 만든다.
     ]).then(([r, p]) => { if (!alive) return; setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setPeriod(tabPeriod); setLoadError(null); })
       .catch((e) => { if (alive) setLoadError(e); })
@@ -163,18 +165,11 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   }, [sessions]);
   const bkey = (b: { sessionDate: string; gameSeq: number }) => `${b.sessionDate}#${b.gameSeq}`;
   // 플레이어명 → 손님유형 코드(new/regular/staff/other/none). 커스텀 텍스트 유형은 '기타', 무유형은 'none'.
-  const playerType = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of players) {
-      const vt = p.visitorType;
-      const code = (vt === 'new' || vt === 'regular' || vt === 'staff' || vt === 'other') ? vt : (vt && vt.trim() ? 'other' : 'none');
-      m.set(p.name, code);
-    }
-    return m;
-  }, [players]);
+  //   키는 (게임#이름) — 명단이 게임마다 따로라 이름만 쓰면 사이드 손님이 메인 동명 유형으로 분류된다(SP13, lib/ledgerPlayerType).
+  const playerType = useMemo(() => playerTypeMap(players), [players]);
 
   const m = useMemo(() => {
-    const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
+    const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(playerTypeKey(b.gameSeq, b.playerName)) ?? 'none')) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
     // 2026-09-11: underEntries('1 미만 엔트리' 건수)를 없앴다 — 바인은 언제나 1회라 1 미만이 나올 수 없다.
     let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, discountCnt = 0, discountWon = 0;
@@ -221,8 +216,11 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
     }
     const target = period === 'day' ? (sessionsByDate.get(date) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0) : 0;
     const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
+    // 같은 사람이 메인·사이드 명단에 다 있으면 한 번만 센다(메인 먼저 — 명단은 game_seq 순으로 온다).
+    const seenVisitor = new Set<string>();
     for (const p of players) {
-      if (!p.visitorType) continue;
+      if (!p.visitorType || seenVisitor.has(p.name)) continue;
+      seenVisitor.add(p.name);
       if (p.visitorType === 'new' || p.visitorType === 'regular' || p.visitorType === 'staff') visitor[p.visitorType]++;
       else visitor.other++;
     }

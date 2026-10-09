@@ -56,9 +56,6 @@
   .path i { font-style:normal; color:var(--mute); }
   .tip { margin-top:14px; font-size:15px; color:var(--ok); }
   .tip.w { color:var(--warn); }
-  /* 아직 앱에 들어오지 않은 화면·문구 — 병합되면 이 표시를 지운다 */
-  .soon { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; border:1px solid var(--warn); color:var(--warn);
-    font-size:12px; font-weight:800; line-height:1.5; vertical-align:2px; white-space:nowrap; }
   .nw { white-space:nowrap; }
   .figs { display:grid; gap:16px; margin-top:20px; min-width:0; }
   figure { justify-self:center; width:min(320px,100%); }
@@ -107,7 +104,6 @@
   <p class="kicker">손님용 사용설명서 · 2026-10-08 정식 오픈판</p>
   <h1>가입하고, 대회를 찾고, 출석하는 순서입니다</h1>
   <p class="lead">NURI HOLDEM은 홀덤펍 대회를 찾고 예약하고, 매장에서 출석하고, 연습 도구까지 쓰는 앱입니다. 아래 8개 순서대로 읽으면 처음 오신 분도 바로 쓸 수 있습니다. 휴대폰 화면 기준으로 설명합니다.</p>
-  <p class="cap" style="margin-top:10px"><span class="soon" style="margin-left:0">반영 예정</span> 표시는 앱에 곧 들어오는 화면·문구입니다. 정식 오픈 전에 적용됩니다.</p>
 
   <ol class="flow" aria-label="손님용 설명서 차례">
     <li><a href="#s1"><span class="n">1</span><h3>가입·동의</h3><p>로그인, 본인인증, 약관</p></a></li>
@@ -128,7 +124,7 @@
       <li>화면의 <b>로그인</b> 창에서 가입합니다. 만 19세 미만은 이용할 수 없습니다</li>
       <li>처음에는 <b>이용약관과 개인정보 처리 동의</b>를 합니다. 마케팅 수신 동의는 선택이고, 나중에 바꿀 수 있습니다</li>
       <li>글쓰기나 이용권 받기 같은 기능을 쓰려면 <b>휴대폰 본인인증</b>이 필요합니다. 한 사람이 한 계정으로만 인증할 수 있습니다</li>
-      <li>약관이 새 판(3판)으로 바뀌면 접속할 때 <b>다시 동의</b>하는 창이 한 번 뜹니다. 동의해야 계속 쓸 수 있습니다</li>
+      <li>약관이 새 판으로 바뀌면 접속할 때 <b>다시 동의</b>하는 창이 한 번 뜹니다. 동의해야 계속 쓸 수 있습니다. 다음 판(제4판)은 2026-11-09부터 시행합니다</li>
     </ul>
     <span class="path">로그인 <i>›</i> 약관 동의 <i>›</i> 본인인증</span>
     <p class="tip">둘러보기(일정 보기, 라이브 보기)는 로그인 없이도 됩니다.</p>
@@ -147,7 +143,7 @@
       <li>대회 카드에는 <b>참가비</b>와 <b>GTD</b>가 상품 가격 정보로 그대로 표시됩니다</li>
       <li>마음에 드는 대회를 열어 <b>예약</b>하면 매장의 예약자 명단에 올라갑니다. 매장을 팔로우하면 새 대회가 올라올 때 알림이 옵니다</li>
       <li><b>라이브</b> 탭에서는 지금 진행 중인 대회 현황을 봅니다</li>
-      <li>대회는 <b>운영자 승인 뒤</b> 일정에 올라옵니다. 방금 올라온 대회가 안 보이면 잠시 뒤 다시 보세요 <span class="soon">반영 예정</span></li>
+      <li>대회는 <b>운영자 승인 뒤</b> 일정에 올라옵니다. 방금 올라온 대회가 안 보이면 잠시 뒤 다시 보세요</li>
     </ul>
     <span class="path">홈 <i>›</i> 대회 카드 <i>›</i> 예약</span>
     <div class="figs">

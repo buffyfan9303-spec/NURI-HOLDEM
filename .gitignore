@@ -59,6 +59,11 @@ service-account*.json
 playstore/screenshots/
 playstore/screenshots-real/
 playstore/*.png
+# Android 서명 키·Bubblewrap 생성 프로젝트 — 절대 커밋하지 않는다(공개 저장소). 키는 오너 PC 와 별도 백업에만 둔다.
+*.keystore
+*.jks
+playstore/twa/*
+!playstore/twa/twa-manifest.json
 
 # 클락 TV 시각 검증 캡처 — 로컬 확인용(42MB). e2e/clock-visual.spec.ts 로 언제든 재생성한다.
 docs/clock-shots/

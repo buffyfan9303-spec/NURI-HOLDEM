@@ -8,6 +8,7 @@
 // (post-detail-read.spec.ts 의 2026-09-12 실사고 참고). 쓰기(POST)는 목으로 받아 페이로드만 본다. 운영 쓰기 0.
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -30,7 +31,7 @@ const post = {
 const profile = (id: string, role: string, nickname: string, extra: Record<string, unknown> = {}) => ({
   id, name: `${nickname}이름`, nickname, email: `${nickname}@example.com`, role, approved: true, status: 'active',
   venue_id: null, activity_points: 0, joined_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-  agreed_to_terms: true, consented_legal_version: 3, ...extra,
+  agreed_to_terms: true, consented_legal_version: LEGAL_VERSION, ...extra,
 });
 
 interface Cap { method: string; url: string; body: string }

@@ -153,6 +153,10 @@ export const WON_PER_MAN = 10000;
 export function wonToMan(won: number): string {
   return (won / WON_PER_MAN).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+/** 원 → [값, 단위]. 0 이 아닌 1만 미만은 원 단위로 쓴다 — 8분 근무 1,600원이 '0.16만원' 으로 읽히던 자리(audit10 P3-3). */
+export function wonAmount(won: number): [string, '만원' | '원'] {
+  return won !== 0 && Math.abs(won) < WON_PER_MAN ? [Math.round(won).toLocaleString(), '원'] : [wonToMan(won), '만원'];
+}
 
 /** 카드 결제에 적용할 단가(카드단가 미설정 시 현금단가) */
 export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }): number {
@@ -1374,11 +1378,12 @@ export async function deleteLedgerSession(venueId: string, date: string, gameSeq
 }
 
 // ── 명단(roster) ──────────────────────────────────────────────────────────────
-export async function getLedgerPlayers(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerPlayer[]> {
+/** gameSeq='all' — 그날 **모든 게임** 명단(통계 유형 필터용, SP13). 정렬은 게임 → 자리 순. */
+export async function getLedgerPlayers(venueId: string, date = today(), gameSeq: number | 'all' = MAIN_GAME_SEQ): Promise<LedgerPlayer[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.from('ledger_players')
-    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq)
-    .order('sort_order').order('created_at');
+  let q = supabase.from('ledger_players').select('*').eq('venue_id', venueId).eq('session_date', date);
+  if (gameSeq !== 'all') q = q.eq('game_seq', gameSeq);
+  const { data, error } = await q.order('game_seq').order('sort_order').order('created_at');
   if (error) throw error;
   return (data ?? []).map(rowToPlayer);
 }

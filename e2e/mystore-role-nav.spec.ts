@@ -122,6 +122,9 @@ const coownerNotPrimary = async (p: import('@playwright/test').Page) => {
   await p.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify([{ user_id: 'aaaaaaaa-0000-4000-8000-000000000001', nickname: '대표', name: '대표', is_primary: true, status: 'approved' },
       { user_id: MOCK_UID, nickname: '업주', name: '업주', is_primary: false, status: 'approved' }]) }));
+  // 대표 업주 판정의 정본(my_member_venues relation) — 공동 운영자는 'coowner'.
+  await p.route(/\/rest\/v1\/rpc\/my_member_venues/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ id: MOCK_VENUE, name: '테스트 홀덤펍', relation: 'coowner' }]) }));
 };
 const kakaoInput = (page: import('@playwright/test').Page) => page.locator('[data-pane="page"] input[placeholder^="https://open.kakao.com"]');
 

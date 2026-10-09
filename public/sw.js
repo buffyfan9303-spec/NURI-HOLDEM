@@ -1,12 +1,17 @@
 /* NURI HOLDEM — Service Worker: 앱 셸 캐싱(빠른 재방문) + 웹 푸시 */
 /* eslint-disable no-undef */
 
-const CACHE = 'nuri-shell-v2'; // 버전 올리면 activate 에서 옛 캐시 전체 삭제(누적 정리)
+const CACHE = 'nuri-shell-v3'; // 버전 올리면 activate 에서 옛 캐시 전체 삭제(누적 정리) · v3(2026-10-09): 앱 아이콘·파비콘을 다이아로 — 같은 주소라 캐시 우선이면 옛 스페이드가 남는다
 // [DS] FONT-1: Pretendard dynamic subset 은 페이지당 woff2 수십 조각을 받는다 —
 // 60 상한이면 폰트가 앱 셸 자산을 밀어내며 캐시가 공회전하므로 상한을 함께 올린다.
 const CACHE_MAX_ENTRIES = 150; // 캐시 엔트리 상한 — 초과 시 오래된 것부터 삭제(무한 성장 방지)
 // 캐시 대상: Vite 해시 자산(/assets, 불변) + 아이콘 + 이미지/폰트(같은 출처, /fonts css 포함). HTML·API는 캐시 안 함(항상 최신).
 const CACHEABLE = /\/(assets|fonts|icon|favicon|nuri-logo)\b|\.(?:png|jpg|jpeg|svg|webp|gif|woff2?)$/i;
+// 담는 응답의 종류 — JS·CSS·폰트·이미지만(2026-10-07 PR #206, #205 검토 P3-5).
+//   배포 공백에 옛 청크 주소로 요청하면 Vercel 의 `/(.*)` → index.html 재작성 때문에 **200 text/html** 이 온다.
+//   예전엔 그것을 해시 자산으로 믿고 담아, 나중 청크 재시도(?r=n — iconsExtraLoader·sbRealtimeLazy)마다 주소별로 쌓여
+//   상한(150)을 채우고 진짜 셸 자산을 밀어냈다(검토 실측 31건). 경로가 아니라 실제 내용 종류로 거른다.
+const CACHEABLE_TYPE = /javascript|ecmascript|css|font|image\//i;
 
 self.addEventListener('install', (event) => {
   // 오프라인 폴백 페이지 미리 캐시
@@ -43,7 +48,7 @@ self.addEventListener('fetch', (event) => {
     if (cached) return cached;
     try {
       const res = await fetch(req);
-      if (res && res.ok && res.type === 'basic') {
+      if (res && res.ok && res.type === 'basic' && CACHEABLE_TYPE.test(res.headers.get('content-type') || '')) {
         const c = await caches.open(CACHE);
         await c.put(req, res.clone());
         // 상한 초과분은 오래된 것(추가 순서 앞쪽)부터 삭제 — 오프라인 폴백 페이지는 보존

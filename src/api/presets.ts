@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import type { ClockLevel } from './clock';
+import type { DiscountKind } from './ledger';
 
 // ── PL2a: 단계 전용 네임스페이스 3개 ───────────────────────────────────────────
 // 공용 필드(title·buyInWon·스택3종·blindLevels·rankingPrizes)는 GamePresetData 최상위 유지,
@@ -30,8 +31,9 @@ export interface PresetLedgerData {
   targetEntries?: number;    // 기준 엔트리(GTD)
   maxEntries?: number;       // 맥스 엔트리(엔트리 게임)
   // 할인 프리셋(원). ⚠ level(자동 적용 레벨)까지 실어야 한다 — 빠뜨리면 프리셋 왕복 한 번에
-  // #20 레벨 자동 할인이 **조용히 꺼진다**(2026-09-05 감사에서 확인).
-  discounts?: { label: string; amountWon: number; level?: number }[];
+  // #20 레벨 자동 할인이 **조용히 꺼진다**(2026-09-05 감사에서 확인). kind(적용 조건)도 같다 — 빠지면 '첫 바인' 할인이
+  // 리엔트리에도 자동으로 걸린다(roti-1009 C-2). 옛 프리셋은 kind 가 없다 = 아무 바인(기존 동작).
+  discounts?: { label: string; amountWon: number; level?: number; kind?: DiscountKind }[];
   dealers?: string;          // 딜러 명단(줄바꿈 구분)
   eventMemo?: string;        // 이벤트 비고
   tournamentStartTime?: string; // 토너먼트 스타트 시각 'HH:MM'(날짜는 세션에서)

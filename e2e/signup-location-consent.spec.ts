@@ -11,6 +11,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -22,7 +23,7 @@ const USER = { id: UID, aud: 'authenticated', role: 'authenticated', email: EMAI
   identities: [{ id: UID, provider: 'email' }], created_at: new Date().toISOString() };
 const SESSION = { access_token: TOKEN, refresh_token: 'e2e-signup', token_type: 'bearer', expires_in: 3600, expires_at: exp, user: USER };
 const PROFILE = { id: UID, email: EMAIL, name: '위치가입', nickname: '위치가입', role: 'user', approved: true, status: 'active',
-  agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 3, activity_points: 0, badges: [], avatar_color: '#6B7280', avatar_url: null };
+  agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: LEGAL_VERSION, activity_points: 0, badges: [], avatar_color: '#6B7280', avatar_url: null };
 
 type Calls = { signup: Record<string, unknown>[]; setConsent: Record<string, unknown>[] };
 async function setup(page: Page, w: number, scheme: 'dark' | 'light'): Promise<Calls> {

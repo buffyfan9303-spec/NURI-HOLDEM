@@ -67,7 +67,8 @@ jobs:
     #   2026-09-24: 807 테스트·2 워커로 28~30분 → 30분 취소 → 45분으로 올렸고, 09-27 에 36~44분까지 찼다. 그래서 나눴다.
     # 🔴 CI 가 끝나지 않으면 Vercel 이 승격하지 않는다 → 배포가 유저에게 안 닿는다(2026-09-17 nuriholdem.com 이 749a835 에 멈춤).
     # 통과를 위해 게이트를 느슨하게 푸는 것이 아니다 — 검사 범위는 그대로 두고 동시에 돌린다.
-    timeout-minutes: 30
+    # 2026-10-08: 30→40. 정상 예산(셋업 ~1분 + 가장 무거운 샤드 22~23분)에 여유가 6분뿐이라 apt 정체 한 번에 잘렸다.
+    timeout-minutes: 40
     strategy:
       # 한 조각이 빨개도 나머지는 끝까지 돈다 — 실패 목록을 한 번에 보려고. 판정은 집계 잡이 한다.
       fail-fast: false
@@ -124,8 +125,25 @@ jobs:
         run: npm ci
 
       # 러너에 컬러 이모지·CJK 폰트가 없어 emoji-glyphs / font-coverage 게이트가 환경 때문에 빨갛던 것(2026-08-30~) — 폰트를 깐다
+      # 2026-10-08: 30분 취소 9건 중 6건이 이 단계의 apt 미러(azure.archive.ubuntu.com) 정체였다(902~1790초, 중앙값 13초).
+      #   .deb 를 캐시해 두 번째부터는 미러를 타지 않는다. 캐시 설치가 실패하면(러너 이미지 갱신 등) apt 로 되돌아간다.
+      - name: Fonts cache
+        uses: actions/cache@v6
+        with:
+          path: ~/fonts-deb
+          key: fonts-deb-${{ runner.os }}-noto-cjk-emoji-v1
       - name: Fonts (color emoji · CJK)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji fonts-noto-cjk
+        timeout-minutes: 12
+        run: |
+          if ls ~/fonts-deb/*.deb >/dev/null 2>&1 && sudo dpkg -i ~/fonts-deb/*.deb >/dev/null; then
+            echo "fonts from cache"
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --download-only fonts-noto-color-emoji fonts-noto-cjk
+            mkdir -p ~/fonts-deb && cp /var/cache/apt/archives/*.deb ~/fonts-deb/
+            sudo dpkg -i ~/fonts-deb/*.deb >/dev/null
+          fi
+          fc-list | grep -qi 'Noto Sans CJK' && fc-list | grep -qi 'Noto Color Emoji'
       - name: Install Playwright (chromium)
         run: npx playwright install --with-deps chromium
 
@@ -196,7 +214,9 @@ jobs:
   ci-ok:
     name: build-and-e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 2026-10-08: 55→120. 집계 잡은 실행 시작부터 떠서 e2e 조각을 폴링한다 — PR 9개가 몰려 조각이 러너를 기다리는 동안
+    #   55분에 먼저 취소됐다(#230·#231·#233·#235, 조각은 전부 pass). 대기 시간까지 덮도록 늘린다.
+    timeout-minutes: 120
     permissions:
       actions: read
     steps:

@@ -45,6 +45,12 @@ import { mockSchedules } from './_schedules';
     //   2026-09-21 실측: 공개 매장은 3곳이나 있었는데, 칩을 누르니 매장 페이지가 안 열리고
     //   옛 코드의 catch 가 false 를 돌려 **'공개 매장이 없다'로 위장**됐다. 게이트 2개가 그렇게 잠들었다.
     const cards = sec.getByTestId('venue-card');
+    // 🔴 2026-10-07 — 섹션이 보인 **직후** count 하면 안 된다. 매장 목록은 부팅 첫 배치(일정·매장·공지·클락 allSettled)가
+    //   끝나야 오므로, 새 컨텍스트(스냅샷 없음)에서는 그 전 ~250ms 동안 목록이 비어 있다. main 124f04ed CI 가 이 창에서
+    //   3회 연속 0 을 읽어 '공개 매장이 없다' 로 떨어졌다(같은 실패가 bb55f13f 빌드에서도 로컬 재현 — #208 회귀 아님).
+    //   → 카드 1장 또는 **실제 빈 상태(venue-empty)** 가 보일 때까지 기다린다. 로딩 중에는 둘 다 없다(뼈대 venue-list-loading).
+    await expect(cards.first().or(sec.getByTestId('venue-empty')),
+      "'홀덤펍' 목록이 끝내 안 왔다 — 카드도 빈 상태도 없다(뼈대에 멈춤 · 조회 실패)").toBeVisible({ timeout: 15_000 });
     if ((await cards.count()) === 0) return false;
     await cards.first().click({ timeout: 10_000 });
     await expect(p.locator('[role="dialog"][aria-label*="매장 페이지"]'),

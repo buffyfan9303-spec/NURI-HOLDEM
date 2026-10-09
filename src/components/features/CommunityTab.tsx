@@ -43,11 +43,17 @@ import { relativeTime } from '../../lib/relativeTime';
 import { markProgrammaticScroll, notifyScrollNow } from '../../lib/useScrollY';
 import { restoreScrollTop } from '../../lib/headerShrink';
 import { msgOf } from '../../lib/dbError';
+import { reloadSaved, saveForReload, useReloadState } from '../../lib/reloadTab';
+import { PAID_EXPOSURE_ON, paidShown } from '../../lib/paidExposure';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
   marketSlot?: ReactNode;
   venues: Venue[];
+  /** App 의 매장 목록 첫 조회가 끝났는가. 끝나기 전 빈 목록은 '0곳' 이 아니라 '아직 모름' 이다 — 뼈대를 보인다. 기본 true = 예전 동작. */
+  venuesLoaded?: boolean;
+  /** 매장 목록 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
+  venuesErr?: unknown;
   comments: Comment[];
   posts: CommunityPost[];
   /** App 의 게시글 첫 조회가 끝났는가(스냅샷 포함). 게시판 뼈대 행 수를 정한다 — 끝났으면 그 개수, 0 이면 뼈대 대신 빈 상태. */
@@ -102,10 +108,15 @@ const FAB_HYST_PX = 8;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
+// 새로고침하면 보던 섹션으로(오너 2026-10-07 "커뮤니티-게시판에서 새로고침을 하면 홈으로 넘어가" · lib/reloadTab). 첫 렌더 값이라 알약이 미끄러지지 않는다.
+const SEC_KEY = 'nuri:reload:community-sec';
+//   ⚠ 이 줄은 모듈이 처음 실릴 때(커뮤니티를 처음 열 때) 돈다 — 새로고침 직전 탭이 커뮤니티일 때만 쓴다(lib/reloadTab BOOT_TAB · P3-3).
+lastCommunitySection = reloadSaved(SEC_KEY, SEC_ORDER, 'community') ?? lastCommunitySection;
 
 // 게시판 카테고리 필터 — 라벨·색표는 src/lib/postCategory.ts 가 단일 출처.
 // (글보기 상세에도 같은 뱃지를 넣어야 해서 모듈로 뺐다 — 복사해 두면 언젠가 한쪽만 바뀐다)
 const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
+const BOARD_CAT_IDS = BOARD_CATEGORIES.map((c) => c.id);
 
 
 
@@ -122,7 +133,7 @@ const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, venuesLoaded = true, venuesErr = null, comments, posts: rawPosts, postsLoaded = false, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, noticesLoaded = true, isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -146,6 +157,7 @@ function CommunityTab({
   // 뒤로가기의 기준 섹션(아래 useBackClose 주석). 마운트 값에서 시작하고, 외부 지정(nuri:community-section)이 오면
   // 그 섹션으로 **섹션과 같은 커밋에서** 옮긴다 — CONNECTIVITY-ALL 6 (2026-09-24).
   const [entrySection, setEntrySection] = useState<Section>(section);
+  useEffect(() => { saveForReload(SEC_KEY, section); }, [section]);
   const [, startSecTransition] = useTransition();
   // keep-alive — 한 번 방문한 섹션은 언마운트하지 않고 display 만 끈다(메인 탭 visitedTabs 와 같은 조리법).
   // 재방문 마운트 비용이 0이라 전환 커밋 프레임이 가벼워지고, 스냅샷 뒤 동기 커밋(flushSync)이 가능해진다.
@@ -418,7 +430,7 @@ function CommunityTab({
         const bv = b.venue.verificationStatus === 'verified' ? 1 : 0;
         if (av !== bv) return bv - av;
         // 2순위: isPaidAd (true가 먼저)
-        if (a.venue.isPaidAd !== b.venue.isPaidAd) return a.venue.isPaidAd ? -1 : 1;
+        if (paidShown(a.venue.isPaidAd) !== paidShown(b.venue.isPaidAd)) return paidShown(a.venue.isPaidAd) ? -1 : 1;
         // 3순위: 관리자가 드래그로 정한 노출 순서(display_order) — 이걸 안 보면 관리자 드래그가 죽은 컨트롤이 된다
         const ao = a.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
         const bo = b.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
@@ -451,8 +463,11 @@ function CommunityTab({
           실측 후: 바 53.5px  = pt-1(4.25) + 버튼 h-[44px] + pb-1(4.25) + 테두리(1).
           히트 영역은 44px 를 그대로 지킨다(WCAG 2.5.5) — 줄인 것은 트레이 여백과 **시각 알약**뿐이다.
           ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신).
-          C-9(2026-09-29): 붙는 위치 = 헤더 − pt-1 + 헤더 밑줄 1px — 버튼 윗변이 헤더 밑변에 정확히 닿는다(−0.5rem 일 때 접힌 헤더가 위 5px 를 덮어 39/44px). */}
-      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.25rem+1px)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.25rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+          C-9(2026-09-29): 붙는 위치 = 헤더 − pt-1 + 헤더 밑줄 1px — 버튼 윗변이 헤더 밑변에 정확히 닿는다(−0.5rem 일 때 접힌 헤더가 위 5px 를 덮어 39/44px).
+          🔴 audit10 P2-2(2026-10-07): 바 위로 16px 를 칠하던 ::before(2026-06 '갭 비침' 덮개)를 걷었다. 붙은 상태에서는 바 윗변이
+          불투명 z-50 헤더 밑면보다 위라(겹침) 덮을 틈이 없고, 안 붙은 상태(스크롤 0)에서는 바로 위 본인인증 띠의 글자 아래 절반을 가렸다.
+          '틈 없음' 은 e2e/community-secbar-top.spec.ts 가 펼침·접힘·PC 에서 잰다. */}
+      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.25rem+1px)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.25rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1">
         {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
@@ -577,6 +592,9 @@ function CommunityTab({
           <MyCommunitiesActionM onSelectVenue={onSelectVenue} onCreated={onReloadVenues} version={myCommVer} />
           <VenuesSectionM
             sortedVenues={sortedVenues}
+            // 목록이 비어 있을 때만 의미가 있다 — 스냅샷이든 응답이든 한 곳이라도 있으면 그대로 그린다
+            loading={venues.length === 0 && !venuesLoaded && venuesErr == null}
+            loadErr={venues.length === 0 ? venuesErr : null}
             query={query}
             onQuery={setQuery}
             onSelectVenue={onSelectVenue}
@@ -684,7 +702,8 @@ function FeedSection({
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState<PostCategory | 'all'>('all');
+  // 새로고침하면 보던 분류 칩 그대로(design-review P3-1 · lib/reloadTab). 이 피드는 게시판 한 곳(enableCategory)에만 쓰인다.
+  const [cat, setCat] = useReloadState<PostCategory | 'all'>('nuri:reload:board-cat', BOARD_CAT_IDS, 'all', 'community');
   // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
   const [order, setOrder] = useState<'new' | 'popular'>('new');
   const [visible, setVisible] = useState(15);
@@ -757,7 +776,8 @@ function FeedSection({
     getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setAdsEvery(parseAdsEvery(v))).catch(() => {});
   }, []);
   useEffect(() => {
-    if (!enableCategory) return;
+    // 유료 노출 스위치가 꺼져 있으면 광고 칸을 아예 받지 않는다 — 승격 글은 제 게시판의 일반 글로 남는다.
+    if (!enableCategory || !PAID_EXPOSURE_ON) return;
     loadAds();
     window.addEventListener('nuri:ads-changed', loadAds);
     return () => window.removeEventListener('nuri:ads-changed', loadAds);
@@ -1381,11 +1401,16 @@ function MyCommunitiesAction({ onSelectVenue, onCreated, version = 0 }: {
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // 세대 가드 — 늦게 온 응답(이전 계정·이전 호출)이 지금 목록을 덮지 않게 한다.
+  const gen = useRef(0);
   const reload = () => {
-    getMyOwnedCommunities().then(setOwned).catch(() => {});
-    getMyJoinedGroups().then(setJoined).catch(() => {});
+    const g = ++gen.current;
+    getMyOwnedCommunities().then((v) => { if (g === gen.current) setOwned(v); }).catch(() => {});
+    getMyJoinedGroups().then((v) => { if (g === gen.current) setJoined(v); }).catch(() => {});
   };
-  useEffect(() => { reload(); }, [version]);
+  // 계정이 바뀌면(로그인·로그아웃·A→B) 앞 계정의 운영·가입 목록부터 비우고 다시 읽는다(UP-11).
+  useEffect(() => { setOwned([]); setJoined([]); }, [user?.id]);
+  useEffect(() => { reload(); }, [version, user?.id]);
 
   if (!user) return null;
   const isOwner = user.role === 'venue_owner';
@@ -1498,9 +1523,12 @@ const VENUE_FILTERS: { key: string; label: string }[] = [
   { key: 'dealer_team', label: '딜러팀' }, { key: 'club', label: '동호회' }, { key: 'youtuber', label: '유튜버' },
 ];
 function VenuesSection({
-  sortedVenues, query, onQuery, onSelectVenue, onReloadVenues,
+  sortedVenues, loading = false, loadErr = null, query, onQuery, onSelectVenue, onReloadVenues,
 }: {
   sortedVenues: { venue: Venue; commentCount: number; latest?: Comment }[];
+  /** 첫 조회 전이라 목록이 비어 있다 — '결과가 없습니다' 대신 뼈대(2026-10-07: 응답 전 빈 상태가 '0곳' 으로 읽혔다) */
+  loading?: boolean;
+  loadErr?: unknown;
   query: string;
   onQuery: (q: string) => void;
   onSelectVenue: (id: string) => void;
@@ -1565,8 +1593,8 @@ function VenuesSection({
       <div data-main-enter className="border-b border-border-subtle pb-1.5">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-bold text-ink-primary">{VENUE_FILTERS.find((f) => f.key === kindFilter)?.label ?? '전체'}</h2>
-          <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>
-          {/* 정렬 안내 — 실제 정렬(인증 → 유료광고 → 팔로워순)과 일치 */}
+          {!loading && loadErr == null && <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>}
+          {/* 정렬 안내 — 실제 정렬과 일치(인증 → [유료 노출 켜짐일 때만 유료] → 팔로워순) */}
           {/* ⚠ shrink-0 + whitespace-nowrap 이라 좁아져도 줄지도 접히지도 않아, 390·200% 에서
               "→ 팔로워순" 이 뷰포트 밖으로 나갔다(실측 2026-09-18). 이건 안내 문구이므로
               접히는 편이 사라지는 편보다 낫다 — 접을 수 있게 풀어 준다. */}
@@ -1581,16 +1609,35 @@ function VenuesSection({
             <span className="text-ink-muted">→</span>
             {/* accent-300 은 다크 지면(surface-base)에서 3.6:1 로 AA(4.5) 미달이다 — accent-200 은 6.94:1.
                 대비는 순백이 아니라 **실제 지면**으로 잰다(.cursor/rules/30-traps.mdc). */}
-            <span className="text-accent-200 font-semibold">유료광고</span>
-            <span className="text-ink-muted">→</span>
+            {/* 유료 노출이 꺼져 있으면(lib/paidExposure) 정렬에도 없으니 안내에서도 뺀다 — 손님 화면에 '유료광고' 0. */}
+            {PAID_EXPOSURE_ON && (<>
+              <span className="text-accent-200 font-semibold">유료광고</span>
+              <span className="text-ink-muted">→</span>
+            </>)}
             <span className="text-ink-secondary">팔로워순</span>
           </span>
         </div>
       </div>
 
       {/* 리스트 */}
-      {filtered.length === 0 ? (
-        <EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" />
+      {loadErr != null ? (
+        <LoadErrorCard error={loadErr} what="매장 목록" onRetry={onReloadVenues} />
+      ) : loading ? (
+        // 매장 카드와 같은 껍데기·줄 구조(썸네일 40 · 이름/지역 2줄) — 응답이 와도 목록이 밀리지 않는다.
+        // data-stable-skeleton: 판 교체(tabCover)가 '준비 전' 으로 보고 떠나는 판을 붙잡지 않게(BoardListSkeleton 과 같은 이유)
+        <ul aria-busy="true" data-stable-skeleton="" data-testid="venue-list-loading" className="space-y-2">
+          {[0, 1, 2].map((k) => (
+            <li key={k} aria-hidden className="flex items-center gap-2.5 px-2.5 py-2 rounded-aura border card-aura">
+              <span className="skeleton h-10 w-10 shrink-0 rounded-xl" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="skeleton mb-0.5 block w-32 text-sm font-semibold rounded-input"><span className="invisible">매장</span></span>
+                <span className="skeleton block w-24 text-2xs rounded-input"><span className="invisible">지역</span></span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : filtered.length === 0 ? (
+        <div data-testid="venue-empty"><EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" /></div>
       ) : (
         <ul data-main-enter className="space-y-2">
           {filtered.map(({ venue, commentCount, latest }) => (
@@ -1601,7 +1648,7 @@ function VenuesSection({
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-(--dur-fast) cursor-pointer active:bg-surface-high',
-                  venue.isPaidAd
+                  paidShown(venue.isPaidAd)
                     ? 'bg-surface-low border-accent-400/50 hover:border-accent-400'
                     : 'card-aura',
                 ].join(' ')}
@@ -1613,7 +1660,7 @@ function VenuesSection({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 mb-0.5">
-                        {venue.isPaidAd && (
+                        {paidShown(venue.isPaidAd) && (
                           <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                             AD
                           </span>

@@ -10,7 +10,7 @@ import {
   windowEndMinute, earlyTierWindows, earlyTierIndexAt, normalizeEarlyTiers, rebuyStackAt, rebuyChipsOf,
   msToRegCloseAt, prizePlaceCount, targetEntriesOf, voucherPerEntryMismatch, MAX_VOUCHER_PER_ENTRY,
 } from './chipRules';
-import { computeLiveStats, deriveClockCounts, emptyClockState, defaultClockConfig, withDerivedEarly, applyEarlyEdit, clockIsLeftover, type ClockConfig, type ClockLevel, type ClockState } from '../api/clock';
+import { computeLiveStats, deriveClockCounts, emptyClockState, defaultClockConfig, withDerivedEarly, applyEarlyEdit, clockIsLeftover, earlyTypeAtLevel, type ClockConfig, type ClockLevel, type ClockState } from '../api/clock';
 import { discountAllowed, autoDiscountIndex, earlyTypeOf, type LedgerBuyin, type LedgerSession } from '../api/ledger';
 import { settlementReport } from './ledgerSettlement';
 import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from './ledgerStart';
@@ -38,8 +38,10 @@ describe('W-05 · 얼리 창 끝 = 다음 레벨 시작 분(앞 브레이크 포
 
 describe('W-27 · 경계는 반열림 한 규칙', () => {
   const w = earlyTierWindows([{ level: 1, chips: 10_000 }, { level: 4, chips: 5_000 }], levelsA);
-  it('24.999분 = 1단, 25분 정각 = 2단(2LV 시작), 107.999 = 2단, 108 = 없음', () => {
-    expect([24.999, 25, 107.999, 108, -0.01].map((m) => earlyTierIndexAt(m, w))).toEqual([0, 1, 1, -1, -1]);
+  // 🔴 roti-1009 C-1(2026-10-09) — 계약을 뒤집었다: 시작 전(-0.01분)은 예전엔 '없음'(-1)이었는데 이제 가장 이른 단계(0)다.
+  //   '2LV 시작 전' 창에는 시작 전도 들어간다. 날짜가 깨진 행(NaN)만 판정 불가(-1).
+  it('24.999분 = 1단, 25분 정각 = 2단(2LV 시작), 107.999 = 2단, 108 = 없음 · 시작 전 = 1단 · NaN = 없음', () => {
+    expect([24.999, 25, 107.999, 108, -0.01, -600, NaN].map((m) => earlyTierIndexAt(m, w))).toEqual([0, 1, 1, -1, 0, 0, -1]);
   });
   it('두 칸 경로(earlyTypeOf)도 같은 규칙 — 25:00 정각 도착은 더블이 아니라 1얼리', () => {
     const s = { earlyDoubleMin: 25, earlySingleMin: 108, tournamentStart: '2026-09-29T10:00:00.000Z' };
@@ -47,6 +49,35 @@ describe('W-27 · 경계는 반열림 한 규칙', () => {
     expect(earlyTypeOf(b('2026-09-29T10:25:00.000Z'), s)).toBe('single');
     expect(earlyTypeOf(b('2026-09-29T10:24:59.999Z'), s)).toBe('double');
     expect(earlyTypeOf(b('2026-09-29T11:48:00.000Z'), s)).toBe('none');
+  });
+});
+
+// roti-1009 C-1 — 대회 시작 전 접수 손님의 얼리가 **기록 경로에 따라** 갈렸다.
+//   장부 결제창은 클락 대기(1LV)로 early_override 를 'double' 로 저장하고(NuriPosLedger clockEarlyNow = earlyTypeAtLevel(cfg, 1)),
+//   QR 접수대 승인(approve_buyin_request)은 override 없이 넣어 시각 판정(earlyTypeOf)을 탄다 — 그게 시작 전이면 'none' 이었다.
+// 음성 대조: chipRules.earlyTierIndexAt 의 NaN 가드를 예전 `!(mins >= 0)` 로 되돌리면 이 describe 가 빨개진다.
+describe('C-1 · 시작 전 접수 = 가장 이른 얼리 단계 (결제창 경로 ≡ QR 승인 경로)', () => {
+  // 로티 깐부전 10-09: 1~16LV 30분, 4LV 뒤 브레이크 8분 · 얼리 '2LV 시작 전 +1만 · 5LV 시작 전 +5천'
+  const roti: ClockLevel[] = [L(30), L(30), L(30), L(30), B(8), L(30), L(30)];
+  const cfg = withDerivedEarly({ ...defaultClockConfig(), levels: roti, earlyTiers: [{ level: 1, chips: 10_000 }, { level: 4, chips: 5_000 }] });
+  const sess = { ...sessionEarlyOf(cfg), tournamentStart: '2026-10-09T08:00:00.000Z' };   // 17:00 KST
+  const at = (min: number, earlyOverride: LedgerBuyin['earlyOverride'] = null, entryNo = 1) => ({
+    id: `x${min}`, venueId: 'v', sessionDate: '2026-10-09', gameSeq: 1, playerName: `p${min}`, entryNo, paymentMethod: 'cash', isUnpaid: false,
+    buyinAt: new Date(Date.parse(sess.tournamentStart) + min * 60_000).toISOString(), isSplit: false, cashAmount: 0, cardAmount: 0,
+    transferAmount: 0, ticketCount: 0, unpaidAmount: 0, discountLevel: 0, discountIndex: 0, earlyOverride,
+  }) as unknown as LedgerBuyin;
+  it('16:55 QR 승인(override 없음) = 결제창(클락 대기 1LV) = 더블 +10,000', () => {
+    const modal = earlyTypeAtLevel(cfg, 1);
+    expect(modal).toBe('double');
+    expect(earlyTypeOf(at(-5), sess)).toBe(modal);
+    expect(earlyTypeOf(at(-5, modal), sess)).toBe(modal);
+    const d = deriveClockCounts([at(-5), at(-120), at(40)], sess);
+    expect([d.earlies, d.doubleEarlies, d.earlyChips]).toEqual([3, 2, 25_000]);
+  });
+  it("시작 전이어도 리엔트리·수기 '없음' 은 얼리가 아니다 · 얼리 창이 없는 게임도 아니다", () => {
+    expect(earlyTypeOf(at(-1, null, 2), sess)).toBe('none');
+    expect(earlyTypeOf(at(-1, 'none'), sess)).toBe('none');
+    expect(earlyTypeOf(at(-1), { earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: sess.tournamentStart })).toBe('none');
   });
 });
 

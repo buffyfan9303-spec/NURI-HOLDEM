@@ -36,7 +36,7 @@ describe('클락 #1 얼리 기준 = 등록 시점(장부 세션) 스냅샷', () 
 
   it('장부 세션 폼은 진행 중 클락이면 기존 얼리 창을 유지한다(포스터·폼 레벨로 다시 계산하지 않음)', () => {
     const s = src('../components/features/NuriPosLedger.tsx');
-    const body = s.slice(s.indexOf('const submitOnce = ('), s.indexOf('earlyDoubleMin: earlyDMin, earlySingleMin: earlySMin'));
+    const body = s.slice(s.indexOf('const submitOnce = '), s.indexOf('earlyDoubleMin: earlyDMin, earlySingleMin: earlySMin'));
     expect(body).toMatch(/let earlyDMin = base\.earlyDoubleMin \?\? 0, earlySMin = base\.earlySingleMin \?\? 0;/);
     expect(body).toMatch(/if \(!clockState\?\.running\) \{[\s\S]*earlyDMin = cfg\.earlyDoubleMin; earlySMin = cfg\.earlySingleMin;/);
     // 포스터 구조(레벨 길이)가 등록 때 분 환산에 들어간다 — 포스터 등록 기준

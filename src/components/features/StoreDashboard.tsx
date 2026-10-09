@@ -1,16 +1,16 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Children, Suspense, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
 import { Fold, useReveal } from '../atoms/Fold';
-import { useIsMdUp } from '../../lib/responsive';
+import { useIsDesktop, useIsMdUp } from '../../lib/responsive';
 import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
-  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, getDowAvgBuyins, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, getDowAvgBuyins, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, wonAmount, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest, voucherShortOf,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
@@ -44,7 +44,8 @@ import CheckinModal from './CheckinModal';
 //   이름을 그대로 둔 것은 이 파일을 읽는 계약 테스트(laborLoadFailure)의 JSX 문자열을 바꾸지 않기 위해서다.
 const DealerShiftsModal = lazyWithReload(() => import('./DealerShiftsModal'));
 import Modal from '../atoms/Modal';
-import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
+import { getAppSetting, BOOST_CONTACT_EMAIL_KEY } from '../../api/settings';
+import { BIZ_REQUIRED } from './BusinessFooter';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
 import { relativeTime } from '../../lib/relativeTime';
@@ -176,6 +177,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const [monthDealers, setMonthDealers] = useState<DealerShift[]>([]);
   const [dealerErr, setDealerErr] = useState(false);
   const [shiftErr, setShiftErr] = useState(false);
+  // SP02(2026-10-08) — 오늘·월간 출근 조회가 플래그 하나를 같이 쓰면, 월간 실패 뒤 늦게 온 오늘 성공이 오류를 지워
+  //   인건비 요약이 monthShifts=[] 로 '총 인건비 N원'(딜러 몫만)을 정상값처럼 띄웠다. 월간은 따로 든다.
+  const [monthShiftErr, setMonthShiftErr] = useState(false);
   // 인건비는 급여 정산 화면과 같은 규칙(휴게·주휴·5인 가산 설정)으로 센다 — 두 화면의 합계가 달라지면 안 된다.
   const payRules = usePayRules(venueId);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
@@ -205,8 +209,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   접기는 토글로 되고 매 리사이즈마다 펴고 접는 쪽이 더 놀랍다.
   const [moreOpen, setMoreOpen] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches === true);
-  // 펼침 칸은 토글 **위** 그리드에 끼어든다 — 누른 토글은 제자리(스크롤 보정), 칸은 투명도로 들고 난다(2026-09-29 감사 #1: 열면 +400px 밀렸다).
-  const moreShown = useReveal(moreOpen);
+  // PC(≥1024): 펼침 칸은 토글 **위** 그리드에 끼어든다 — 누른 토글은 제자리(스크롤 보정), 칸은 투명도로 들고 난다(2026-09-29 감사 #1: 열면 +400px 밀렸다).
+  // 모바일(<1024): 🔴 2026-10-07 오너 "더보기 누르면 아래에 나와야지 왜 위로 가" — 위 방식은 칸이 토글 위(화면 밖)에 생기고
+  //   스크롤이 그만큼(390 실측 +964px) 내려가 토글만 제자리였다. 눌러도 눈앞에 새 정보가 없다. 그래서 '더 보기' 칸만
+  //   토글 **바로 아래** 접이(Fold)로 옮긴다 — 아래로 펼쳐지고, 접을 때 바닥 클램프는 Fold 의 keepScroll 이 막는다.
+  const moreBelow = !useIsDesktop();
+  const moreShown = useReveal(moreOpen && !moreBelow) || (moreBelow && moreOpen);
   // 운영 가이드 배너 — 베테랑 매장에도 영구 노출되던 것을 닫기 가능으로(닫으면 기억)
   const [guideHidden, setGuideHidden] = useState(() => {
     try { return localStorage.getItem('nuri:guide-banner-dismissed') === '1'; } catch { return false; }
@@ -390,7 +398,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       getPendingBuyinRequests(venueId, d).then(guard(setPendingReqs)).catch(() => {}),
       // 독립 검증 B(2026-09-13): 출근 조회 실패를 삼키면 딜러 인건비만의 값이 '총 인건비 N만원' 으로 뜬다 — wageErr·dealerErr 와 같은 모양.
       getStaffSchedule(venueId, d, d).then(guard((ss: StaffShift[]) => { setShifts(ss); setShiftErr(false); })).catch(guard(() => { setShifts([]); setShiftErr(true); })),
-      getStaffSchedule(venueId, weekStartOf(mr.start), mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setShiftErr(true); })),
+      getStaffSchedule(venueId, weekStartOf(mr.start), mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setMonthShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setMonthShiftErr(true); })),
       getStaffWages(venueId).then(guard((w: StaffWage[]) => { setWages(w); setWageErr(false); })).catch(guard(() => { setWages([]); setWageErr(true); })),
       // F6: getDealerShifts 가 이제 실패를 던진다 — 빈 배열로 받으면 '딜러 인건비 0' 이 정상값처럼 보인다. wageErr 와 같은 모양.
       getDealerShifts(venueId, weekStartOf(mr.start), mr.end).then(guard((ds: DealerShift[]) => { setMonthDealers(ds); setDealerErr(false); })).catch(guard(() => { setMonthDealers([]); setDealerErr(true); })),
@@ -572,19 +580,23 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   오늘 적은 높이만 예약한다. 옛 숫자 형식(날짜 없음)은 '오늘 것이 아님'으로 읽는다.
   const liveKey = `nuri:dash-live-h:${venueId}`;
   const liveRef = useRef<HTMLElement>(null);
-  const liveReserveH = useMemo(() => {
-    if (!loading) return 0;
+  // audit10 ⑨(2026-10-07) — 같은 기억에 '클락이 켜져 있었나'(c)도 싣는다. 확인 중엔 아래 격자의 '대회 클락' 카드를 그 기억대로 세운다 —
+  //   종전엔 확인 중 늘 보이다가 클락 응답이 오면 사라져 옆 카드들이 한 칸씩 왼쪽으로 밀렸다(1440 0.10 · 1024 0.057, 목 업주 클락 진행 중 직접 진입).
+  const liveMemo = useMemo(() => {
+    if (!loading) return { h: 0, c: false };
     try {
-      const v = JSON.parse(localStorage.getItem(liveKey) || 'null') as { h?: unknown; d?: unknown } | null;
-      return v && v.d === d ? Number(v.h) || 0 : 0;
-    } catch { return 0; }
+      const v = JSON.parse(localStorage.getItem(liveKey) || 'null') as { h?: unknown; d?: unknown; c?: unknown } | null;
+      return v && v.d === d ? { h: Number(v.h) || 0, c: v.c === true } : { h: 0, c: false };
+    } catch { return { h: 0, c: false }; }
   }, [loading, liveKey, d]);
+  const liveReserveH = liveMemo.h;
+  const clockCardHidden = loading ? liveMemo.c : clockActive;
   useLayoutEffect(() => {
     if (loading || !active) return; // 숨은 판(keep-alive)의 높이 0 을 '위젯 없음'으로 적지 않는다
     const h = liveWidget ? Math.round(liveRef.current?.getBoundingClientRect().height ?? 0) : 0;
     if (liveWidget && h === 0) return;
-    try { if (h > 0) localStorage.setItem(liveKey, JSON.stringify({ h, d })); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
-  }, [loading, active, liveWidget, liveKey, d, activeClocks.length, pendingReqs.length]);
+    try { if (h > 0) localStorage.setItem(liveKey, JSON.stringify({ h, d, c: clockActive })); else localStorage.removeItem(liveKey); } catch { /* 차단 환경 — 예약만 못 한다 */ }
+  }, [loading, active, liveWidget, liveKey, d, activeClocks.length, pendingReqs.length, clockActive]);
 
   // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
   //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
@@ -606,6 +618,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   진행 중이 하나도 없거나 마감이 2개 이하면 접지 않는다(표가 비거나 접어 봐야 짧다). PC 는 종전대로 전부.
   const cardGridRef = useRef<HTMLDivElement>(null);
   useEffect(() => fitLastCard(cardGridRef.current));
+  const moreGridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => fitLastCard(moreGridRef.current));
   const isMdUp = useIsMdUp();
   const [allGames, setAllGames] = useState(false);
   const closedGames = todayGames.filter((g) => g.sx.closed).length;
@@ -884,7 +898,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     wages: Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage])), dealers: monthDealers });
   const laborTotal = labor.total, laborHours = labor.netMin / 60, dealerPay = labor.dealerPay;
   // 시급이든 딜러 근무든 못 불러왔으면 합계는 숫자가 아니다 — '0만원' 이 정상값처럼 읽힌다(F6). 급여 설정도 같다.
-  const laborErr = wageErr || dealerErr || shiftErr || !!payRules.err;
+  const laborErr = wageErr || dealerErr || monthShiftErr || !!payRules.err;
 
   // ── 손님 유형 비중(오늘 명단) ──
   const typeCount: Record<string, number> = {};
@@ -904,6 +918,287 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   (같은 렌더 안 순서). 같은 사실(미수 N만)을 KPI·할 일·배너 세 번 말하던 것을 줄이고, 배너가 빠지면 1280·1366 에서 할 일 설명 폭이 돌아온다.
   let todoOwedShown = false;
 
+  // 토글 이름은 실제로 펼쳐지는 칸만 말한다 — 클락이 돌면 '대회 클락' 칸은 라이브 위젯과 겹쳐 숨는데(clockCardHidden) 이름엔 '클락'이 남아
+  //   눌러도 클락이 안 나왔다(오너 10-07 "정보 제대로 송출도 안되고"). 권한으로 빠지는 칸도 같다.
+  const moreLabel = ['더 보기', caps.ledger && !clockCardHidden && '클락', caps.manage && '주간 비교', caps.staff && '직원', caps.voucher && '이용권']
+    .filter(Boolean).join(' · ');
+  // 대시보드 카드 한 벌 — PC 는 한 격자에 섞어 그리고, 모바일(<1024)은 '더 보기' 칸만 토글 **아래** 격자로 옮긴다(splitCards).
+  const dashCards = (
+    <>
+          {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
+          {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
+          {/* 2026-10-03 E3 후속 — 7일 장부가 없는 매장(새 매장)은 '최근 7일 추세'가 자리 그대로 171px 이고(L-2: 상태가 바뀌어도 높이 불변)
+              옆 '대회 클락'·'전주 대비'는 99px 라 PC 첫 줄 아래 72px 빈 홈이 생겼다. 그 상태(확인 중·실패·데이터 없음)에서만 두 이웃을
+              줄 높이로 늘리고 본문을 세로 가운데 둔다 — 셋 다 빈 안내라 줄이 고르게 선다. 데이터가 오면 이웃은 제 높이로 돌아가지만
+              줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
+          <DashCard more show={moreShown && caps.ledger && !clockCardHidden} title="대회 클락" onClick={() => onGoto({ section: 'clock', gameSeq: clock?.gameSeq ?? MAIN_GAME_SEQ })} center={trendFill} stretch={trendFill}
+            badge={clockActive
+              ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
+              : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
+            {loading ? <EmptySkeleton /> : !clockActive || !lvl ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">실행 중인 클락이 없습니다.</p>
+            ) : lvl.kind === 'break' ? (
+              <div className="py-2 text-center">
+                <p className="text-lg font-extrabold text-ink-primary">BREAK</p>
+                <p className="mt-1 text-2xs text-ink-muted">휴식 시간</p>
+              </div>
+            ) : (
+              <div className="flex items-end justify-between gap-2">
+                <div>
+                  <p className="text-2xs text-ink-muted">레벨 {levelNo}</p>
+                  <p className="text-xl font-extrabold text-ink-primary tabular-nums">{lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}</p>
+                  {lvl.ante > 0 && <p className="text-2xs text-ink-muted">ante {lvl.ante.toLocaleString()}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xs text-ink-muted">남은 인원</p>
+                  <p className="text-lg font-bold text-ink-primary tabular-nums">{Math.max(0, cnt.players + clock!.adjEntries - clock!.eliminations)}</p>
+                </div>
+              </div>
+            )}
+          </DashCard>
+
+          {/* 최근 7일 추세 + 객단가 */}
+          <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
+            badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석</span>}>
+            {/* 순서가 중요하다 — 실패를 '데이터 없음'보다 **먼저** 판정한다(F14). 조회가 죽으면 range 가
+                빈 값이라 weekEntry 가 0 이고, 예전엔 그게 "7일간 손님이 없었다"로 읽혔다. */}
+            {/* E3 L-2(2026-10-03) — 확인 중 뼈대(h-12)가 실제 본문(막대 + 두 줄, 카드 108→171px)보다 63px 짧아, 정착하는 순간
+                PC 3열의 다음 줄 카드 3장이 63px 내려갔다(1440 CLS 0.0179). 뼈대·데이터 없음·실패 줄을 **모두** 실제 본문과 같은 틀
+                (막대 칸 + 두 줄, 보이지 않는 대역)에 겹쳐 세워 상태가 바뀌어도 카드 높이가 그대로다 — 뼈대만 키우면 7일 장부가 없는 매장
+                (매장 전환·새 매장)에서 171→99 로 접히며 반대로 올라갔다(D1 게이트 1440 전환). 문구는 그 칸 세로 가운데. */}
+            {trendBlank ? (
+              <div className={loading ? 'skeleton grid rounded-input' : 'grid'}>
+                <div aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }}>
+                  <div className="mb-2 h-14" />
+                  <div className="border-t pt-2 text-2xs">0</div>
+                  <div className="mt-1 text-2xs">0</div>
+                </div>
+                <div style={{ gridArea: '1 / 1', alignSelf: 'center' }}>
+                  {loading ? null : rangeErr ? (
+                    <LoadFailRow what="최근 7일 장부" onRetry={reloadRange} />
+                  ) : (
+                    <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-2 flex h-14 items-end justify-between gap-1">
+                  {perDay.map((x) => (
+                    <div key={x.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                      <div className="w-full max-w-[18px] rounded-xs bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}회`} />
+                      <span className={`text-2xs ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-border-subtle pt-2 text-2xs">
+                  <span className="text-ink-muted">7일 합계</span>
+                  <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>회 · <b className="text-ink-primary">{wonToMan(weekPaid)}</b>만</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-2xs">
+                  <span className="text-ink-muted">평균 객단가</span>
+                  <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{wonToMan(avgSpend)}</b>만 / 바인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
+                </div>
+              </>
+            )}
+          </DashCard>
+
+          {/* 전주 대비(주간 비교) — 오너 2026-09-19 "칸이 많이 남잖아 절반을 기준으로 하던 해서 상하 XY축
+              줄간격 및 좌우 간격 조정": center(위 DashCard 참고)로 남는 높이를 받아 두 줄을 세로 중앙에 두고,
+              CompareRow 내부 간격도 늘렸다(space-y-2→-4, gap-2→-3). */}
+          <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
+            stretch={trendFill}
+            badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
+            {/* h-16(64px) = 정착 두 줄(22·22 + 사이 16 + 위아래 4) — 2026-10-05 글자 사다리 상향으로 60 → 64 가 되며 기본 h-12(48)와 16px 차가 났다. */}
+            {loading ? <Skeleton className="h-16" /> : rangeErr ? (
+              <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
+            ) : (weekEntry === 0 && prevBuyins === 0) ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
+            ) : (
+              <div className="space-y-4 py-0.5">
+                <CompareRow label="바인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
+                <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
+              </div>
+            )}
+          </DashCard>
+
+          {/* 다가오는 예약 — C08: 인원 조회 실패를 '0명'과 갈라놓는다(실패했는데 0명으로 보이면
+              "예약이 없다"는 거짓 안심을 준다). */}
+          <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
+            badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {resCountsErr ? '—' : totalRes}</span>}>
+            {loading ? <EmptySkeleton /> : upcoming.length === 0 ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
+            ) : (
+              <ul className="space-y-1">
+                {!!resCountsErr && (
+                  <li data-testid="dash-res-err" className="flex select-none items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
+                    {/* 2026-10-07(PR #207 같은 부류) — 맨 글자 + 버튼이 섞인 flex 줄은 탭하면 글이 선택되며 줄이 갈라졌다. 글을 span 으로 감싸고
+                        버튼은 inline-flex, 정적 안내라 li 에 select-none(설치형 index.css 가 li 를 요소 선택자로 다시 여므로 li 에 건다). */}
+                    <span className="min-w-0">예약 인원을 불러오지 못했어요 — 0명과는 달라요.</span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); reloadReservations(); }}
+                      className="hit inline-flex shrink-0 items-center rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
+                  </li>
+                )}
+                {upcoming.map((g) => (
+                  <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
+                    <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCountsErr ? '—' : (resCounts[g.id] ?? 0)}명</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashCard>
+
+          {/* 고객·단골(바인·방문 횟수 · 직원 제외).
+              ⚠ 이름을 '단골 TOP' 에서 바꾼 이유: 이 카드가 여는 것은 TOP 5 가 아니라 **매장 전체 고객 목록**이다.
+                 '유저' 같은 모호한 이름을 새로 만들지 않는다 — 직원은 '직원 관리', 고객은 '고객·단골',
+                 이용권 대상은 이용권 화면의 '받는 손님' 으로 역할이 갈린다. */}
+          <DashCard show={caps.ledger} title="고객·단골" onClick={() => setRegOpen(true)}
+            badge={<span className="text-2xs font-bold text-ink-muted">전체 보기</span>}>
+            {loading ? <EmptySkeleton /> : topRegulars.length === 0 ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
+            ) : (
+              <ul className="space-y-1">
+                {topRegulars.map((r, i) => (
+                  <li key={r.name} className="flex items-center gap-2 text-xs">
+                    <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
+                    {/* 2026-09-25 MYSTORE-FULL-AUDIT #5 — 한 줄에 [이름 | 바인·방문·단골 | 보내기] 를 다 세우면 이름 열이
+                        65px(1440, 카드 279px)만 남아 '이도현(포…' 처럼 잘렸다. 수치는 이름 아래 둘째 줄로 내린다. */}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-ink-secondary" title={r.name}>{r.name}</span>
+                      <span className="block text-2xs tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 font-bold text-ink-secondary">단골</span>}</span>
+                    </span>
+                    {/* CRM 행동 버튼 — 고객에게 바로 매장이용권 발급(받는 사람 자동 입력).
+                        DashCard 의 children 은 헤더 <button> 밖이라 진짜 <button> 을 쓸 수 있다 —
+                        span[role=button] 은 Space 키가 안 먹고 폼 의미도 없어서 흉내에 그친다. */}
+                    {/* 🔴 2026-09-20 — 발급/열람 분리를 RegularsModal·CheckinModal 에는 적용했는데 **여기를 놓쳤다**.
+                        열람권만 가진 직원에게 '보내기' 가 보이고, 눌러도 발급 폼이 없는 모달만 열린다. */}
+                    {caps.issueVoucher && (
+                      <button type="button" title={`${r.name}님에게 매장이용권 전송`}
+                        onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
+                        className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
+                      ><Icon name="gift" size={11} className="shrink-0" />전송</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashCard>
+
+          {/* 오늘 출근 */}
+          <DashCard more show={moreShown && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
+            badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{workedStaff.length}/{shifts.length} 출근</span>}>
+            {loading ? <EmptySkeleton /> : shiftErr ? (
+              <p className="py-3 text-center text-2xs text-danger-light">출근 기록을 불러오지 못했습니다.</p>
+            ) : shifts.length === 0 && !shiftErr ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
+            ) : (
+              <ul className="flex flex-wrap gap-2">
+                {shifts.map((s) => (
+                  <li key={s.name} className={`inline-flex items-center gap-0.5 rounded-badge px-2 py-0.5 text-2xs font-semibold ${s.checkIn ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface-float text-ink-secondary'}`}>
+                    {s.checkIn && <Icon name="check" size={10} strokeWidth={3} />}{s.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashCard>
+
+          {/* 인건비 요약(이번 달) */}
+          <DashCard more show={moreShown && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
+            badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
+            {loading ? <EmptySkeleton /> : (laborHours === 0 && !laborErr) ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
+                  <Stat label="총 인건비" value={laborErr ? '—' : wonAmount(laborTotal)[0]} unit={laborErr ? '' : wonAmount(laborTotal)[1]} gold />
+                  <Stat label="총 근무" value={dealerErr ? '—' : hoursValue(labor.netMin)} unit={dealerErr ? '' : '시간'} />
+                </div>
+                {wageErr && <p className="text-2xs text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
+                {dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+                {monthShiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+                {!laborErr && dealerPay > 0 && (
+                  <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonShort(laborTotal - dealerPay)} · 딜러 {wonShort(dealerPay)}</p>
+                )}
+              </div>
+            )}
+          </DashCard>
+
+          {/* 매장이용권(사용 이용권) */}
+          <DashCard more show={moreShown && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
+            badge={<span className="text-2xs font-bold text-ink-muted">전송·관리 →</span>}>
+            {/* 2026-10-06 store-p3-1006 — 확인 중에도 **같은 틀**(칸 4개 + 설명)을 보이지 않게 세우고 뼈대를 덮는다.
+                뼈대(h-12)만 두면 정착 때 카드가 틀 높이로 자라 아래 줄이 밀렸다(첫 로드 판 성장). */}
+            <ReserveWhile loading={loading}>
+              <>
+                {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
+                    오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
+                {/* 직원은 '7일 사용' 칸이 없다(아래) — 3칸을 한 줄로. */}
+                <div className={`grid ${caps.manage ? 'grid-cols-2' : 'grid-cols-3'} gap-x-3 gap-y-2`}>
+                  {/* 2026-09-18 오너 결정: "이용권은 T 단위로" — 발행도 T 로 맞춘다.
+                      이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
+                      ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
+                        "몇 장을 보낼까요?"·"한 장 줄이기" 처럼 세는 말이라 T 로 바꾸면 문장이 깨진다. */}
+                  <Stat label="7일 전송" value={sentBad ? '—' : `${weekVoucher}`} unit={sentBad ? '' : '장'} />
+                  <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
+                  {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
+                      한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
+                  {/* verifier 2026-10-03 — 7일 사용 T 는 14일 장부 행에서 센다. 직원(can_manage_pos 아님)에게는 지난 날의 바인 행이 미수 행만 와서(20261003h)
+                      작은 숫자가 정상처럼 보였다 → 직원에게는 칸을 뺀다(이용권 전송 수·오늘 사용은 온전한 원천이라 남긴다). */}
+                  {caps.manage && <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />}
+                  {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
+                  <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
+                </div>
+                {(!!rangeErr || !!sentErr) && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
+                <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 실제로 보낸 이용권 장수(전송 취소 제외) · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
+              </>
+            </ReserveWhile>
+          </DashCard>
+
+          {/* 🎂 생일 단골(7일 내) — 고객·단골의 고객정보에서 생일 등록 시 자동 표시 */}
+          <DashCard more show={moreShown && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
+            badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">7일 내 {bdays.length}명</span>}>
+            {bdays.length === 0 ? (
+              <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 고객·단골 → 고객정보에서 등록해요.</p>
+            ) : (
+              <ul className="space-y-1">
+                {bdays.slice(0, 5).map((b) => (
+                  <li key={b.name} className="flex items-center gap-2 text-2xs">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
+                    <span className="shrink-0 tabular-nums text-ink-muted">{b.birthday}</span>
+                    <span className={['inline-flex shrink-0 items-center gap-0.5 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', b.dday === 0 ? 'bg-amber-400/15 text-amber-400' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                      {b.dday === 0 ? <><Icon name="gift" size={10} />오늘</> : `D-${b.dday}`}
+                    </span>
+                  </li>
+                ))}
+                <li className="pt-0.5 text-2xs text-ink-muted">축하 쿠폰은 고객·단골 → 고객정보 → 쿠폰 발급으로 보내세요.</li>
+              </ul>
+            )}
+          </DashCard>
+
+          {/* 손님 유형 비중(오늘) */}
+          <DashCard more show={moreShown && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
+            badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{playerTotal}명</span>}>
+            {loading ? <EmptySkeleton /> : playerTotal === 0 ? (
+              <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
+            ) : (
+              <ul className="space-y-1">
+                {typeEntries.map(([k, n]) => (
+                  <li key={k} className="flex items-center gap-2 text-2xs">
+                    <span className="w-14 shrink-0 text-ink-secondary">{k}</span>
+                    <span className="h-1.5 flex-1 rounded-full bg-surface-high overflow-hidden">
+                      <span className="block h-full rounded-full bg-accent-300/80" style={{ width: `${Math.round((n / playerTotal) * 100)}%` }} />
+                    </span>
+                    <span className="w-12 shrink-0 text-right tabular-nums text-ink-muted">{n}명 {Math.round((n / playerTotal) * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DashCard>
+    </>
+  );
+
   return (
     <div className="space-y-3">
       {/* 고객·단골(CRM). 이용권 보내기는 권한이 있을 때만 넘긴다 — 없으면 버튼 자체가 그려지지 않는다.
@@ -919,6 +1214,17 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
              누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼. `caps.issueVoucher`(= 서버 can_manage_pos)로 바꾼다. */}
       <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); void reloadRange(); }}venueId={venueId} canIssue={caps.issueVoucher} canStaffCheckin={caps.manage} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
+
+      {/* 포스터 상단 고정 문의 — 오너 2026-10-07 "문의 위로 올려 맨 위로". 종전엔 맨 아래 유틸 줄 끝(모바일은 '더 보기' 아래)이었다.
+          대시보드 맨 위 오른쪽 한 줄 링크. 누름 상자는 before 로 위아래 14px 씩 보태 44px 이상(줄 높이는 글자 그대로). */}
+      {caps.manage && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => setBoostOpen(true)} data-testid="boost-inquiry"
+            className="relative inline-flex items-center gap-1 text-2xs font-bold text-ink-muted transition-colors before:absolute before:inset-x-0 before:-inset-y-[14px] hover:text-accent-300">
+            <Icon name="flame" size={11} />포스터 상단 고정 문의
+          </button>
+        </div>
+      )}
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}
       {/* ⚠ 375 에서 라벨이 '운영 가이'로 잘려 있었다 — 버튼 3개가 shrink-0 이라 라벨 폭이 먼저 죽는다.
@@ -1153,8 +1459,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             </div>
           )}
           <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            {/* 진행 클락(선택 게임) */}
-            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/2">
+            {/* 진행 클락(선택 게임) — SP16: 문자열 'clock' 은 직전 클락 게임(보통 메인)을 열었다. 보고 있는 게임으로 간다. */}
+            <button type="button" onClick={() => onGoto({ section: 'clock', gameSeq: widgetGame })} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/2">
               <div className="min-w-0">
                 <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '대회 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (
@@ -1570,275 +1876,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {/* C1 D-3·D-4(2026-10-02) — ① 등높이 격자라 빈 상태 카드(다가오는 예약·오늘 출근·인건비·생일 단골)가 옆 카드 높이까지 83~146px 비었다 → items-start.
           ② 3열 마지막 줄에 카드 1장만 남으면(1440: '손님 유형') 오른쪽 두 칸 ~630px 가 빈다 → 그 카드만 한 줄 전체(fitLastCard). */}
       <div ref={cardGridRef} className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
-        {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
-        {/* 2026-10-03 E3 후속 — 7일 장부가 없는 매장(새 매장)은 '최근 7일 추세'가 자리 그대로 171px 이고(L-2: 상태가 바뀌어도 높이 불변)
-            옆 '대회 클락'·'전주 대비'는 99px 라 PC 첫 줄 아래 72px 빈 홈이 생겼다. 그 상태(확인 중·실패·데이터 없음)에서만 두 이웃을
-            줄 높이로 늘리고 본문을 세로 가운데 둔다 — 셋 다 빈 안내라 줄이 고르게 선다. 데이터가 오면 이웃은 제 높이로 돌아가지만
-            줄 높이는 7일 카드(171)가 그대로 정하므로 다른 카드는 움직이지 않는다. 데이터 있는 매장은 종전(items-start) 그대로다(C1 D-3). */}
-        <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')} center={trendFill} stretch={trendFill}
-          badge={clockActive
-            ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
-            : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">미실행</span>}>
-          {loading ? <EmptySkeleton /> : !clockActive || !lvl ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">실행 중인 클락이 없습니다.</p>
-          ) : lvl.kind === 'break' ? (
-            <div className="py-2 text-center">
-              <p className="text-lg font-extrabold text-ink-primary">BREAK</p>
-              <p className="mt-1 text-2xs text-ink-muted">휴식 시간</p>
-            </div>
-          ) : (
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <p className="text-2xs text-ink-muted">레벨 {levelNo}</p>
-                <p className="text-xl font-extrabold text-ink-primary tabular-nums">{lvl.sb.toLocaleString()}/{lvl.bb.toLocaleString()}</p>
-                {lvl.ante > 0 && <p className="text-2xs text-ink-muted">ante {lvl.ante.toLocaleString()}</p>}
-              </div>
-              <div className="text-right">
-                <p className="text-2xs text-ink-muted">남은 인원</p>
-                <p className="text-lg font-bold text-ink-primary tabular-nums">{Math.max(0, cnt.players + clock!.adjEntries - clock!.eliminations)}</p>
-              </div>
-            </div>
-          )}
-        </DashCard>
-
-        {/* 최근 7일 추세 + 객단가 */}
-        <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
-          badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석</span>}>
-          {/* 순서가 중요하다 — 실패를 '데이터 없음'보다 **먼저** 판정한다(F14). 조회가 죽으면 range 가
-              빈 값이라 weekEntry 가 0 이고, 예전엔 그게 "7일간 손님이 없었다"로 읽혔다. */}
-          {/* E3 L-2(2026-10-03) — 확인 중 뼈대(h-12)가 실제 본문(막대 + 두 줄, 카드 108→171px)보다 63px 짧아, 정착하는 순간
-              PC 3열의 다음 줄 카드 3장이 63px 내려갔다(1440 CLS 0.0179). 뼈대·데이터 없음·실패 줄을 **모두** 실제 본문과 같은 틀
-              (막대 칸 + 두 줄, 보이지 않는 대역)에 겹쳐 세워 상태가 바뀌어도 카드 높이가 그대로다 — 뼈대만 키우면 7일 장부가 없는 매장
-              (매장 전환·새 매장)에서 171→99 로 접히며 반대로 올라갔다(D1 게이트 1440 전환). 문구는 그 칸 세로 가운데. */}
-          {trendBlank ? (
-            <div className={loading ? 'skeleton grid rounded-input' : 'grid'}>
-              <div aria-hidden style={{ visibility: 'hidden', gridArea: '1 / 1' }}>
-                <div className="mb-2 h-14" />
-                <div className="border-t pt-2 text-2xs">0</div>
-                <div className="mt-1 text-2xs">0</div>
-              </div>
-              <div style={{ gridArea: '1 / 1', alignSelf: 'center' }}>
-                {loading ? null : rangeErr ? (
-                  <LoadFailRow what="최근 7일 장부" onRetry={reloadRange} />
-                ) : (
-                  <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="mb-2 flex h-14 items-end justify-between gap-1">
-                {perDay.map((x) => (
-                  <div key={x.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                    <div className="w-full max-w-[18px] rounded-xs bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}회`} />
-                    <span className={`text-2xs ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between border-t border-border-subtle pt-2 text-2xs">
-                <span className="text-ink-muted">7일 합계</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>회 · <b className="text-ink-primary">{wonToMan(weekPaid)}</b>만</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between text-2xs">
-                <span className="text-ink-muted">평균 객단가</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{wonToMan(avgSpend)}</b>만 / 바인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
-              </div>
-            </>
-          )}
-        </DashCard>
-
-        {/* 전주 대비(주간 비교) — 오너 2026-09-19 "칸이 많이 남잖아 절반을 기준으로 하던 해서 상하 XY축
-            줄간격 및 좌우 간격 조정": center(위 DashCard 참고)로 남는 높이를 받아 두 줄을 세로 중앙에 두고,
-            CompareRow 내부 간격도 늘렸다(space-y-2→-4, gap-2→-3). */}
-        <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
-          stretch={trendFill}
-          badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
-          {/* h-16(64px) = 정착 두 줄(22·22 + 사이 16 + 위아래 4) — 2026-10-05 글자 사다리 상향으로 60 → 64 가 되며 기본 h-12(48)와 16px 차가 났다. */}
-          {loading ? <Skeleton className="h-16" /> : rangeErr ? (
-            <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
-          ) : (weekEntry === 0 && prevBuyins === 0) ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
-          ) : (
-            <div className="space-y-4 py-0.5">
-              <CompareRow label="바인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
-              <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
-            </div>
-          )}
-        </DashCard>
-
-        {/* 다가오는 예약 — C08: 인원 조회 실패를 '0명'과 갈라놓는다(실패했는데 0명으로 보이면
-            "예약이 없다"는 거짓 안심을 준다). */}
-        <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {resCountsErr ? '—' : totalRes}</span>}>
-          {loading ? <EmptySkeleton /> : upcoming.length === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
-          ) : (
-            <ul className="space-y-1">
-              {!!resCountsErr && (
-                <li className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
-                  예약 인원을 불러오지 못했어요 — 0명과는 달라요.
-                  <button type="button" onClick={(e) => { e.stopPropagation(); reloadReservations(); }}
-                    className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
-                </li>
-              )}
-              {upcoming.map((g) => (
-                <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
-                  <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCountsErr ? '—' : (resCounts[g.id] ?? 0)}명</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashCard>
-
-        {/* 고객·단골(바인·방문 횟수 · 직원 제외).
-            ⚠ 이름을 '단골 TOP' 에서 바꾼 이유: 이 카드가 여는 것은 TOP 5 가 아니라 **매장 전체 고객 목록**이다.
-               '유저' 같은 모호한 이름을 새로 만들지 않는다 — 직원은 '직원 관리', 고객은 '고객·단골',
-               이용권 대상은 이용권 화면의 '받는 손님' 으로 역할이 갈린다. */}
-        <DashCard show={caps.ledger} title="고객·단골" onClick={() => setRegOpen(true)}
-          badge={<span className="text-2xs font-bold text-ink-muted">전체 보기</span>}>
-          {loading ? <EmptySkeleton /> : topRegulars.length === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
-          ) : (
-            <ul className="space-y-1">
-              {topRegulars.map((r, i) => (
-                <li key={r.name} className="flex items-center gap-2 text-xs">
-                  <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
-                  {/* 2026-09-25 MYSTORE-FULL-AUDIT #5 — 한 줄에 [이름 | 바인·방문·단골 | 보내기] 를 다 세우면 이름 열이
-                      65px(1440, 카드 279px)만 남아 '이도현(포…' 처럼 잘렸다. 수치는 이름 아래 둘째 줄로 내린다. */}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-ink-secondary" title={r.name}>{r.name}</span>
-                    <span className="block text-2xs tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 font-bold text-ink-secondary">단골</span>}</span>
-                  </span>
-                  {/* CRM 행동 버튼 — 고객에게 바로 매장이용권 발급(받는 사람 자동 입력).
-                      DashCard 의 children 은 헤더 <button> 밖이라 진짜 <button> 을 쓸 수 있다 —
-                      span[role=button] 은 Space 키가 안 먹고 폼 의미도 없어서 흉내에 그친다. */}
-                  {/* 🔴 2026-09-20 — 발급/열람 분리를 RegularsModal·CheckinModal 에는 적용했는데 **여기를 놓쳤다**.
-                      열람권만 가진 직원에게 '보내기' 가 보이고, 눌러도 발급 폼이 없는 모달만 열린다. */}
-                  {caps.issueVoucher && (
-                    <button type="button" title={`${r.name}님에게 매장이용권 전송`}
-                      onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
-                      className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
-                    ><Icon name="gift" size={11} className="shrink-0" />전송</button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashCard>
-
-        {/* 오늘 출근 */}
-        <DashCard more show={moreShown && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{workedStaff.length}/{shifts.length} 출근</span>}>
-          {loading ? <EmptySkeleton /> : shiftErr ? (
-            <p className="py-3 text-center text-2xs text-danger-light">출근 기록을 불러오지 못했습니다.</p>
-          ) : shifts.length === 0 && !shiftErr ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {shifts.map((s) => (
-                <li key={s.name} className={`inline-flex items-center gap-0.5 rounded-badge px-2 py-0.5 text-2xs font-semibold ${s.checkIn ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface-float text-ink-secondary'}`}>
-                  {s.checkIn && <Icon name="check" size={10} strokeWidth={3} />}{s.name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashCard>
-
-        {/* 인건비 요약(이번 달) */}
-        <DashCard more show={moreShown && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
-          {loading ? <EmptySkeleton /> : (laborHours === 0 && !laborErr) ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
-          ) : (
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
-                <Stat label="총 인건비" value={laborErr ? '—' : wonToMan(laborTotal)} unit={laborErr ? '' : '만원'} gold />
-                <Stat label="총 근무" value={dealerErr ? '—' : hoursValue(labor.netMin)} unit={dealerErr ? '' : '시간'} />
-              </div>
-              {wageErr && <p className="text-2xs text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
-              {dealerErr && <p className="text-2xs text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
-              {shiftErr && <p className="text-2xs text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
-              {!laborErr && dealerPay > 0 && (
-                <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonToMan(laborTotal - dealerPay)}만 · 딜러 {wonToMan(dealerPay)}만</p>
-              )}
-            </div>
-          )}
-        </DashCard>
-
-        {/* 매장이용권(사용 이용권) */}
-        <DashCard more show={moreShown && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
-          badge={<span className="text-2xs font-bold text-ink-muted">전송·관리 →</span>}>
-          {/* 2026-10-06 store-p3-1006 — 확인 중에도 **같은 틀**(칸 4개 + 설명)을 보이지 않게 세우고 뼈대를 덮는다.
-              뼈대(h-12)만 두면 정착 때 카드가 틀 높이로 자라 아래 줄이 밀렸다(첫 로드 판 성장). */}
-          <ReserveWhile loading={loading}>
-            <>
-              {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
-                  오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
-              {/* 직원은 '7일 사용' 칸이 없다(아래) — 3칸을 한 줄로. */}
-              <div className={`grid ${caps.manage ? 'grid-cols-2' : 'grid-cols-3'} gap-x-3 gap-y-2`}>
-                {/* 2026-09-18 오너 결정: "이용권은 T 단위로" — 발행도 T 로 맞춘다.
-                    이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
-                    ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
-                      "몇 장을 보낼까요?"·"한 장 줄이기" 처럼 세는 말이라 T 로 바꾸면 문장이 깨진다. */}
-                <Stat label="7일 전송" value={sentBad ? '—' : `${weekVoucher}`} unit={sentBad ? '' : '장'} />
-                <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
-                {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
-                    한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
-                {/* verifier 2026-10-03 — 7일 사용 T 는 14일 장부 행에서 센다. 직원(can_manage_pos 아님)에게는 지난 날의 바인 행이 미수 행만 와서(20261003h)
-                    작은 숫자가 정상처럼 보였다 → 직원에게는 칸을 뺀다(이용권 전송 수·오늘 사용은 온전한 원천이라 남긴다). */}
-                {caps.manage && <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />}
-                {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
-                <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
-              </div>
-              {(!!rangeErr || !!sentErr) && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 실제로 보낸 이용권 장수(전송 취소 제외) · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
-            </>
-          </ReserveWhile>
-        </DashCard>
-
-        {/* 🎂 생일 단골(7일 내) — 고객·단골의 고객정보에서 생일 등록 시 자동 표시 */}
-        <DashCard more show={moreShown && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">7일 내 {bdays.length}명</span>}>
-          {bdays.length === 0 ? (
-            <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 고객·단골 → 고객정보에서 등록해요.</p>
-          ) : (
-            <ul className="space-y-1">
-              {bdays.slice(0, 5).map((b) => (
-                <li key={b.name} className="flex items-center gap-2 text-2xs">
-                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
-                  <span className="shrink-0 tabular-nums text-ink-muted">{b.birthday}</span>
-                  <span className={['inline-flex shrink-0 items-center gap-0.5 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', b.dday === 0 ? 'bg-amber-400/15 text-amber-400' : 'bg-surface-float text-ink-secondary'].join(' ')}>
-                    {b.dday === 0 ? <><Icon name="gift" size={10} />오늘</> : `D-${b.dday}`}
-                  </span>
-                </li>
-              ))}
-              <li className="pt-0.5 text-2xs text-ink-muted">축하 쿠폰은 고객·단골 → 고객정보 → 쿠폰 발급으로 보내세요.</li>
-            </ul>
-          )}
-        </DashCard>
-
-        {/* 손님 유형 비중(오늘) */}
-        <DashCard more show={moreShown && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{playerTotal}명</span>}>
-          {loading ? <EmptySkeleton /> : playerTotal === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
-          ) : (
-            <ul className="space-y-1">
-              {typeEntries.map(([k, n]) => (
-                <li key={k} className="flex items-center gap-2 text-2xs">
-                  <span className="w-14 shrink-0 text-ink-secondary">{k}</span>
-                  <span className="h-1.5 flex-1 rounded-full bg-surface-high overflow-hidden">
-                    <span className="block h-full rounded-full bg-accent-300/80" style={{ width: `${Math.round((n / playerTotal) * 100)}%` }} />
-                  </span>
-                  <span className="w-12 shrink-0 text-right tabular-nums text-ink-muted">{n}명 {Math.round((n / playerTotal) * 100)}%</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashCard>
+        {moreBelow ? splitCards(dashCards, false) : dashCards}
       </div>
 
       {/* ── 오늘 게임·세션 운영 표(§5 다섯 번째 행 · 전체 폭) ──────────────────────
@@ -1926,10 +1964,15 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {/* 더 보기 토글(IA3a) — 클락·전주 대비·직원·이용권·생일·손님 유형은 접힌 상태가 기본 */}
       <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
         className="flex w-full items-center justify-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
-        {moreOpen ? '간단히 보기' : '더 보기 · 클락 · 주간 비교 · 직원 · 이용권'}
+        {moreOpen ? '간단히 보기' : moreLabel}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           className={['transition-transform', moreOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
+      {moreBelow && (
+        <Fold open={moreOpen}>
+          <div ref={moreGridRef} data-testid="dash-more-below" className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">{splitCards(dashCards, true)}</div>
+        </Fold>
+      )}
 
       {/* 유틸 줄(IA3a) — 카드 옷을 입던 순수 링크들. '그 자리에서 끝내거나, 유틸이거나' */}
       {caps.manage && (
@@ -1937,12 +1980,16 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">출석·QR 명단</button>
           <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => setDealerOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">딜러 로테이션·급여</button>
-          <span className="text-ink-muted" aria-hidden>·</span>
-          <button type="button" onClick={() => setBoostOpen(true)} className="inline-flex items-center gap-1 font-bold text-ink-muted transition-colors hover:text-accent-300"><Icon name="flame" size={11} />포스터 상단 고정 문의</button>
+          {/* '포스터 상단 고정 문의' 는 대시보드 맨 위로 옮겼다(오너 2026-10-07) */}
         </div>
       )}
     </div>
   );
+}
+
+/** '더 보기' 칸(DashCard more)만 / 나머지만 골라낸다 — 모바일은 둘을 다른 자리(토글 위 격자 · 토글 아래 접이)에 그린다. */
+function splitCards(cards: ReactElement<{ children?: ReactNode }>, more: boolean) {
+  return Children.toArray(cards.props.children).filter((c) => isValidElement<{ more?: boolean }>(c) && !!c.props.more === more);
 }
 
 /** C1 D-3 — 격자 마지막 줄에 카드가 1장만 남으면 그 카드를 한 줄 전체로 편다(열 수는 실제 계산값으로 — sm 2열·xl 3열 모두).
@@ -2022,6 +2069,9 @@ function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
 }
 
 // `gold` 는 금액 칸 표식으로 남는다 — 2026-10-04 오너 결정으로 금액은 본문 색(금색은 순위·성취 전용)이라 색을 바꾸지 않는다.
+/** 줄글 속 금액 — 1만 이상은 'N만', 1만 미만은 'N원'(wonAmount). */
+const wonShort = (won: number) => { const [v, u] = wonAmount(won); return u === '원' ? `${v}원` : `${v}만`; };
+
 function Stat({ label, value, unit, danger }: { label: string; value: string; unit?: string; gold?: boolean; danger?: boolean }) {
   return (
     <div>
@@ -2057,18 +2107,21 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
 // 아래를 낮추는 방향이라 대비는 오히려 오른다(ink-secondary 6.52→7.04 실측).
 
 // ── ⚡ 부스트(포스터 상단 고정) 문의 모달 ─────────────────────────────────────
-// 연락처는 운영자가 관리자 설정 → 게시물 관리에서 입력(app_settings) — 미입력 시 준비 중 안내.
+// 메일은 운영자가 관리자 설정 → 게시물 관리에서 입력(app_settings). 전화는 **고객센터 번호**(사업자 정보 단일 소스 BIZ_REQUIRED '전화번호').
+//   🔴 2026-10-07 오너 "번호 고객센터 번호로 변경" — 종전엔 관리자 설정 boost_contact_phone(개인 휴대폰)을 보였다.
+//   그 설정은 이제 이 창에서 읽지 않는다(관리자 화면 입력칸은 AdminTab 소유 — 정리는 리드 판단).
+const BOOST_PHONE = BIZ_REQUIRED.find(([k]) => k === '전화번호')?.[1] ?? '';
 function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   useEffect(() => {
     if (!open) return;
     getAppSetting(BOOST_CONTACT_EMAIL_KEY).then((v) => setEmail(v ?? '')).catch(() => {});
-    getAppSetting(BOOST_CONTACT_PHONE_KEY).then((v) => setPhone(v ?? '')).catch(() => {});
   }, [open]);
-  const hasContact = !!(email.trim() || phone.trim());
+  const phone = BOOST_PHONE;
+  const hasContact = !!(email.trim() || phone);
+  // dragToClose — 입력칸 없는 안내 시트라 제목 줄·본문(맨 위일 때)에서도 끌어내려 닫는다(오너 10-07 "맨 위에서만 돼").
   return (
-    <Modal open={open} onClose={onClose} title="포스터 상단 고정(부스트)" maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={onClose} title="포스터 상단 고정(부스트)" maxWidth="sm" variant="sheet" dragToClose>
       <div className="space-y-3 p-4">
         <div className="rounded-card border border-accent-400/30 bg-accent-300/6 p-3 space-y-2">
           <p className="text-sm font-bold text-accent-300">이런 효과가 있어요</p>
@@ -2096,9 +2149,9 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
                   <span className="shrink-0 text-2xs text-accent-300">메일 보내기 →</span>
                 </a>
               )}
-              {phone.trim() && (
-                <a href={`tel:${phone.replace(/[^0-9+]/g, '')}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high p-3 text-sm font-semibold text-ink-primary">
-                  <Icon name="comment" size={15} className="shrink-0 text-ink-muted" /> <span className="min-w-0 flex-1 truncate">{phone.trim()}</span>
+              {phone && (
+                <a href={`tel:${phone.replace(/[^0-9+]/g, '')}`} data-testid="boost-phone" className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high p-3 text-sm font-semibold text-ink-primary">
+                  <Icon name="comment" size={15} className="shrink-0 text-ink-muted" /> <span className="min-w-0 flex-1 truncate">고객센터 {phone}</span>
                   <span className="shrink-0 text-2xs text-accent-300">전화 걸기 →</span>
                 </a>
               )}

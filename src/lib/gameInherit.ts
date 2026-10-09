@@ -33,14 +33,20 @@ export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSessio
   return p;
 }
 
-/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
+/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별).
+ *  브레이크 원문 label 도 넘긴다(2026-10-09 — 버려져서 장부(포스터 연결)로 시작한 클락 TV 에 'BREAK' 만 보였다).
+ *  저장 규칙(posterPayload.cleanLevels)과 같이 브레이크 행에만, 빈 값이면 키를 만들지 않는다. */
 export function posterLevelsToClock(
   levels: NonNullable<NonNullable<Schedule['structure']>['levels']>,
 ): ClockLevel[] {
-  return levels.map((l) => ({
-    kind: l.isBreak ? 'break' as const : 'level' as const,
-    minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
-  }));
+  return levels.map((l) => {
+    const label = l.isBreak ? l.label?.trim() : '';
+    return {
+      kind: l.isBreak ? 'break' as const : 'level' as const,
+      minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
+      ...(label ? { label } : {}),
+    };
+  });
 }
 
 /** PL1a 무금액 상속 — 클락 cfg 병합 패치. 소비처는 반드시 '진행 중 아님'을 확인할 것(비파괴 병합 가드). */
@@ -272,7 +278,8 @@ export function applyToLedger(d: GamePresetData): Partial<LedgerSession> & { tou
   if (ns.targetEntries) p.targetEntries = ns.targetEntries;
   if (ns.maxEntries) p.maxEntries = ns.maxEntries;
   // level 까지 옮긴다 — 빠뜨리면 프리셋을 불러온 순간 레벨 자동 할인이 꺼진 채로 시작한다.
-  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0 }));
+  // kind(적용 조건)도 — 빠뜨리면 '첫 바인 16LV 까지' 가 리엔트리에도 자동으로 걸린다(roti-1009 C-2). 없으면 칸을 만들지 않는다(옛 프리셋 그대로).
+  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0, ...(x.kind ? { kind: x.kind } : {}) }));
   if (ns.dealers) p.dealers = ns.dealers;
   if (ns.eventMemo) p.eventMemo = ns.eventMemo;
   if (ns.tournamentStartTime) p.tournamentStartTime = ns.tournamentStartTime;
@@ -384,7 +391,7 @@ export function presetFromRound(sess: LedgerSession, clockCfg?: ClockConfig | nu
       cardAmountWon: sess.cardAmount ?? undefined,
       targetEntries: sess.targetEntries || undefined,
       maxEntries: sess.maxEntries || undefined,
-      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0 })) : undefined,
+      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0, ...(x.kind ? { kind: x.kind } : {}) })) : undefined,
       dealers: sess.dealers || undefined,
       eventMemo: sess.eventMemo || undefined,
       tournamentStartTime: localHHMM(sess.tournamentStart),

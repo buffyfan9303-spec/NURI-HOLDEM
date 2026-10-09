@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import BusinessFooter from './BusinessFooter';
+import EventVenueLogo from './EventVenueLogo';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -98,32 +99,54 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
   }, [loading]);
 
   const tearTimer = useRef(0);
-  useEffect(() => () => { if (tearTimer.current) window.clearTimeout(tearTimer.current); }, []);
+  /* UP-01(2026-10-08) — 늦은 응답이 **지금 보이는 시트**에 붙지 않게 하는 두 ref.
+     shownIdx = 지금 시트에 떠 있는 카드 번호(닫힘·판 닫힘·언마운트 = null). 응답은 이 값이 요청한 번호와 같을 때만 시트에 그린다.
+     inFlight = 요청 중 표시 — busy(state)는 다음 렌더 전까지 옛 값이라 같은 틱의 두 번째 클릭을 못 막는다. */
+  const shownIdx = useRef<number | null>(null);
+  const inFlight = useRef(false);
+  useEffect(() => () => {
+    if (tearTimer.current) window.clearTimeout(tearTimer.current);
+    shownIdx.current = null;
+  }, []);
 
   // U06(2026-09-12) 공유 계약 — 이 화면도 Modal 을 쓰지 않는 풀스크린 dialog 오버레이라(VenuePage·GroupPage·
   // EventListPage 와 같은 부류) 같은 포커스 트랩·복원을 쓴다. 새 로직을 만들지 않는다.
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(open, dialogRef);
 
-  const closeSheet = () => { setPick(null); setPhase('idle'); setResult(null); };
+  const showSheet = (c: EventCard) => { shownIdx.current = c.idx; setPick(c); setPhase('confirm'); };
+  const closeSheet = () => { shownIdx.current = null; setPick(null); setPhase('idle'); setResult(null); };
+  // 판이 닫히면 시트도 닫는다 — 요청 중에 뒤로가기로 판을 닫았다면 결과는 아래 토스트로 알린다.
+  useEffect(() => { if (!open) closeSheet(); }, [open]);
 
   const doOpen = async () => {
-    if (!pick || !board || busy) return;
+    if (!pick || !board || inFlight.current) return;
+    // 🔴 UP-01 — 요청 대상을 **여기서 고정**한다. 응답 시점의 pick 은 다른 카드일 수 있다
+    //   (예전엔 요청 중 '다른 카드'로 닫고 B 를 고르면 A 의 경품이 B 번호 시트에 그려졌다).
+    const idx = pick.idx;
+    inFlight.current = true;
     setBusy(true);
     try {
       // ⚠ 서버 응답을 받은 **뒤에** 찢는다. 먼저 찢어 놓고 실패하면 '열렸다가 되돌아오는' 화면이 되는데,
       //   그건 당첨을 뺏긴 것처럼 보인다. 실패는 카드가 닫힌 채로 끝나야 한다.
       // ⚠ prop 의 slug 가 아니라 **지금 보고 있는 보드의 slug**. 둘이 갈라지면 다른 판의 카드를 연다.
-      const r = await openEventCard(pick.idx, board.slug);
-      setResult(r);
-      setPhase('tearing');
-      tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
+      const r = await openEventCard(idx, board.slug);
+      if (shownIdx.current === idx) {
+        setResult(r);
+        setPhase('tearing');
+        tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
+      } else {
+        // 시트가 닫혔다(판 닫힘·언마운트) — 결과를 잃지 않게 번호를 붙여 알린다. 서버는 이미 확정했다.
+        toast.show(r.tier
+          ? `${idx}번 카드 결과: ${TIER_META[r.tier]?.label ?? `${r.tier}등`} 당첨 — ${r.voucherTitle} ${r.voucherCount}장이 지갑에 들어갔습니다`
+          : `${idx}번 카드 결과: 꽝`, r.tier ? 'success' : 'info');
+      }
       load(); // 참여권·남은 경품·다른 사람 개봉을 뒤에서 갱신
     } catch (e) {
       toast.show(msgOf(e, '카드를 열지 못했습니다'), 'error');
-      closeSheet();
+      if (shownIdx.current === idx) closeSheet();
       load(); // '이미 열린 카드' 였다면 내 보드가 낡은 것이다
-    } finally { setBusy(false); }
+    } finally { inFlight.current = false; setBusy(false); }
   };
 
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 닫힐 때만 fade-out(진입은 위 실측대로 없음).
@@ -238,7 +261,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
           <div className="mt-4 grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-12">
             {board.cards.map((c) => (
               <CardTile key={c.idx} card={c} disabled={!canPlay}
-                onPick={() => { setPick(c); setPhase('confirm'); }} />
+                onPick={() => showSheet(c)} />
             ))}
           </div>
 
@@ -285,9 +308,12 @@ function Hero({ board, left, total, user, onLogin, av }: {
       <div aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent-400/15 blur-2xl" />
 
       <div className="relative flex items-center gap-2.5">
-        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
-          <Icon name="gift" size={17} />
-        </span>
+        {/* 참여권 매장 로고(2026-10-09) — 선물 타일과 **같은 상자**(h-9 w-9)에 둥글게. 없거나 못 불러오면 선물 타일 그대로. */}
+        <EventVenueLogo url={board.brand?.imageUrl} className="h-9 w-9 shrink-0 rounded-full">
+          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
+            <Icon name="gift" size={17} />
+          </span>
+        </EventVenueLogo>
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
           <h2 className="line-clamp-2 break-keep text-base font-bold leading-tight text-ink-primary">{board.title}</h2>
@@ -546,8 +572,10 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
             <p className="text-sm font-bold text-ink-primary">{card.idx}번 카드를 여시겠습니까?</p>
             <p className="mt-1 text-2xs text-ink-muted">참여권 1장을 사용합니다. 한 번 연 카드는 되돌릴 수 없습니다.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button type="button" onClick={onClose} className="btn-ghost min-h-[44px] text-sm">다른 카드</button>
-              <button type="button" onClick={onOpen} disabled={busy} className="btn-primary min-h-[44px] text-sm disabled:opacity-60">
+              {/* 요청 중엔 닫지 못한다(UP-01) — 닫으면 이미 서버에서 확정된 결과를 볼 시트가 사라진다. */}
+              <button type="button" onClick={onClose} disabled={busy} data-testid="event-sheet-cancel"
+                className="btn-ghost min-h-[44px] text-sm disabled:opacity-60">다른 카드</button>
+              <button type="button" onClick={onOpen} disabled={busy} data-testid="event-sheet-open" className="btn-primary min-h-[44px] text-sm disabled:opacity-60">
                 {busy ? '여는 중…' : '찢기'}
               </button>
             </div>

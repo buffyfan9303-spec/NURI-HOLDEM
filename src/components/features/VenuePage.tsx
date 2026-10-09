@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { useVenueScope } from '../../lib/useVenueScope';
-import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
+import { venueScheduleList, notEnded, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
+import { heroTouchIntent } from '../../lib/heroTouch';
 import { onColorInkClass } from '../../lib/color';
+import { visitCountRows } from '../../lib/venueVisitRank';
+import { paidShown } from '../../lib/paidExposure';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import {
   naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, naverMaps, geocodeAddress, probeNaverAuth,
@@ -227,6 +230,9 @@ export default function VenuePage({
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
   if (!venue) return null;
 
+  // 「예정 대회」·「진행 예정」 탭은 끝난 회차를 뺀다 — venueSchedules 는 지난 회차를 품은 채로 둔다(배너 매칭·폴백이 쓴다).
+  const upcomingSchedules = notEnded(venueSchedules);
+
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
   // 카카오톡 링크의 정본은 「내 매장 → 매장 설정 → 매장 페이지」(VenueCustomizePanel). 예전 window.prompt 편집은 제거.
@@ -363,7 +369,7 @@ export default function VenuePage({
 
         {/* 매장 아이덴티티 — 오버랩 로고 아바타 + 중앙 정렬 + 3-스탯 행(오너 레퍼런스 2026-08-27).
             대표 이미지(image_url)를 원형 아바타로 재사용 — 새 fetch 0. 스탯 행은 비인터랙티브라
-            venue-ia 첫 뷰포트 행동 예산(≤6)에 셈되지 않는다. */}
+            venue-ia 첫 뷰포트 행동 예산(≤7)에 셈되지 않는다. */}
         <div className="px-page-x pb-3 border-b border-border-subtle">
           {/* relative: HeroSection(positioned)이 static 아바타 위에 페인트돼 로고 상반이
               히어로에 가려 반원으로 잘렸다(PC 점검 2026-08-28) — 오버랩 의도(-mt-8·border 링)대로 위로.
@@ -399,7 +405,7 @@ export default function VenuePage({
               <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
                 {venue.region}
               </span>
-              {venue.isPaidAd && (
+              {paidShown(venue.isPaidAd) && (
                 <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
                   프리미엄
                 </span>
@@ -451,7 +457,9 @@ export default function VenuePage({
             매장 상세의 물리적 최종 행동은 '도착을 알리거나(체크인)·걸거나(전화)·묻거나(카카오톡)·
             찾아가는(길찾기)' 것이다 — 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
             4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더.
-            행동 예산(venue-ia ≤6): 체크인+전화+길찾기+카카오=4 + 헤더 팔로우·공유=6 — 여기에 더 추가 금지. */}
+            행동 예산(venue-ia ≤7): 오늘의 대회 카드 + 출석 QR + 전화 + 길찾기 + 카카오 = 5 · 헤더 팔로우·공유 = 7 — 여기에 더 추가 금지.
+            (종전 '…=4 + 팔로우·공유=6' 은 오늘의 대회 카드를 빠뜨린 셈이었다 — 카카오 링크·오늘 대회가 함께 있는 매장은 늘 7.
+             2026-10-09 리드 결정: 화면은 그대로 두고 예산을 7 로 바로잡음. 경위는 e2e/venue-ia.spec.ts 머리말.) */}
         <div className="px-page-x py-2.5 border-b border-border-subtle space-y-2">
           {todayPosters.length > 0 && (() => {
             const t0 = todayPosters[0];
@@ -485,7 +493,7 @@ export default function VenuePage({
               438px 이라 375 뷰포트에서 scrollWidth 457 > clientWidth 375 — **카카오톡 버튼이 화면 밖으로
               잘려 나가 있었다**(오너가 직접 지목한 행이다). 버튼을 줄이거나 라벨을 깎는 대신
               위계대로 2행으로 쌓는다: 프라이머리(QR 체크인)는 전폭, 보조 3개는 균등 분할.
-              행동 개수는 그대로 4개 — 행동 예산(체크인·전화·길찾기·카카오 + 헤더 팔로우·공유 = 6)은 불변.
+              행동 개수는 그대로 4개 — 행동 예산(위 Tier 1 주석, ≤7)은 불변.
               보조 행은 `flex` + `flex-1` 이라 전화·주소가 없는 매장에서도 남은 것끼리 자동 균등이 된다
               (grid-cols-3 고정이면 빈 칸이 생긴다). */}
           <div className="space-y-2">
@@ -516,7 +524,7 @@ export default function VenuePage({
                   '아직 등록 안 했어요' 토스트가 떴다 — 즉 손님에게 이 버튼은 눌러도 아무 데도 못 가는,
                   '없다'는 사실만 알려 주는 컨트롤이었다. 그건 행동이 아니라 상태다. 라벨에 '미등록'을
                   적으면 **누르기 전에** 같은 사실을 알 수 있어 '무반응 클릭 금지' 의도에 더 충실하고,
-                  첫 뷰포트 행동 예산(≤6, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
+                  첫 뷰포트 행동 예산(≤7, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
                   자리(오너 지시의 핵심)는 그대로 지킨다 — 업주 본인에게는 여전히 등록 버튼이다. */}
             <KakaoActionButton kakao={kakao} />
             </div>
@@ -621,16 +629,16 @@ export default function VenuePage({
               )}
             </div>
           )}
-          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
+          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} viewerIsManager={isMyVenue || user?.role === 'admin'} /></div></>}
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}
-              allPosters={venueSchedules}
+              allPosters={upcomingSchedules}
               notices={notices}
               onSelect={onSelectSchedule}
             />
           )}
-          {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} onSelect={onSelectSchedule} />}
+          {tab === 'schedules' && <SchedulesPanel schedules={upcomingSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
             <div className="space-y-3">
               <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />
@@ -715,12 +723,22 @@ function HeroSection({
   const onTouchEnd = (e: React.TouchEvent) => {
     const s = touchRef.current; touchRef.current = null;
     if (!s) return;
+    // 업주 편집 버튼(배경 변경·사진 추가·삭제)·file input 위의 손가락은 hero 탭이 아니다 — 그 버튼의 click 이 제 일을 해야 한다.
+    // 단 lg 전면 오버레이 버튼(data-hero-cover)은 hero 전체를 덮어 터치가 늘 그 위에서 시작·종료된다 — 예외로 두지 않으면 lg 터치 스와이프가 사라진다.
+    if ((e.target as Element).closest('button:not([data-hero-cover]), a, input, label')) return;
     const t = e.changedTouches[0];
-    const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { go(safeIdx + (dx < 0 ? 1 : -1)); return; }
     // 거의 안 움직였으면 스와이프가 아니라 **탭**이다 — 그 배너가 가리키는 대회로 보낸다.
     // (click 이벤트를 따로 듣지 않는 이유: 스와이프 끝에도 click 이 따라와 오작동한다.)
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) onSlideTap?.(slides[safeIdx]);
+    // UP-12: 판정은 lib/heroTouch — 1장이어도 탭은 열리고, 넘기기만 2장 이상이다.
+    const intent = heroTouchIntent(t.clientX - s.x, t.clientY - s.y, slides.length);
+    if (intent === 'next') go(safeIdx + 1);
+    else if (intent === 'prev') go(safeIdx - 1);
+    else if (intent === 'tap' && onSlideTap) {
+      // touchend 뒤에 같은 좌표로 합성 click 이 따라온다. 상세가 그 click 보다 먼저 그려지면(청크가 데워진 두 번째 탭부터)
+      // 손가락 아래로 온 '포스터 확대 보기' 가 click 을 받아 확대까지 열렸다. 탭은 여기서 끝낸다(마우스·키보드는 lg 버튼 onClick).
+      if (e.cancelable) e.preventDefault();
+      onSlideTap(slides[safeIdx]);
+    }
   };
 
   // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
@@ -765,8 +783,8 @@ function HeroSection({
   return (
     <div
       className="relative w-full overflow-hidden h-36 sm:h-48 md:h-56"
-      onTouchStart={slides.length > 1 ? onTouchStart : undefined}
-      onTouchEnd={slides.length > 1 ? onTouchEnd : undefined}
+      onTouchStart={slides.length > 0 ? onTouchStart : undefined}
+      onTouchEnd={slides.length > 0 ? onTouchEnd : undefined}
     >
       {slides.length > 0 ? (
         // 슬라이드 트랙(자동 + 스와이프)
@@ -827,7 +845,7 @@ function HeroSection({
         style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)' }}
       />
 
-      {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤6 행동 예산).
+      {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤7 행동 예산).
           모바일은 스와이프 + 자동 슬라이드가 내비게이션을 담당하므로 버튼 2개는 소음이다. */}
       {/* 배너 활성화 — 터치는 onTouchEnd 의 '탭' 판정이 처리하고, 여기는 **마우스·키보드** 몫이다.
           슬라이드마다 버튼을 두면 사진 n장 = 버튼 n개가 되어 보조기술에 n개로 읽힌다.
@@ -837,7 +855,7 @@ function HeroSection({
         <button
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
-          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
+          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`} data-hero-cover
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />
       )}
@@ -863,7 +881,7 @@ function HeroSection({
       )}
 
       {/* 슬라이드 점 — 상태 표시기(비인터랙티브). 이동은 스와이프(모바일)·화살표(PC)가 담당 —
-          도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤6)이 데이터에 따라 무너진다. */}
+          도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤7)이 데이터에 따라 무너진다. */}
       {/* 인디케이터 — 하단 **오른쪽**. 예전엔 하단 중앙이었는데, 히어로 아래 원형 로고 아바타가
           가운데에서 위로 겹쳐 올라오기(-mt-8) 때문에 도트가 아바타에 정면으로 깔렸다
           (2026-08-29 오너 지적: "동그라미 프로필에 겹쳐 스크롤바가 있다").
@@ -1055,7 +1073,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   return (
     // data-nav="venue-tab": 이 버튼의 행동은 setTab('ranking') 하나 — 매장 페이지 '자기 탭'으로의
     // 셔틀이라 콘텐츠 행동이 아니라 내비게이션 레벨이다(venue-ia 게이트가 role=tab 을 제외하는 것과
-    // 동일 근거). 게이트(첫 뷰포트 행동 ≤6)는 이 속성이 붙은 요소를 세지 않는다.
+    // 동일 근거). 게이트(첫 뷰포트 행동 ≤7)는 이 속성이 붙은 요소를 세지 않는다.
     // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
     <button type="button" onClick={onRanking} data-nav="venue-tab"
       className="flex w-full items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/6 px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
@@ -1072,7 +1090,8 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   );
 }
 
-function VenueRankingPanel({ venueId }: { venueId: string }) {
+// viewerIsManager: QR 출석 전체(checkins RLS = 본인 OR 관리자)를 볼 수 있는 사람인가 — 아니면 장부 집계를 쓴다(UP-13b).
+function VenueRankingPanel({ venueId, viewerIsManager }: { venueId: string; viewerIsManager: boolean }) {
   const cached0 = readRankCache(venueId);
   const [cfg, setCfg] = useState<VenuePageConfig | null>(cached0?.cfg ?? null);
   const [metric, setMetric] = useState<RankBoardId | null>(cached0?.metric ?? null);
@@ -1103,7 +1122,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         for (const p of pc) bc[p.name.toLowerCase()] = p.buyins;
         // 출석왕 = QR 체크인 누적(유저별) — 체크인 기록이 있으면 장부 방문 대신 이걸 쓴다
         let ck: { name: string; count: number }[] = [];
-        if (ms.includes('visit_count')) {
+        if (ms.includes('visit_count') && viewerIsManager) {
           const list = await listVenueCheckins(venueId, '2020-01-01T00:00:00Z').catch(() => []);
           const agg = new globalThis.Map<string, { name: string; count: number }>();
           for (const e of list) {
@@ -1127,7 +1146,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     load();
     const unsub = subscribeRankings(venueId, load); // 실시간: 순위 입력 시 자동 반영
     return () => { active = false; unsub(); };
-  }, [venueId]);
+  }, [venueId, viewerIsManager]);
 
   // 보드 선택을 캐시에 유지(탭 떠났다 복귀해도 같은 보드)
   useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) writeRankCache(venueId, { ...e, metric }); }, [metric, venueId]);
@@ -1171,17 +1190,15 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
-    // 출석왕: QR 체크인 누적 — 체크인 기록이 1건이라도 있으면 그 기준(없으면 장부 방문 폴백)
-    if (cur === 'visit_count' && checkinRows.length > 0) {
-      return checkinRows
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.count }))
-        .filter((b) => b.value > 0)
-        .sort((a, b) => b.value - a.value);
+    // 출석왕: 매장 관리자는 QR 체크인 누적(기록이 있을 때), 그 외 모두는 장부 방문 집계 — 보는 사람과 무관하게 같은 보드(UP-13b)
+    if (cur === 'visit_count') {
+      return visitCountRows(checkinRows, playerCounts, viewerIsManager)
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.value }));
     }
-    // 바인왕/출석왕(폴백): 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
-    if (cur === 'buyin_count' || cur === 'visit_count') {
+    // 바인왕: 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
+    if (cur === 'buyin_count') {
       return playerCounts
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.buyins }))
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
@@ -1206,10 +1223,10 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     return base.filter((b) => b.value >= 0)
       // 동점은 비금전 규칙으로만 가른다(등수 점수 → 최고 등수 → 이름) — 상금 합산 동점결정은 2026-09-05 폐지.
       .sort((a, b) => (b.value - a.value) || (b.moneyPoints - a.moneyPoints) || (a.bestPosition - b.bestPosition) || a.nickname.localeCompare(b.nickname));
-  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, cfg]);
+  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, viewerIsManager, cfg]);
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
-  if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
+  if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0 && !(viewerIsManager && checkinRows.length > 0)) {
     return <EmptyState title="아직 등록된 순위가 없습니다" hint="매장이 순위를 등록하면 집계됩니다" />;
   }
 
@@ -1490,7 +1507,7 @@ function AboutPanel({
           두 단계를 거쳐야 보였다. '지금 문 열었나'는 갈까 말까의 1차 판단 재료인데 두 번 숨어 있었다.
           → 요약(주소·영업시간)은 첫 화면 아이덴티티 블록으로 승격했고(위), 여기는 '확인·복사·지도'
             계층으로 남긴다. 기본 펼침도 검토했으나 그러면 주소 복사 버튼이 첫 뷰포트로 올라와
-            행동 예산(≤6, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
+            행동 예산(≤7, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
           손잡이(summary)는 44px 히트영역을 갖도록 py-1 → py-3. */}
       <details className="group/vinfo" open={editable || undefined}>
         <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
@@ -1904,7 +1921,9 @@ function PostersPanel({
                 <p className="text-2xs font-bold text-ink-muted">공지</p>
                 <ul className="space-y-1.5">
                   {notices.slice(0, 3).map((n) => (
-                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-accent-400/50">
+                    // 2026-10-09 오너 "과한 디자인은 안 된다": 왼쪽 2px 강조색 띠 → 아래 포스터 카드와 같은 얇은 테두리.
+                    // 패딩은 테두리 두께 차(왼 −1px · 위·아래·오른 +1px)만큼 보정해 글자 위치를 그대로 둔다(e2e/venue-notice-card-1009).
+                    <li key={n.id} className="pl-[calc(0.625rem+1px)] pr-[calc(0.625rem-1px)] py-[calc(0.5rem-1px)] rounded-input bg-surface-high border border-border-subtle">
                       <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                       {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
                     </li>

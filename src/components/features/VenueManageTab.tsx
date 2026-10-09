@@ -16,8 +16,9 @@ import { useVenueScope } from '../../lib/useVenueScope';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, updateVenueImage, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
+import { kstToday } from '../../lib/kst';
 import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
 import { splitLedgerName } from '../../lib/rankingGame';
@@ -57,6 +58,7 @@ import { centerInRail } from '../../lib/railScroll';
 import { josa } from '../../lib/josa';
 import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
 import { loadRankingsEffect } from '../../lib/rankingsLoad';
+import { reloadSaved, saveForReload, useReloadState } from '../../lib/reloadTab';
 
 /** 판 높이 예약의 탈출구(F-2) — 해제 시각이 아니다. 로딩 표시가 영영 안 사라지는 버그에서 rAF 대기를 끊을 뿐이다. */
 const PANE_LOCK_ESCAPE_MS = 10_000;
@@ -91,6 +93,9 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
+const SETTINGS_IDS = SETTINGS_TABS.map((t) => t.id);
+const MYSTORE_SEC_KEY = 'nuri:reload:mystore-sec';
+const MYSTORE_VENUE_KEY = 'nuri:reload:mystore-venue';
 /** B1(2026-10-02) 폼 읽기 폭 상한(px) — ≥1440 은 내 매장 판 상한이 풀려(F-2) 1920 에서 판이 1636px 다. 폼(설정·초대·팔로워 알림)은
  *  1366 판 폭(≈946)으로 읽게 여기서 멈춘다. ≤1366 은 판이 이보다 좁아 아무것도 안 바뀐다. 루트 17px 이라 rem 이 아니라 px. */
 const READ_W = 960;
@@ -248,8 +253,11 @@ const VenueEventRequestPanelM = memo(VenueEventRequestPanelL);
 const CalendarPanelL = lazyWithReload(() => import('./CalendarPanel'));
 const CalendarPanelM = memo(CalendarPanelL);
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, deepVenueId, onConsumeDeepVenue, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
-  schedules: Schedule[]; onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, deepVenueId, onConsumeDeepVenue, tabActive = true, homeNonce = 0, resVersion, onVenue, schedulesError = null, onRetrySchedules }: {
+  schedules: Schedule[];
+  /** R12-02 — App 의 포스터 목록 조회 실패. 있으면 게임 목록이 '등록된 게임 없음' 대신 오류·재시도를 말한다 */
+  schedulesError?: unknown; onRetrySchedules?: () => void;
+  onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
   /** 매장 설정 › 매장 페이지 '손님 화면' → 손님이 보는 매장 페이지(App 의 openVenueId). 없으면 버튼이 렌더되지 않는다 */
@@ -291,13 +299,33 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [memberVenueId, setMemberVenueId] = useState<string | null>(null);
   // 알림 딥링크의 매장 전환(deepVenueId)이 '목록이 아직 안 옴' 과 '목록이 빔' 을 가르는 데 쓴다
   const [memberVenuesLoaded, setMemberVenuesLoaded] = useState(false);
+  /** 목록을 **성공적으로** 받은 계정 uid — 실패면 null. 대표 업주 판정(primaryOwner)이 남의 목록·실패를 '대표 아님'으로 읽지 않게. */
+  const [memberVenuesOf, setMemberVenuesOf] = useState<string | null>(null);
   const [adminVenuesLoaded, setAdminVenuesLoaded] = useState(false);
+  // 🔴 새로고침하면 보던 **매장**도 그대로(design-review P2-1, 2026-10-07). 섹션만 되살리고 매장은 대표 매장으로 돌아가면
+  //   여러 매장 업주가 B 매장 장부에서 새로고침했을 때 **A 매장의 같은 장부**가 열린다 — 모양이 같아 바인을 엉뚱한 매장에 적는다.
+  //   · 남긴 id 는 **서버가 준 내 매장 목록**(my_member_venues · 운영자는 전체 매장) 안에 있을 때만 쓴다(소속 해제·남의 id 는 버린다).
+  //   · 대표 매장이 아닌 id 를 되살릴 때는 목록이 올 때까지 매장을 **정하지 않는다**(venueHeld) — 그 사이 대표 매장 권한·데이터를
+  //     한 번도 조회하지 않으므로 늦게 온 A 응답이 B 화면에 섞일 자리가 없고, 섹션 복원(reloadSec)도 매장이 정해진 뒤에야 확정된다.
+  //   · 목록에 없으면 대표 매장 + 대시보드(reloadSec 를 버린다).
+  const [reloadVenue] = useState(() => {
+    const id = reloadSaved<string>(MYSTORE_VENUE_KEY, null, 'my-store');
+    return id ? { id, other: id !== user?.venueId } : null;
+  });
+  const [venueHeld, setVenueHeld] = useState(() => !!reloadVenue?.other);
+  const holdVenue = venueHeld && !isAdmin;
   // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
   const venueId: string | null = isAdmin ? adminVenueId
+    : holdVenue ? null
     : (memberVenueId ?? user?.venueId ?? memberVenues[0]?.id ?? null);
+  useEffect(() => { if (venueId) saveForReload(MYSTORE_VENUE_KEY, venueId); }, [venueId]);
   // 2026-09-28 — 새 포스터는 **지금 고른 매장**으로 등록한다(App.handleCreatePosterFromStore 가 이 id 를 받는다).
   const createPosterHere = useCallback(() => onCreatePoster(venueId), [onCreatePoster, venueId]);
   const [section, setSection] = useState<Section | null>(null);
+  // 새로고침하면 보던 섹션으로(오너 2026-10-07 · lib/reloadTab). 섹션은 권한 확인 뒤에야 정해지므로(아래 setSection(s => s ?? …))
+  //   그 자리에서 대시보드 대신 쓰고, 권한 밖이면 첫 확인 직후(페인트 전) 대시보드로 돌린다 — 대시보드가 한 번 그려졌다 바뀌지 않는다.
+  const reloadSec = useRef(reloadSaved(MYSTORE_SEC_KEY, MYSTORE_ORDER, 'my-store') as Section | null);
+  useEffect(() => { if (section) saveForReload(MYSTORE_SEC_KEY, section); }, [section]);
   // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
   const [gameStep, setGameStep] = useState<GameStep>(() => {
     try { const v = localStorage.getItem('nuri:game-step'); if (v && isGameStep(v)) return v; } catch { /* noop */ }
@@ -306,7 +334,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
   useEffect(() => { sectionRef.current = section; settingsTabRef.current = settingsTab; });
   // IA3c: 설정 하위탭 상태(기본 '매장 페이지')
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('page');
+  const [settingsTab, setSettingsTab] = useReloadState<SettingsTab>('nuri:reload:mystore-set', SETTINGS_IDS, 'page', 'my-store'); // 권한 밖이면 아래 permsLoaded 효과가 첫 노출 탭으로
   // ⚠ 예전엔 useDeferredValue 였다. VT 의 flushSync 커밋 안에서 deferred 값은 옛 값으로 남아
   //   스냅샷이 **옛 판**을 찍고 진짜 교체가 전환 뒤에 노출됐다(오너 2026-09-15 "드르륵").
   //   판은 keep-alive(display 토글)라 재방문 전환 비용이 거의 없고, 첫 마운트 비용은 VT 스냅샷이 가린다.
@@ -505,19 +533,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   공동운영자(venue_owners)일 수 있어 탭은 보이고 실행에서만 '대표 업주만' 으로 거절됐다 → 대표 업주가 **아님이 확인되면** 탭을 뺀다.
   // 🔴 FULL-RECHECK-2/C #3(2026-09-26) — 예전 판정은 getMyVenue()(owner_id = 나, limit 1)였다. 소유 매장이 0개인 공동운영자는
   //   null(모름)이 되어 탭이 **보였고**, 매장이 둘인 대표 업주는 다른 매장이 잡혀 false 가 될 수 있었다(limit 1).
-  //   이제 이 매장의 사장 목록(list_venue_owners)에서 **내 줄의 is_primary** 로 정한다. 확인될 때(true)만 보인다 —
-  //   조회 실패·로딩 중에는 숨긴다(되돌릴 수 없는 매장 삭제 버튼이라 fail-closed; 다시 들어오면 재조회된다).
-  const [primaryOwner, setPrimaryOwner] = useState<boolean | null>(null);
+  // 🔴 10회차 실연(2026-10-06) — 그다음 판정(list_venue_owners 의 내 줄 is_primary)은 **venue_owners 행이 있는 대표만** 잡았다.
+  //   실매장 6곳 중 5곳은 대표가 venues.owner_id 로만 연결돼 행이 없어 false → 대표인데 '위험 구역'이 숨고 위치 확인 스위치가 잠겼다.
+  //   이제 서버 판정을 그대로 쓴다: my_member_venues 의 relation='owner' = `venues.owner_id = 나 ∧ _venue_owner_ok`
+  //   (set_venue_checkin_geo_required·kill_venue 가 보는 바로 그 조건). 공동 운영자는 'coowner', 직원은 'staff' 라 새로 열리는 것 없음.
+  //   목록을 못 받았거나 다른 계정의 목록이면 null(모름) — 위험 구역·스위치는 숨긴다(fail-closed).
   const myUid = user?.id;
-  useEffect(() => {
-    if (!isOwner || !venueId || !myUid) { setPrimaryOwner(null); return; }
-    let alive = true;
-    setPrimaryOwner(null);
-    listVenueOwners(venueId)
-      .then((rows) => { if (alive) setPrimaryOwner(rows.some((r) => r.userId === myUid && r.isPrimary)); })
-      .catch(() => { if (alive) setPrimaryOwner(null); });
-    return () => { alive = false; };
-  }, [isOwner, venueId, myUid]);
+  const primaryOwner: boolean | null = (!isOwner || !venueId || !myUid || memberVenuesOf !== myUid) ? null
+    : memberVenues.some((v) => v.id === venueId && v.relation === 'owner');
   const canSettingsTab = useCallback((t: SettingsTab) => (
     t === 'danger' ? (isOwner && !!venueId && primaryOwner === true) : staffOk
   ), [isOwner, venueId, staffOk, primaryOwner]);
@@ -846,24 +869,40 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 소속 매장 목록(전환기용) — 계정이 바뀌면 고른 매장도 버린다(다른 계정의 매장 id 가 남지 않게).
   const myUidForVenues = user?.id;
   useEffect(() => {
-    setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false);
+    setMemberVenues([]); setMemberVenueId(null); setMemberVenuesLoaded(false); setMemberVenuesOf(null);
     if (isAdmin || !myUidForVenues) return;
     let alive = true;
-    listMyMemberVenues().then((vs) => { if (alive) setMemberVenues(vs); }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ })
-      .finally(() => { if (alive) setMemberVenuesLoaded(true); });
+    listMyMemberVenues().catch(() => null /* 전환기만 안 뜬다 — 종전 동작 */).then((vs) => {
+      if (!alive) return;
+      if (vs) { setMemberVenues(vs); setMemberVenuesOf(myUidForVenues); }
+      // 새로고침 매장 복원(위 reloadVenue) — 같은 커밋에서 매장·붙듦·목록 도착을 함께 바꾼다(대표 매장이 끼어드는 렌더가 없다).
+      if (reloadVenue?.other) {
+        if (vs?.some((v) => v.id === reloadVenue.id)) setMemberVenueId(reloadVenue.id);
+        else reloadSec.current = null;   // 목록 밖 — 대표 매장의 대시보드로
+      }
+      setVenueHeld(false);
+      setMemberVenuesLoaded(true);
+    });
     return () => { alive = false; };
-  }, [isAdmin, myUidForVenues]);
+  }, [isAdmin, myUidForVenues, reloadVenue]);
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
     if (!isAdmin) return;
     let alive = true;
     getAllVenues()
-      .then((vs) => { if (alive) { setAdminVenues(vs); setAdminVenueId((cur) => cur ?? vs[0]?.id ?? null); } })
+      .then((vs) => {
+        if (!alive) return;
+        setAdminVenues(vs);
+        // 새로고침 매장 복원 — 전체 매장 목록 안의 id 만(없어진 매장이면 첫 매장의 대시보드).
+        const keep = reloadVenue && vs.some((v) => v.id === reloadVenue.id) ? reloadVenue.id : null;
+        if (reloadVenue && !keep) reloadSec.current = null;
+        setAdminVenueId((cur) => cur ?? keep ?? vs[0]?.id ?? null);
+      })
       .catch(() => {})
       .finally(() => { if (alive) setAdminVenuesLoaded(true); });
     return () => { alive = false; };
-  }, [isAdmin]);
+  }, [isAdmin, reloadVenue]);
 
   // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위). 운영자는 전권이라 조회 생략.
   useEffect(() => {
@@ -872,7 +911,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (isAdmin) {
       setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true); setSchedOk(true);
       setPermsFor(venueId);
-      setSection((s) => s ?? 'dashboard');
+      setSection((s) => s ?? reloadSec.current ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
       return () => { alive = false; };
@@ -895,7 +934,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         if (!alive) return;
         setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro);
         setPermsFor(venueId);
-        setSection((s) => s ?? 'dashboard');
+        setSection((s) => s ?? reloadSec.current ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
       .finally(() => { if (alive) setPermsLoaded(true); });
@@ -999,6 +1038,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const renderSection = section;
   const renderGameStep = gameStep;
   const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
+  // 새로고침 복원(위 reloadSec)은 첫 권한 확인에서 한 번만 따진다 — 지금 권한으로 열 수 없는 섹션이면 페인트 전에 대시보드로.
+  useLayoutEffect(() => {
+    if (!permsLoaded) return;
+    const r = reloadSec.current;
+    reloadSec.current = null;
+    if (r && section === r && !dItem) setSection('dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 첫 확인 1회
+  }, [permsLoaded]);
 
   // ── U1: 스텝 공통 문맥(매장 › 날짜 › 게임) ────────────────────────────────
   // 왜: 포스터→장부→클락→순위를 오갈 때 "지금 어느 대회를 만지는 중인가"가 화면 어디에도 없었다.
@@ -1045,6 +1092,15 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
+  // 새로고침 매장 복원 대기(위 venueHeld) — 처음 여는 순간과 같은 대기 화면(같은 바깥 상자·pane-reserve 높이).
+  //   '매장 생성'·'소속 없음' 판정은 목록이 와서 매장이 정해진 뒤에 한다(그 전엔 venueId 가 비어 있을 뿐이다).
+  if (holdVenue) {
+    return (
+      <div ref={setUncapRoot} data-uncap-root="" data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
+        <p className="pane-reserve pt-16 text-center text-sm text-ink-muted">불러오는 중…</p>
+      </div>
+    );
+  }
   if (!isAdmin && !venueId) {
     if (isOwner) return <VenueCreateForm onCreated={refreshProfile} />;
     return (
@@ -1442,10 +1498,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               </div>
             )}
             {/* E3 M-1 — 레일 밖 메뉴의 인증 등급 배너(대시보드는 자기 판 안에 따로 그린다). 메뉴마다 새로 마운트하면 조회가 끝날 때
-                배너가 늦게 생겨 판 안이 밀린다 — 한 벌을 계속 마운트해 두고 레일 메뉴에서는 그리지만 않는다(off). */}
+                배너가 늦게 생겨 판 안이 밀린다 — 한 벌을 계속 마운트해 두고 레일 메뉴에서는 그리지만 않는다(off).
+                11회차 M11-02(2026-10-08) — 새로고침 직후엔 첫 조회가 끝날 때 배너가 끼어들어 본문이 72px 밀렸다(1440 5/5) → 대시보드처럼 reserve. */}
             {venueId && isOwner && (
               <div className="empty:hidden" style={renderSection === 'settings' ? { maxWidth: READ_W } : undefined}>
-                <VenueVerificationCard venueId={venueId} showVerification part="grade"
+                <VenueVerificationCard venueId={venueId} showVerification part="grade" reserve
                   off={!!dItem?.locked || renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher'} />
               </div>
             )}
@@ -1474,7 +1531,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
                   <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
-                  {manageOk && <div className="mt-5" style={{ maxWidth: READ_W }}><AnnouncePanelM venueId={venueId} /></div>}
+                  {/* audit10 시각 P3-6(2026-10-07) — 대시보드 카드 열과 같은 폭. READ_W(960) 상한을 걸어 1440 에서 이 카드만 오른쪽 끝이 ~210px 짧았다(폼 판 상한은 설정 하위탭 몫). */}
+                  {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {/* S6-2(2026-09-19): 지역 Suspense 경계 — 이게 없으면 이 셋(캘린더·파트너 매장·이벤트 신청)은
                     첫 방문 시 lazy 청크를 기다리는 동안 **여기가 아니라 App.tsx 최상위 폴백**이 잡혀
@@ -1487,7 +1545,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       resVersion={resVersion} onVenue={onVenue}
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
-                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
+                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} loadError={schedulesError} onRetry={onRetrySchedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
                   canSeeMoney={manageOk}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
@@ -1646,15 +1704,28 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
   //   사용자가 섹션·단계·하위탭을 고름)** 때 접는다. 높이 전환(①)은 프레임마다 이동이 쌓여 여전히 CLS 이고, 본문 대기를 바 응답까지
   //   묶기(③)는 권한이 늦은 순서에서 그대로 정착 순간에 튄다 — 둘 다 이동을 입력 밖에 남긴다. B 에 바가 오면 같은 자리에 들어선다.
   const barRef = useRef<HTMLDivElement>(null);
-  const [hold, setHold] = useState<{ venueId: string; nav: string; h: number } | null>(null);
+  // audit10 ⑨(2026-10-07) — 첫 진입(새로고침·직접 진입)에도 같은 자리를 잡는다: 클락 응답이 오기 전엔 바가 없다가 서는 순간
+  //   아래 셸(레일·대시보드) 전체가 46px 밀렸다(목 업주 클락 진행 중 · 1440 0.027 · 1024 0.038). 응답 전엔 켜져 있는지 모르므로
+  //   대시보드 라이브 카드와 같은 조리법 — **이 기기에서 오늘 이 매장의 바 높이**를 기억해 그만큼 붙잡는다(첫 방문·상태가 바뀐 날은 한 번 움직인다).
+  const memoKey = `nuri:livebar-h:${venueId}`;
+  const [hold, setHold] = useState<{ venueId: string; nav: string; h: number } | null>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(memoKey) || 'null') as { h?: unknown; d?: unknown } | null;
+      const h = v && v.d === kstToday() ? Number(v.h) || 0 : 0;
+      return h > 0 ? { venueId, nav: navKey, h } : null;
+    } catch { return null; }
+  });
+  const [fetched, setFetched] = useState(false);
+  const pendingIdsRef = useRef<Set<string>>(new Set());
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
     stampRef.current = stamp;
     const stale = () => isStaleResponse(stamp, stampRef.current);
-    getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
+    const a = getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
       .catch(() => { if (!stale()) setClocks([]); });
-    getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
+    const b = getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) { pendingIdsRef.current = new Set(r.map((x) => x.id)); setPending(r.length); } })
       .catch(() => { if (!stale()) setPending(0); });
+    void Promise.all([a, b]).then(() => { if (!stale()) setFetched(true); });
   }, [venueId, biz]);
   // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
   const prevVenue = useRef(venueId);
@@ -1664,11 +1735,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
     const h = barRef.current?.offsetHeight ?? 0;
     setHold(h > 0 ? { venueId, nav: navKey, h } : null);
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
-    setClocks([]); setPending(0);
+    setClocks([]); setPending(0); setFetched(false); pendingIdsRef.current = new Set();
   }, [venueId]);
   useEffect(() => { if (active) reload(); }, [active, reload]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
-  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  // 클라우드 리뷰(2026-10-08) — ownsId 없이 구독하면 DELETE(필터 불가)를 **모든 매장** 것까지 받아, 매일 만료 정리 때 매장 수만큼 재조회가 몰렸다.
+  //   이 바가 센 요청이 지워질 때만 다시 센다(대시보드·장부와 같은 조리법). INSERT·UPDATE 는 venue_id 필터로 그대로 받는다.
+  const ownsPending = useCallback((id: string) => pendingIdsRef.current.has(id), []);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsPending }); }, [venueId, reload, active, ownsPending]);
   const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
   const main = live[0];
   const mainRunning = !!main?.running;
@@ -1678,6 +1752,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto, navKe
   const shown = !!main || pending > 0;
   // 바가 한 번 들어서면 붙잡기는 끝이다 — 나중에 그 바가 사라질 때는 종전대로 접힌다.
   useEffect(() => { if (shown) setHold(null); }, [shown]);
+  // 사용자가 판을 옮기면 붙잡기도 끝이다 — 남겨 두면 그 판으로 돌아올 때마다 빈 자리가 다시 생겨 레일이 46px 오르내렸다(PR #203 P2-1).
+  useEffect(() => { setHold((h) => (h && h.nav !== navKey ? null : h)); }, [navKey]);
+  // 응답이 온 뒤의 바 높이를 오늘 날짜로 적는다(없으면 지운다) — 위 첫 진입 자리 잡기의 기억.
+  useLayoutEffect(() => {
+    if (!fetched || !active) return;
+    const h = shown ? barRef.current?.offsetHeight ?? 0 : 0;
+    try { if (h > 0) localStorage.setItem(memoKey, JSON.stringify({ h, d: kstToday() })); else if (!shown) localStorage.removeItem(memoKey); } catch { /* 차단 환경 — 자리만 못 잡는다 */ }
+  }, [fetched, active, shown, memoKey, clocks.length, pending]);
   if (!shown) return hold?.venueId === venueId && hold.nav === navKey ? <div aria-hidden data-livebar-hold="" style={{ height: hold.h }} /> : null;
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
@@ -2187,6 +2269,24 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //   같은 파일 StaffWageManager 와 같은 패턴 — 실패 중에는 저장을 막는다.
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [rankTick, setRankTick] = useState(0);
+  const rankKeyRef = useRef('');
+  useEffect(() => { rankKeyRef.current = `${venueId}|${date}`; }, [venueId, date]);   // 저장 뒤 조용한 재조회가 지금 화면 것인지 판정(H03-09)
+  // 🔴 H03-09 후속(2026-10-08 독립 검증) — 조용한 재조회가 setAllEntries 로 아래 줄 갈아끼우기 effect 를 다시 돌려,
+  //   저장 **뒤에** 고치던 칸을 서버본으로 되돌렸다(재조회 2.5초 지연 + 저장 0.3초 뒤 1위 수정 → '우승자' 로 복귀).
+  //   · quietSeqRef — 재조회 세대. 저장을 두 번 하면 앞 저장의 늦은 응답(낡은 명단)은 버린다. 정식 로더가 돌아도 버린다.
+  //   · keepRowsRef — 응답이 올 때 줄이 저장 직후 기준선과 다르면(사장님이 손댔으면) 그 응답으로는 줄을 갈아끼우지 않는다.
+  //     allEntries 는 그대로 갱신한다 — B→A 로 돌아올 때 최신 저장본이 깔리는 H03-09 본래 수정은 유지된다.
+  const quietSeqRef = useRef(0);
+  const keepRowsRef = useRef<RankingEntry[] | null>(null);
+  const rowsRef = useRef<Row[]>(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
+  //   ⚠ 줄을 두는 것은 저장 뒤 줄 갈아끼우기가 **없었을 때**(기준선이 저장본 그대로)만이다(critical 반례, 같은 날).
+  //     응답 전에 다른 게임 칩을 갔다 오면 effect 가 저장 **전** allEntries 로 줄·기준선을 다시 깐다 — 그 위의 입력을 남기면
+  //     그대로 저장할 때 방금 저장분을 덮는다(H03-09 원래 사고). 그때는 서버본으로 갈아끼우고, 입력은 초안 → '되살리기' 로 남는다.
+  const applyQuietEntries = (entries: RankingEntry[], savedBase: string) => {
+    if (baselineRef.current === savedBase && JSON.stringify(rowsRef.current) !== savedBase) keepRowsRef.current = entries;
+    setAllEntries(entries);
+  };
   // S-10 — 메인을 ''(장부 마감 초안)·제목(게임 칩) 어느 쪽으로 들어와도 저장 이름 하나로 모은다.
   //   안 모으면 이미 저장된 칸이 아닌 빈 칸이 열려 다시 치고 저장 → 같은 대회가 두 벌이 된다. 조회 성공 뒤에만(실패 중 판단 금지).
   useEffect(() => {
@@ -2278,6 +2378,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //   저장하면 B 의 저장본이 A 명단으로 교체된다(F1 과 같은 소실). effect 가 반환하는 cleanup(alive=false)이 이전 요청의
   //   성공·실패·finally 를 전부 버린다 — deps 가 바뀌면 React 가 cleanup 을 먼저 부른다(동작 검사: lib/rankingsLoad.test.ts).
   useEffect(() => {
+    quietSeqRef.current += 1; keepRowsRef.current = null;   // 이 조회가 정본 — 앞서 띄운 조용한 재조회 응답은 버린다(H03-09 후속)
     setLoading(true);
     return loadRankingsEffect({
       fetch: () => getVenueRankings(venueId, date),
@@ -2296,6 +2397,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
   //     전체 삭제 후 재삽입이라, 낡은 초안을 무심코 저장하면 이미 저장된 순위를 통째로 덮어쓴다.
   //     그래서 '되살리기' 버튼을 눌렀을 때만 올린다.
   useEffect(() => {
+    // 저장 뒤 조용한 재조회가 사장님이 손대던 줄 위로 도착했다 — 줄은 두고 allEntries 만 바뀐 채 넘어간다(H03-09 후속).
+    if (keepRowsRef.current === allEntries) { keepRowsRef.current = null; return; }
     // 실패 중에는 rows 를 갈아끼우지 않는다 — 빈 줄을 보여 주면 '아무것도 없네' 로 읽혀 새로 치게 만든다(F1).
     if (loading || loadErr) return;
     const mine = allEntries.filter((e) => (e.eventName ?? '') === eventName);
@@ -2521,6 +2624,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel, canSeeAll = true }: {
       clearRowsDraft(dkey);
       setDrafted(false);
       setRestorable(null);
+      // 🔴 H03-09(2026-10-08) — allEntries 는 마지막 조회본이라 저장 뒤 B→A 로 돌아오면 저장 **전** 명단(또는 빈 줄)이 다시 깔렸고,
+      //   그대로 저장하면 방금 저장분을 덮었다. 서버 정본을 **조용히** 다시 읽는다 — rankTick 은 '불러오는 중…' 으로 표를 접어 화면이 튄다.
+      //   그새 매장·날짜를 옮겼으면 버린다(지금 화면의 저장본을 남의 날짜 것으로 덮지 않게).
+      //   세대 번호(quietSeqRef)가 바뀌었으면 — 그 뒤 또 저장했거나 정식 로더가 돌았으면 — 이 응답은 낡았다(역순 도착).
+      const savedKey = `${venueId}|${date}`, savedBase = baselineRef.current;
+      const seq = ++quietSeqRef.current;
+      void getVenueRankings(venueId, date).then(({ entries }) => { if (rankKeyRef.current === savedKey && quietSeqRef.current === seq) applyQuietEntries(entries, savedBase); }).catch(() => {});
       toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
       toast.show(msgOf(e, '저장에 실패했습니다'), 'error');
@@ -2962,7 +3072,7 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
     </Suspense>
   );
   const items: { id: string; label: string; node: ReactNode }[] = [
-    { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
+    { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} active={active} /> },
     { id: 'schedule', label: '딜러 출근 스케줄',            node: schedIn },
     { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <LazyBox><StaffWageManagerL venueId={venueId} /></LazyBox> },
     { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <LazyBox><StaffSettlementL venueId={venueId} active={active} /></LazyBox> },
@@ -2988,7 +3098,7 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
   );
 }
 
-function StaffManager({ venueId }: { venueId: string }) {
+function StaffManager({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const toast = useToast();
   // 킬스위치(2026-08-29) — 이용권이 꺼진 동안 '이용권내역 권한' 토글은 아무 화면도 열지 못한다.
   // 부여된 권한(vouch)은 서버에 그대로 남는다 — 다시 켜면 이 줄이 원래대로 돌아온다.
@@ -3037,6 +3147,30 @@ function StaffManager({ venueId }: { venueId: string }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [tick, venueId]);
+  // audit10 P3-1(2026-10-07) — 직원이 초대를 수락해도 이 목록은 마운트 때 한 번만 읽어(keep-alive) 새로고침 전까지
+  //   '대기중 초대 · 수락 대기' · '구성원 (0)' 으로 남았다. 판이 **다시 보일 때**와 창이 다시 보일 때 조용히(뼈대 없이) 다시 읽는다.
+  //   초대 수락은 다른 사람의 기기에서 일어나 이 화면에 신호가 없다 — 재방문 시점이 업주가 확인하러 오는 순간이다.
+  const [quietTick, setQuietTick] = useState(0);
+  const wasActive = useRef(active);
+  const venueNow = useRef(venueId);
+  venueNow.current = venueId;   // 매장 전환 중 늦게 온 앞 매장 응답을 버린다(아래 reqVenue 와 비교)
+  useEffect(() => { if (active && !wasActive.current) setQuietTick((t) => t + 1); wasActive.current = active; }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    const onVis = () => { if (document.visibilityState === 'visible') setQuietTick((t) => t + 1); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [active]);
+  useEffect(() => {
+    if (quietTick === 0) return;
+    let alive = true;
+    const reqVenue = venueId;
+    Promise.all([getMyVenueStaff(reqVenue), getMyVenueInvites(reqVenue)])
+      .then(([s, i]) => { if (!alive || venueNow.current !== reqVenue) return; setStaff(s); setInvites(i); setListError(null); try { localStorage.setItem(rowsKey, `${s.length}|${i.length}`); } catch { /* noop */ } })
+      .catch(() => { /* 조용한 재조회 실패는 지금 목록을 그대로 둔다(첫 조회 실패만 오류 카드) */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quietTick]);
   // 권한 조회 두 개는 각자 실패한다 — Promise.all 에 같이 넣으면 한 조회의 실패가 나머지까지 빈 화면으로 만든다(S01 과 같은 뿌리).
   useEffect(() => {
     let alive = true;
@@ -3285,12 +3419,15 @@ function StaffManager({ venueId }: { venueId: string }) {
           </div>
         )}
 
-        {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
+        {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계)
+            🔴 2026-10-07 오너 실기기(Android): 줄을 누르면 글자가 선택되고 번호와 글이 두 줄로 갈라져 아래가 밀렸다.
+            정적 안내라 고를 글이 없다 → li 마다 select-none(설치형 PWA 는 index.css 가 li 요소를 직접 선택 가능으로 열어 ol 에 걸면 안 먹는다).
+            글은 span 으로 감싸 익명 flex 아이템을 없애고, 배지는 inline-flex 라 줄이 block 으로 풀려도 한 줄에 남는다. */}
         <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
           {(['상대가 일반 회원으로 가입', '닉네임이나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
-            <li key={t} className="flex items-center gap-2 text-2xs text-ink-muted">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
-              {t}
+            <li key={t} className="flex select-none items-center gap-2 text-2xs text-ink-muted">
+              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
+              <span>{t}</span>
             </li>
           ))}
         </ol>

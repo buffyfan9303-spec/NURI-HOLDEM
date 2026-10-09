@@ -178,7 +178,17 @@ test('Q2 1440 직원 — 마감 장부 미수 받기: 비번 없음/틀림/맞�
   await expect(dlg.getByTestId('unpaid-collect-pw'), '창의 첫 포커스가 비밀번호 칸이 아니다').toBeFocused({ timeout: 3_000 });
   const pad = await dlg.locator('form').evaluate((f) => parseFloat(getComputedStyle(f).paddingLeft));
   expect(pad, 'B1 — 창 본문 좌우 여백이 제목(17px)과 맞지 않는다').toBeGreaterThanOrEqual(16);
-  const hs = await dlg.locator('[data-testid="unpaid-collect-pw"], [data-testid="unpaid-collect-confirm"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  // 창이 열리는 동안(전환 중)에는 getBoundingClientRect 의 top/bottom 이 float32 로 어긋나 44px 가 43.99997 로 나온다(부하에서만).
+  //   자리(top)가 6프레임 연속 멎은 뒤에 잰다 — 임계(44)는 그대로다.
+  const hs = await dlg.locator('[data-testid="unpaid-collect-pw"], [data-testid="unpaid-collect-confirm"]').evaluateAll((els) => Promise.all(els.map((el) => new Promise<number>((res) => {
+    let last = -1; let still = 0;
+    const tick = () => {
+      const r = el.getBoundingClientRect();
+      if (r.top === last) { if (++still >= 6) return res(r.height); } else { still = 0; last = r.top; }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }))));
   expect(Math.min(...hs), '비밀번호 칸·확정 버튼 높이 44px 미만').toBeGreaterThanOrEqual(44);
   const confirm = dlg.getByTestId('unpaid-collect-confirm');
   await expect(confirm, '비밀번호 없이 확정할 수 있다').toBeDisabled();

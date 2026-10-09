@@ -8,3 +8,6 @@ export { default as marketing } from '../src/pages/legal/MarketingConsent';
 export { default as refund } from '../src/pages/legal/RefundPolicy';
 export { default as deleteAccount } from '../src/pages/legal/AccountDeletion';
 export { default as ownerTerms } from '../src/pages/legal/OwnerTerms';
+export { default as locationTerms } from '../src/pages/legal/LocationTerms';
+// 2026-10-07: 첫 화면 밖 아이콘 청크를 SSR 렌더 전에 받는다(gen-legal.mjs 가 await).
+export { loadIconsExtra } from '../src/components/atoms/iconsExtraLoader';

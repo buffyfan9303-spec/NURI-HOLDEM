@@ -16,6 +16,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { filterListing } from '../../lib/content-filter';
 import { uploadListingImages } from '../../lib/storage';
+import { useRevokeDroppedPreviews } from '../../lib/blobPreviews';
 import type { ListingCategory, ListingCondition } from '../../api/marketplace';
 import { msgOf } from '../../lib/dbError';
 
@@ -81,9 +82,8 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
     }
   }, [open]);
 
-  useEffect(() => {
-    return () => { previews.forEach((u) => URL.revokeObjectURL(u)); };
-  }, [previews]);
+  // UP-02: 빠진 미리보기 URL 만 해제한다(남은 사진의 URL 까지 해제하던 결함) — lib/blobPreviews
+  useRevokeDroppedPreviews(previews);
 
   const handlePickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);

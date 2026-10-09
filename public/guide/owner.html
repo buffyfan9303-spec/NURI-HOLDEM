@@ -73,9 +73,6 @@
   .path i { font-style:normal; color:var(--mute); }
   .tip { margin-top:14px; font-size:15px; color:var(--ok); }
   .tip.w { color:var(--warn); }
-  /* 아직 앱에 들어오지 않은 화면·문구 — 병합되면 이 표시를 지운다 */
-  .soon { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; border:1px solid var(--warn); color:var(--warn);
-    font-size:12px; font-weight:800; line-height:1.5; vertical-align:2px; white-space:nowrap; }
   .figs { display:grid; gap:20px; min-width:0; }
   figure .shot { display:block; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#000; }
   figure img { display:block; width:100%; height:auto; }
@@ -139,7 +136,6 @@
   <p class="kicker">업주 운영 가이드 · 2026-10-08 정식 오픈판</p>
   <h1>가입부터 정산까지, 이 순서대로 하시면 됩니다</h1>
   <p class="lead">앱의 <b>내 매장</b>에서 시작하세요. 포스터에 적은 것이 장부, 클락, 순위, 정산으로 자동으로 이어집니다. 아래 10개 순서대로 읽으면 처음 오신 사장님도 오픈 첫날 운영할 수 있습니다.</p>
-  <p class="cap" style="margin-top:10px"><span class="soon" style="margin-left:0">반영 예정</span> 표시는 앱에 곧 들어오는 화면·문구입니다. 정식 오픈 전에 적용됩니다.</p>
 
   <ol class="flow" aria-label="업주 가이드 차례">
     <li><a href="#s1"><span class="n">1</span><h3>처음 시작</h3><p>가입, 본인인증, 약관</p></a></li>
@@ -182,7 +178,7 @@
       <ul>
         <li>매장이 없으면 <b>내 매장</b>을 여는 순간 「내 매장 만들기」가 나옵니다. <b>이름·주소·전화번호</b>는 꼭 적고, 사진·지역·소개는 나중에 채워도 됩니다</li>
         <li>만든 뒤 <b>관리자 승인</b>까지는 대시보드에 안내 카드만 보입니다. 보통 영업일 기준 1~2일 걸립니다</li>
-        <li><b>인증 매장</b> 배지는 승인과 별개입니다. 사장님이 신청하는 버튼은 없고, 운영자가 검토한 뒤 줍니다. 인증 매장은 인증 배지, 목록 상단 노출, 공식 결과 기록지를 받습니다 <span class="soon">반영 예정</span></li>
+        <li><b>인증 매장</b> 배지는 승인과 별개입니다. 사장님이 신청하는 버튼은 없고, 운영자가 검토한 뒤 줍니다. 인증 매장은 인증 배지, 목록 상단 노출, 공식 결과 기록지 인쇄를 쓸 수 있습니다</li>
         <li>매장 안에서 일하는 사람은 세 종류입니다. <b>대표 업주</b>, <b>공동운영</b>, <b>직원</b>. 위험한 설정은 대표 업주만 할 수 있습니다(9번 참고)</li>
       </ul>
       <span class="path">내 매장 <i>›</i> 매장 만들기</span>
@@ -203,11 +199,11 @@
         <li>포스터 이미지, 대회명, 날짜와 시간, 참가비, GTD를 적습니다</li>
         <li>세부 규칙: 리엔트리, 얼리칩(최대 4단), <b>참가 1회 = 이용권 N장</b></li>
         <li><b>지난 포스터 불러오기</b>로 반복 대회는 몇 초 만에 올리고, 자주 쓰는 구성은 <b>게임 프리셋</b>에 저장합니다</li>
-        <li>대회를 올리면 <b>운영자 승인 뒤</b> 손님 앱의 일정에 실립니다 <span class="soon">반영 예정</span></li>
+        <li>대회를 올리면 <b>운영자 승인 뒤</b> 손님 앱의 일정에 실립니다</li>
         <li>포스터 목록의 <b>예약관리</b>에서 예약자 명단을 보고, 승인된 새 대회는 매장 팔로워에게 알림이 갑니다</li>
       </ul>
       <span class="path">내 매장 <i>›</i> 게임 진행 <i>›</i> 포스터 <i>›</i> + 새 게임</span>
-      <p class="tip w">승인 없이 바로 공개되는 것은 프리미엄 매장뿐입니다. 인증 매장도 승인을 거칩니다. 공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 포스터 이미지를 고치면 다시 심사를 받습니다(프리미엄 매장은 제외) <span class="soon">반영 예정</span></p>
+      <p class="tip w">승인 없이 바로 공개되는 것은 프리미엄 매장뿐입니다. 인증 매장도 승인을 거칩니다. 공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 포스터 이미지를 고치면 다시 심사를 받습니다(프리미엄 매장은 제외)</p>
     </div>
     <div class="figs">
       <figure><a class="shot" href="/guide/img/owner-poster.webp" target="_blank" rel="noopener" aria-label="사진 크게 보기"><img src="/guide/img/owner-poster.webp" width="1680" height="1324" loading="lazy" decoding="async"
@@ -311,7 +307,6 @@
         <li>구성원 목록, 딜러 출근 스케줄, 인건비 관리, 인건비 정산, 직원 출근일지가 한 곳에 있습니다</li>
         <li>구성원 종류는 <b>대표 업주</b> · <b>공동운영</b> · <b>직원</b>입니다. 공동운영은 관리자 승인을 받은 계정만 업주와 같은 권한을 씁니다</li>
         <li>직원은 화면 맨 위 <b>출근·퇴근</b> 버튼으로 기록합니다</li>
-        <li>인건비 화면의 합계와 금액 표시(1만 원 미만은 ‘N원’)가 정리됩니다 <span class="soon">반영 예정</span></li>
       </ul>
       <span class="path">내 매장 <i>›</i> 직원 관리 / 출근 관리</span>
       <p class="tip w">직원에게 장부 권한을 주면 장부뿐 아니라 클락, 순위, 정산까지 한 묶음으로 열립니다.</p>
@@ -374,7 +369,7 @@
       <div class="qa"><dt>직원 화면에 메뉴가 안 보여요</dt><dd>업주가 직원 관리에서 권한을 켜야 합니다. 켠 뒤 직원이 앱으로 돌아오면 자동으로 다시 확인됩니다.</dd></div>
       <div class="qa"><dt>손님이 출석이 안 된대요</dt><dd>위치 확인 출석을 켠 매장이면 손님의 위치 동의와 위치 확인이 필요합니다. 안 되면 손님이 「출석 요청 보내기」를 누르고, 업주가 대시보드에서 승인합니다.</dd></div>
       <div class="qa"><dt>이용권이 안 보내져요</dt><dd>받는 손님이 본인인증을 하지 않았거나(미인증), 오늘 조회 한도를 다 쓴 경우입니다. 전화번호 조회는 손님이 허용했을 때만 됩니다.</dd></div>
-      <div class="qa"><dt>포스터를 고쳤더니 다시 심사래요</dt><dd>공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 이미지를 바꾸면 다시 심사를 받습니다. 프리미엄 매장은 제외입니다 <span class="soon">반영 예정</span></dd></div>
+      <div class="qa"><dt>포스터를 고쳤더니 다시 심사래요</dt><dd>공개된 뒤 대회명, 날짜, 시간, 참가비, GTD, 상금, 이미지를 바꾸면 다시 심사를 받습니다. 프리미엄 매장은 제외입니다</dd></div>
       <div class="qa"><dt>대표를 바꾸고 싶어요</dt><dd>내 매장의 공동 운영자 관리에서 대표를 넘길 수 있습니다. 한 번 넘기면 새 대표만 되돌릴 수 있으니 신중하게 하세요.</dd></div>
       <div class="qa"><dt>매장을 지우고 싶어요</dt><dd>대표 업주만 매장 설정 › 위험 구역에서 할 수 있고, 되돌릴 수 없습니다. 삭제 전에 CSV를 내려받아 두세요.</dd></div>
       <div class="qa"><dt>손님용 설명서는 어디 있나요</dt><dd>손님에게는 <a href="/guide/user.html">손님용 사용설명서</a> 링크를 보내 주세요. 모든 메뉴의 자세한 안내는 <a href="/guide/manual.html">전체 사용설명서</a>에 있습니다.</dd></div>

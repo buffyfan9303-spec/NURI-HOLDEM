@@ -463,10 +463,10 @@ export default function HomeTab({
       //   (2026-09-18 이벤트 탭이 목록으로 바뀌면서 여기까지 목록으로 새고 있었다 —
       //    홈이 미리 받아 둔 보드 씨앗도 함께 끊겨 진입에 스켈레톤이 돌아왔다. e2e/event-enter 가 잡았다.)
       const slug = event.slug;
-      return { title: event.title, sub, alt: `이벤트 · ${event.title} · ${sub}`, testId: 'home-event-banner', live: true, onClick: () => onEvent(slug) };
+      return { title: event.title, sub, alt: `이벤트 · ${event.title} · ${sub}`, testId: 'home-event-banner', live: true, logo: event.brand?.imageUrl, onClick: () => onEvent(slug) };
     }
     const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
-    return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
+    return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, logo: event?.brand?.imageUrl, onClick: () => onEvent() };
   }, [eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
   /** 🔴 2026-09-24 오너: "빠른 카드 두 개의 세부 설명 줄은 삭제하고 세로 폭을 살짝 줄여라" — 설명 줄(종전 quickEventDesc)이 빠졌다.
@@ -825,7 +825,8 @@ export default function HomeTab({
               {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
             </h3>
             <span data-testid="home-schedule-count" className="shrink-0 text-2xs text-ink-muted">
-              {useFallback ? '오늘·내일 예정 없음' : `대회 ${daySchedules.length}개`}
+              {/* R11-04 — 응답 전(뼈대)·실패(오류 카드)에는 건수를 말하지 않는다. '대회 0개' 는 사실일 때만. */}
+              {!loaded || failed ? '' : useFallback ? '오늘·내일 예정 없음' : `대회 ${daySchedules.length}개`}
             </span>
           </header>
           {!loaded ? (

@@ -26,7 +26,7 @@
 
 /** 현재 약관 동의 판(= 이용약관의 판). 개정 시 +1 하고 legalHistory.ts 의 terms 이력 · 아래 CONSENT_GATES · DB current_legal_version() 을 같이 올린다.
  *  제3판(2026-10-06 리드 결정, 약관 재검토 P2-2 활동 포인트): 공지·시행일은 legalDeploy.ts TERMS_V3_*(배포일 기준) 한 곳. */
-export const LEGAL_VERSION = 3;
+export const LEGAL_VERSION = 4;
 
 /** 제2판(2026-09-29, 약관 4문서 공통 개정) 시행일(KST, ISO). 이 날부터 제1판 동의자는 재동의 게이트가 '차단'이다.
  *  ⚠ 이 상수들(LEGAL_EFFECTIVE_* · LEGAL_NOTICE_*)은 **제2판 공통 개정**의 날짜다 — 처리방침·서약·마케팅 문서와 개정 이력이 함께 쓴다.
@@ -59,7 +59,7 @@ export {
   PRIVACY_V3_NOTICE_ISO as PRIVACY_NOTICE_ISO, PRIVACY_V3_NOTICE_DATE as PRIVACY_NOTICE_DATE,
   PRIVACY_V3_EFFECTIVE_ISO as PRIVACY_EFFECTIVE_ISO, PRIVACY_V3_EFFECTIVE_DATE as PRIVACY_EFFECTIVE_DATE,
 } from './legalDeploy';
-import { TERMS_V3_EFFECTIVE_ISO } from './legalDeploy';
+import { TERMS_V3_EFFECTIVE_ISO, TERMS_V4_EFFECTIVE_ISO } from './legalDeploy';
 /** 제2판 원문 보존본(처리방침 제14조③ '이전 방침을 함께 게시') — 2026-10-06 에 뜬 제3판 공지 직전의 /legal/privacy.html.
  *  경로의 날짜는 **보존본을 뜬 날**이다(공지일이 배포일로 옮겨져도 파일은 그대로). sitemap 에 넣지 않는다. */
 export const PRIVACY_PREV_ARCHIVE_URL = '/legal/archive/2026-10-06/privacy.html';
@@ -88,6 +88,8 @@ export type LegalConsentStage = 'ok' | 'notice' | 'required';
 const CONSENT_GATES: readonly (readonly [number, string])[] = [
   [2, LEGAL_EFFECTIVE_ISO],
   [3, TERMS_V3_EFFECTIVE_ISO],
+  // 제4판(제11조제4항, 회원에게 불리한 변경) — 공지 후 30일 뒤 시행일부터 제3판 동의자 차단. 그 전에는 notice(차단 없음).
+  [4, TERMS_V4_EFFECTIVE_ISO],
 ];
 
 /** 이 회원을 차단하는 판의 시행일(ISO) — 없으면 null(차단 안 함). 게이트 문구가 '언제부터 시행'을 고를 때도 쓴다. */

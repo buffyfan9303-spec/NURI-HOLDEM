@@ -1,7 +1,7 @@
 // src/components/features/NuriPosLedger.tsx
 import { Fold } from '../atoms/Fold';
 import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
-import { useIsDesktop, useIsMdUp } from '../../lib/responsive';
+import { useIsDesktop, useIsMdUp, useIsXl } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
@@ -1170,10 +1170,12 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   const cellAt = (name: string, e: number) => binByKey.get(`${name}\u0000${e}`) ?? null;
   const countOf = (name: string) => countByName.get(name) ?? 0;
   const maxEntryOf = (name: string) => maxEntryByName.get(name) ?? 0;
-  // 바인 컬럼 수 — PC는 10 고정(폭 축소로 한 화면에), 모바일은 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화)
+  // 바인 컬럼 수 — 넓은 PC(xl≥1280)는 10 고정(한 화면에 다 들어간다), 그 아래는 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화).
+  //   audit10 ⑩(2026-10-07) — 종전 기준 lg(1024)는 10칸이 판보다 78px 넓어(목 업주 756 vs 834) 9·10바인 칸이 총바인 고정 열 밑에 반쯤 잘렸다.
   const isDesktopLedger = useIsDesktop();
+  const tenBinCols = useIsXl();
   const globalMaxEntry = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
-  const binCols = (isDesktopLedger || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
+  const binCols = (tenBinCols || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
 
   // 정렬 — 100명+ 명단에서 빨리 찾기: 등록순(기본)/이름순/바인 많은 순
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'bins'>('recent');
@@ -1293,7 +1295,7 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
   const summaryRows = useMemo(() => summaryRowsOf(buyins, session, isExcluded), [buyins, session, isExcluded]);
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
-  const handleOpen = async (s: LedgerSession) => {
+  const handleOpen = async (s: LedgerSession): Promise<boolean> => {
     try {
       await openLedgerSession(s, s.openedBy ?? null);
       await syncDealersToSchedule(s.sessionDate, s.dealers);
@@ -1307,18 +1309,20 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
       //   기능 소실 아님 — 클락은 장부 상단 '클락' 버튼과 ClockRemoteBar 로 언제든 켠다.
       //   ⚠ 되살릴 일이 있어도 confirm 이 아니라 화면 안 배너로 해라 — 모달 대화상자는 그동안
       //     다른 조작을 전부 막고, 브라우저 자동화에서는 세션이 통째로 멈춘다.
+      return true;
     }
     catch (e) {
       // #5(2026-09-27) — 다른 접수대가 먼저 시작했다. 덮지 않았으니 그 장부를 다시 읽어 보드로 넘어간다.
       if (e instanceof Error && e.message === LEDGER_ALREADY_OPEN) {
         toast.show(`${LEDGER_ALREADY_OPEN}. 그 장부를 불러왔어요 — 제목·단가·담당을 확인해 주세요`, 'info', { durationMs: 7000 });
         await reloadSession(); reload();
-        return;
+        return false;   // 이 폼의 장부는 저장되지 않았다 — 클락도 건드리지 않는다(H03-08)
       }
       toast.show(ledgerErrorText(e, '시작 실패'), 'error', { durationMs: 7000 });   // 20260925g: 직원 지난 날짜·담당 권한 hint 를 쉬운 말로
+      return false;
     }
   };
-  const handleEditSave = async (s: LedgerSession) => {
+  const handleEditSave = async (s: LedgerSession): Promise<boolean> => {
     // 비분납 바인은 세션 단가·할인을 '참조'로 재계산한다 — 변경이 기존 기록 전체에 소급된다는
     // 사실을 모르고 고치면 실제 받은 현금과 장부가 조용히 어긋난다. 바뀔 때만 한 번 묻는다.
     const priceChanged = s.buyinAmount !== session.buyinAmount
@@ -1336,10 +1340,10 @@ export default function NuriPosLedger({ venueId, venueName, canManage, onMakeRan
     //   폼에서 이미 잠갔지만(lockPricing), 저장 경로에서도 막는다 — 폼을 우회해도 장부가 틀어지지 않게.
     if (priceChanged && buyins.length > 0) {
       toast.show('이미 기록된 바인이 있어 단가와 기존 할인은 바꿀 수 없습니다. 할인은 뒤에 추가만 됩니다', 'error');
-      return;
+      return false;
     }
-    try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
-    catch (e) { toast.show(ledgerErrorText(e, '저장 실패'), 'error', { durationMs: 7000 }); }
+    try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); return true; }
+    catch (e) { toast.show(ledgerErrorText(e, '저장 실패'), 'error', { durationMs: 7000 }); return false; }
   };
   const handleClose = async (memo: string) => {
     try {
@@ -2648,11 +2652,15 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
               : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
-          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 truncate">
-            {cur.kind === 'break'
-              ? (cur.label || 'BREAK')
-              : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{formatCountdown(rem)}</span>
+          {/* 라벨(블라인드)과 남은 시간은 따로 — 긴 브레이크 라벨('BREAK 10 MINS & REG …')이 한 말줄임 안에서 시간까지 잘라 먹었다(390, review-251 P2-②).
+              시간은 줄지 않고(shrink-0) 라벨만 말줄임한다. */}
+          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 flex min-w-0 items-baseline">
+            <span data-testid="ledger-clock-level" className="min-w-0 truncate">
+              {cur.kind === 'break'
+                ? (cur.label || 'BREAK')
+                : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+            </span>
+            <span data-testid="ledger-clock-remaining" className={clock.running ? 'ml-2 shrink-0 text-emerald-300' : 'ml-2 shrink-0 text-accent-300'}>{formatCountdown(rem)}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
@@ -2899,7 +2907,8 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
 function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], dealerOptions = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied, lockPricing = false }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
-  onSubmit: (s: LedgerSession) => void | Promise<void>; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
+  /** 장부 저장 성공이면 true — 클락 동기화는 true 일 때만 돈다(H03-08). */
+  onSubmit: (s: LedgerSession) => Promise<boolean>; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
   /** 이 매장에 등록된 딜러/직원 이름 — 금일 딜러 명단을 **적는 대신 고르게** 한다(오너 2026-09-18).
    *  venue_staff(계정 직원) ∪ staff_wage(비회원 포함 인건비 명부). 비어 있으면 칩 줄을 그리지 않고
@@ -3228,8 +3237,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     submittingRef.current = true; setSubmitting(true);
     try { await submitOnce(); } finally { submittingRef.current = false; setSubmitting(false); }
   };
-  const submitOnce = (): void | Promise<void> => {
+  const submitOnce = async (): Promise<void> => {
     if (cash <= 0) return;
+    let syncClock: (() => Promise<void>) | null = null;
     if (badDisc >= 0) return; // 아래 경고 문구가 이유를 말한다
     const tStart = startISO;
     // #21: 장부에 적은 얼리 '레벨'을 세션의 얼리 '분'으로 환산해 함께 저장한다.
@@ -3240,8 +3250,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     let earlyTiers = base.earlyTiers;   // W-04 — 진행 중 클락이면 기존 창 그대로(아래 분기에서만 다시 계산)
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
+      // 🔴 H03-08 후속(2026-10-08 독립 검증) — 세션 얼리 분(장부 자동 판정)과 클락 설정(TV 얼리 표시)은 **같은 베이스**여야 한다.
+      //   예전엔 세션 쪽은 마운트 스냅샷(clockState.config), 클락 쪽은 쓰기 직전 다시 읽은 config 로 따로 만들어,
+      //   폼이 열린 동안 클락 레벨이 바뀌었거나 마운트 조회가 실패(clockState=null → 기본 레벨)했으면 두 값이 갈렸다.
+      //   → 장부 저장 **전에** 클락을 다시 읽기만 하고(쓰기는 여전히 장부 성공 뒤), 그 config 하나로 둘 다 계산한다.
+      //   읽기가 실패하면 세션 얼리는 예전처럼 스냅샷으로 계산하되 클락은 쓰지 않는다(조회 실패를 '클락 없음'으로 읽으면 진행 중 대회가 0 으로 덮인다).
+      let basis: ClockState | null = null, basisErr: unknown = null;
+      try { basis = await getClockState(base.venueId, base.gameSeq); } catch (e) { basisErr = e; }
       // PL3: '지난 게임 그대로 열기'로 불러온 완성 클락 설정이 있으면 그게 베이스(빈 기본값보다 우선)
-      const baseCfg = inheritClockRef.current.full ?? clockState?.config ?? defaultClockConfig();
+      const baseCfg = inheritClockRef.current.full ?? (basisErr ? clockState?.config : basis?.config) ?? defaultClockConfig();
       // PL1a+b: 연동 포스터의 구조(레벨·레지레벨·애드온)와 상금(원 정규형)을 클락에 함께 병합 —
       // '클락 설정 단계가 일상 운영에서 사라진다'(§13-B 최고 ROI 두 곳 중 ②). 폼에서 고친 값이 우선.
       const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
@@ -3261,9 +3278,20 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       //   `clock.ts:381` 이 경고하는 "조회 실패가 '클락 없음'이 되면 진행 중 대회가 0으로 덮인다" 가 바로 이 자리다.
       //   → 쓰기 직전에 다시 읽고, 진행 흔적이 있으면 **덮지 않는다**(TournamentClock.startClock 과 같은 조리법).
       //     그리고 실패를 더 이상 삼키지 않는다 — 설정이 안 넘어간 것을 업주가 알아야 한다.
-      void (async () => {
+      // 🔴 H03-08(2026-10-08) — 예전엔 이 블록을 onSubmit **앞에서** void 로 띄웠다. 장부 시작이 실패하거나
+      //   다른 접수대가 먼저 열어(LEDGER_ALREADY_OPEN) 이 폼의 장부가 저장되지 않아도 클락은 이미 'reset'·'update' 로 바뀌었다.
+      //   → 장부 저장이 **성공(true)** 한 뒤에만 돈다(아래 submitOnce 끝). 클락 베이스도 쓰기 직전 다시 읽은 fresh.config 다 —
+      //     폼이 열려 있던 동안 클락 판에서 고친 설정을 마운트 때 스냅샷(clockState)으로 되돌리지 않는다.
+      syncClock = async () => {
+        if (basisErr) { formToast.show(ledgerErrorText(basisErr, '클락 설정 저장에 실패했습니다'), 'error'); return; }
         try {
+          // 장부 저장 동안 그새 시작·수정됐을 수 있다 — 쓰기 직전 한 번 더 읽어 진행 흔적은 지금 행으로 판정한다.
           const fresh = await getClockState(base.venueId, base.gameSeq);
+          // 설정이 그사이 바뀌었으면 세션 얼리와 같은 베이스(basis)가 아니다 — 덮지 않는다(남이 고친 설정을 되돌리지 않게).
+          if (JSON.stringify(fresh?.config ?? null) !== JSON.stringify(basis?.config ?? null)) {
+            formToast.show('클락 설정이 그사이 바뀌어 덮어쓰지 않았습니다. 클락 판에서 확인해 주세요', 'error');
+            return;
+          }
           // W-14 — 지난 날 멈춘 채 남은 클락(연결 장부 날짜·마지막 쓰기가 오늘이 아님)은 포스터 설정으로 새로 채운다.
           //   오늘 대회로 돌고 있거나 멈춘 클락은 예전처럼 보호한다(clockHasProgress). 판정은 lib/ledgerStart 한 곳.
           const action = clockStartAction(fresh, base.sessionDate);
@@ -3277,9 +3305,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         } catch (e) {
           formToast.show(ledgerErrorText(e, '클락 설정 저장에 실패했습니다'), 'error');
         }
-      })();
+      };
     }
-    return onSubmit({
+    const ok = await onSubmit({
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
@@ -3296,6 +3324,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...(earlyTiers !== undefined ? { earlyTiers } : {}),
       ...(addonEntry !== undefined ? { addonEntry } : {}),
     });
+    // 장부가 실제로 저장됐을 때만 클락을 맞춘다(H03-08). 실패·다른 접수대 선점이면 클락 쓰기 0.
+    if (ok === true && syncClock) await syncClock();
   };
 
   // (역사) S2(2026-09-24) — 모바일 하단 고정 바가 포커스한 칸을 덮어 onFocusCapture 에서 scrollBy 로 올렸다.

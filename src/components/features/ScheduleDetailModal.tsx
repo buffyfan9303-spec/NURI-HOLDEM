@@ -32,6 +32,7 @@ import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 import { gameTypeLabel } from '../../lib/gameTypeLabel';
 import { startChips, reentryText, reentrySummary, reentryPriceWon, breakText } from '../../lib/scheduleDetailText';
+import { paidShown } from '../../lib/paidExposure';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -251,7 +252,7 @@ export default function ScheduleDetailModal({
                     : `진행 중 · ${badge.text}`}
                 </span>
               )}
-              {schedule.isPremium && (
+              {paidShown(schedule.isPremium) && (
                 <span className="rounded-badge bg-accent-300 px-2 py-0.5 text-xs font-bold text-white leading-none">
                   TOP
                 </span>
@@ -284,7 +285,7 @@ export default function ScheduleDetailModal({
                 제목에도 맞춘다. 360px 에서 대회명이 음절 중간에서 갈리던 문제. */}
             <h1 className={[
               'text-xl font-bold leading-tight break-keep wrap-anywhere',
-              schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
+              paidShown(schedule.isPremium) ? 'text-accent-300' : 'text-ink-primary',
             ].join(' ')}>
               {schedule.title}
             </h1>

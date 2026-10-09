@@ -10,6 +10,7 @@
 // 쓰기 0 — clock_states·clock_ads 조회만 갈아끼운다. server_now 는 _fixtures 가 끊어 오프셋 0 → 서버 시각 = 페이지 시계.
 import { test, expect } from './_fixtures';
 import { TV_VENUE as VENUE, serveClock } from './_clock';
+import { PAID_EXPOSURE_ON } from '../src/lib/paidExposure';
 
 const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const AD_OK = 'https://ads.e2e.invalid/ok.png';
@@ -67,7 +68,11 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1920, height: 1080 });
     // 한 바퀴 = 30 + 30 + 30 + 10 = 100초. 바퀴 시작 1초 뒤에서 시작한다(시상 칸).
-    const T0 = Math.floor(Date.now() / 100_000) * 100_000 + 100_000 + 1_000;
+    // 유료 노출이 꺼져 있으면(lib/paidExposure, 2026-10-09 오너 결정) 광고 장이 없다 — 90초 바퀴 · 3장.
+    const AD = PAID_EXPOSURE_ON;
+    const N = AD ? 4 : 3;
+    const WHEEL = AD ? 100_000 : 90_000;
+    const T0 = Math.floor(Date.now() / WHEEL) * WHEEL + WHEEL + 1_000;
     await page.clock.install({ time: T0 });
     const advance = clockAdvancer(page, T0 - 1_000);
     await serveClock(page, row({
@@ -91,14 +96,14 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     await expect(shownSheet(page)).toContainText('300,000');
     // 문구 줄은 합계에 안 들어간다 — 총액 = 300,000
     await expect(page.getByTestId('clk-prize-total')).toHaveText('300,000');
-    await expect(page.getByTestId('clk-prize-page')).toHaveText('1 / 4');
+    await expect(page.getByTestId('clk-prize-page')).toHaveText(`1 / ${N}`);
     await page.screenshot({ path: 'test-results/clock-shots/k-1-prize.png' });
 
     await advance(30_000);
     await expect(aside.locator('p').first()).toHaveText(/bounty/i);
     await expect(shownSheet(page)).toContainText('헤드 바운티');
     await expect(aside).toContainText('바운티 안내');
-    await expect(page.getByTestId('clk-prize-page')).toHaveText('2 / 4');
+    await expect(page.getByTestId('clk-prize-page')).toHaveText(`2 / ${N}`);
     await advance(1_000);
     await page.screenshot({ path: 'test-results/clock-shots/k-2-bounty.png' });
 
@@ -114,17 +119,24 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     await expect(lis.nth(2)).toContainText('3. B팀');
     await page.screenshot({ path: 'test-results/clock-shots/k-3-team.png' });
 
-    // ④ 광고 — 404 주소는 빠지고 살아 있는 한 장만 건다(10초)
-    await advance(30_000);
-    await expect(aside.locator('p').first()).toHaveText(/sponsor/i);
-    const img = shownSheet(page).locator('img');
-    await expect(img).toHaveAttribute('src', AD_OK);
-    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
-    await page.screenshot({ path: 'test-results/clock-shots/k-4-ad.png' });
-
-    await advance(10_000);
-    await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
-    await expect(page.getByTestId('clk-prize-page')).toHaveText('1 / 4');
+    // ④ 광고 — 404 주소는 빠지고 살아 있는 한 장만 건다(10초). 유료 노출이 꺼져 있으면 광고가 등록돼 있어도 장이 없다.
+    if (AD) {
+      await advance(30_000);
+      await expect(aside.locator('p').first()).toHaveText(/sponsor/i);
+      const img = shownSheet(page).locator('img');
+      await expect(img).toHaveAttribute('src', AD_OK);
+      await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+      await page.screenshot({ path: 'test-results/clock-shots/k-4-ad.png' });
+      await advance(10_000);
+      await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
+      await expect(page.getByTestId('clk-prize-page')).toHaveText(`1 / ${N}`);
+    } else {
+      await advance(30_000);
+      await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
+      await expect(page.getByTestId('clk-prize-page')).toHaveText(`1 / ${N}`);
+      await expect(page.getByTestId('clk-prize-track').locator('[data-ad-sheet]'), '유료 노출이 꺼졌는데 광고 장이 섰다').toHaveCount(0);
+      await advance(10_000);
+    }
 
     // 머리말 높이가 장마다 같다 — 들썩임 없음
     const topY = async () => (await page.getByTestId('clk-prize-track').boundingBox())!.y;
@@ -158,6 +170,7 @@ test.describe('클락 TV — K단계 검토 반영', () => {
   };
 
   test('① 광고 2개 — 광고→시상으로 빠지는 동안 광고 장은 방금 보인 광고 그대로다', async ({ page }) => {
+    test.skip(!PAID_EXPOSURE_ON, '유료 노출 꺼짐(2026-10-09 오너 결정) — 광고 장 없음은 위 K단계 ④ 가 단언한다');
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1920, height: 1080 });
     const T0 = Math.floor(Date.now() / 40_000) * 40_000 + 40_000 + 1_000;   // 시상 30 + 광고 10 = 40초 바퀴

@@ -6,6 +6,7 @@ import Modal from '../atoms/Modal';
 import { SkeletonList } from '../atoms/Skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
+import { mergeEarlyRows } from '../../lib/mergeEarlyRows';
 import { isAuthorShown } from '../../lib/postVisible';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
@@ -333,7 +334,8 @@ export default function PostDetailModal({
     getComments({ postId: post.id })
       .then((cs) => {
         if (!active) return;
-        setReplies(cs);
+        // UP-06(2026-10-08): 조회가 늦으면 그 사이 구독이 먼저 받은 새 댓글을 통째로 덮었다 — id 기준으로 합친다.
+        setReplies((prev) => mergeEarlyRows(prev, cs, 'front'));
       })
       .catch((e) => { if (active) setCErr(e); });
     return () => { active = false; };
@@ -426,6 +428,7 @@ export default function PostDetailModal({
     if (!user) { promptLogin(); return; }
     // 낙관적으로 먼저 바꾼다 — 실패하면 이 스냅샷으로 되돌린다(서버는 거부했는데 화면만 바뀐 채 남지 않게).
     const before = { my: myReaction, bb, gr };
+    const startId = post.id;
     try {
       if (myReaction === type) {
         setMyReaction(null);
@@ -439,7 +442,9 @@ export default function PostDetailModal({
         await reactToPost(post.id, type);
       }
     } catch (e) {
-      setMyReaction(before.my); setBb(before.bb); setGr(before.gr);
+      // UP-07(2026-10-08): 그 사이 이전/다음 글로 넘어갔으면 되돌리지 않는다 — before 는 이전 글의 수치라
+      //   다음 글의 카운터를 덮었다(끌올 handleBump 와 같은 startId 가드).
+      if (currentPostIdRef.current === startId) { setMyReaction(before.my); setBb(before.bb); setGr(before.gr); }
       toast.show(msgOf(e, '처리에 실패했습니다'), 'error');
     }
   };
@@ -477,7 +482,8 @@ export default function PostDetailModal({
       postId: post.id, parentId, user,
       addComment,
       getCurrentPostId: () => currentPostIdRef.current,
-      onSaved: (saved) => setReplies((prev) => [saved, ...(prev ?? [])]),
+      // UP-05(2026-10-08): 실시간 INSERT 가 HTTP 응답보다 먼저 오면 같은 id 가 두 번 붙었다 — 같은 병합 경로로 중복을 거른다.
+      onSaved: (saved) => setReplies((prev) => applyCommentEvent(prev, { type: 'insert', comment: saved })),
       onError: (msg) => toast.show(msg, 'error'),
     });
   };
@@ -967,8 +973,9 @@ export default function PostDetailModal({
             마감하므로 선을 하나 더 그으면 경계가 두 번 생긴다. */}
         {!hidden && <hr className="border-t border-border-strong mt-3 max-lg:hidden" aria-hidden="true" />}
 
-        {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
-        {user?.id === post.userId && (
+        {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다).
+            숨김(관리자 숨김·임시조치) 글도 그리지 않는다 — 서버 bump_post 가 blinded 면 거절한다(audit10 P3-4). */}
+        {user?.id === post.userId && !post.blinded && (
           <div data-pd-bump className="mt-1.5 flex items-center gap-2">
             <Icon name="zap" size={16} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
             <span className="min-w-0 flex-1 text-xs leading-tight text-ink-secondary">

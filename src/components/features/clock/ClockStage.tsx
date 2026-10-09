@@ -14,17 +14,20 @@
 //   · 운영자 16:9 박스 — cqmin = 박스의 짧은 변. 그래서 같은 마크업이 박스 안에서 그대로 축소된다.
 //   뷰포트 기준(vmin·md:·landscape:)으로 돌아가면 둘 중 하나가 반드시 틀린다(2026-09-11 실측 2회).
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
-import { createContext, memo, useContext, useEffect, useReducer, useState, type ReactNode } from 'react';
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
-import { clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
+import { bbAt, clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
 import { useClockSecond } from '../../../lib/clockTick';
 import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
+import { PAID_EXPOSURE_ON } from '../../../lib/paidExposure';
 import type { ClockStageDecor } from './clockStageDecor';
+import { levelCueKey, useLevelCue, LEVEL_CUE_GLOW } from './levelCue';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, PRIZE_BAND_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
+import { BREAK_LABEL_FLOOR, BREAK_LABEL_H, breakLabelFontSize, breakLabelText } from './breakLabelFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
 const mmss = (ms: number) => formatCountdown(ms);
@@ -113,7 +116,11 @@ export interface ClockStageProps {
  * 보드 본체 — 상태 바 / 본문 3열 / 하단 레일.
  * 데이터를 읽지 않는다(구독·폴링·저장 0). 받은 ClockState 를 그리기만 한다.
  */
-export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adSize = 'sm', ads = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
+export default function ClockStage({ g, venueName, headerRight, qr, sponsor: rawSponsor, adSize = 'sm', ads: rawAds = NO_ADS, decor = NO_DECOR }: ClockStageProps) {
+  // 유료 노출 스위치(lib/paidExposure) — TV·운영자·관전 클락이 모두 이 보드를 그리므로 여기서 한 번 끈다.
+  //   등록 데이터와 관리자 광고 설정은 그대로 두고, 화면에만 안 건다(다시 켜면 그대로 돌아온다).
+  const sponsor = PAID_EXPOSURE_ON ? rawSponsor : null;
+  const ads = PAID_EXPOSURE_ON ? rawAds : NO_ADS;
   const pl = decor.plated ? PLATE : undefined;
   const logo = decor.logo;
   // 재점검 2회차 하-C — 세로로 긴 로고는 머리줄(높이 고정)에서 23×63px 로 읽히지 않았다. 폭/높이 < LOGO_TALL_AR 이면
@@ -126,10 +133,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
     const im = e.currentTarget;
     if (logo && im.naturalHeight > 0) setLogoAr({ src: logo.src, ar: im.naturalWidth / im.naturalHeight });
   };
-  const lvls = g.config?.levels ?? [];
-  // 손님 기기라 DB 를 고치지 않고 '지금 진짜 레벨' 을 계산해 표시한다(DB 전진은 운영자 화면 책임).
-  const eff = effectiveLevel(g);
-  const curIdx = eff.index;
+  // (레벨·BB 는 초 틱을 가진 자식들 — LevelLine·BottomMetrics — 이 각자 실효 레벨로 잰다.)
   const ls = g.liveStats ?? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
@@ -141,9 +145,6 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   const totalPrize = prizeTotalOf(prizes);
   const hasCounts = !!g.liveStats
     || (ls.entries > 0 || ls.alive > 0 || ls.rebuys > 0 || ls.earlies > 0 || ls.addons > 0 || ls.eliminations > 0);
-  // BB 병기 — 브레이크 중엔 직전 플레이 레벨의 BB
-  let curBB = 0;
-  for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { curBB = l.bb; break; } }
   const buyIn = ls.buyInAmount ?? 0;
   const regLevel = g.config?.regCloseLevel ?? 0;
   // 리바이·애드온·얼리는 **각자** 판정한다(예전엔 셋이 한 조건에 묶여 '리바이 · 애드온' 한 줄이었고 얼리는 아예 없었다).
@@ -328,7 +329,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               </div>
             ) : <span />}
             {/* 하단 중앙 — 칩 경제 3종. QR(좌)·스폰서(우) 사이의 빈 폭을 실제 정보로 채운다. */}
-            <BottomMetrics g={g} curBB={curBB} />
+            <BottomMetrics g={g} />
             <div className="flex shrink-0 items-center justify-self-end gap-[2cqmin]">
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: adSize === 'lg' ? '9cqmin' : adSize === 'md' ? '7.2cqmin' : '5.5cqmin' }} />}
               {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
@@ -631,15 +632,20 @@ function PausedLabel({ g }: { g: ClockState }) {
  * 초당 갱신이 필요 없다(레벨은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
  * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
+/** M07 빛 판 — 글자 상자 안(inset-0, 레이아웃 0)·평소 투명. -z-10 은 부모 p 의 isolate 안에서만 글자 뒤로 간다. */
+const CUE_CLS = 'pointer-events-none absolute inset-0 -z-10 rounded-[0.5em] opacity-0';
 function LevelLine({ g }: { g: ClockState }) {
   useClockSecond(g);   // C4 — 아래 'K9' 주석 참고(lib/clockTick): DB 쓰기 없이 레벨 경계를 지나도 매초 실효 레벨을 다시 읽는다
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const isBreak = lvls[eff.index]?.kind === 'break';
+  // M07 — 레벨 경계에서 한 번만 글자 뒤 빛(levelCue.ts). relative isolate: 빛 판(-z-10)이 이 줄 안에서만 글자 뒤에 깔린다(레이아웃 0).
+  const cue = useLevelCue<HTMLSpanElement>(levelCueKey(g.venueId, g.gameSeq, eff.index));
   return (
-    <p data-testid="clk-level" className="whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
+    <p data-testid="clk-level" className="relative isolate whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
       style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #D9B25A)', ...(usePlate() ? PLATE : null) }}>
       {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
+      <span ref={cue} aria-hidden data-testid="clk-level-cue" className={CUE_CLS} style={LEVEL_CUE_GLOW} />
     </p>
   );
 }
@@ -696,10 +702,12 @@ function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
  * 우측 세로 레일에 같이 두면 7줄이 되어 글자가 작아지고, 정작 화면 하단은 QR·스폰서만 남아 비었다.
  * 다음 휴식만 초당 갱신이라 이 컴포넌트에 틱을 가둔다 — 보드 전체를 매초 다시 그리지 않는다.
  */
-function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
+function BottomMetrics({ g }: { g: ClockState }) {
   useClockSecond(g);
   const ls = g.liveStats;
   const eff = effectiveLevel(g);
+  // BB 병기 — 이 칸의 초 틱과 **같은 실효 레벨**로 잰다. 부모(틱 없음)에서 받으면 레벨 경계 뒤 다음 상태 수신까지 이전 레벨 BB 였다.
+  const curBB = bbAt(g.config?.levels ?? [], eff.index);
   const brk = msToNextBreak(g, eff.index, eff.remainingMs);
   /** 값 없음(—)과 실제 0 을 구분한다 — 장부가 아직 안 붙은 클락에서 '총 칩 0' 은 거짓이다. */
   const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
@@ -795,6 +803,43 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
  * 높이는 내용대로다 — 타이머는 위 스페이서 구조 덕에 이 행의 높이와 무관하므로 ANTE 유무가 타이머를 밀지 않는다.
  * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
  */
+/** 브레이크 라벨 글자 — 최대 두 줄, 넘치면 말줄임. 공백 없는 긴 낱말도 칸 안에서 끊는다(anywhere).
+ *  줄 높이 1.1 × 2줄 = 칸 높이(breakLabelFit.ts). 한 줄일 때는 상자(1.1em)가 칸(1em)보다 크지만 <p> 가 세로 가운데로 두어
+ *  글자 기준선이 종전 leading-none 한 줄과 같은 자리다(기본 'BREAK' 픽셀 불변). */
+const BREAK_LABEL_TEXT = {
+  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden',
+  overflowWrap: 'anywhere', textAlign: 'center', textWrap: 'balance', lineHeight: 1.1,
+} as const;
+
+/** 브레이크 라벨(CURRENT 칸). 글자 크기는 em 추정(breakLabelFit)이라 기기 글꼴(특히 이모지)이 추정보다 넓으면
+ *  한 줄 크기 그대로 두 줄이 되어 칸 높이를 넘고 위 'BREAK' 머리글을 덮는다(review-251 P2-①).
+ *  그때만 하한 크기로 내려 두 줄 안에 넣는다 — 렌더 직후·글꼴 교체·크기 변화 때 판정하고, 그리기 전이라 깜빡임이 없다.
+ *  1.15 = 한 줄 상자(1.1em, 최대 H×1.1)는 통과시키고, 넘친 두 줄이 위아래 칸 사이 여백(0.8cqmin)을 넘기 전에 잡는 선. */
+function BreakLabel({ text, glow }: { text: string; glow: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [squeezed, setSqueezed] = useState<string | null>(null);   // 하한으로 내린 라벨 — 라벨이 바뀌면 다시 판정
+  const squeeze = squeezed === text;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || squeeze) return;
+    const check = () => {
+      const box = el.parentElement;
+      if (box && el.getBoundingClientRect().height > box.getBoundingClientRect().height * 1.15) setSqueezed(text);
+    };
+    check();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, squeeze]);
+  return (
+    <p className="relative isolate flex max-w-full items-center justify-center font-extrabold leading-none"
+      style={{ height: BREAK_LABEL_H, fontSize: squeeze ? BREAK_LABEL_FLOOR : breakLabelFontSize(text), color: 'var(--clk-timer-break, #7dd3fc)' }}>
+      {glow}<span ref={ref} data-testid="clk-break-label" style={BREAK_LABEL_TEXT}>{breakLabelText(text)}</span>
+    </p>
+  );
+}
+
 const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   useClockSecond(g);   // C4 — memo 라 부모 리렌더도 안 탄다. 틱이 없으면 TV 가 다음 폴링(최대 30초)까지 옛 블라인드를 보였다.
   const lvls = g.config?.levels ?? [];
@@ -802,6 +847,9 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   const lv = lvls[eff.index];
   const isBreak = lv?.kind === 'break';
   const next = (() => { for (let i = eff.index + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
+  // M07 — LevelLine 과 같은 키·같은 틱. CURRENT 블라인드(또는 BREAK) 뒤에 한 번만 빛이 번진다(숫자 크기·위치 불변).
+  const cue = useLevelCue<HTMLSpanElement>(levelCueKey(g.venueId, g.gameSeq, eff.index));
+  const cueGlow = <span ref={cue} aria-hidden data-testid="clk-cur-cue" className={CUE_CLS} style={LEVEL_CUE_GLOW} />;
   const num = (n: number) => n.toLocaleString();
   // 글자 크기를 **칸 폭에도** 묶는다(2026-09-13 검증자 실측 — 폰트 ON 에서 15,000/30,000 이 1920×1080 에서 NEXT 와 8px 겹치고
   //   프라이즈 열을 30px 침범, 200K/400K 는 99px 겹침·세로 TV 68px 잘림. 폴백 폰트에서도 6자리는 24px 겹치던 기존 결함).
@@ -841,17 +889,17 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
       <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center border-r border-white/[0.07] px-[2cqmin]">
         <p className={`${LABEL} ${LABEL_SIZE}`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
-          <p className="whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
-            {lv?.label || 'BREAK'}
-          </p>
+          // 2026-10-09 P1 — 포스터 원문 라벨('BREAK TIME 8 MINS / 1,000칩 레이스')이 nowrap 고정 크기라 칸을 넘어 NEXT 를 덮었다.
+          //   칸 높이는 종전 한 줄 높이 그대로 고정(다른 칸 위치 불변), 글자는 칸 폭에 맞춰 줄이고 → 두 줄 → 말줄임(breakLabelFit.ts).
+          <BreakLabel text={lv?.label || 'BREAK'} glow={cueGlow} />
         ) : (
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
             {/* data-testid: clock-blinds-fit.spec 앵커 — 예전엔 `.clk-cols .whitespace-nowrap` 의 0·1번째를 CURRENT·NEXT 로 잡았는데
                 2026-09-19 LevelLine(whitespace-nowrap)이 중앙 열에 들어오며 0번째가 LEVEL 이 되어 10건이 거짓 실패했다. */}
-            <p data-testid="clk-cur-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums"
+            <p data-testid="clk-cur-blinds" className="relative isolate whitespace-nowrap font-extrabold leading-none tabular-nums"
               style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #D9B25A)' }}>
-              {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
+              {cueGlow}{lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
                 행 높이는 부모가 고정하므로 이 줄의 유무가 타이머를 밀지 않는다. */}

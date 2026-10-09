@@ -204,10 +204,11 @@ test('🔴 M4-02 후속 — 축소된 헤더 밑 +1~+5px 은 헤더가 아니라
   expect(r.hits, `보이는 헤더(밑면 ${r.hb}) 아래 띠의 누름을 헤더가 가로챈다 — 섹션 바·본문·검색 띠 윗부분이 죽는다`).toEqual([]);
 });
 
-test('🔴 M4-04 후속 — 계정 메뉴 항목으로 탭을 옮길 때 메뉴가 떠나는 판보다 먼저 사라지지 않는다(옛 판 비침 없음)', async ({ page }) => {
+test('🔴 M4-04 후속(8차 INSTANT-SWAP) — 계정 메뉴 항목으로 탭을 옮기면 판은 한 프레임에 바뀌고(떠나는 판 없음) 메뉴는 새 판 위에서 걷힌다', async ({ page }) => {
+  // 2026-10-08 — 떠나는 판 퇴장 페이드를 걷었다(src/lib/tabCover.ts 8차 절). 옛 계약('메뉴가 떠나는 판보다 먼저 사라지지 않는다')의
+  //   전제(옛 판이 240ms 남는다)가 없어졌으므로, 옛 판이 비칠 자리 자체가 없다 — 떠나는 판 0 · 메뉴는 컷이 아니라 퇴장으로 걷힌다를 잰다.
   test.setTimeout(120_000);
   await bootTools(page, true);
-  // 홈에서 출발 — '도구' 항목이 탭 이동(떠나는 판 handOffPane + 메뉴 handoff)이 된다.
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'home' })));
   await page.waitForTimeout(1500);
   await page.getByRole('button', { name: '검증계정 메뉴' }).click();
@@ -215,14 +216,14 @@ test('🔴 M4-04 후속 — 계정 메뉴 항목으로 탭을 옮길 때 메뉴�
   await page.waitForTimeout(600);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-  const frames = await page.evaluate(() => new Promise<{ menu: number; pane: number }[]>((res) => {
-    const out: { menu: number; pane: number }[] = [];
+  const frames = await page.evaluate(() => new Promise<{ menu: number | null; leaving: boolean; tab: string }[]>((res) => {
+    const out: { menu: number | null; leaving: boolean; tab: string }[] = [];
     let n = 0;
     const tick = () => {
       const menu = document.querySelector<HTMLElement>('header [data-menu-leave]');
-      const pane = document.querySelector<HTMLElement>('[data-pane-leaving]');
-      if (menu && pane) out.push({ menu: +Number(getComputedStyle(menu).opacity).toFixed(3), pane: +Number(getComputedStyle(pane).opacity).toFixed(3) });
-      if (++n > 90) { res(out); return; }
+      const tab = [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((p) => p.style.display !== 'none')?.dataset.tab ?? '?';
+      out.push({ menu: menu ? +Number(getComputedStyle(menu).opacity).toFixed(3) : null, leaving: !!document.querySelector('[data-pane-leaving]'), tab });
+      if (++n > 60) { res(out); return; }
       requestAnimationFrame(tick);
     };
     const item = [...document.querySelectorAll<HTMLElement>('header div.w-56 button')].find((b) => (b.textContent ?? '').trim() === '도구');
@@ -230,7 +231,8 @@ test('🔴 M4-04 후속 — 계정 메뉴 항목으로 탭을 옮길 때 메뉴�
     requestAnimationFrame(tick);
   }));
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-  expect(frames.length, '메뉴 퇴장과 떠나는 판이 함께 있는 프레임을 못 모았다(측정 공허 — 판 handoff 가 안 돌았다)').toBeGreaterThan(3);
-  const early = frames.filter((f) => f.menu < f.pane - 0.05);
-  expect(early, `메뉴가 떠나는 판보다 먼저 사라진 프레임 ${early.length}개 — 메뉴 자리로 옛 판이 비친다: ${JSON.stringify(frames.slice(0, 12))}`).toEqual([]);
+  expect(frames.at(-1)?.tab, '메뉴의 도구 항목이 탭을 옮기지 않았다(측정 공허)').toBe('tools');
+  expect(frames.filter((f) => f.leaving).length, '떠나는 판이 섰다 — 판 교체는 한 프레임이어야 한다(블러·네모칸 부류)').toBe(0);
+  const fading = frames.filter((f) => f.tab === 'tools' && f.menu !== null && f.menu > 0.05);
+  expect(fading.length, `메뉴가 한 프레임에 컷됐다 — 퇴장으로 걷혀야 한다: ${JSON.stringify(frames.slice(0, 12))}`).toBeGreaterThan(1);
 });

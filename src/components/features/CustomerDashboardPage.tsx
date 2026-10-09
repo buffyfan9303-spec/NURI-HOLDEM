@@ -49,6 +49,7 @@ import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox'; // 자동 로그인 
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
+import { saveForReload, ME_TAB_KEY } from '../../lib/reloadTab';
 import VoucherWallet from './VoucherWallet'; // 이용권 지갑 정본 — 헤더 [이용권·출석] 시트와 같은 컴포넌트를 쓴다(중복 0)
 
 // ── 홈 화면 설치(A2HS) 이벤트 선점 ─────────────────────────────────────────────
@@ -750,6 +751,8 @@ function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, o
   // 그 판이 한 번 마운트·조회된 뒤 바뀐다(판이 keep-alive 라 그 판이 세션 내내 남는다).
   const [prevOpen, setPrevOpen] = useState(open);
   if (prevOpen !== open) { setPrevOpen(open); if (open) setTab(initialTab); }
+  // 새로고침하면 이 탭으로 다시 연다 — App 이 부팅 때 읽어 initialTab 으로 준다(lib/reloadTab).
+  useEffect(() => { if (open) saveForReload(ME_TAB_KEY, tab); }, [open, tab]);
   // 하위 탭 전환 = 방향성 푸시(data-profile-tabbar 제자리 · data-profile-panel 만 밀림) — 커뮤니티·GTO 와 같은 조리법
   const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
   useLayoutEffect(() => { goTabRef.current = goTab; }, [goTabRef, goTab]);
@@ -990,7 +993,7 @@ function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
       {cancelable && (
         <button
           type="button" onClick={fire} disabled={busy}
-          className="absolute inset-y-0 right-0 flex w-[76px] items-center justify-center bg-danger text-xs font-bold text-white active:opacity-80 disabled:opacity-60"
+          className="peer absolute inset-y-0 right-0 flex w-[76px] items-center justify-center bg-danger text-xs font-bold text-white active:opacity-80 disabled:opacity-60"
         >
           {busy ? '취소 중…' : '예약 취소'}
         </button>
@@ -998,8 +1001,8 @@ function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
       <div
         className={[
           'relative bg-surface-low px-3 py-2 transition-transform duration-(--dur-fast) ease-out',
-          // PC: 호버 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응)
-          cancelable ? 'md:group-hover:translate-x-[-76px]' : '',
+          // PC: 호버·키보드 초점 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응). 초점은 보이지 않는 버튼에 가면 확인 없이 Enter 로 취소되므로 peer-focus 로 모든 폭에서 덮개를 비킨다(UP-19)
+          cancelable ? 'md:group-hover:translate-x-[-76px] peer-focus:translate-x-[-76px]' : '',
         ].join(' ')}
         style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
         onTouchStart={onTouchStart}

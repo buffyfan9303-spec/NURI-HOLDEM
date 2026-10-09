@@ -17,6 +17,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { filterContent } from '../../lib/content-filter';
 import { uploadCommunityImages } from '../../lib/storage';
+import { useRevokeDroppedPreviews } from '../../lib/blobPreviews';
 import type { PostCategory } from '../../api/community';
 import CardGridPicker from './gto/CardGridPicker';
 import { cardId } from './gto/useDeepGto';
@@ -175,10 +176,8 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
     setHandTarget(target);
   };
 
-  useEffect(() => {
-    // 언마운트/프리뷰 교체 시 objectURL 정리(메모리릭 방지)
-    return () => { previews.forEach((u) => URL.revokeObjectURL(u)); };
-  }, [previews]);
+  // 언마운트/프리뷰 교체 시 objectURL 정리(메모리릭 방지) — UP-02: 빠진 URL 만 해제한다(lib/blobPreviews).
+  useRevokeDroppedPreviews(previews);
 
   const handlePickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);

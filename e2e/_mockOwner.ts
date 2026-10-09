@@ -18,6 +18,7 @@
 import type { Page, Route } from '@playwright/test';
 import { SUPABASE_URL } from './_session';
 import { OWNER_TERMS_VERSION } from '../src/lib/legalDeploy';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
 
 const REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 /** supabase-js v2 의 세션 키 — 앱이 로드되기 전에 심으면 정상 로그인으로 부팅한다. */
@@ -85,7 +86,7 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     venue_id: MOCK_VENUE, activity_points: 0, created_at: FAKE_SESSION.user.created_at,
     // 2026-09-28 — 개정 약관 시행일(LEGAL_EFFECTIVE_ISO 2026-09-29)부터 구버전 동의자는 '개정 약관 동의' 차단 게이트를 본다.
     //   이 칸이 없으면 시행일 이후 **모든 목킹 업주 스펙**이 게이트에 막혀 '내 매장' 을 못 찾는다(자정 넘김 스펙에서 실측).
-    consented_legal_version: 3,
+    consented_legal_version: LEGAL_VERSION,
     ...opts.profile,
   }));
   const venueRow = {
@@ -131,9 +132,12 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   // 순위 판이 타는 STABLE RPC. 없으면 운영 서버에서 401 을 받고 화면이 삼켜
   //   '데이터 없음' 과 '인증 실패' 가 구별되지 않는다.
   await page.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([])));
-  // 매장 사장 목록 — '위험 구역' 하위탭은 여기서 **내 줄의 is_primary** 가 확인될 때만 보인다(FULL-RECHECK-2/C #3, fail-closed).
-  //   목킹 업주는 venues.owner_id 인 대표 업주다. 안 걸어 두면 가짜 토큰이 401 을 받아 탭이 사라진다.
+  // 매장 사장 목록(설정 › 통계의 '사장님 관리' 카드).
   await page.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([{ user_id: MOCK_UID, nickname: '업주', name: '업주', is_primary: true, status: 'approved' }])));
+  // 소속 매장 목록 — 대표 업주 판정(relation='owner')의 정본이다. '위험 구역' 하위탭·위치 확인 출석 스위치는
+  //   여기서 이 매장이 'owner' 로 확인될 때만 열린다(fail-closed). 안 걸면 가짜 토큰이 401 을 받아 둘 다 닫힌다.
+  //   매장 한 곳이라 전환기는 뜨지 않는다(종전 그대로). 두 매장·공동 운영자 시험은 스펙이 extra 로 덮는다.
+  await page.route(/\/rest\/v1\/rpc\/my_member_venues/, (r) => r.fulfill(json([{ id: MOCK_VENUE, name: MOCK_VENUE_NAME, relation: 'owner' }])));
   // ⚠ StoreLiveBar 는 `진행 중 클락 없음 && 대기 바인 0` 일 때만 null 이다(VenueManageTab).
   //   그 바는 단계 바보다 **위**에 있어서, 값이 우연히 0 이면 '바 위치 고정' 불변식이
   //   우연 위에 서게 된다. 명시로 0 을 준다.

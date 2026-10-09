@@ -11,6 +11,7 @@
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { TV_VENUE as VENUE, serveClock } from './_clock';
+import { PAID_EXPOSURE_ON } from '../src/lib/paidExposure';
 
 const LEVELS = [
   { kind: 'level', sb: 500, bb: 1000, ante: 1000, minutes: 20 },
@@ -99,7 +100,9 @@ test.describe('관전 클락 — 법정 고지 한 줄(#18)', () => {
     });
     await page.goto(`/?display=${VENUE}&g=1&auto=0`);
     await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('img', { name: '스폰서' }), '광고 목이 안 붙었다(측정 전제 없음)').toBeVisible();
+    // 유료 노출이 꺼져 있으면(lib/paidExposure, 2026-10-09 오너 결정) 광고가 등록돼 있어도 걸지 않는다 — 고지 줄 측정은 그대로 한다.
+    if (PAID_EXPOSURE_ON) await expect(page.getByRole('img', { name: '스폰서' }), '광고 목이 안 붙었다(측정 전제 없음)').toBeVisible();
+    else await expect(page.getByRole('img', { name: '스폰서' }), '유료 노출이 꺼졌는데 스폰서 광고가 섰다').toHaveCount(0);
     await expect(page.getByText('Next Break'), '휴식 칸이 없다(측정 전제 없음)').toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(500);

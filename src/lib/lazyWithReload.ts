@@ -10,6 +10,7 @@
 //   받기 전에는 지금과 똑같이 lazy + Suspense 폴백이 안전망이다(호출부 동작 불변).
 import { createElement, lazy, useState } from 'react';
 import type { ComponentProps, ComponentType } from 'react';
+import { loadIconsExtra } from '../components/atoms/iconsExtraLoader';
 
 const KEY = 'nuri_chunk_reload_at';
 
@@ -18,8 +19,12 @@ export function lazyWithReload<T extends ComponentType<any>>(factory: () => Prom
   let mod: T | undefined;
   let pending: Promise<{ default: T }> | undefined;
   // 같은 요청을 공유한다(preload 와 lazy 가 청크를 두 번 받지 않게). 실패하면 비워 다음에 다시 시도한다.
-  const load = () => (pending ??= factory().then(
-    (m) => { mod = m.default; return m; },
+  // 2026-10-07 번들 감축 PR A ③: 첫 화면 밖 아이콘 청크(iconsExtra)도 같이 기다린다 — lazy 화면이 첫 프레임부터 아이콘을 갖게.
+  //   아이콘 청크 실패는 삼킨다 — 화면은 그대로 열리고 빈 칸은 iconsExtraLoader 가 **다른 주소(?r=n)로** 다시 받아 채운다
+  //   (같은 주소는 브라우저가 실패를 기억해 다시 못 받는다). 새로고침하지 않는 이유: 입력 중인 글·열린 시트를 지킨다.
+  //   화면 청크 실패만 아래 새로고침 복구로 간다.
+  const load = () => (pending ??= Promise.all([factory(), loadIconsExtra().catch(() => {})]).then(
+    ([m]) => { mod = m.default; return m; },
     (err) => { pending = undefined; throw err; },
   ));
   const Lazy = lazy(async () => {

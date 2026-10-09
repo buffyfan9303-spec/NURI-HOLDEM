@@ -6,7 +6,7 @@
 //
 // 이 스펙이 잠그는 것
 //   ① 상단 3분할 탭이 되살아나지 않는다 · 브랜드 오브젝트는 화면당 하나
-//   ② 소셜 CTA 는 Google 하나 (Apple·Kakao 없음)
+//   ② 소셜 CTA 는 Google 하나 (Apple 없음 · Kakao 는 공개 스위치 VITE_KAKAO_LOGIN_ENABLED 를 켠 빌드에서만 정확히 하나 — E2E_KAKAO_LOGIN=on)
 //   ③ 로그인 → 회원가입 → 유형 전환 → 로그인 복귀 · 비밀번호 찾기 왕복이 전부 된다
 //   ④ initialMode="signup-owner" 직접 진입이 매장 업주로 앉는다
 //   ⑤ 필수 약관 전에는 가입 버튼이 잠기고, 선택 약관 없이도 열린다
@@ -51,11 +51,13 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await expect(dialog.getByTestId('auth-title-login')).toBeVisible();
   });
 
-  test('🔴 소셜 CTA 는 Google 하나 — Apple·Kakao 는 없다', async ({ page }) => {
+  test('🔴 소셜 CTA 는 Google 하나 — Apple 은 없고 Kakao 는 스위치를 따른다', async ({ page }) => {
+    const kakaoOn = process.env.E2E_KAKAO_LOGIN === 'on';
     const dialog = await openLogin(page);
     await expect(dialog.getByRole('button', { name: /Google로/ })).toHaveCount(1);
     await expect(dialog.getByRole('button', { name: /Apple|애플/ }), 'Apple 로그인이 생겼다').toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: /카카오|Kakao/ }), '삭제한 카카오 로그인이 돌아왔다').toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /카카오|Kakao/ }),
+      kakaoOn ? '스위치를 켠 빌드인데 카카오 버튼이 하나가 아니다' : '스위치가 꺼진 빌드인데 카카오 로그인 버튼이 있다').toHaveCount(kakaoOn ? 1 : 0);
   });
 
   test('🔴 이메일·비밀번호 입력과 자동 로그인 체크가 그대로 동작한다', async ({ page }) => {

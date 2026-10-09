@@ -11,6 +11,8 @@
 import { test, expect } from './_fixtures';
 import { type Page, type Route } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { LEGAL_VERSION } from '../src/lib/legalVersion';
+import { PAID_EXPOSURE_ON } from '../src/lib/paidExposure';
 
 const ADS_RPC = /\/rest\/v1\/rpc\/community_ads_public/;
 const POSTS_REST = /\/rest\/v1\/community_posts\?/;
@@ -83,7 +85,26 @@ const promoted = (page: Page) => page.locator('[data-promoted-post-id]');
 const visibleText = (scope: Page | ReturnType<Page['locator']>, t: string) =>
   scope.getByText(t).filter({ visible: true });
 
+// 2026-10-09 오너 결정 "유료 광고 노출 하지마" — 손님 화면 광고 칸은 lib/paidExposure 스위치가 켜져 있을 때만 선다.
+//   꺼져 있는 동안의 계약은 아래 '유료 노출 꺼짐' 이 잠근다. 스위치를 켜면 이 묶음이 그대로 다시 돈다.
+test.describe('유료 노출 꺼짐 — 커뮤니티 광고 칸', () => {
+  test.skip(PAID_EXPOSURE_ON, '유료 노출이 켜져 있다 — 위 승격 계약이 대신 돈다');
+  test('🔴 서버가 광고를 내려줘도 광고 칸을 조회·렌더하지 않고, 일반 피드는 그대로다', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const counters = { ads: 0, postById: 0 };
+    await install(page, { ads: [adRow(1, 'ad-1', '광고로 올린 글')], counters });
+    await openBoard(page);
+    await expect(visibleText(page, '일반글 하나').first(), '일반 피드가 안 떴다(측정 전제 없음)').toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1200);
+    expect(counters.ads, `광고 RPC 를 ${counters.ads}번 불렀다 — 꺼진 스위치를 우회했다`).toBe(0);
+    await expect(promoted(page), '유료 노출이 꺼졌는데 광고 칸이 섰다').toHaveCount(0);
+    await expect(page.locator('[data-tab="community"] span', { hasText: /^AD$/ }).filter({ visible: true })).toHaveCount(0);
+    await expect(visibleText(page, '광고로 올린 글')).toHaveCount(0);
+  });
+});
+
 test.describe('커뮤니티 광고 — 게시글 승격', () => {
+  test.skip(!PAID_EXPOSURE_ON, '유료 노출 꺼짐(2026-10-09 오너 결정) — 켜면 다시 돈다');
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, height: 844 }); });
 
   test('🔴 게재 중인 광고가 **게시글 카드 그대로** 서고 AD 배지가 붙는다 (feed 보기)', async ({ page }) => {
@@ -335,7 +356,7 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
       id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 3,
+      agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
     })));
     // 🔴 쓰기는 여기서 끊고 페이로드만 기록한다 — 운영 DB 에 나가지 않는다.
     await page.route(/\/rest\/v1\/community_ads/, (r) => {
@@ -409,7 +430,7 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
       id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
       venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
-      agreed_to_terms: true, consented_legal_version: 3,
+      agreed_to_terms: true, consented_legal_version: LEGAL_VERSION,
     })));
     await page.route(/\/rest\/v1\/community_ads/, (r) => {
       if (r.request().method() === 'GET') return r.fulfill(json(adRows));
@@ -474,6 +495,8 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     await expect(page.locator('[data-ad-admin-slot="2"]').getByText('게재 중')).toBeVisible({ timeout: 10_000 });
 
     // ④ 손님 화면 — 서버 RPC 가 그 글을 광고로 내려주면 게시판 광고 칸에 그 글이 선다
+    //   (유료 노출이 꺼져 있으면 손님 화면엔 광고 칸이 없다 — 그 계약은 '유료 노출 꺼짐' 묶음이 잠근다. 관리 경로는 위에서 끝까지 검증했다.)
+    if (!PAID_EXPOSURE_ON) return;
     liveAds = [adRow(2, NEW_ID, '가을 정기 대회 안내', { user_name: '운영자', category: 'info' })];
     await page.goto('/?tab=community');
     await dismissOverlays(page);
