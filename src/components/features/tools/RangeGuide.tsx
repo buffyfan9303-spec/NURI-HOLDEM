@@ -5,7 +5,9 @@ import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
 import { buildFreq, rangeComboPct } from '../../../lib/ranges';
 import { RANGE_GROUPS, RANGE_SCENARIOS, type RangeScenario, type TablePos } from '../../../lib/ranges.data';
+import { DEPTH_GAP_NOTE, DEPTH_SCENARIOS, carryScenario, type RangeDepth } from '../../../lib/ranges.depth.data';
 import Icon from '../../atoms/Icon';
+import SegmentedTabs from '../../atoms/SegmentedTabs';
 
 // 스타팅핸드 가이드 — Chen 근사(19개 계수 파생)를 폐기하고 자체 제작 표준 차트로 전환.
 // 오픈(6맥스+9인 얼리)·블라인드 수비·3벳·vs 3벳 34개 시나리오, 혼합 빈도는 셀 채움으로.
@@ -42,7 +44,16 @@ const chipCls = (on: boolean) =>
   [CHIP_HIT, 'h-[32px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-hidden',
     on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
 
-const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;
+const firstOfGroup = (list: RangeScenario[], g: RangeScenario['group']) => list.find((s) => s.group === g) ?? list[0];
+
+// 스택 깊이(2026-10-09 오너 "100bb 뿐 아니라 3개 정도 더") — 모든 표를 바꾸는 가장 바깥 축이라 그룹 칩 위 한 줄.
+//   100bb 는 앤티 없는 표(ranges.data.ts), 25·40·60bb 는 BB 앤티 1bb 표(ranges.depth.data.ts). 기본은 100bb 그대로다
+//   (오답 노트 '차트에서 보기'·#tool=range 딥링크가 100bb id 로 온다).
+type DepthKey = '25' | '40' | '60' | '100';
+const DEPTH_TABS: { key: DepthKey; label: string }[] = [
+  { key: '25', label: '25bb' }, { key: '40', label: '40bb' }, { key: '60', label: '60bb' }, { key: '100', label: '100bb' },
+];
+const listOf = (k: DepthKey): RangeScenario[] => (k === '100' ? RANGE_SCENARIOS : DEPTH_SCENARIOS[Number(k) as RangeDepth]);
 
 export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
   initialGroup?: RangeScenario['group'];
@@ -51,13 +62,17 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
   highlight?: string;
 } = {}) {
   // 기본 그룹 = 9인 오픈(2026-09-02): 국내 홀덤펍은 9인 테이블이 기본이라 6맥스보다 먼저 보여야 한다
+  const [depth, setDepth] = useState<DepthKey>('100');
+  const list = listOf(depth);
   const [scenId, setScenId] = useState<string>(
-    () => (initialScenId && RANGE_SCENARIOS.some((s) => s.id === initialScenId) ? initialScenId : firstOfGroup(initialGroup ?? 'rfi9').id),
+    () => (initialScenId && RANGE_SCENARIOS.some((s) => s.id === initialScenId) ? initialScenId : firstOfGroup(RANGE_SCENARIOS, initialGroup ?? 'rfi9').id),
   );
-  const scen = RANGE_SCENARIOS.find((s) => s.id === scenId) ?? RANGE_SCENARIOS[0];
+  const scen = list.find((s) => s.id === scenId) ?? list[0];
   const group = scen.group;
+  // 그 깊이에 표가 있는 그룹만 — 빈 상자를 만들지 않는다(25bb 에는 3벳·vs 3벳이 없다). 칩 행은 가로 스크롤 한 줄이라 개수가 바뀌어도 높이는 같다.
+  const groups = useMemo(() => RANGE_GROUPS.filter((g) => list.some((s) => s.group === g.id)), [list]);
 
-  const inGroup = useMemo(() => RANGE_SCENARIOS.filter((s) => s.group === group), [group]);
+  const inGroup = useMemo(() => list.filter((s) => s.group === group), [list, group]);
   // 1단: 내 포지션 — 그룹 안에서 중복 제거 후 테이블 순서로
   const heroes = useMemo(() => [...new Set(inGroup.map((s) => s.hero))].sort(byPos), [inGroup]);
   // 2단: 상대 — 고른 내 포지션 안의 매치업들(RFI 는 상대가 없어 이 행 자체가 없다)
@@ -80,13 +95,24 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
   // 액션이 둘 이상이면 '총 continue'(= 폴드하지 않는 비율)를 한 줄로 — 콤보 가중 %, 매트릭스 범례와 같은 규칙.
   const totalPct = useMemo(() => actions.reduce((s, a) => s + rangeComboPct(a.freq), 0), [actions]);
 
-  const pickGroup = (g: RangeScenario['group']) => setScenId(firstOfGroup(g).id);
+  const pickGroup = (g: RangeScenario['group']) => setScenId(firstOfGroup(list, g).id);
+  // 깊이를 바꿔도 같은 자리(같은 그룹·내 자리·상대)를 유지한다 — 셀 선택(RangeMatrix13)도 그대로라 같은 손을 깊이별로 비교할 수 있다.
+  const pickDepth = (k: DepthKey) => {
+    setDepth(k);
+    setScenId(carryScenario(listOf(k), scen).id);
+  };
   const pickHero = (h: TablePos) =>
     setScenId(inGroup.filter((s) => s.hero === h).sort((a, b) => byPos(a.vs ?? a.hero, b.vs ?? b.hero))[0].id);
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc={`상황별 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 빈도`}>
+    // desc 는 개수를 세지 않는 고정 문장 — 깊이마다 개수가 달라 바꿀 때 글자 폭·줄 수가 튄다.
+    <CalcCard desc="포지션·상황별 프리플랍 레인지 · 스택 깊이 4단계 · 셀을 누르면 핸드별 빈도">
+      {/* ⓪ 스택 깊이 — 위로만 넓히는 44px 누름면(hitUp)이 위 desc 와 겹치지 않게 pt-1.5 로 간격을 벌린다
+          (space-y-3 12px < 오버행 13px → 6px 를 더해 18px). role 은 달지 않는다(tablist 를 group 으로 또 감싸지 않게). */}
+      <div data-testid="range-depth" className="pt-1.5">
+        <SegmentedTabs items={DEPTH_TABS} value={depth} onChange={pickDepth} grow hitUp className="w-full" />
+      </div>
       {/* ① 상황 그룹 */}
       {/* ⚠ 줄바꿈(flex-wrap)이 아니라 **가로 스크롤**이다(오너 2026-09-18: "아직도 아래에는 왜 한개가 또 떨어져 있어").
           5개가 한 줄에 안 들어가면 wrap 은 마지막 하나만 아래로 떨어뜨려 **4+1 고아**를 만들고,
@@ -94,7 +120,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
           아래 '내 포지션'·'상대' 두 줄이 쓰는 방식과 같게 맞춘다 — 넘치면 옆으로 민다. */}
       <div>
         <div data-testid="range-guide" className="-my-[7px] flex gap-1 overflow-x-auto py-[7px] scrollbar-none">
-          {RANGE_GROUPS.map((g) => (
+          {groups.map((g) => (
             <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
               {g.label}
             </button>
@@ -140,15 +166,16 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       <p className="text-2xs text-ink-muted">{scen.desc}</p>
 
       {/* 출처는 결과 **바로 옆**에 붙인다 — 하단 ※ 고지는 스크롤 밖이라 읽히지 않았다(2026-09-11). */}
-      <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
+      <div className="flex justify-center"><SourceBadge kind="chart" note={depth === '100' ? '100bb · 앤티 없음' : `${depth}bb · BB앤티`} /></div>
       <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       {scen.note && (
         <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/6 border border-accent-400/20 px-2 py-1.5"><Icon name="target" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />{scen.note}</p>
       )}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 100bb 기준 자체 제작 표준 차트(학습용). %는 1326콤보 가중 — 실제 참여율 감각과 일치합니다.
-        숏스택(≤15bb)은 <b>푸시·폴드 차트</b>를 쓰세요.
+        ※ 자체 제작 학습 차트(솔버 산출 아님). %는 1326콤보 가중. 스택은 앤티를 낸 뒤 남은 유효 스택.
+        20bb 이하는 <b>푸시·폴드 차트</b>를 쓰세요.
+        <br />{DEPTH_GAP_NOTE[depth === '100' ? 100 : (Number(depth) as RangeDepth)]}
       </p>
     </CalcCard>
   );

@@ -198,6 +198,7 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     'src/components/features/LedgerStatsPanel.tsx': '통계 카드 안 기간·지표 토글 — 차트만 다시 그린다',
     'src/components/features/NuriPosLedger.tsx': '장부 목록 정렬 토글',
     'src/components/features/tools/PushFoldChart.tsx': '푸시/폴드 차트 보기(올인/콜) — 같은 차트 칸',
+    'src/components/features/tools/RangeGuide.tsx': '레인지 차트 스택 깊이(25/40/60/100bb) — 같은 카드의 표 데이터만 바뀐다(2026-10-09)',
     'src/components/features/tools/StartingHandRankPanel.tsx': '순위 기준 토글(10인/헤즈업) — 같은 격자·목록의 값만 바뀐다(2026-10-01)',
   };
   it('탭 레일을 그리는 화면은 goSubTab 을 쓴다(아니면 위 목록에 이유와 함께)', () => {

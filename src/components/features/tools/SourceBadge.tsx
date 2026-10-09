@@ -22,7 +22,8 @@ export type SourceKind =
 const META: Record<SourceKind, { label: string; hint: string; icon: IconName; cls: string }> = {
   chart: {
     label: '자체 제작 학습 차트',
-    hint: '100bb 기준 통설 합의 수치로 직접 만든 표입니다. 빈도(100/50/25%)는 혼합전략을 학습용으로 단순화했습니다. 상용 솔버 표를 복제하지 않았습니다.',
+    // 2026-10-09: 레인지 차트가 100bb(앤티 없음) 외에 25·40·60bb(BB 앤티) 표를 갖게 되어 '100bb 기준' 단정을 뺐다 — 기준은 배지 note 가 말한다.
+    hint: '배지에 적힌 스택·앤티 기준으로 사람이 직접 만든 표입니다. 빈도(100/50/25%)는 혼합전략을 학습용으로 단순화했습니다. 상용 솔버 표를 복제하지 않았습니다.',
     icon: 'table', cls: 'border-accent-400/40 bg-accent-300/8 text-accent-200',
   },
   nash: {

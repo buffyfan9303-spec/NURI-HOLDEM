@@ -493,3 +493,33 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(sprLabel, 'SPR 과 팟오즈 라벨이 같아졌다 — 시점이 반대인데 구별이 사라졌다').not.toBe(potLabel);
   });
 });
+
+// ── 레인지 차트 스택 깊이 25·40·60bb(2026-10-09 오너 "100bb 뿐 아니라 3개 정도 더") ──────────────
+// 깊이 표의 값·관계는 src/lib/ranges.depth.test.ts 가 잠근다. 여기서는 화면·문구가 사실과 맞는지만 본다.
+describe('레인지 차트 스택 깊이 — 화면이 사실을 말한다', () => {
+  const src = (f: string) => readFileSync(join(ROOT, f), 'utf-8');
+
+  it('레인지 차트가 깊이 표를 읽고, 깊이 선택(range-depth · SegmentedTabs)이 있고, 기본은 100bb 다', () => {
+    const rg = src('src/components/features/tools/RangeGuide.tsx');
+    expect(rg).toContain("from '../../../lib/ranges.depth.data'");
+    expect(rg).toContain('data-testid="range-depth"');
+    expect(rg).toMatch(/<SegmentedTabs[^>]*items=\{DEPTH_TABS\}/);
+    // 기본이 100bb 가 아니면 오답 노트 '차트에서 보기'(100bb id)·e2e 배지 검사가 깨진다
+    expect(rg).toMatch(/useState<DepthKey>\('100'\)/);
+    // 푸시·폴드 상한은 20bb 다(NASH_STACKS) — 예전 고지의 '≤15bb' 는 사실과 어긋났다
+    expect(rg).not.toContain('≤15bb');
+  });
+
+  it('핸드 분석 모달이 "100bb 한 벌" 이라고 말하지 않는다 — 깊이 표가 생겼다(미지원 안내는 유지)', () => {
+    const modal = src('src/components/features/HandGtoModal.tsx');
+    expect(modal).not.toContain('100bb 한 벌');
+    expect(modal).toContain('현재 데이터 미지원');
+  });
+
+  it('chart 출처 배지 근거 문구가 "100bb 기준" 이라고 단정하지 않는다 — 기준은 배지 note 가 말한다', () => {
+    const badge = src('src/components/features/tools/SourceBadge.tsx');
+    const hint = badge.match(/chart: \{[\s\S]*?hint: '([^']*)'/);
+    expect(hint, 'chart hint 를 못 찾았다').toBeTruthy();
+    expect(hint![1]).not.toContain('100bb 기준');
+  });
+});
