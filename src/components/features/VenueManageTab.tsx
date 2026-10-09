@@ -1530,7 +1530,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
                   <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo} refreshSlot={dashRefreshSlot}
-                    schedulesError={schedulesError} onRetrySchedules={onRetrySchedules}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
                   {/* audit10 시각 P3-6(2026-10-07) — 대시보드 카드 열과 같은 폭. READ_W(960) 상한을 걸어 1440 에서 이 카드만 오른쪽 끝이 ~210px 짧았다(폼 판 상한은 설정 하위탭 몫). */}
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
