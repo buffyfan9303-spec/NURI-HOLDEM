@@ -46,3 +46,40 @@ test('양성 대조 — 조회 성공·0건이면 "예정된 게임이 없습니
   await expect(c.getByText('예정된 게임이 없습니다.')).toBeVisible({ timeout: 10_000 });
   await expect(c.getByText('게임 목록을(를) 불러오지 못했어요', { exact: false })).toHaveCount(0);
 });
+
+// R2M-03(2026-10-09 2회차 점검) — 같은 실패에서 맨 위 '지금 할 일' 이 '오늘 등록된 대회가 없어요 — 대회 등록하기'(같은 날 중복 대회)를 권했다.
+//   음성 대조: 수정 전 빌드에서 FAIL(오류 제목이 없고 '오늘 등록된 대회가 없어요' 가 보인다 — 12시 이후).
+test('🔴 일정 조회 실패 → 지금 할 일이 "대회 등록하기" 대신 오류·다시 시도', async ({ page }) => {
+  test.setTimeout(90_000);
+  let gets = 0;
+  await bootOwner(page, {
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/schedules\?/, (r) => {
+        if (r.request().method() !== 'GET') return r.fallback();
+        gets += 1;
+        return r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'mock fail' }) });
+      });
+    },
+  });
+  await openMyStore(page);
+  const todo = page.getByTestId('todo-card');
+  await expect(todo.getByText('대회 일정을 불러오지 못했어요')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('오늘 등록된 대회가 없어요')).toHaveCount(0);
+  const before = gets;
+  await todo.getByRole('button', { name: /다시 시도/ }).click();
+  await expect.poll(() => gets, { message: '지금 할 일의 다시 시도가 일정 재조회를 내지 않았다' }).toBeGreaterThan(before);
+});
+
+test('양성 대조 — 조회 성공·0건이면 지금 할 일에 오류 문구가 없다', async ({ page }) => {
+  test.setTimeout(90_000);
+  await bootOwner(page, {
+    extra: async (p) => {
+      await p.route(/\/rest\/v1\/schedules\?/, (r) => (r.request().method() === 'GET'
+        ? r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }) : r.fallback()));
+    },
+  });
+  await openMyStore(page);
+  await expect(page.getByRole('button', { name: /^다가오는 예약/ }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('예정된 게임이 없습니다.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('대회 일정을 불러오지 못했어요')).toHaveCount(0);
+});

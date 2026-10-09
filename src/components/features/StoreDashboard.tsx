@@ -1777,6 +1777,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = { icon: 'clock', title: '클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 진행 중 · 클락을 켜면 라이브 탭에 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' };
+        } else if (schedulesError && !started && !todayPoster && (caps.ledger || caps.posters)) {
+          // R2M-03(2026-10-09) — 일정 조회 실패를 '오늘 포스터 없음'으로 읽으면 아래 갈래가 '대회 등록하기'(같은 날 중복 대회)나
+          //   '지난 게임 그대로 열기'를 권한다. 모르는 것은 모른다고 — 포스터 판단 갈래를 건너뛰고 오류·재시도(다가오는 예약 LoadFailRow 와 같은 값).
+          todo = { icon: 'alert', title: '대회 일정을 불러오지 못했어요', desc: '오늘 대회가 없는 것과는 달라요 — 다시 불러온 뒤 확인해 주세요.', cta: '다시 시도', onClick: () => onRetrySchedules?.(), tone: 'warn' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
