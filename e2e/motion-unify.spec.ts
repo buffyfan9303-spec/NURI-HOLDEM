@@ -15,6 +15,8 @@
 //   MU5 전면 판 열기 — 매장·게시글·일정 상세·이벤트 목록·내 정보가 한 장치(fade-in)로 열리고, 내 정보도 페이드로 닫힌다(2026-09-27).
 //
 // 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 돌리면 MU1·MU2·MU4 의 '덮개 0' 이 빨개진다.
+// 9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다"): 판 교체 뒤 판 밖 지면색 막([data-pane-fade])이 0.4 에서 곧바로 걷힌다.
+//   옛 덮개 0 은 그대로 두고, 새 막은 '최댓값 ≤ 0.6 · ≥0.5 프레임 ≤ 3(붙잡지 않는다)' 으로 따로 판정한다(fd).
 // (4차 음성 대조 기록 — 덮개 한 줄·isSettled ③ 제거 — 은 덮개와 함께 사라졌다.)
 // ⚠ 운영 데이터를 읽는다(매장 카드·게시글·장터 행). 코드를 안 바꿨는데 빨개지면 운영 데이터부터 의심하라(CLAUDE.md).
 // ⚠ 하네스 Chromium 만 본다. 삼성 인터넷 GPU·주소창 접힘은 재현하지 못한다(재현 못 함 ≠ 없음).
@@ -25,7 +27,7 @@ import { ANON_KEY, dismissOverlays, stabilizeBackstack, stubLogin } from './_ses
 import { mockSchedules } from './_schedules';
 import { mockPosts, mockListings } from './_mocks';
 
-type F = { t: number; cov: number; ca: number; sy: number; ph: number; sig: string; sk: number; skr: number; vt: number; op: number | null; shown: boolean };
+type F = { t: number; cov: number; fd: number; ca: number; sy: number; ph: number; sig: string; sk: number; skr: number; vt: number; op: number | null; shown: boolean };
 type Rec = { F: F[]; LS: [number, number][] };
 
 /** 표본은 **페인트 뒤**(rAF 안에서 보낸 메시지 = 다음 태스크)에 뜬다 — 같은 프레임의 덮개 자리 잡기 rAF 가 끝난, 화면에 그려진 상태를 본다. */
@@ -47,10 +49,12 @@ const RECORDER = () => {
       const cs = getComputedStyle(c); if (cs.display !== 'none') cov = Math.max(cov, Number(cs.opacity));
       for (const a of c.getAnimations()) if (a.playState === 'running') ca = Math.max(ca, Number(a.effect?.getTiming().duration ?? 0));
     }
+    const pf = document.querySelector('[data-pane-fade]'); const pcs = pf ? getComputedStyle(pf) : null;
+    const fd = pcs && pcs.display !== 'none' ? Math.round(Number(pcs.opacity) * 100) / 100 : 0;
     const root = st.root ? [...document.querySelectorAll<HTMLElement>(st.root)].find((e) => e.getClientRects().length > 0) : null;
     const ov = st.ov ? [...document.querySelectorAll<HTMLElement>(st.ov)].filter((e) => e.getClientRects().length > 0).pop() : null;
     st.F.push({
-      t: tRaf, cov: Math.round(cov * 100) / 100, ca, sy: Math.round(scrollY),
+      t: tRaf, cov: Math.round(cov * 100) / 100, fd, ca, sy: Math.round(scrollY),
       ph: root ? root.offsetHeight : -1,
       // 판이 바뀌었는가 — 글자 전체(길이+앞뒤)를 본다. 앞 60자만 보면 같은 머리말을 가진 목록끼리 구별을 못 한다.
       sig: root ? (() => { const tx = (root.textContent ?? '').replace(/\s+/g, ''); return `${root.querySelectorAll('*').length}:${tx.length}:${tx.slice(0, 40)}:${tx.slice(-40)}`; })() : '',
@@ -104,6 +108,8 @@ function expectCleanSwap(r: Rec, label: string) {
   expect.soft(i, `${label}: 판이 바뀌는 프레임을 못 봤다(전환이 안 일어났다) — 아래 단언이 공허해진다`).toBeGreaterThan(0);
   expect.soft(F.filter((f) => f.cov > 0.05).map((f) => `${Math.round(f.t)}ms cov=${f.cov}`),
     `${label}: 덮개(지면색 판)가 그려졌다 — 이미 그려진 판을 가렸다 드러내는 '검정 → 콘텐츠' 깜빡임`).toEqual([]);
+  expect.soft(Math.max(0, ...F.map((f) => f.fd)), `${label}: 판 전환 막이 0.6 넘게 시작했다 — 5차 '검정 → 콘텐츠' 부류`).toBeLessThanOrEqual(0.6);
+  expect.soft(F.filter((f) => f.fd >= 0.5).length, `${label}: 판 전환 막을 ≥0.5 로 3프레임 넘게 붙잡았다`).toBeLessThanOrEqual(3);
   // 보이는 스크롤 튐 = 판(글자 서명·높이)은 그대로인데 scrollY 만 40px 넘게 움직인 프레임. 판이 바뀐 프레임의 스크롤은 교체의 일부다.
   //   (keep-alive 판은 숨은 섹션 글자까지 textContent 에 들어가 서명만으로는 교체를 못 볼 수 있다 — 높이를 같이 본다.)
   const bareJumps = F.flatMap((f, k) => (k > 0 && Math.abs(f.sy - F[k - 1].sy) > 40 && f.sig === F[k - 1].sig && f.ph === F[k - 1].ph ? [`${Math.round(f.t)}ms ${F[k - 1].sy}→${f.sy}`] : []));

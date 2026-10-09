@@ -305,7 +305,12 @@ export default function ScheduleDetailModal({
               <button
                 type="button"
                 onClick={() => onVenueClick(schedule.venueId!)}
-                className="tap-44 mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group"
+                /* 🔴 2026-10-09 M-01 — 공용 tap-44 는 누름면을 **위로만** 넓힌다(24px 줄 → 위 20px). 여기서는 그 위가 대회 제목이라
+                   제목 아래 절반(y380~393)을 누르면 매장 페이지가 열렸다. 이 버튼만 **아래로** 넓힌다:
+                   ::before 가 버튼 위 끝에서 시작해 44px(버튼이 44 이상이면 버튼 높이)까지 내려간다.
+                   아래는 글자뿐인 지역·형식 줄이고, 그 아래 주소 링크(tap-44, 위로 14.25)와는 겹치지 않는다(e2e/schedule-detail-venue-tap-1009 실측).
+                   tap-44 의 '아래로 내밀면 scrollHeight 가 는다' 함정은 해당 없다 — 아래 줄들이 늘 이 확장부보다 길다. */
+                className="relative mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group before:absolute before:inset-x-0 before:top-0 before:h-[max(100%,44px)] before:content-['']"
               >
                 <span className="min-w-0 break-keep wrap-anywhere font-bold underline decoration-dotted underline-offset-2">
                   {schedule.pubName}

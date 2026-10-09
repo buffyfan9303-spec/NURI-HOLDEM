@@ -6,6 +6,7 @@
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_VERSION } from './legalVersion';
 import { LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_NOTICE, LOCATION_TERMS_VERSION, PRIVACY_PRE_LOCATION_ARCHIVE_URL } from './locationTerms';
 import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_NOTICE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V4_NOTICE_DATE, TERMS_V4_EFFECTIVE_DATE } from './legalDeploy';
+import { LBS_REPORT_VALUE, LBS_REPORT_ADDED } from './lbsReport';
 export type LegalDocKey = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
 
 export interface LegalRevision {
@@ -68,6 +69,8 @@ export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
         '제2조⑥에 출석 기록을 회사가 활동 점수·연속 출석·이벤트·순위표에 쓰는 항목으로 적고(매장에는 제9조에 따라 제공), 딜러 구인 지원서·장터와 그룹의 대화·매장 후기·외치기·출석 요청과 참가 신청 기록·이벤트 참여권·포인트 구매와 꾸미기 보유 기록을 처리 항목에 더했으며, 제3조에 각 항목의 탈퇴 시 처리를 적었습니다. 제2조②·⑦에 매장 운영자 이용약관(개인정보 처리위탁 포함)을 적었습니다.',
         '제2조⑥에 매장이 등록한 대회 순위 기록(전국 입상 경력 순위표에 이용)을, 제3조에 출석 기록의 탈퇴 후 처리를 적고, 제3조의 매장 기록에서 출석 기록을 빼 회사가 수집하는 정보로 정리했습니다. 출석·출석 요청·참가 신청·이용권 화면에 매장 제공 사실을 한 줄로 알립니다(제9조제2항).',
         '제12조의 만 19세 확인을 실제 절차(가입 시 본인 확인, 본인인증에서 만 19세 미만이면 인증 거절·저장하지 않음·이용 제한 후 해지·파기)대로 적었습니다.',
+        // 현행 판(제3판) 안의 사실 추가 — 판 번호는 그대로. 제2판(이미 끝난 판) 목록에 두면 '끝난 판을 고쳤다'로 읽힌다(PR #253 검토 P2-2).
+        `제2조⑨(개인위치정보의 처리)에 위치기반서비스사업 신고 ${LBS_REPORT_VALUE}를 추가했습니다(${LBS_REPORT_ADDED} 추가). 이미 수리된 신고 사실을 적은 것으로 회원에게 불리한 내용이 없어 적은 날부터 바로 적용했습니다.`,
       ],
     },
     {
@@ -98,6 +101,7 @@ export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
         '근거 조문 2건을 정정했습니다. 대리게임 금지의 근거를 「게임산업진흥에 관한 법률」 제28조에서 제32조제1항제11호로 바로잡고, 「국민체육진흥법」 제2조는 마인드 스포츠를 정의하지 않으므로 조문명을 ‘체육의 정의’로 바로잡고 마인드 스포츠는 ‘통칭’임을 밝히는 표현으로 바꿨습니다.',
         '위반 행위 제재 기준과 신고·상담 창구(1336·1488)를 표로 정리했습니다.',
         '사업자 정보의 업태·종목을 2026-10-06 발급 사업자등록증명의 기재에 맞추어 정정했습니다(2026-10-06 정정). 사업자 정보 표기를 바로잡은 것으로 회원의 권리·의무에는 변경이 없습니다.',
+        `사업자 정보에 위치기반서비스사업 신고 ${LBS_REPORT_VALUE}를 추가했습니다(${LBS_REPORT_ADDED} 추가). 이미 수리된 신고 사실을 적은 것으로 회원의 권리·의무에는 변경이 없어 적은 날부터 바로 적용했습니다.`,
       ],
     },
     { version: 1, effective: LEGAL_PREV_EFFECTIVE_DATE, notice: LEGAL_PREV_EFFECTIVE_DATE, changes: ['제정.'] },

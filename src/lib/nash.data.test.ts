@@ -38,8 +38,8 @@ describe('PushFoldChart 화면 계약(소스)', () => {
   const src = readFileSync(join(__dirname, '../components/features/tools/PushFoldChart.tsx'), 'utf-8');
 
   it('표가 없는 조합에서 행렬 대신 "데이터가 없습니다" 를 그린다', () => {
-    // 2026-09-21: 5번째 인자 `true` 는 allowApprox(추정 구간 표시 허용)다 — 앤티 리터럴이 아니다(nash.data.ts NASH_ANTE_APPROX).
-    expect(src).toMatch(/const hasData = hasNashRange\(effView, k, stack, NASH_BIG_ANTE, true\)/);
+    // 2026-09-21: 5번째 인자 `true`(allowApprox)로 추정 구간까지 읽었다 → 2026-10-09 오너 GTO-F1: 차트도 추정 칸을 '준비 중' 으로 가린다 — 5번째 인자 없음.
+    expect(src).toMatch(/const hasData = hasNashRange\(effView, k, stack, NASH_BIG_ANTE\);/);
     expect(src).toMatch(/\{hasData\s*\?\s*<RangeMatrix13/);
     expect(src).toContain('데이터가 없습니다');
   });
@@ -49,7 +49,9 @@ describe('PushFoldChart 화면 계약(소스)', () => {
     const hint = badge.match(/nash: \{[\s\S]*?hint: '([^']*)'/)?.[1] ?? '';
     expect(hint, 'nash 힌트를 못 찾았다').not.toBe('');
     expect(hint).not.toContain('단일 콜러 근사 · 2~20bb');
-    expect(hint).not.toContain('준비 중');      // 2026-10-02 N7 2단계: 2~5bb 는 다인 균형으로 다시 만들었다 — 숨긴 칸이 없다
+    // 2026-10-02 N7 2단계: 2~5bb 는 다인 균형으로 다시 만들었다. 2026-10-09 오너 GTO-F1: 6~10bb 추정 칸은 '준비 중' 으로 가린다 — 힌트도 그렇게 말한다
+    expect(hint).toContain('6~10bb 는 정확한 계산을 준비 중');
+    expect(hint).not.toContain('추정');
     expect(hint).toContain('다인 균형');        // 뒤 3명+ 2~5bb(solve-deal.mjs)
     expect(hint).toContain('정확 균형');        // SB·BTN(NASH_EXACT_KS)
   });
@@ -90,7 +92,7 @@ describe('PushFoldChart 화면 계약(소스)', () => {
   it('③ 빅 앤티 고정 — 앤티 토글·상태가 없고 데이터는 ante=on 만 읽는다 · ④ "앤티 = …" 설명이 없다', () => {
     expect(NASH_BIG_ANTE).toBe(true);
     expect(src).not.toMatch(/const BIG_ANTE\b/);                        // 화면 안 사본 금지 — 공용 상수만
-    expect(src).toMatch(/nashRange\(effView, k, stack, NASH_BIG_ANTE, true\)/);   // 5번째 true = allowApprox(2026-09-21)
+    expect(src).toMatch(/nashRange\(effView, k, stack, NASH_BIG_ANTE\)/);   // 2026-10-09: allowApprox(5번째 true) 없음 — 추정 칸은 '준비 중'
     expect(src).not.toMatch(/useState[^\n]*[Aa]nte/);   // const [ante, setAnte] 금지
     expect(src).not.toContain("'없음'");                 // 앤티 '없음' 선택지 금지
     expect(src).not.toContain('앤티 = ');                // 부가설명 제거

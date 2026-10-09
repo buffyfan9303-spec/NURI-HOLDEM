@@ -55,11 +55,14 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   // 표가 없는 조합은 행렬을 그리지 않는다 — 빈 표를 decode 하면 전부 0(=전부 폴드)이라 틀린 조언이 된다.
   // 🔴 2026-09-21 오너 "2bb~10bb 닫혀 있는 부분 계산해서 적용" → 다인 콜 **근사** 값(NASH_ANTE_APPROX)을 차트만 읽는다
   //   (`allowApprox=true`). 드릴·스팟 분석은 여전히 격리다. 추정 구간은 아래 배지가 '추정' 이라고 말한다.
-  const hasData = hasNashRange(effView, k, stack, NASH_BIG_ANTE, true);
-  const approx = isNashApprox(stack, NASH_BIG_ANTE, k);
+  // 🔴 2026-10-09 오너 결정(GTO-F1 · 이전 지시 A-059·B-041 '보정 통과 못한 스택은 준비 중') → 차트도 **추정 칸을 읽지 않는다**
+  //   (allowApprox 를 넘기지 않는다). 뒤 3명+ · 6~10bb 는 아래 '준비 중' 안내로 간다. 정확 칸은 드릴·스팟과 같은 기본 경로라 값이 그대로다.
+  //   잠금: pushfoldQuarantine.test.tsx(가린 90칸 · 나머지 186칸 값 불변) · e2e/pushfold-ticks.spec.ts.
+  const hasData = hasNashRange(effView, k, stack, NASH_BIG_ANTE);
+  const approx = hasData && isNashApprox(stack, NASH_BIG_ANTE, k);   // 지금은 늘 false(추정 칸은 hasData=false) — allowApprox 를 되살릴 때만 쓰인다
 
   const actions = useMemo<MatrixAction[]>(() => {
-    const arr = nashRange(effView, k, stack, NASH_BIG_ANTE, true);
+    const arr = nashRange(effView, k, stack, NASH_BIG_ANTE);
     return [{
       key: effView,
       label: effView === 'shove' ? '올인' : '콜',
@@ -125,7 +128,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
         <div className="flex justify-between" aria-hidden="true">
           {NASH_STACKS.map((s) => {
             const on = s === stack;
-            const has = hasNashRange(effView, k, s, NASH_BIG_ANTE, true);
+            const has = hasNashRange(effView, k, s, NASH_BIG_ANTE);
             return (
               <button key={s} type="button" tabIndex={-1} onClick={() => setStack(s)}
                 data-stack={s} data-has-data={has ? 'true' : 'false'}
@@ -152,8 +155,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
       {/* 추정 구간(빅앤티 6~10bb · 뒤 3명+ — BTN·SB 는 정확, 2~5bb 는 2026-10-02 다인 균형)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
-      <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
+      <div className="flex flex-col items-center gap-0.5" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
+        {/* 기준 한 줄(A-012, 2026-10-09) — 항상 같은 한 줄이라 자리·스택·보기를 바꿔도 높이가 변하지 않는다. */}
+        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="pushfold-basis">9인 대회 기준</p>
       </div>
       {hasData && isMultiwayUncapped(stack, k, true) && <MultiwayNotice className="-my-1" />}
       {hasData
@@ -173,14 +178,15 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
             {isNashQuarantined(stack, NASH_BIG_ANTE, k, effView) ? (
               <>
                 {/* 2026-10-01 오너 "일단 숨기고 재생성"(감사 N7) 때 빅앤티 2~5bb · 뒤 3명+ 가 이 갈래로 왔다.
-                    2026-10-02 다인 균형(solve-deal.mjs)으로 다시 만들어 격리에서 뺐으므로 **지금은 이 갈래에 오는 칸이 없다.**
-                    숨김 해제 커밋을 되돌리면 다시 이 갈래가 쓰인다 — 지우지 마라. */}
-                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 <b className="text-accent-300">준비 중</b>입니다.</p>
+                    2026-10-02 다인 균형(solve-deal.mjs)으로 다시 만들어 격리에서 뺐다. 지우지 마라 — 아래 10-09 가림이 이 갈래를 쓴다. */}
+                {/* 2026-10-09 오너 결정(GTO-F1): 뒤 3명+ · 6~10bb 의 '다인 콜 근사(추정)' 칸이 이 갈래로 온다.
+                    쓸 수 있는 깊이는 'N bb 이상' 으로 말하지 않는다 — 2~5bb 는 살아 있고 6~10bb 만 비어 '2bb 이상' 이 거짓이 된다. */}
+                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 스택은 <b className="text-accent-300">정확한 계산을 준비 중</b>입니다.</p>
                 <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
-                  예전 추정값이 공개된 Nash 표와 크게 달라 내렸고, 다시 계산하고 있습니다. 가까운 깊이로 대체하지 않습니다.
+                  아직 근사값만 있어 보여 드리지 않습니다. 가까운 깊이로 대체하지 않습니다.
                   눈금에서 점선으로 표시된 깊이(
-                  {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE, true)).join('·')}bb)가 그 구간이고,
-                  <b> SB·BTN</b>과 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있습니다.
+                  {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE)).join('·')}bb)가 그 구간이고,
+                  <b> SB·BTN</b>과 이 자리의 <b>{NASH_STACKS.filter((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE)).join('·')}bb</b>는 그대로 쓰실 수 있습니다.
                 </p>
               </>
             ) : (

@@ -93,8 +93,11 @@ function judge(f: Frame[], label: string, expectTodo: boolean) {
   expect(nspan, `${label}: 아래 카드 격자가 세로로 움직였다`).toBeLessThanOrEqual(3);
 }
 
-/** ledger_sessions — 지정 매장의 GET 을 늦추고, history 면 '어제 마감 1건' 질의에 답한다. */
+/** ledger_sessions — 지정 매장의 GET 을 늦추고, history 면 '어제 마감 1건' 질의에 답한다.
+ *  일정(schedules)은 '조회 성공·오늘 포스터 없음'으로 고정한다 — 이 스펙의 전제(정오 전·이력 없음 = 할 일 없음)다.
+ *  안 걸면 가짜 토큰이 운영 서버에서 401 을 받아 '대회 일정을 불러오지 못했어요'(R2M-03 실패 갈래)가 뜬다(main CI run 37940996274). */
 async function routeSessions(p: Page, o: { delayFor?: string; delay: number; history: boolean }) {
+  await p.route(/\/rest\/v1\/schedules\?/, (r: Route) => (r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback()));
   await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r: Route) => {
     if (r.request().method() !== 'GET') return r.fallback();
     const u = r.request().url();

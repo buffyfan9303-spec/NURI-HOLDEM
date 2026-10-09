@@ -18,7 +18,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
-  setBuyinAddon, addonFinance, addonEntryOf, addonTotals, type AddonMethod, type AddonFinance,
+  setBuyinAddon, addonFinance, addonEntryOf, addonEntryNote, addonTotals, type AddonMethod, type AddonFinance,
   splitMismatch, summaryRowsOf,
 
   discountAmountOf, autoDiscountIndex, discountAllowed, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
@@ -39,8 +39,8 @@ import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
-import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
+import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound, posterAddonOf } from '../../lib/gameInherit';
+import { ledgerStartClockConfig, sessionEarlyOf, sessionEarlyBasis, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
@@ -50,7 +50,7 @@ import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals, voucherLeftover, voucherLeftoverText } from '../../lib/buyinApproval';
-import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
+import { discountsFromPromotions, ledgerLabelOf, linkedPosterDiscounts } from '../../lib/posterDiscounts';
 import type { AccessLoad } from '../../lib/staffAccess';
 import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useVenueScope } from '../../lib/useVenueScope';
@@ -2652,11 +2652,15 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
               : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
-          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 truncate">
-            {cur.kind === 'break'
-              ? (cur.label || 'BREAK')
-              : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{formatCountdown(rem)}</span>
+          {/* 라벨(블라인드)과 남은 시간은 따로 — 긴 브레이크 라벨('BREAK 10 MINS & REG …')이 한 말줄임 안에서 시간까지 잘라 먹었다(390, review-251 P2-②).
+              시간은 줄지 않고(shrink-0) 라벨만 말줄임한다. */}
+          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 flex min-w-0 items-baseline">
+            <span data-testid="ledger-clock-level" className="min-w-0 truncate">
+              {cur.kind === 'break'
+                ? (cur.label || 'BREAK')
+                : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+            </span>
+            <span data-testid="ledger-clock-remaining" className={clock.running ? 'ml-2 shrink-0 text-emerald-300' : 'ml-2 shrink-0 text-accent-300'}>{formatCountdown(rem)}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
@@ -2969,18 +2973,27 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
   // F-1(store-link-1002) — 직전 게임 설정은 폼이 그려진 뒤 도착한다. 도착하면 **빈 칸만** 채운다(업주가 이미 친 칸은 덮지 않는다).
   const prefillDone = useRef(false);
+  // PIPE-F1/F2 — 자동으로 채운 할인 칸(포스터·직전 게임)과 직전 게임이 채운 게임명. 업주가 손댄 값과 구별해,
+  //   포스터를 연결하면 자동 값만 그 포스터 것으로 바꾸고(linkedPosterDiscounts) 직전 게임명은 오늘 포스터 자동 연동을 막지 않는다.
+  const autoDiscsRef = useRef<DiscountPreset[] | null>(null);
+  const prefillTitleRef = useRef<string | null>(null);
+  // P2-1(review-260) — 업주가 명시로 불러온 설정(지난 게임 그대로 열기·프리셋·메인 복사·게임 프리셋)은 늦게 온 포스터 목록의
+  //   자동 연동이 덮지 않는다. 예전엔 게임명으로만 '자동 값인가'를 봐서, 지난 게임명 == 직전 게임명이면 자동 연동이 게임명·단가만
+  //   포스터 것으로 바꾸고 할인은 지난 게임 것(새 배열 = 업주 수정)으로 남겨 섞인 채 저장됐다. 포스터를 직접 고르는 길(칩·선택)은 그대로다.
+  const explicitPickRef = useRef(false);
+  const markExplicitPick = () => { explicitPickRef.current = true; prefillTitleRef.current = null; };
   useEffect(() => {
     if (mode !== 'open' || !prefilled) { prefillDone.current = false; return; }
     if (prefillDone.current) return;
     prefillDone.current = true;
-    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base);
-    if (f.title !== undefined) setTitle(f.title);
+    const f = fillEmptyFromPrefill({ title, cash, card, target, dealers, event, discs }, base, !!(schedId || base.scheduleId));
+    if (f.title !== undefined) { prefillTitleRef.current = f.title; setTitle(f.title); }
     if (f.cash !== undefined) setCash(f.cash);
     if (f.card !== undefined) setCard(f.card);
     if (f.target !== undefined) setTarget(f.target);
     if (f.dealers !== undefined) setDealers(f.dealers);
     if (f.event !== undefined) setEvent(f.event);
-    if (f.discs !== undefined) setDiscs(f.discs);
+    if (f.discs !== undefined) { autoDiscsRef.current = f.discs; setDiscs(f.discs); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, prefilled]);
   const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
@@ -2994,8 +3007,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [todayPick, setTodayPick] = useState<Schedule[]>([]); // 당일 포스터 2개+ — 침묵 대신 선택 칩(§13-B)
   // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
   // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
+  // PIPE-F2 — 예전엔 직전 게임 설정(prefilled)이 포스터 목록보다 **먼저** 오면 자동 연동을 통째로 건너뛰어(도착 순서 의존),
+  //   오늘 포스터 대신 어제 게임명·할인으로 장부가 열렸다. 막는 것은 업주가 직접 친 게임명과 게임관리 '이 포스터로 새 장부'(base.scheduleId,
+  //   아래 seed 상속이 맡는다)뿐이다 — 직전 게임이 채운 게임명은 오늘 포스터가 덮는다.
   useEffect(() => {
-    if (mode !== 'open' || prefilled || autoLinked || schedId || title.trim()) return;
+    if (mode !== 'open' || base.scheduleId || autoLinked || schedId || explicitPickRef.current || (title.trim() && title !== prefillTitleRef.current)) return;
     const todays = schedules.filter((s) => s.date === base.sessionDate);
     if (todays.length === 1) {
       setAutoLinked(true);
@@ -3049,8 +3065,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     if (start) setStartStack(start);
     const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
     if (rebuy) setRebuyStack(rebuy);
-    if (sc.buyIn?.addonStack) { setIsAddon(true); setAddonStack(sc.buyIn.addonStack); }
-    if (sc.buyIn?.addon) { setIsAddon(true); setAddonAmount(sc.buyIn.addon); }   // 포스터 애드온 비용 → 장부 애드온 가격
+    // 포스터 애드온(스택·비용 → 장부 애드온 스택·가격). 포스터에 없으면 **끈다** — 앞서 고른 부스터데이 포스터·지난 게임 값이
+    //   이 게임으로 넘어가지 않게(roti-1009). 클락 쪽 같은 판정은 clockPatchFromSchedule 이 같은 함수로 한다.
+    const addon = posterAddonOf(sc);
+    setIsAddon(addon.isAddon); setAddonStack(addon.addonStack); setAddonAmount(addon.addonAmount);
     // W-04 — 포스터 얼리 단계의 1·2단을 폼 두 칸에 보여 준다(단계 없음 = 0). 3·4단은 제출 때 포스터에서 그대로 온다.
     const cp = clockPatchFromSchedule(sc);
     posterEarlyRef.current = Array.isArray(cp.earlyTiers);
@@ -3067,6 +3085,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     //   비어 있으면 '장부를 연 시각'이 기준이 돼 개설 17:30·스타트 19:00 대회의 19:05 첫 바인이 얼리가 아니게 됐다.
     //   (포스터에 시간이 없으면 클락이 처음 돌 때 서버 기준 시각으로 채운다 — api/clock noteTournamentStart.)
     if (sc.startTime) { const iso = isoAt(base.sessionDate, sc.startTime); if (iso) setStartISO(iso); }
+    // PIPE-F1 — 포스터 할인(할인액이 붙은 프로모션)도 바로 장부 할인 칸으로(오너 A-055 "이벤트·얼리·할인이 장부에 바로").
+    //   예전엔 '포스터 할인 가져오기'를 눌러야만 들어가, 안 누르면 로티 깐부전 1LV 바인이 5만·0.5엔트리 대신 10만·1엔트리로 기록됐다.
+    //   새 장부만 — 수정 폼은 바인이 자리번호로 할인을 참조하므로 버튼(덧붙이기)만 쓴다.
+    if (mode === 'open') {
+      const d = linkedPosterDiscounts(sc.promotions, discs, autoDiscsRef.current);
+      if (d) { autoDiscsRef.current = d; setDiscs(d); }
+    }
   };
   // A1(2026-09-28) — 게임관리 '이 포스터로 새 장부'(seed)로 들어온 경우도 같은 상속을 한 번 적용한다.
   //   예전엔 seed 가 제목·단가·유형만 실어 와서, 제출 때 폼의 스택(기본 50,000)이 포스터 스택을 덮었다(:병합 순서 cfg).
@@ -3110,6 +3135,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
   const applyPreset = (p: LedgerPreset) => {
+    markExplicitPick();
     setTitle(p.title);
     setCash(p.buyinAmount || 0);
     setCard(p.cardAmount ?? 0);
@@ -3122,6 +3148,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 메인 게임 설정 그대로 복사(사이드 빠른 생성) — 단가·할인·딜러·게임유형·애드온
   const applyCopyMain = () => {
     if (!copyMain) return;
+    markExplicitPick();
     // 제목은 충돌 방지 위해 "(사이드N)" 접미사 자동(메인은 그대로)
     setTitle(copyMain.title ? `${copyMain.title} (사이드${(base.gameSeq ?? MAIN_GAME_SEQ) - 1})` : '');
     setCash(copyMain.buyinAmount || 0);
@@ -3158,6 +3185,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 담당 직원(operIds)과 날짜는 건드리지 않는다(사람 입력은 그 둘만 — DoD).
   const applyLastRound = (r: LastClosedRound) => {
     const s = r.session;
+    markExplicitPick();
     setTitle(s.title ?? '');
     setCash(s.buyinAmount || 0);
     setCard(s.cardAmount ?? 0);
@@ -3191,6 +3219,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // PL2c: 게임 프리셋 → 장부 폼(어댑터 경유 · '있는 것만'). 클락 몫은 시작 시 병합.
   const applyGamePresetToForm = (p: GamePreset) => {
     const d = applyToLedger(p.data);
+    markExplicitPick();
     if (d.title !== undefined) setTitle(d.title ?? '');
     if (d.buyinAmount !== undefined) setCash(d.buyinAmount);
     if (d.cardAmount !== undefined) setCard(d.cardAmount ?? 0);
@@ -3261,9 +3290,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       // 병합(포스터 구조·레지·얼리 단계·계단 스택·상금 → 프리셋 패치 → 폼)과 레벨→분 환산은 lib/ledgerStart 한 곳.
       //   clockPatchFromSchedule(linkedSched) · withDerivedEarly 가 그 안에서 돈다(포스터 등록 기준 — 클락 #1).
       const cfg = ledgerStartClockConfig(baseCfg, linkedSched, inheritClockRef.current.patch,
-        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
-      const early = sessionEarlyOf(cfg);
-      earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin; earlyTiers = early.earlyTiers;
+        // 애드온은 폼(= 아래 onSubmit 이 세션에 저장하는 값)을 그대로 — 세션과 클락이 같은 애드온을 말한다(review-256 P2-1).
+        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack, addon: { isAddon, addonStack } });
+      // H03-08 후속(2026-10-09) — 마운트 뒤 클락이 시작·진행됐으면(최신 행이 protect) 클락은 아래에서 덮이지 않는다.
+      //   그때 세션 얼리를 폼 cfg 로 만들면 장부 자동 얼리와 TV 얼리가 갈린다 → 그 클락 설정 한 벌로 계산한다(읽기 실패면 예전대로 cfg).
+      const earlyCfg = basisErr ? cfg : sessionEarlyBasis(basis, base.sessionDate, cfg);
+      const earlyFromClock = earlyCfg !== cfg;
+      const early = sessionEarlyOf(earlyCfg);
+      earlyDMin = early.earlyDoubleMin; earlySMin = early.earlySingleMin; earlyTiers = early.earlyTiers;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
       //   'paused' 로 읽어 시작도 안 한 대회가 TV 에 PAUSED 로 뜨고, '계속하기' 를 누르면 endsAt=now 로 1레벨이 통째로 건너뛰었다.
       // 🔴 2026-09-17: 여기서 쓰던 `clockState` 는 이 폼이 **마운트될 때 한 번** 읽은 스냅샷이다(:2185, 구독 없음).
@@ -3293,7 +3327,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           const action = clockStartAction(fresh, base.sessionDate);
           const row = clockStartRow(action, fresh, cfg, base.venueId, base.gameSeq, base.title ?? '', base.sessionDate);
           if (!row) {
-            formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
+            formToast.show(earlyFromClock
+              ? '진행 중인 클락이 있어 클락 설정은 덮어쓰지 않고, 장부 얼리를 그 클락 설정에 맞췄습니다'
+              : '진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
             return;
           }
           await saveClockState(row);
@@ -3334,7 +3370,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <h3 className="text-sm font-bold text-ink-primary">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b></p>
           {prefilled && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />직전 게임 설정을 불러왔습니다. 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
+          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택·할인 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
           {/* PL1a: 당일 포스터 2개+ — 자동연동이 침묵하던 케이스에 선택 칩(§13-B '자동화는 항상 되거나, 왜 안 되는지 보이거나') */}
           {!autoLinked && !schedId && todayPick.length >= 2 && (
             <div className="mt-1.5">
@@ -3492,7 +3528,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <button type="button" onClick={importPosterDiscs}
               className="flex w-full items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-2 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/15">
               <Icon name="copy" size={13} className="shrink-0" />
-              포스터 할인 가져오기 ({posterDiscs.length}개)
+              {/* 새 장부는 포스터를 연결할 때 이미 채웠다(PIPE-F1) — 지웠거나 고친 뒤 다시 덧붙이는 버튼 */}
+              포스터 할인 {mode === 'open' ? '다시 ' : ''}가져오기 ({posterDiscs.length}개)
               <span className="min-w-0 flex-1 truncate text-right font-normal text-ink-muted">
                 {posterDiscs.map((p) => `${ledgerLabelOf(p)} −${wonToMan(p.discountWon ?? 0)}만`).join(' · ')}
               </span>
@@ -3622,6 +3659,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-2xs text-ink-muted">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
         </div>
+        {/* review-256 P3-1 — 가격만 있는 포스터는 스택을 추측하지 않고 0 으로 둔다. 그대로 시작하면 클락 총 칩에 애드온 칩이 안 더해진다. */}
+        {isAddon && addonStack <= 0 && (
+          <p data-testid="ledger-addon-stack-warn" className="mt-1 text-2xs font-semibold text-amber-300">애드온 스택이 비어 있어요. 넣지 않으면 클락 총 칩에 애드온 칩이 더해지지 않아요.</p>
+        )}
       </Field>
 
       <Field label="매장이용권 전송/시상 · 선택 (당일 전송 장수)">
@@ -3971,7 +4012,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                   F2(2026-09-29): 예전엔 가게지원·분납 버튼 밑(모달 맨 끝)이라 할인 프리셋 게임의 1280×800 첫 화면에서
                   13.6/131.7px 만 보였다(스크롤 단서 없음). */}
               {session.isAddon && onSetAddon && (
-                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} busy={busy} onSet={onSetAddon} />
+                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} entry={session.addonEntry} busy={busy} onSet={onSetAddon} />
               )}
 
               {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다.
@@ -4085,14 +4126,16 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
 }
 
 /** 애드온 한 줄(2026-09-28 오너) — 완납/미수 수단 격자 **바로 밑**. 기록된 바인에만 붙는다(애드온은 앉은 자리에 얹는 것).
- *  ⚠ 애드온은 바인 횟수·엔트리·얼리·총 칩에 들어가지 않는다 — 돈만 따로 센다(ledger.ts addonFinance). */
+ *  ⚠ 애드온은 바인 횟수·얼리에 들어가지 않는다 — 돈은 따로 센다(ledger.ts addonFinance).
+ *    엔트리는 게임별 addonEntry 만큼 더해지고(addonEntryOf · 기본 0), 클락 총 칩에는 애드온 수 × addonStack 이 들어간다(clock.ts computeLiveStats).
+ *    머리 안내는 그 값(addonEntryNote)을 말한다 — roti-1009 전엔 '엔트리에 안 들어감' 고정이라 0.5엔트리 게임에서 틀렸다. */
 const ADDON_OTHER: { key: string; method: AddonMethod; unpaid: boolean; label: string }[] = [
   { key: 'card', method: 'card', unpaid: false, label: '카드 완납' }, { key: 'card-u', method: 'card', unpaid: true, label: '카드 미수' },
   { key: 'transfer', method: 'transfer', unpaid: false, label: '이체 완납' }, { key: 'transfer-u', method: 'transfer', unpaid: true, label: '이체 미수' },
   { key: 'ticket', method: 'ticket', unpaid: false, label: '티켓 완납' }, { key: 'ticket-u', method: 'ticket', unpaid: true, label: '티켓 미수' },
 ];
-function AddonRow({ buyin, amount, busy, onSet }: {
-  buyin: LedgerBuyin | null | undefined; amount: number; busy: boolean;
+function AddonRow({ buyin, amount, entry, busy, onSet }: {
+  buyin: LedgerBuyin | null | undefined; amount: number; /** 세션 addonEntry(애드온 1회 엔트리) */ entry: number | undefined; busy: boolean;
   onSet: (addon: { method: AddonMethod; unpaid: boolean } | null) => void;
 }) {
   const m = buyin?.addonMethod ?? null;
@@ -4109,7 +4152,7 @@ function AddonRow({ buyin, amount, busy, onSet }: {
     <div data-testid="ledger-addon-row" className="space-y-1.5 border-t border-border-subtle pt-2">
       <p className="flex items-center justify-between gap-2 whitespace-nowrap text-2xs">
         <span className="font-bold text-ink-secondary">애드온</span>
-        <span className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · 바인·엔트리에 안 들어감` : '가격 미설정'}</span>
+        <span data-testid="ledger-addon-note" className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · ${addonEntryNote({ addonEntry: entry })}` : '가격 미설정'}</span>
       </p>
       {/* 20260930i — 이용권 분납 애드온: 이용권 몫은 서버가 적는다(화면은 남은 금액의 수단만 바꾼다). */}
       {m && m !== 'ticket' && (buyin?.addonTicketCount ?? 0) > 0 && (

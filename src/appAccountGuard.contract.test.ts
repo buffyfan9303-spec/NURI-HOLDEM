@@ -17,7 +17,8 @@ const src = raw.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).re
 
 /** 계정마다 결과가 다른 조회 — 응답이 화면 state 로 들어간다. 최소 등장 횟수는 빈 검사 방지용. */
 const FETCHERS: [RegExp, number][] = [
-  [/getMyNotifications\(\)/g, 5],
+  // R2P-02(2026-10-09): 알림 조회 5곳을 App.loadNotifications 한 곳으로 모았다 — 하한은 1(그 한 체인이 가드를 지나야 한다).
+  [/getMyNotifications\(\)/g, 1],
   [/getMyBuyinRequestsToday\(\)/g, 4],
   [/myVisitedVenues\(\)/g, 1],
   [/myUnreadMessageCount\(\)/g, 1],

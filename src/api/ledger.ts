@@ -62,8 +62,9 @@ export interface LedgerBuyin {
   discountIndex: number;        // 적용 할인 프리셋(0=없음, 1~5)
   earlyOverride: EarlyType | null; // 얼리 수기지정(null=시각 기준 자동판정)
   /** 애드온(2026-09-28) — 이 바인 행에 붙은 애드온 1회. null = 애드온 없음.
-   *  ⚠ 애드온은 **바이인 횟수·엔트리·얼리·총 칩에 들어가지 않는다** — buyinFinance 는 이 칸을 읽지 않는다.
-   *  돈은 {@link addonFinance} 가 따로 센다(완납=애드온 매출, 미수=미수금, 티켓=티켓 회수). */
+   *  ⚠ 애드온은 **바이인 횟수·얼리에 들어가지 않는다** — buyinFinance 는 이 칸을 읽지 않는다.
+   *  돈은 {@link addonFinance} 가 따로 센다(완납=애드온 매출, 미수=미수금, 티켓=티켓 회수).
+   *  엔트리는 게임별 addonEntry(W-06, 기본 0)만큼 {@link addonEntryOf} 가 따로 더하고, 클락 총 칩에는 애드온 수 × addonStack 이 들어간다(clock.ts computeLiveStats). */
   addonMethod?: AddonMethod | null;
   addonUnpaid?: boolean;
   /** 기록 시점 애드온 금액 스냅샷(원) — 나중에 세션 애드온 가격을 고쳐도 소급되지 않는다. */
@@ -367,6 +368,12 @@ export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' 
 export function addonEntryOf(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>, s: { addonEntry?: number }): number {
   const v = s.addonEntry ?? 0;
   return v > 0 ? addonFinance(b).count * v : 0;
+}
+/** 장부 애드온 줄 머리 안내 — 애드온 1회가 엔트리에 무엇을 더하는지. addonEntryOf 와 **같은 판정**(0 이하 = 안 더함)이어야 한다.
+ *  roti-1009 — 예전엔 '바인·엔트리에 안 들어감' 고정이라 부스터 0.5엔트리 게임에서 틀린 안내였다. */
+export function addonEntryNote(s: { addonEntry?: number }): string {
+  const v = s.addonEntry ?? 0;
+  return v > 0 ? `1회 ${v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}엔트리` : '바인·엔트리에 안 들어감';
 }
 /** 애드온 합계 — 여러 행을 더한다. 화면·정산이 같은 함수를 쓴다. */
 export function addonTotals(buyins: readonly (Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'> & { addonTicketCount?: number })[]): AddonFinance {

@@ -23,6 +23,29 @@ export function posterChipRules(sc: Pick<Schedule, 'buyIn'>): PosterChipRules {
   };
 }
 
+/** 포스터가 말하는 애드온 — 장부 폼(isAddon·스택·가격)과 클락 패치(isAddon·스택)가 이 한 판정을 쓴다.
+ *  🔴 roti-1009(오너 '부스터데이는 애드온') — 예전엔 두 곳 다 애드온을 **켜기만** 했다. 부스터데이 클락이 남은 채
+ *    다음 날 애드온 없는 깐부전 장부를 시작하면 isAddon·스택 50,000 이 그대로 넘어가 TV 에 ADD-ON 이 떴다
+ *    (ClockStage 는 스택 > 0 만으로도 띄운다). 리엔트리 계단·얼리 단계처럼 '포스터에 없으면 끈다'로 맞췄다.
+ *  · 가격만 있고 스택이 없으면 애드온은 켜고 스택은 0 — 지난 게임의 스택을 이 게임 것으로 추측하지 않는다. */
+export function posterAddonOf(sc: Pick<Schedule, 'buyIn'>): { isAddon: boolean; addonStack: number; addonAmount: number } {
+  const stack = Math.round(Number(sc.buyIn?.addonStack) || 0);
+  const amount = Math.round(Number(sc.buyIn?.addon) || 0);
+  const addonStack = stack > 0 ? stack : 0, addonAmount = amount > 0 ? amount : 0;
+  return { isAddon: addonStack > 0 || addonAmount > 0, addonStack, addonAmount };
+}
+
+/** 연동 장부 세션 → 클락 애드온 두 칸(클락 설정 화면의 시드). 세션 = 클락 — 세션이 애드온 없음이면 **둘 다** 끈다
+ *  (isAddon 만 끄고 스택을 남기면 체크박스는 꺼졌는데 TV 는 ADD-ON 을 띄운다, roti-1009 P3).
+ *  세션 스택이 0 이면 0 — 클락에 남은 스택(지난 게임일 수 있다)으로 되돌리지 않는다(posterAddonOf 와 같은 원칙, review-256 P3-2). */
+export function clockAddonFromSession(
+  sess: Pick<LedgerSession, 'isAddon' | 'addonStack'>, base: Pick<ClockConfig, 'isAddon' | 'addonStack'>,
+): Pick<ClockConfig, 'isAddon' | 'addonStack'> {
+  if (sess.isAddon == null) return { isAddon: base.isAddon, addonStack: base.addonStack };
+  if (!sess.isAddon) return { isAddon: false, addonStack: 0 };
+  return { isAddon: true, addonStack: sess.addonStack > 0 ? sess.addonStack : 0 };
+}
+
 /** 포스터 → 장부 세션 칸(W-06 애드온 엔트리 · W-19 기준 엔트리 = GTD ÷ 참가비). '있는 것만' 키를 만든다. */
 export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> {
   const p: Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> = {};
@@ -33,14 +56,20 @@ export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSessio
   return p;
 }
 
-/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
+/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별).
+ *  브레이크 원문 label 도 넘긴다(2026-10-09 — 버려져서 장부(포스터 연결)로 시작한 클락 TV 에 'BREAK' 만 보였다).
+ *  저장 규칙(posterPayload.cleanLevels)과 같이 브레이크 행에만, 빈 값이면 키를 만들지 않는다. */
 export function posterLevelsToClock(
   levels: NonNullable<NonNullable<Schedule['structure']>['levels']>,
 ): ClockLevel[] {
-  return levels.map((l) => ({
-    kind: l.isBreak ? 'break' as const : 'level' as const,
-    minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
-  }));
+  return levels.map((l) => {
+    const label = l.isBreak ? l.label?.trim() : '';
+    return {
+      kind: l.isBreak ? 'break' as const : 'level' as const,
+      minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
+      ...(label ? { label } : {}),
+    };
+  });
 }
 
 /** PL1a 무금액 상속 — 클락 cfg 병합 패치. 소비처는 반드시 '진행 중 아님'을 확인할 것(비파괴 병합 가드). */
@@ -67,7 +96,9 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
   if (start) p.startStack = start;
   const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
   if (rebuy) p.rebuyStack = rebuy;
-  if (sc.buyIn?.addonStack) { p.addonStack = sc.buyIn.addonStack; p.isAddon = true; }
+  // 애드온 — 포스터에 없으면 **끈다**(posterAddonOf 주석). 키를 늘 만든다: 소비처가 `{ ...baseCfg, ...schedPatch }` 로 펴서 지난 클락 값을 덮어야 한다.
+  const addon = posterAddonOf(sc);
+  p.isAddon = addon.isAddon; p.addonStack = addon.addonStack;
   // W-10 — 회차별 리엔트리 스택. 포스터에 없으면 **빈 배열로 지운다** — 지난 포스터의 계단이 이 게임으로 새지 않게(단일값 = 기존 동작).
   const rules = posterChipRules(sc);
   p.rebuyStacks = rules.rebuyStacks ?? [];
@@ -90,6 +121,9 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
  *  · 그 밖의 단위(T·GP·포인트·초대권…)는 **입력한 단위 그대로**(W-25, 원 환산 병기 안 함 — §28).
  *  · 빈 문자열 단위('')는 돈으로도 단위로도 추측하지 않고 뺀다(PL1b).
  *  · '11-15th' 같은 범위 순위는 자리 수를 count 로 싣는다 — 총액 = Σ amount × count(W-12). */
+/** 순위 상금 행의 단위가 돈(원 환산 대상)인가 — 단위 없음(구형)·만원·원. T·GP·포인트 등은 아니다(W-25). */
+export const isMoneyUnit = (unit: string | null | undefined): boolean => unit == null || unit === '만원' || unit === '원';
+
 export function clockPrizeRowsOf(rows: readonly { rank: string; amount?: number; unit?: string; amountWon?: number }[] | null | undefined): ClockPrizeRow[] {
   const out: ClockPrizeRow[] = [];
   for (const r of rows ?? []) {
@@ -117,10 +151,11 @@ export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] {
  *  금액은 전부 원 정규형(*Won)으로 적고, 구형 필드는 표시 호환용으로만 함께 채운다. */
 export function presetFromSchedule(sc: Schedule): GamePresetData {
   const prizes = (sc.rankingPrizes ?? [])
-    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
-    // 티켓(unit 'T')은 장수·'T' 를 그대로 보존한다 — 만원으로 눌러 버리면 '1T' 표기를 복원할 수 없다.
-    .map((r) => r.unit === 'T'
-      ? ({ rank: r.rank, amount: r.amount, unit: 'T', amountWon: rankingPrizeWon(r) })
+    .filter((r) => (r.amount ?? 0) > 0 && (isMoneyUnit(r.unit) || !!r.unit?.trim()))
+    // LC-F1(2026-10-09) — 돈이 아닌 단위(T·GP·포인트…)는 장수·단위 그대로, 원 환산(amountWon)을 붙이지 않는다(W-25·§28).
+    //   예전엔 T 에 amountWon 을 붙여 applyToPoster 가 400T 를 400만원으로 바꿨고, GP 등은 아예 빠졌다.
+    .map((r) => !isMoneyUnit(r.unit)
+      ? ({ rank: r.rank, amount: r.amount, unit: r.unit!.trim() })
       : ({ rank: r.rank, amount: r.unit === '원' ? Math.round(r.amount / 10_000) : r.amount, unit: '만원', amountWon: rankingPrizeWon(r) }));
   return {
     title: sc.title,
@@ -223,9 +258,10 @@ export function applyToPoster(d: GamePresetData): Partial<PosterFormData> {
   if (d.isCompetition != null) p.isCompetition = d.isCompetition;
   if (d.rankingPrizes?.length) {
     // 정규형(amountWon·원)이 있으면 만원으로 환산, 구형·비화폐(%·pts) 행은 원문 그대로(무손실)
+    //   LC-F1 — amountWon 이 있어도 단위가 돈(만원·원·빈 단위)일 때만 환산한다. 이전 판이 T 행에 붙인 amountWon 은 무시.
     p.rankingPrizes = d.rankingPrizes.map((r) => (
-      r.amountWon != null
-        ? { rank: r.rank, amount: Math.round(r.amountWon / 10_000), unit: '만원' }
+      r.amountWon != null && (isMoneyUnit(r.unit) || !r.unit)
+        ?{ rank: r.rank, amount: Math.round(r.amountWon / 10_000), unit: '만원' }
         : { rank: r.rank, amount: r.amount, unit: r.unit ?? '' }
     ));
   }

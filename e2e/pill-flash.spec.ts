@@ -14,6 +14,9 @@
 //   ② 판 영역이 **평평한 한 색**(휘도 표준편차 < 2.5 — 빈 지면 판)인 화면 프레임 0 — CDP 스크린캐스트 픽셀.
 //      ②는 덮개가 아닌 다른 방식으로 '빈 판' 을 다시 만들어도 잡는다. 공허 방지: 정착 판은 평평하지 않아야 한다.
 // 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 이 스펙을 돌리면 ①② 가 세 조건 모두 빨갛다.
+// 9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 새 막([data-pane-fade])은 ① 의 옛 덮개와 다르게 판정한다:
+//   ①' 막 최댓값 ≤ 0.6 · 막 opacity ≥ 0.5 인 프레임 ≤ 3(붙잡지 않는다) · 재방문 이동마다 막이 보인다(딱딱함 방지).
+//   ② 는 그대로 — 반투명 막이 '빈 지면 판' 을 만들면 여기서 빨개진다(0.85 시작은 운영 실측에서 빈 판 2프레임).
 //
 // ⚠ bootOwner 는 매장·권한만 목킹하고 나머지 읽기는 운영으로 간다(쓰기는 _fixtures 가드가 끊는다).
 // ⚠ 하네스 Chromium 만 본다 — 삼성 인터넷 GPU·실기기 밝기는 재현하지 못한다(재현 못 함 ≠ 없음).
@@ -28,7 +31,7 @@ const WIN_MS = 900;
 const FLAT_STD = 2.5;
 
 type Shot = { ts: number; data: string };
-type Row = { label: string; visit: string; coverMax: number; flat: number[]; frames: number; lastStd: number };
+type Row = { label: string; visit: string; coverMax: number; fadeMax: number; fadeHeld: number; fadeFrames: number; flat: number[]; frames: number; lastStd: number };
 
 async function lumStats(b64: string, rect: { x: number; y: number; w: number; h: number }, vw: number) {
   const buf = Buffer.from(b64, 'base64');
@@ -70,10 +73,10 @@ async function run(page: Page, vp: { width: number; height: number }, scheme: 'd
     expect(p, `단계 알약 '${label}' 을 못 찾았다 — 측정이 공허해진다`).not.toBeNull();
     await page.waitForTimeout(200);
     await page.evaluate((win) => {
-      const w = window as unknown as { __pf: number[] | null };
-      const fr: number[] = []; w.__pf = null; const t0 = performance.now();
+      const w = window as unknown as { __pf: [number, number][] | null };
+      const fr: [number, number][] = []; w.__pf = null; const t0 = performance.now();
       const cov = (el: Element | null) => { if (!el) return 0; const cs = getComputedStyle(el); if (cs.display === 'none') return 0; const r = el.getBoundingClientRect(); return r.width * r.height < 1 ? 0 : Number(cs.opacity); };
-      const tick = () => { fr.push(Math.max(cov(document.querySelector('[data-tab-cover]')), cov(document.querySelector('[data-sub-cover]')))); if (performance.now() - t0 < win) requestAnimationFrame(tick); else w.__pf = fr; };
+      const tick = () => { fr.push([Math.max(cov(document.querySelector('[data-tab-cover]')), cov(document.querySelector('[data-sub-cover]'))), cov(document.querySelector('[data-pane-fade]'))]); if (performance.now() - t0 < win) requestAnimationFrame(tick); else w.__pf = fr; };
       requestAnimationFrame(tick);
     }, WIN_MS);
     shots.length = 0;
@@ -85,8 +88,8 @@ async function run(page: Page, vp: { width: number; height: number }, scheme: 'd
     } else {
       await page.mouse.move(p!.x, p!.y); await page.mouse.down(); await page.waitForTimeout(70); await page.mouse.up();
     }
-    await page.waitForFunction(() => (window as unknown as { __pf: number[] | null }).__pf, null, { timeout: 20_000 });
-    const covs = await page.evaluate(() => (window as unknown as { __pf: number[] }).__pf);
+    await page.waitForFunction(() => (window as unknown as { __pf: [number, number][] | null }).__pf, null, { timeout: 20_000 });
+    const covs = await page.evaluate(() => (window as unknown as { __pf: [number, number][] }).__pf);
     const rect = await page.evaluate(() => {
       const b = document.querySelector('[data-mystore-secpanel]')!.getBoundingClientRect();
       const top = Math.max(b.top, 0); return { x: b.left, y: top, w: b.width, h: Math.min(b.bottom, innerHeight) - top };
@@ -101,17 +104,22 @@ async function run(page: Page, vp: { width: number; height: number }, scheme: 'd
       n++; lastStd = st.std;
       if (st.std < FLAT_STD) flat.push(Math.round(dt));
     }
-    rows.push({ label, visit, coverMax: Math.max(0, ...covs), flat, frames: n, lastStd });
+    rows.push({ label, visit, coverMax: Math.max(0, ...covs.map((c) => c[0])), fadeMax: Math.max(0, ...covs.map((c) => c[1])),
+      fadeHeld: covs.filter((c) => c[1] >= 0.5).length, fadeFrames: covs.filter((c) => c[1] > 0.02).length, flat, frames: n, lastStd });
     await page.waitForTimeout(300);
   }
   await cdp.send('Page.stopScreencast').catch(() => {});
-  if (process.env.PILL_FLASH_LOG) for (const r of rows) console.log(`[pill-flash] ${r.visit} ${r.label} cover=${r.coverMax} flat=${r.flat.join(',')} frames=${r.frames} lastStd=${r.lastStd.toFixed(1)}`);
+  if (process.env.PILL_FLASH_LOG) for (const r of rows) console.log(`[pill-flash] ${r.visit} ${r.label} cover=${r.coverMax} fade=${r.fadeMax.toFixed(2)}/${r.fadeHeld}/${r.fadeFrames} flat=${r.flat.join(',')} frames=${r.frames} lastStd=${r.lastStd.toFixed(1)}`);
   return rows;
 }
 
 function expectNoFlash(rows: Row[], tag: string) {
   const covered = rows.filter((r) => r.coverMax > 0.05).map((r) => `${r.visit} ${r.label} op=${r.coverMax.toFixed(2)}`);
   expect.soft(covered, `${tag}: 덮개(지면색 판)가 콘텐츠를 가렸다 — '검정 → 콘텐츠' 깜빡임`).toEqual([]);
+  const held = rows.filter((r) => r.fadeMax > 0.6 + 1e-6 || r.fadeHeld > 3).map((r) => `${r.visit} ${r.label} max=${r.fadeMax.toFixed(2)} ≥0.5×${r.fadeHeld}`);
+  expect.soft(held, `${tag}: 막([data-pane-fade])이 0.6 넘게 시작했거나 ≥0.5 로 3프레임 넘게 붙잡았다 — 5차 '검정 → 콘텐츠' 부류`).toEqual([]);
+  const stiff = rows.filter((r) => r.visit === 'revisit' && r.fadeFrames === 0).map((r) => r.label);
+  expect.soft(stiff, `${tag}: 재방문 이동에 막이 한 번도 안 보였다 — 한 프레임 교체(딱딱함)`).toEqual([]);
   const flat = rows.filter((r) => r.flat.length > 0).map((r) => `${r.visit} ${r.label} @${r.flat.join(',')}ms`);
   expect.soft(flat, `${tag}: 판 영역이 한 색으로 평평한 프레임(빈 지면 판)이 화면에 나왔다`).toEqual([]);
   // 공허 방지 — 화면 프레임을 실제로 받았고, 정착한 판은 평평하지 않다(글자·카드가 있다).

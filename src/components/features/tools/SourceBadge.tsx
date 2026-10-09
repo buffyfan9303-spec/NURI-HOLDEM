@@ -30,7 +30,7 @@ const META: Record<SourceKind, { label: string; hint: string; icon: IconName; cl
     label: '자체 Nash 모델',
     // 2026-10-01 감사(online-audit2 N10): 옛 힌트가 '단일 콜러 근사 · 몬테카를로' 한 가지 방식만 말했다. 실제는 자리·깊이마다 다르다 —
     //   nash.data.ts 머리말(①②③)과 NASH_EXACT_KS · NASH_ANTE_APPROX 가 정본. 방식이 바뀌면 이 문장도 같이 고친다.
-    hint: '첫 진입(first-in) 올인 · 2~20bb · 빅앤티(BB 앤티 1bb) 기준 자체 산출값입니다. SB·BTN 은 전수·3인 에퀴티로 푼 정확 균형, 뒤 3명 이상은 2~5bb 가 실제 딜 표본 위에서 오버콜까지 푼 다인 균형 · 6~10bb 가 콜러 2명까지 본 근사(추정) · 12bb 이상이 단일 콜러 모델입니다. 빈도는 0~8 단계로 양자화돼 있습니다.',
+    hint: '첫 진입(first-in) 올인 · 2~20bb · 빅앤티(BB 앤티 1bb) 기준 자체 산출값입니다. SB·BTN 은 전수·3인 에퀴티로 푼 정확 균형, 뒤 3명 이상은 2~5bb 가 실제 딜 표본 위에서 오버콜까지 푼 다인 균형 · 12bb 이상이 단일 콜러 모델이고, 6~10bb 는 정확한 계산을 준비 중이라 보여 드리지 않습니다. 빈도는 0~8 단계로 양자화돼 있습니다.',
     icon: 'arrow-up-from-line', cls: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300',
   },
   mc: {

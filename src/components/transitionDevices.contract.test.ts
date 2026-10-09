@@ -144,6 +144,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'src/components/atoms/ToastView.tsx': '성공 토스트 체크 아이콘 획 그리기(stroke-dashoffset, 아이콘 한 개·1회) — 지연 청크 안이라 첫 화면 CSS 0B(2026-10-08 M04)',
     'src/components/features/gto/HandBoardPicker.tsx': '카드 슬롯 한 칸(36×48) 내려앉기 — 손으로 고른 순간만 transform·opacity 180ms, fill 없음(M06 2026-10-08 · 판 전환 아님)',
     'src/components/features/clock/levelCue.ts': '클락 레벨 경계 1회 빛(M07) — 레벨이 바뀔 때만 한 번, 타이머 로직과 무관(2026-10-08)',
+    'src/lib/tabCover.ts': '9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 메인·하위 판 교체 뒤 판 밖 지면색 막 한 장의 opacity 만 0.4→0 220ms. 앱의 유일한 판 전환 연출((d) 가 값·대상을 잠근다)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
     const names = [...cssOutsideTheme().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
@@ -176,13 +177,39 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
   it('8차 INSTANT-SWAP — 메인·하위 판 교체는 한 프레임이다: 떠나는 판을 새 판 위에 겹쳐 걷는 장치(복제·퇴장 애니)가 없다', () => {
     // 오너 2026-10-08 "블러 처리되며 이동, 뒤에 살짝 네모칸" — 떠나는 판이 새 판 위에서 0.999→0 으로 걷히는 ~300ms 동안 두 판이 겹쳐 보였다.
     const fn = (name: string) => { const i = tc.indexOf(`export function ${name}(`); expect(i, `${name} 정의가 없다`).toBeGreaterThan(0); const rest = tc.slice(i); return rest.slice(0, rest.search(/\n}\r?\n/)); };
-    expect(fn('handOffPane'), '메인 탭 — 새 판 첫 프레임 뒤 스왑 정적화 해제만 한다').toMatch(/afterFirstFrame\(releaseSwap\)/);
-    expect(fn('handOffSubPanel'), '하위 탭 — 커밋 뒤 첫 프레임 다음 스왑 정적화 해제').toMatch(/afterFirstFrame\(releaseSwap\)/);
-    expect(tc, '판 전환에 WAAPI 애니가 돌아왔다 — 떠나는 판 페이드는 겹침·상자를 만든다').not.toMatch(/\.animate\(/);
+    // 9차 — 스왑 정적화 해제와 막 걷기는 **같은 콜백**(새 판 첫 프레임 다음)이다. 커밋 프레임에 걷기를 시작하면 빠진 타일(6차 원인).
+    expect(fn('handOffPane'), '메인 탭 — 새 판 첫 프레임 다음 프레임에 정적화 해제 + 막 걷기').toMatch(/requestAnimationFrame\(\(\) => \{ releaseSwap\(\); fadeOut\(\); \}\)/);
+    expect(fn('handOffPane'), '메인 탭 — 막은 첫 rAF(첫 페인트 전)에 깔고 둘째 rAF 에서 걷는다').toMatch(/requestAnimationFrame\(\(\) => \{\s*if \(armed\) fadeOut = coverAt\(/);
+    expect(fn('handOffSubPanel'), '하위 탭 — 커밋 뒤 첫 프레임 다음 정적화 해제 + 막 걷기').toMatch(/afterFirstFrame\(\(\) => \{ releaseSwap\(\); fadeOut\(\); \}\)/);
     expect(tc, '떠나는 판 복제본이 돌아왔다').not.toMatch(/cloneNode\(|data-pane-leaving/);
     const cssCode = read('src/index.css').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(cssCode, 'index.css 에 떠나는 판 규칙([data-pane-leaving])이 돌아왔다').not.toMatch(/data-pane-leaving/);
     expect(cssCode, '스왑 프레임 정적화(빠진 타일 방지)는 남아야 한다').toMatch(/\[data-swap-freeze\], \[data-swap-freeze\] \* \{/);
+  });
+  it('9차 PANE-FADE — 판 전환 WAAPI 는 지면색 막 한 장의 opacity 뿐이고, 시작값 ≤ 0.6 · 붙잡지 않는다', () => {
+    // 오너 2026-10-09 "블러모션을 없애라고 했더니 너무 딱딱해졌어". 5차(막 1.0 + 준비 대기 = 검정 깜빡임)·8차(떠나는 판 겹침 = 블러·네모칸)로 돌아가지 않게.
+    expect((tc.match(/\.animate\(/g) ?? []).length, 'tabCover.ts 의 WAAPI 는 막 걷기 한 곳뿐이다').toBe(1);
+    const call = tc.slice(tc.indexOf('.animate('), tc.indexOf('.animate(') + 160);
+    expect(call, '막 걷기 keyframe 은 opacity 만(from → 0) · 길이 FADE_MS · 곡선 FADE_EASE').toMatch(/^\.animate\(\[\{ opacity: from \}, \{ opacity: 0 \}\], \{ duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS \}\)/);
+    // from = FADE_FROM, 연타로 걷히는 중인 막이 있으면 그 값(더 낮다 — 맥박 방지 P3-2). FADE_FROM 위로는 못 간다.
+    expect(tc, '막 시작값(from)은 FADE_FROM 이하다').toMatch(/const from = cur > 0\.02 \? Math\.min\(FADE_FROM, cur\) : FADE_FROM;/);
+    expect(Number(/const FADE_LEAD_MS = (\d+);/.exec(tc)?.[1]), '앞당김은 한 프레임까지(더 당기면 첫 프레임이 이미 거의 걷힌 컷이다)').toBeLessThanOrEqual(20);
+    expect(tc, '막 이외에는 아무것도 움직이지 않는다 — filter·blur·transform 금지').not.toMatch(/\bfilter\s*[:=]|blur\(|transform|translate\(|scale\(/);
+    const from = Number(/export const FADE_FROM = ([\d.]+);/.exec(tc)?.[1]);
+    expect(from, '시작값 상한 0.6 — 0.85 는 운영 실측에서 빈 판 2프레임·번쩍 8.8(5차 검정 깜빡임 부류)').toBeLessThanOrEqual(0.6);
+    expect(from, '시작값이 너무 낮으면 다시 딱딱하다').toBeGreaterThanOrEqual(0.4);
+    const ms = Number(/export const FADE_MS = (\d+);/.exec(tc)?.[1]);
+    expect(ms).toBeGreaterThanOrEqual(160); expect(ms).toBeLessThanOrEqual(260);
+    expect(tc, '막은 판 밖 fixed 한 장이고 입력을 받지 않는다').toMatch(/data-pane-fade[\s\S]{0,200}position:fixed;pointer-events:none;/);
+    // P2-1(design-reviewer 2026-10-09) — 막을 body 에 붙이면 앱 셸(relative z-1) 맥락 밖이라 셸 안 하단바(z-50)·누른 탭까지 흐린다.
+    expect(tc, '막은 판과 같은 쌓임 맥락(앱 셸)에 붙는다 — body 직속 고정 금지').not.toMatch(/document\.body\.appendChild\(/);
+    expect(tc).toMatch(/const hostFor = \(el: Element \| null\): Element => \(el \? el\.closest\(SHELL\) : document\.querySelector\(SHELL\)\) \?\? document\.body;/);
+    expect(codeOnly(read('src/App.tsx')), '막이 붙는 셸 표식').toMatch(/<div data-app-shell="" className="relative z-1 /);
+    const cover = tc.slice(tc.indexOf('function coverAt('), tc.indexOf('function mainRect('));
+    expect(cover.length).toBeGreaterThan(200);
+    expect(cover, '막은 판 준비를 기다리지 않는다(waitSettled·isSettled 금지 — 5차 원인)').not.toMatch(/waitSettled|isSettled|tabPaneReady/);
+    expect(cover, '동작 줄이기·숨은 문서에서는 막 0').toMatch(/fadeOff\(\)/);
+    expect(tc).toMatch(/const fadeOff = \(\): boolean => document\.hidden \|\| window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches;/);
   });
   it('SlidingPill 은 판 교체 중(html[data-tab-swap]) 미끄러짐을 새 판 첫 프레임 뒤로 미룬다(스왑 프레임에 합성 애니 0)', () => {
     expect(codeOnly(read('src/components/atoms/SlidingPill.tsx'))).toMatch(/hasAttribute\('data-tab-swap'\)/);

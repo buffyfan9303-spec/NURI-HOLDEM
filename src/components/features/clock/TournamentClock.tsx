@@ -13,7 +13,7 @@ import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats, composeLiveStats,
   countLevels, withDerivedEarly, applyEarlyEdit, generateBlinds, clampAdjEarlies, clampAdjCount,
-  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, clockOwnerKey, type ClockLevelSnapshot,
+  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, clockOwnerKey, undoSkippedText, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, getVenueClocks, effectiveLevel,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
@@ -30,7 +30,7 @@ import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '
 // msToRegClose 는 이 파일에서 더 쓰지 않는다 — 상류 03cd8bb 가 등록 마감 표시를 ClockStage 로 옮겼다.
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
-import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
+import { applyToClock, clockAddonFromSession, presetFromClockConfig } from '../../../lib/gameInherit';
 /** 상금표가 가리키는 자리 수 — 범위 순위('11-15th' = 5)까지 센다(W-12). 순위 입력 빈 줄 수로 쓴다. */
 const prizePlaces = (prizes: readonly ClockPrizeRow[]) => prizes.reduce((n, p) => n + Math.max(1, p.count ?? 1), 0);
 import PresetPicker from '../PresetPicker';
@@ -139,6 +139,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   //   매장 전환 때 올린 번호에 걸리지 않아 B 화면에 A 클락이 떴다(관리자 전환 경로). await 뒤마다 지금 매장을 확인한다.
   const venueNow = useRef(venueId);
   venueNow.current = venueId; // 렌더 중 대입 — effect 한 틱 사이 응답이 새지 않게
+  // PR #244 ③ 검증 P2(2026-10-09) — 무장한 실행취소의 '지금 화면' 기준. 매장 전환은 ClockLive 를 언마운트해 그 stateRef 가 A 로 굳으므로
+  //   ClockLive 자신의 stateRef 만으로는 매장이 바뀐 것을 못 본다(토스트 onClick 이 B 화면에서 A 에 썼다). 부모의 지금 (매장, 게임) 을 읽힌다.
+  const ownerNow = useCallback(() => ({ venueId: venueNow.current, gameSeq: curGameSeqRef.current }), []);
   const reloadPresets = useCallback(() => run('presets', getClockPresets, setPresets), [run]);
 
   useEffect(() => {
@@ -185,11 +188,11 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   const seededInitial = useMemo<ClockConfig>(() => {
     const base = state?.config ?? defaultClockConfig();
     if (!seedSession) return withDerivedEarly(base);
+    // 애드온 두 칸은 함께 — 세션이 애드온 없음이면 스택도 0(isAddon 만 끄면 TV 는 스택만으로 ADD-ON 을 띄운다, roti-1009 P3).
     return withDerivedEarly({
       ...base,
       title: seedSession.title || base.title,
-      isAddon: seedSession.isAddon ?? base.isAddon,
-      addonStack: (seedSession.isAddon && seedSession.addonStack) ? seedSession.addonStack : base.addonStack,
+      ...clockAddonFromSession(seedSession, base),
     });
   }, [state, seedSession]);
 
@@ -351,7 +354,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} expect={slotHint(state.sessionDate)} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
       <ClockLive
         venueName={venueName}
-        state={state} canManage={canManage} active={active}
+        state={state} canManage={canManage} active={active} ownerNow={ownerNow}
         onChange={(s) => setState(s)}
         onSave={saveLive}
         onReload={reloadState}
@@ -467,8 +470,8 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, expect: expe
 /** K1 — 모바일 미리보기의 고정 캔버스 폭(px). PC 미리보기(1024: 748 · 1440: 570)와 같은 급이라 '그대로 축소' 가 된다. */
 const STAGE_CANVAS_W = 720;
 
-function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, onOpenSettings, onEnd, active = true }: {
-  state: ClockState; canManage: boolean; venueName?: string;
+function ClockLive({ state, canManage, venueName, ownerNow, onChange, onSave, onReload, onOpenSettings, onEnd, active = true }: {
+  state: ClockState; canManage: boolean; venueName?: string; ownerNow: () => Pick<ClockState, 'venueId' | 'gameSeq'>;
   onChange: (s: ClockState) => void; onSave: (next: ClockState, prev: ClockState) => void; onReload: () => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
@@ -652,13 +655,16 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 🔴 H03-06(2026-10-08) — ClockLive 는 게임 전환(switchGame)에도 **같은 인스턴스**로 남는다. 그래서 A 에서 무장한
   //   [되돌리기]·토스트 [실행취소] 를 B 로 넘어가 누르면 persist 가 stateRef(=B) 에 A 의 레벨·시각을 병합해 저장했다.
   //   무장 시점의 (매장, 게임) 키를 들고 있다가 지금 화면이 다른 게임이면 아무것도 쓰지 않는다.
+  //   2026-10-09 — 기준은 부모의 지금 (매장, 게임)(ownerNow) **과** 이 인스턴스의 stateRef 둘 다. 매장 전환은 이 인스턴스를 언마운트해
+  //   stateRef 가 A 로 굳으므로 ownerNow 가 막고, 게임 전환 응답 전(curGameSeq 는 이미 B·state 는 아직 A)도 ownerNow 가 막는다.
   const persistFor = (owner: string, patch: Partial<ClockState>): boolean => {
-    if (clockOwnerKey(stateRef.current) !== owner) return false;
+    if (clockOwnerKey(ownerNow()) !== owner || clockOwnerKey(stateRef.current) !== owner) return false;
     persist(patch);
     return true;
   };
   // H03-06 후속(2026-10-08) — 쓰지 않은 것을 말없이 넘기면 업주는 되돌린 줄 안다(A 는 정지 그대로). 토스트는 5초간 남아 있어 B 에서도 눌린다.
-  const undoSkipped = () => toast.show('다른 게임으로 옮겨 실행취소하지 않았어요. 그 게임 클락에서 다시 조작해 주세요', 'info');
+  //   매장이 바뀐 경우는 '다른 매장' 으로 말한다(2026-10-09) — 문구 판정은 api/clock 의 undoSkippedText 한 곳.
+  const undoSkipped = (owner: string) => toast.show(undoSkippedText(owner, ownerNow()), 'info');
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -905,7 +911,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       persist({ running: false, remainingMs: frozen, endsAt: null });
       toast.show('클락을 일시정지했어요. 손님 화면에도 바로 반영됩니다', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: true, endsAt: new Date(now() + frozen).toISOString() })) undoSkipped(); } },
+        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: true, endsAt: new Date(now() + frozen).toISOString() })) undoSkipped(owner); } },
       });
     } else {
       const ms = Math.max(0, live.remainingMs || computeRemaining(live));
@@ -913,7 +919,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       persist({ running: true, endsAt: new Date(now() + ms).toISOString() });
       toast.show('클락을 재개했어요', 'info', {
         durationMs: 5000,
-        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: false, remainingMs: ms, endsAt: null })) undoSkipped(); } },
+        action: { label: '실행취소', onClick: () => { if (!persistFor(owner, { running: false, remainingMs: ms, endsAt: null })) undoSkipped(owner); } },
       });
     }
   };
@@ -928,10 +934,11 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const undoLevel = () => {
     if (!levelUndo) return;
     // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원. 다른 게임으로 넘어갔으면 쓰지 않는다(H03-06).
-    const done = persistFor(levelUndoOwnerRef.current, levelUndoPatch(levelUndo));
+    const undoOwner = levelUndoOwnerRef.current;
+    const done = persistFor(undoOwner, levelUndoPatch(levelUndo));
     setLevelUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    if (!done) { undoSkipped(); return; }
+    if (!done) { undoSkipped(undoOwner); return; }
     toast.show('레벨 이동을 되돌렸습니다. 남은 시간까지 복원', 'info');
   };
   const setLevel = (delta: number) => {

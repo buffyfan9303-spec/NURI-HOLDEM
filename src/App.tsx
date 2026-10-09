@@ -294,7 +294,7 @@ interface TabDef { id: TabId; label: string; }
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
 const AppHeader = memo(function AppHeader({
-  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
+  unreadCount, notifications, notifError, onRetryNotifs, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
   onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink, hasStore = false,
 }: {
   /** 내 매장 탭이 있는가 — App 의 tabs(업주·직원·관리자)와 같은 판정. 계정 메뉴의 '내 매장' 입구를 가른다. */
@@ -311,6 +311,9 @@ const AppHeader = memo(function AppHeader({
   onGotoTab?: (t: TabId) => void;
   unreadCount: number;
   notifications: AppNotification[];
+  /** 알림 조회 실패(R2P-02) — 있으면 패널이 빈 상태 대신 실패 카드·다시 시도를 그린다 */
+  notifError?: unknown;
+  onRetryNotifs?: () => void;
   onMarkRead: (ids: string[]) => void;
   onOpenLogin: () => void;
   onNavigateNotification: (n: AppNotification) => void;
@@ -663,6 +666,8 @@ const AppHeader = memo(function AppHeader({
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         notifications={notifications}
+        loadError={notifError}
+        onRetry={onRetryNotifs}
         onMarkRead={onMarkRead}
         onNavigate={onNavigateNotification}
         onUnreadMessagesChange={onUnreadMessagesChange}
@@ -1014,9 +1019,13 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
                     // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
                     // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base">
-                    {count![tab]}
-                  </span>
+                    // 🔴 2026-10-09 숫자는 DOM 글자가 아니라 ::after(content: attr(data-count))로 그린다.
+                    //   글자 노드로 두면 진행 중 대회가 있을 때 버튼 textContent 가 '1라이브' 가 되어
+                    //   하단바 버튼을 글자로 정확히 찾는 e2e(flicker-gate·tab-handoff-gate·tab-instant-swap·
+                    //   pane-fade-press-row)가 운영에 클락이 도는 시간마다 전부 깨졌다(main CI 37926571456).
+                    //   접근성 이름은 버튼 aria-label('라이브, 진행 중 대회 N개')이 이미 말하므로 화면 표시만 남긴다.
+                    data-count={count![tab]}
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-base after:content-[attr(data-count)]" />
                 )}
               </span>
               {/* §T1 규칙 2: 사다리 밖 임의 px 금지. text-[11px] 는 절대 px 이라 html{font-size:17px}
@@ -1426,7 +1435,7 @@ export default function App() {
     const onOn = () => {
       setOffline(false);
       reloadSchedules(); reloadVenues(); reloadNotices();
-      if (user) getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
+      if (user) void loadNotifications();
     };
     window.addEventListener('offline', onOff);
     window.addEventListener('online', onOn);
@@ -2122,6 +2131,12 @@ export default function App() {
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // R2P-02: 알림 조회 실패를 '새 알림이 없습니다'로 위장하지 않는다 — 실패는 값으로 남겨 패널이 다시 시도를 준다.
+  //   실패해도 목록·배지는 이전 값 그대로(setNotifications 를 부르지 않는다). 성공하면 실패 표시를 지운다.
+  const [notifErr, setNotifErr] = useState<unknown>(null);
+  const loadNotifications = useCallback(() => getMyNotifications()
+    .then(forAccount((list: AppNotification[]) => { setNotifications(list); setNotifErr(null); }))
+    .catch(forAccount(setNotifErr)), [forAccount]);
   // 알림·바인 요청·가 본 매장 등 계정 범위 응답은 전부 위 `forAccount`(uidRef 대조)를 지난다 — N01 · R3-01.
   //   A 로그인 → 재조회 시작 → 로그아웃 → B 로그인 → A 응답 도착 순서에서 B 의 목록·배지가 A 의 것으로 덮였다.
   //   서버는 각자 제 데이터만 주므로 RLS 우회는 아니지만, **남의 알림이 내 화면에 보이는 것** 자체가 사고다.
@@ -2702,8 +2717,8 @@ export default function App() {
   useEffect(() => {
     // 계정 가드(forAccount): A 세션으로 나간 조회가 로그아웃→B 로그인 뒤에 도착하면 B 의 목록(배지·패널·내 정보 미리보기)을
     // A 의 알림 50건으로 덮었다.
-    if (user) getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
-    else setNotifications([]);
+    if (user) void loadNotifications();
+    else { setNotifications([]); setNotifErr(null); }
     // ⚠ [user] 객체 의존이면 일일 출석점수 반영(setUser 참조 교체)에도 재실행돼 fetch·리렌더가 2배였다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -2755,7 +2770,7 @@ export default function App() {
   useVisibilityRefresh(() => {
     // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
     if (user) {
-      getMyNotifications().then(forAccount(setNotifications)).catch(() => {});
+      void loadNotifications();
       // ⚠ 쪽지 미읽음 카운트는 **여기서 받지 않는다.** 한때 여기 있었는데 독립 검증에서 반증됐다 —
       //   이 훅의 20초 스로틀이 복귀 재조회를 삼켜 배지가 최대 180초까지 낡았다(HEAD 는 90초).
       //   지금은 위 폴링 이펙트가 '건너뛴 틱'을 기억했다가 복귀 때 스로틀 없이 한 번 메운다.
@@ -2798,15 +2813,13 @@ export default function App() {
       default:
         break;
     }
-  }, [activeTab, user, isAdmin, refreshClocks, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices, forAccount]);
+  }, [activeTab, user, isAdmin, refreshClocks, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices, loadNotifications]);
 
   // 알림 실시간 수신(신규/읽음)
   useEffect(() => {
     if (!user) return;
     // ⚠ N01: 늦게 도착한 A 의 알림이 B 화면을 덮지 않게 한다 — 계정 대조는 forAccount 한 곳에서.
-    const reload = () => getMyNotifications()
-      .then(forAccount(setNotifications))
-      .catch(() => {});
+    const reload = () => { void loadNotifications(); };
     const ch = supabase
       .channel(`notif:${user.id}`)
       .on('postgres_changes',
@@ -3407,11 +3420,9 @@ export default function App() {
     // ⚠ N01: 재조회가 늦게 도착하는 사이 계정이 바뀌었으면 그 목록은 남의 것이다. 대조하고 버린다.
     //   계정은 **재조회를 낼 때** 찍는다 — 읽음 처리 실패를 기다리는 사이 계정이 바뀌었으면 그 재조회는 새 세션으로 나가 새 계정 것이 맞다.
     markNotificationsRead(ids).catch(() => {
-      getMyNotifications()
-        .then(forAccount(setNotifications))
-        .catch(() => {});
+      void loadNotifications();
     });
-  }, [forAccount]);
+  }, [loadNotifications]);
 
   // 알림 클릭 → 해당 페이지로 이동
   const handleNavigateNotification = useCallback((n: AppNotification, opts?: { returnToMe?: boolean }) => {
@@ -4210,7 +4221,9 @@ export default function App() {
     //     내 매장에 들어가는 순간 좌우로 68px 씩 벌어지는 것만 보였다(오너 보고 "전체가 넓어져서 이질감").
     //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
     //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
-    <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle" style={storeUncap ? { maxWidth: 'none' } : undefined}>
+    // data-app-shell — 판 전환 막(src/lib/tabCover.ts 9차)이 붙는 자리. 이 래퍼(relative z-1)가 쌓임 맥락이라 막이 여기 있어야
+    //   하단바(z-50)·헤더 아래에 깔린다(body 에 붙이면 셸 전체 위로 올라가 누른 탭까지 흐렸다 — 2026-10-09 P2-1).
+    <div data-app-shell="" className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle" style={storeUncap ? { maxWidth: 'none' } : undefined}>
       {/* 전면 오버레이 안의 사업자 푸터도 약관·문의를 열 수 있게 — 콜백 공급(BusinessFooter.tsx FooterActionsContext) */}
       <FooterActionsContext.Provider value={footerActions}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
@@ -4232,6 +4245,8 @@ export default function App() {
         hasStore={hasStoreTabs}
         unreadCount={unreadNotifs + unreadMsgs}
         notifications={notifications}
+        notifError={notifErr}
+        onRetryNotifs={loadNotifications}
         onMarkRead={handleMarkRead}
         onUnreadMessagesChange={setUnreadMsgs}
         onOpenLogin={openLoginCb}

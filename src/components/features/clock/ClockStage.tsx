@@ -14,7 +14,7 @@
 //   · 운영자 16:9 박스 — cqmin = 박스의 짧은 변. 그래서 같은 마크업이 박스 안에서 그대로 축소된다.
 //   뷰포트 기준(vmin·md:·landscape:)으로 돌아가면 둘 중 하나가 반드시 틀린다(2026-09-11 실측 2회).
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
-import { createContext, memo, useContext, useEffect, useReducer, useState, type ReactNode } from 'react';
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
 import { bbAt, clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
 import { useClockSecond } from '../../../lib/clockTick';
@@ -27,6 +27,7 @@ import { levelCueKey, useLevelCue, LEVEL_CUE_GLOW } from './levelCue';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, PRIZE_BAND_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
+import { BREAK_LABEL_FLOOR, BREAK_LABEL_H, breakLabelFontSize, breakLabelText } from './breakLabelFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
 const mmss = (ms: number) => formatCountdown(ms);
@@ -301,10 +302,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor: raw
                 · 0.6 ~ 0.8 — 짧은 띠: 총상금 + 상위 3등 한 줄
                 · 0.8 초과(정사각에 가까움) — 띠 없음(가로 보드 3열이 펴지는 5/4 전까지 상금이 안 보이는 것은 종전과 같다)
               e2e clock-recheck1-1003 이 세로 비 1.11~2.05 여섯 화면에서 겹침 0 을 단언한다. */}
-          {(prizes.length > 0 || extras.length > 0 || ads.length > 0) && (
-            <PrizeColumn band prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} extras={extras} ads={ads} />
-          )}
-          {prizes.length > 0 && <PrizeShortBand prizes={prizes} totalPrize={totalPrize} />}
+          {/* 🔴 R2M-01(2026-10-09 2회차 점검) — 위 N-1 띠(전체·짧은 띠)를 걷어냈다. 오너 결정(2026-09-30 ⑥, B-024):
+              '세로 TV 는 시상·추가 페이지·광고 미표시 유지'. N-1 은 이 결정을 확인하지 않고 되돌린 것이었다. 가로 보드는 그대로다. */}
 
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
           {/* 12cqmin: 하단이 이제 보조가 아니라 **지표 레일**이다(총 칩·평균 스택·다음 휴식).
@@ -358,30 +357,6 @@ function LogoTall({ logo, onLoad }: { logo: NonNullable<ClockStageDecor['logo']>
  *  여백(padding)을 쓰면 받침이 칸 높이를 먹어 로고가 36% 작아졌다(빨강 '작게' 261.7×52.3 → 167.5×33.5, 검토 중-3) → 링은 상자 **밖**에 그려 크기 손실 0. */
 function logoPlate(plate: string | null) {
   return plate ? { background: plate, boxShadow: `0 0 0 0.5cqmin ${plate}`, borderRadius: '1.6cqmin' } : undefined;
-}
-
-/** 짧은 상금 띠 — 총상금 + 상위 3등 한 줄. 덜 긴 세로 화면(폭/높이 0.6~0.8) 전용. 테스트 앵커 clk-prizes-short. */
-function PrizeShortBand({ prizes, totalPrize }: { prizes: PrizeRow[]; totalPrize: { amount: number; unit: string } | null }) {
-  const pl = usePlate() ? PLATE : undefined;
-  const top = prizes.slice(0, 3);
-  return (
-    <aside data-testid="clk-prizes-short"
-      className="hidden [@container(min-aspect-ratio:601/1000)_and_(max-aspect-ratio:4/5)]:flex shrink-0 flex-col gap-[0.6cqmin] border-t border-white/6 px-[3cqmin] py-[1cqmin]"
-      style={pl}>
-      <p className="flex items-baseline justify-between gap-[2cqmin]">
-        <span className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</span>
-        {totalPrize && <span data-testid="clk-prize-total-short" className="font-black leading-none tabular-nums" style={{ fontSize: 'clamp(18px, 3.6cqmin, 60px)', color: 'var(--clk-prize, #F5C451)' }}>{prizeAmountText(totalPrize)}</span>}
-      </p>
-      <ul className="grid grid-cols-3 gap-x-[2cqmin]">
-        {top.map((p, i) => (
-          <li key={i} className="flex min-w-0 items-baseline justify-between gap-[0.8cqmin] whitespace-nowrap">
-            <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: 'max(9px,1.7cqmin)', ...DIM }}>{prizePlaceText(p.place)}</span>
-            <span className="min-w-0 truncate font-extrabold tabular-nums" style={{ fontSize: 'max(10px,2cqmin)', color: 'var(--clk-prize, #F5C451)' }}>{prizeAmountText(p)}</span>
-          </li>
-        ))}
-      </ul>
-    </aside>
-  );
 }
 
 /** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다.
@@ -802,6 +777,43 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
  * 높이는 내용대로다 — 타이머는 위 스페이서 구조 덕에 이 행의 높이와 무관하므로 ANTE 유무가 타이머를 밀지 않는다.
  * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
  */
+/** 브레이크 라벨 글자 — 최대 두 줄, 넘치면 말줄임. 공백 없는 긴 낱말도 칸 안에서 끊는다(anywhere).
+ *  줄 높이 1.1 × 2줄 = 칸 높이(breakLabelFit.ts). 한 줄일 때는 상자(1.1em)가 칸(1em)보다 크지만 <p> 가 세로 가운데로 두어
+ *  글자 기준선이 종전 leading-none 한 줄과 같은 자리다(기본 'BREAK' 픽셀 불변). */
+const BREAK_LABEL_TEXT = {
+  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden',
+  overflowWrap: 'anywhere', textAlign: 'center', textWrap: 'balance', lineHeight: 1.1,
+} as const;
+
+/** 브레이크 라벨(CURRENT 칸). 글자 크기는 em 추정(breakLabelFit)이라 기기 글꼴(특히 이모지)이 추정보다 넓으면
+ *  한 줄 크기 그대로 두 줄이 되어 칸 높이를 넘고 위 'BREAK' 머리글을 덮는다(review-251 P2-①).
+ *  그때만 하한 크기로 내려 두 줄 안에 넣는다 — 렌더 직후·글꼴 교체·크기 변화 때 판정하고, 그리기 전이라 깜빡임이 없다.
+ *  1.15 = 한 줄 상자(1.1em, 최대 H×1.1)는 통과시키고, 넘친 두 줄이 위아래 칸 사이 여백(0.8cqmin)을 넘기 전에 잡는 선. */
+function BreakLabel({ text, glow }: { text: string; glow: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [squeezed, setSqueezed] = useState<string | null>(null);   // 하한으로 내린 라벨 — 라벨이 바뀌면 다시 판정
+  const squeeze = squeezed === text;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || squeeze) return;
+    const check = () => {
+      const box = el.parentElement;
+      if (box && el.getBoundingClientRect().height > box.getBoundingClientRect().height * 1.15) setSqueezed(text);
+    };
+    check();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, squeeze]);
+  return (
+    <p className="relative isolate flex max-w-full items-center justify-center font-extrabold leading-none"
+      style={{ height: BREAK_LABEL_H, fontSize: squeeze ? BREAK_LABEL_FLOOR : breakLabelFontSize(text), color: 'var(--clk-timer-break, #7dd3fc)' }}>
+      {glow}<span ref={ref} data-testid="clk-break-label" style={BREAK_LABEL_TEXT}>{breakLabelText(text)}</span>
+    </p>
+  );
+}
+
 const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   useClockSecond(g);   // C4 — memo 라 부모 리렌더도 안 탄다. 틱이 없으면 TV 가 다음 폴링(최대 30초)까지 옛 블라인드를 보였다.
   const lvls = g.config?.levels ?? [];
@@ -851,9 +863,9 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
       <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center border-r border-white/[0.07] px-[2cqmin]">
         <p className={`${LABEL} ${LABEL_SIZE}`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
-          <p className="relative isolate whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
-            {cueGlow}{lv?.label || 'BREAK'}
-          </p>
+          // 2026-10-09 P1 — 포스터 원문 라벨('BREAK TIME 8 MINS / 1,000칩 레이스')이 nowrap 고정 크기라 칸을 넘어 NEXT 를 덮었다.
+          //   칸 높이는 종전 한 줄 높이 그대로 고정(다른 칸 위치 불변), 글자는 칸 폭에 맞춰 줄이고 → 두 줄 → 말줄임(breakLabelFit.ts).
+          <BreakLabel text={lv?.label || 'BREAK'} glow={cueGlow} />
         ) : (
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}

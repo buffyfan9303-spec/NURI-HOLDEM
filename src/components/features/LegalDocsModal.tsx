@@ -17,6 +17,7 @@ import {
   LOCATION_TERMS_PREV_ARCHIVE_URL, LOCATION_OFFICER, CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE,
   LOCATION_TERMS_EFFECTIVE_KO, isGeoRequiredNow,
 } from '../../lib/locationTerms';
+import { LBS_REPORT_LABEL, LBS_REPORT_VALUE, LBS_REPORT_ADDED } from '../../lib/lbsReport';
 import TermsOfService from '../../pages/legal/TermsOfService';
 import PrivacyPolicy from '../../pages/legal/PrivacyPolicy';
 import RefundPolicy from '../../pages/legal/RefundPolicy';
@@ -43,6 +44,7 @@ export const LOCATION = `제1조(목적)
 
 제2조(사업자 정보)
 상호 ${BIZ.company} · 대표 ${BIZ.ceo} · 주소 ${BIZ.addr} · 전화 ${BIZ.phone} · 이메일 ${BIZ.email}
+${LBS_REPORT_LABEL}: ${LBS_REPORT_VALUE}
 
 제3조(서비스 내용)
 1. 장소 정보: 매장(홀덤펍)·대회 일정의 등록 위치(지역·주소)와 길찾기 연결을 제공합니다. 이 위치는 매장 운영자가 등록한 사업장 위치이며 이용자의 개인위치정보가 아닙니다.
@@ -95,6 +97,8 @@ export const LOCATION = `제1조(목적)
 4. 제${LOCATION_TERMS_VERSION}판 개정 이유: 매장 출석 QR은 주소만 알면 매장 밖에서도 열 수 있어, 매장이 원하면 실제로 매장 안에 있는 이용자만 QR로 출석하도록 하기 위함입니다(같은 법 제12조제1항에 따른 변경 이유 공개).
 5. 제${LOCATION_TERMS_VERSION}판 개정 내용: 제3조제3항의 출석 위치 확인을 매장이 '위치 확인 출석'을 켠 경우로 한정하고, 제3조제5항을 신설하여 그 매장에서 동의하지 않거나 위치를 확인할 수 없으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)이 처리되지 않는다는 점과, 매장에서 출석 요청을 보내 업주 승인으로 같은 혜택의 출석을 하는 대체 경로를 적었습니다. 제5조제2항의 기록 항목을 같은 법 제2조제5호의 용어(이용·제공 일시·방법, 취득 경로, 제공받는 자)로 바로잡고, 제7조제1항에 동의하지 않을 때의 효과를 적었으며, 제9조에 위치정보관리책임자의 연락처(전자우편·사업자 대표 전화)를 따로 적었습니다.
 6. 제${LOCATION_TERMS_VERSION}판은 ${LOCATION_TERMS_EFFECTIVE} 정식 오픈과 함께 시행합니다. 이미 제2판에 동의한 이용자에게는 위치 확인 출석 매장에서 다음 출석 때 제${LOCATION_TERMS_VERSION}판 동의를 다시 여쭙니다. 출석 위치 확인은 이 약관을 알린 뒤 이용자의 별도 동의를 받아서만 이용합니다.
+7. 제${LOCATION_TERMS_VERSION}판 변경 이력
+   - ${LBS_REPORT_ADDED}: 제2조의 사업자 정보에 위치기반서비스사업 신고 ${LBS_REPORT_VALUE}를 추가했습니다. 이미 수리된 신고 사실을 적은 것으로 이용자에게 불리한 내용이 없어 적은 날부터 바로 적용했습니다.
 
 시행일: ${LOCATION_TERMS_EFFECTIVE}`;
 

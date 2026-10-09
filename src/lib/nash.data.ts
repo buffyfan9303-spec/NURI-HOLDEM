@@ -96,7 +96,11 @@ export const NASH_ANTE_QUARANTINE: readonly number[] = [6, 7, 8, 9, 10];
  *  🔴 2026-10-01 — **2~5bb 를 뺐다**(오너 결정 "일단 숨기고 재생성", 감사 gto-calc-audit-1001 N7).
  *    공개 9인 BB앤티 Nash 셔브 표(PokerCoaching, 비교용으로만 씀)보다 우리 추정값이 **모두 좁았다** — 5bb −3.1~−8.7 ·
  *    4bb −5.7~−8.7 · 3bb −14.8~−26.8 · 2bb −31.7~−57.9%p(UTG 2bb 27.6 vs 85.5%). 숏스택 핵심 구간에서 '폴드' 를 보여 줬다.
- *    6~10bb 는 −0.9~−4.4%p 라 '추정' 배지로 남긴다. 차트는 2~5bb 의 뒤 3명+ 자리를 '준비 중' 으로 보여 준다. */
+ *    6~10bb 는 −0.9~−4.4%p 라 '추정' 배지로 남긴다. 차트는 2~5bb 의 뒤 3명+ 자리를 '준비 중' 으로 보여 준다.
+ *  🔴 2026-10-09 — **차트도 이 구간을 읽지 않는다**(오너 결정 GTO-F1 · 이전 지시 A-059·B-041 '보정 통과 못한 스택은 준비 중').
+ *    PushFoldChart 가 allowApprox 를 넘기지 않아 6~10bb 뒤 3명+ 90칸(3 kind × 6자리 × 5깊이)은 '정확한 계산을 준비 중' 안내로 간다.
+ *    **화면 소비처 0** 이다 — 값은 재산출 비교용으로 남긴다(지우지 마라). 목록·allowApprox 인자는 그대로 둔다(데이터 불변 지문이 이 경로를 본다).
+ *    잠금: src/components/features/tools/pushfoldQuarantine.test.tsx · 아래 allowApprox 소스 검사(nash.data.test.ts). */
 export const NASH_ANTE_APPROX: readonly number[] = [6, 7, 8, 9, 10];
 
 /** 2026-10-02 오너 결정 "푸시폴드 2~5bb 전부 공개(설명 표시)" — 이 칸(빅앤티 · 뒤 3명+ · 2~5bb)은 **콜 인원 제한 없는 다인 게임**의 균형이다.
@@ -174,7 +178,8 @@ export function hasNashRange(kind: NashKind, k: number, stack: number, ante: boo
 }
 
 /** k(뒤 인원)·스택(bb)·앤티 여부로 169핸드 빈도(0..1)를 돌려준다. callSB 는 k>=2 전용. */
-/** `allowApprox` — 차트 전용. 추정 구간(NASH_ANTE_APPROX)의 다인 콜 근사 표까지 돌려준다. 드릴·스팟은 넘기지 마라. */
+/** `allowApprox` — 추정 구간(NASH_ANTE_APPROX)의 다인 콜 근사 표까지 돌려준다. 2026-10-09 부터 **제품 코드 어디도 넘기지 않는다**
+ *  (차트도 '준비 중' — 오너 GTO-F1). 데이터 불변 지문·재산출 비교 테스트만 쓴다. 화면·드릴·스팟에서 넘기지 마라. */
 export function nashRange(kind: NashKind, k: number, stack: number, ante: boolean, allowApprox = false): Float32Array {
   return decode(tableOf(kind, k, stack, ante, allowApprox));
 }
