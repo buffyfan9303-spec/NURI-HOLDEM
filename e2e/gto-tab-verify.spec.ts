@@ -318,6 +318,38 @@ test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-2
     }
   });
 
+  // 2026-10-09 스택 깊이 탭(25·40·60·100bb) — SegmentedTabs hitUp 은 누름면을 위로만 16px 넓힌다.
+  //   위 이웃(카드 설명 문단)과 겹치지 않게 래퍼에 pt-1.5 를 뒀다. 유효 높이와 함께 '넓힌 윗변이 설명 문단 아래에 있는가' 를 잰다.
+  test('🔴 레인지 차트 스택 깊이 탭 4개가 44px 유효 표적이고 위 설명 문단과 겹치지 않는다', async ({ page }) => {
+    await openTools(page, '#tool=range');
+    const dialog = page.getByRole('dialog').first();
+    const tabs = dialog.locator('[data-testid="range-depth"] [role="tab"]');
+    await expect(tabs).toHaveCount(4, { timeout: 15_000 });
+    // effH 는 위아래 14px 까지만 탐침한다(양쪽 오버행용). hitUp 은 위로만 16px 를 넓히므로 같은 방식으로 24px 까지 잰다.
+    const effHUp = (loc: ReturnType<Page['locator']>) => loc.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const x = Math.round(r.left + r.width / 2);
+      const hits = (y: number) => { const t = document.elementFromPoint(x, y); return !!t && (t === el || el.contains(t)); };
+      let top = r.top, bottom = r.bottom;
+      for (let d = 1; d <= 24; d++) { if (!hits(Math.round(r.top) - d)) break; top = r.top - d; }
+      for (let d = 1; d <= 24; d++) { if (!hits(Math.round(r.bottom) + d)) break; bottom = r.bottom + d; }
+      return Math.round(bottom - top);
+    });
+    for (let i = 0; i < 4; i++) {
+      expect(await effHUp(tabs.nth(i)), `깊이 탭 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+    const gap = await dialog.locator('[data-testid="range-depth"]').evaluate((wrap) => {
+      const desc = wrap.previousElementSibling as HTMLElement | null;   // CalcCard 의 설명 블록
+      const tab = wrap.querySelector('[role="tab"]') as HTMLElement;
+      const r = tab.getBoundingClientRect();
+      const before = getComputedStyle(tab, '::before');
+      const hitTop = r.top + (parseFloat(before.top) || 0);              // ::before 의 top(음수) = 위로 넓힌 양
+      return { hitTop, descBottom: desc ? desc.getBoundingClientRect().bottom : -1, beforeTop: before.top };
+    });
+    expect(gap.descBottom, '설명 문단을 못 찾았다').toBeGreaterThan(0);
+    expect(gap.hitTop, `깊이 탭 누름면이 위 설명 문단을 덮는다: ${JSON.stringify(gap)}`).toBeGreaterThanOrEqual(gap.descBottom - 0.5);
+  });
+
   test('🔴 푸시·폴드 포지션 그리드(세로 gap 4.25px)가 44px 유효 표적을 가진다', async ({ page }) => {
     await openTools(page, '#tool=pushfold');
     const dialog = page.getByRole('dialog').first();
@@ -340,6 +372,71 @@ test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-2
     expect(n, '스택 눈금이 안 보인다').toBeGreaterThan(0);
     for (let i = 0; i < n; i++) {
       expect(await effH(ticks.nth(i)), `스택 눈금 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
+// ── 2026-10-09 레인지 차트 스택 깊이(25·40·60·100bb) ─────────────────────────────────────
+// 기본은 100bb(앤티 없음) 그대로 — 위 '배지 100bb' 검사와 오답 노트 딥링크가 100bb 로 온다.
+// 누를 때는 page.evaluate(btn.click()) — locator.click() 의 자동 스크롤이 측정을 오염시킨다(CLAUDE.md 참고 메모).
+test.describe('레인지 차트 스택 깊이', () => {
+  const pressDepth = (page: Page, label: string) => page.evaluate((l) => {
+    const btn = [...document.querySelectorAll('[data-testid="range-depth"] [role="tab"]')].find((b) => b.textContent?.trim() === l) as HTMLButtonElement | undefined;
+    if (!btn) throw new Error(`깊이 탭 ${l} 없음`);
+    btn.click();
+  }, label);
+
+  test('🔴 #tool=range 딥링크 → 깊이 탭 4개 · 기본 100bb → 40bb 로 바꾸면 배지·그룹 칩·매트릭스가 그 깊이를 따른다', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openTools(page, '#tool=range');
+    const dialog = page.getByRole('dialog').first();
+    const tabs = dialog.locator('[data-testid="range-depth"] [role="tab"]');
+    await expect(tabs).toHaveText(['25bb', '40bb', '60bb', '100bb'], { timeout: 15_000 });
+    await expect(tabs.nth(3)).toHaveAttribute('aria-selected', 'true');
+    const badge = dialog.locator('[data-source-badge="chart"]').first();
+    await expect(badge).toContainText('100bb · 앤티 없음');
+    const groupChip = (name: string) => dialog.locator('[data-testid="range-guide"]').getByRole('button', { name, exact: true });
+    await expect(groupChip('3벳')).toHaveCount(1);
+
+    await pressDepth(page, '40bb');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(badge).toContainText('40bb · BB앤티');
+    await expect(badge).not.toContainText('100bb');
+    await expect(groupChip('3벳')).toHaveCount(0);       // 40bb 에는 콜드 3벳 표가 없다 — 빈 상자를 만들지 않는다
+    await expect(groupChip('vs 3벳')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'AA 상세' })).toBeVisible();
+
+    // 같은 자리 유지 — BB 수비(vs BTN)에서 25bb 로 바꾸면 25bb 의 BB vs BTN(올인·콜)으로 간다
+    await groupChip('블라인드 수비').click();
+    await dialog.getByRole('group', { name: '상대 오픈 포지션' }).getByRole('button', { name: 'vs BTN', exact: true }).click();
+    await pressDepth(page, '25bb');
+    await expect(dialog.getByText('BB vs BTN 오픈', { exact: true })).toBeVisible();
+    await expect(badge).toContainText('25bb · BB앤티');
+    await expect(groupChip('vs 3벳')).toHaveCount(0);    // 25bb 에는 vs 3벳 표가 없다
+    await expect(dialog.getByText(/25bb 표: BB 올인에 대한 콜/)).toBeVisible();
+  });
+
+  test('🔴 390px 에서 깊이 4개 각각 가로 넘침 0 · 깊이를 바꿔도 깊이 탭 위치가 움직이지 않는다', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openTools(page, '#tool=range');
+    const dialog = page.getByRole('dialog').first();
+    await expect(dialog.locator('[data-testid="range-depth"] [role="tab"]')).toHaveCount(4, { timeout: 15_000 });
+    const tabTop = () => dialog.locator('[data-testid="range-depth"]').evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    const top0 = await tabTop();
+    for (const d of ['25bb', '40bb', '60bb', '100bb']) {
+      await pressDepth(page, d);
+      await expect(dialog.locator('[data-testid="range-depth"] [aria-selected="true"]')).toHaveText(d);
+      const o = await page.evaluate(() => {
+        const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+        const wide = [...dlg.querySelectorAll('*')].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.right > window.innerWidth + 0.5 && !el.closest('.overflow-x-auto');
+        }).map((el) => `${el.tagName}.${(el.className && String(el.className).slice(0, 40)) || ''}`);
+        return { doc: document.documentElement.scrollWidth - document.documentElement.clientWidth, wide: wide.slice(0, 5) };
+      });
+      expect(o.doc, `${d}: 문서 가로 넘침`).toBeLessThanOrEqual(0);
+      expect(o.wide, `${d}: 화면 밖으로 나간 요소`).toEqual([]);
+      expect(await tabTop(), `${d}: 깊이 탭이 움직였다`).toBe(top0);
     }
   });
 });

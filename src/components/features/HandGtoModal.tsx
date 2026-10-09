@@ -7,7 +7,7 @@
 //   6맥스 LJ(UTG) 오픈 100bb — 차트는 77·ATo 를 100% 오픈이라 하고, Chen 계산은 폴드라고 했다.
 // 같은 앱이 같은 상황에 반대로 답하면 둘 다 못 믿게 된다. 그래서 이 화면도 차트를 읽는다.
 //
-// 대신 차트는 **100bb 한 벌**만 있다. 다른 스택을 물으면 값을 만들어 내지 않고
+// 대신 이 화면은 **100bb 표(앤티 없음)만** 읽는다. 다른 스택을 물으면 값을 만들어 내지 않고
 // '현재 데이터 미지원' 이라고 말한 뒤 숏스택 도구(푸시·폴드 차트)로 보낸다 —
 // 없는 데이터를 근사로 채우는 것이 이 화면이 원래 하던 일이었고, 그게 충돌의 원인이었다.
 import { useMemo, useState } from 'react';
@@ -19,7 +19,7 @@ import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 import SourceBadge from './tools/SourceBadge';
 import { RANK_BASIS_LABEL, STARTING_HAND_BY_HAND } from './tools/startingHandRank';
 
-/** 차트가 덮는 스택 — ranges.data 는 100bb 한 벌뿐이다(파일 상단 주석). */
+/** 이 화면이 읽는 스택 — ranges.data 의 100bb 표(앤티 없음). 25·40·60bb(BB 앤티) 표는 레인지 차트 화면만 읽는다(ranges.depth.data.ts). */
 const CHART_BB = 100;
 const STACK_TABS: { bb: number; label: string }[] = [
   { bb: 12, label: '12bb' },
@@ -117,8 +117,9 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
                 <Icon name="info" size={13} className="shrink-0" aria-hidden />현재 데이터 미지원
               </p>
               <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
-                이 앱의 프리플랍 차트는 <b>100bb 한 벌</b>입니다. {bb}bb 기준 표는 없습니다.
-                숏스택(≤20bb)은 GTO 탭의 <b className="text-accent-300">푸시 · 폴드 차트</b>를 쓰세요 — 그쪽은 스택별 자체 Nash 데이터가 있습니다.
+                이 화면은 <b>100bb 표(앤티 없음)</b>만 읽습니다. {bb}bb 결과는 만들지 않습니다.
+                25·40·60bb(BB앤티) 표는 GTO 탭 › <b className="text-accent-300">프리플랍 레인지 차트</b>에 있습니다.
+                숏스택(≤20bb)은 <b className="text-accent-300">푸시 · 폴드 차트</b>를 쓰세요 — 그쪽은 스택별 자체 Nash 데이터가 있습니다.
               </p>
               <button type="button"
                 onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: 'pushfold' })); }}
