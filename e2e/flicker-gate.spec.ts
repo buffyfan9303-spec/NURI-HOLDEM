@@ -118,6 +118,8 @@ function judge(rows: Verdict[], steps: Step[], tag: string) {
   const modal = new Set(steps.filter((s) => s.kind === 'modal').map((s) => s.id));
   expect.soft(rows.filter((r) => !modal.has(r.id) && r.blink.length).map((r) => `${r.id} ${r.blink.join('|')}`), `${tag}: 화면 휘도가 튀었다 돌아온 프레임 — 한 번 번쩍`).toEqual([]);
   expect.soft(rows.filter((r) => r.coverFrames).map((r) => `${r.id} ${r.coverFrames}프레임`), `${tag}: 전환용 덮개([data-tab-cover]/[data-sub-cover])가 보였다 — 5차에서 없앤 그 덮개`).toEqual([]);
+  // 9차 판 전환 막([data-pane-fade]) — 있어도 되지만 0.6 넘게 시작하거나 ≥0.5 로 붙잡으면 5차 '검정 → 콘텐츠' 부류다. 빈 판·번쩍은 위 flat·blink 가 픽셀로 본다.
+  expect.soft(rows.filter((r) => r.fadeMax > 0.6 + 1e-6 || r.fadeHeld > 3).map((r) => `${r.id} max=${r.fadeMax.toFixed(2)} ≥0.5×${r.fadeHeld}`), `${tag}: 판 전환 막이 0.6 넘게 시작했거나 3프레임 넘게 붙잡았다`).toEqual([]);
   expect.soft(rows.filter((r) => r.ovFrames).map((r) => `${r.id} ${r.ovFrames}프레임`), `${tag}: 불투명 전면 폴백(fixed inset-0 aria-busy)이 커밋됐다 — startTransition/preload 를 잃었다`).toEqual([]);
   const cold = rows.filter((r) => r.firstApp !== undefined || r.id === 'cold');
   expect.soft(cold.map((r) => r.id).filter((id) => rows.find((r) => r.id === id)!.firstApp === undefined), `${tag}: 콜드 진입에서 앱 첫 페인트를 못 잡았다 — 셸 교체 hook 이 낡았다`).toEqual([]);
