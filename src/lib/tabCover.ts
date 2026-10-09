@@ -233,14 +233,127 @@ let atCommit: ((fn: () => void) => void) | null = null;
 //     움직이는 것은 탭 표시(SlidingPill 알약)뿐이다.
 //   남긴 것: ① 스왑 프레임 정적화(holdSwap · releaseSwap) — 판 교체 프레임에 크롬 전환(합성 애니)이 돌면 새 판 타일이 래스터되기 전에
 //     프레임이 나가 빠진 타일(다크=검정)이 보였다(6차 원인). 즉시 교체에서도 같은 위험이라 그대로 둔다. ② 하위 탭 P2 스크롤(alignSubTabPanel).
-//   🔴 되살리지 마라 — 판 위에 옛 판(또는 지면색 한 장)을 겹쳐 두고 걷는 방식은 길이와 상관없이 '겹침·상자' 를 만든다.
+//   🔴 되살리지 마라 — 새 판 위에 **옛 판**(복제본·스냅샷)을 겹쳐 두고 걷는 방식은 길이와 상관없이 '겹침·상자' 를 만든다.
 //     src/components/transitionDevices.contract.test.ts (d) 와 e2e/tab-instant-swap.spec.ts 가 잠근다.
+//     (9차는 옛 판이 아니라 **내용 없는 지면색 막**을 반투명에서 걷는다 — 겹치는 글자·상자가 없다. 아래 9차 절.)
 // ─────────────────────────────────────────────────────────────────────────────
 /** 헤더 계정 메뉴가 다른 화면을 열며 걷힐 때의 퇴장 길이·곡선(App AppHeader menuHandoff). 판 전환에는 더 이상 쓰지 않는다(8차). */
 export const LEAVE_FADE_MS = 240;
 export const LEAVE_EASE = 'cubic-bezier(.4,0,.2,1)';
 /** 커밋이 끝내 안 오는 경우(같은 탭으로 되돌린 연타 등)에도 전환을 영원히 꺼 두지 않는 상한. */
 const SWAP_GUARD_MS = 1500;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9차 PANE-FADE(오너 2026-10-09: "블러모션을 없애라고 했더니 너무 딱딱해졌어. 웹앱이 콘텐츠 이동할 때 이렇게 딱딱한게 어디있어") —
+//   8차의 한 프레임 교체는 그대로 두고(떠나는 판 겹침 0), 새 판 **위**에 지면색 막 한 장을 **반투명(FADE_FROM)에서 시작해 곧바로** 걷는다.
+//   새 판은 첫 프레임부터 보이고(0.45 만큼), 220ms 감속으로 또렷해진다 — '바로 바뀌는데 부드럽다'.
+//   이력의 네 칸(새 판 효과=삼성 밝기 · 불투명 막 붙잡기=검정 깜빡임 · 떠나는 판 겹침=블러·네모칸 · 무효과=딱딱함) 중 안 써 본 칸이다
+//   (분석: C:\Users\buffy\Documents\누리홀덤_영상분석_0930\audit12\owner-1009b\motion-history.md ③).
+//   · 5차 덮개와 다른 점: 1.0 이 아니라 0.55 에서 시작하고, 판 준비를 기다리지 않고, 붙잡지 않는다(≥0.5 는 많아야 2~3프레임).
+//     운영 주입 실측: 0.6 → 빈 판 0·번쩍 지표 ≤6.5 / 0.85 → 빈 판 2프레임·번쩍 8.8(기준 8 초과). 그래서 시작값 상한 0.6.
+//   · 막은 판의 **형제**(body 에 붙는 fixed 한 장)다 — 새 판·조상에는 여전히 opacity/transform 0(R3 · 삼성 밝기 점프 부류).
+//   · 막은 **커밋 순간** 정지값으로 깔고(클릭 때 깔면 옛 판을 먼저 흐린다), 페이드는 **새 판 첫 프레임 다음**(releaseSwap 과 같은 콜백)에
+//     시작한다 — 스왑 프레임에 합성 애니가 돌면 새 판 타일 래스터를 안 기다려 빠진 타일(다크=검정)이 나온다(6차 원인).
+//   · 동작 줄이기 · 숨은 문서 · 전면 판(html[data-overlay]) 열림 · 앱 첫 마운트(이동이 아님)에는 막 0 — 8차 한 프레임 교체 그대로.
+//   🔴 막 시작값을 0.6 위로 올리거나, 막을 판 준비까지 붙잡거나, 떠나는 판을 겹치지 마라 — 각각 5차·8차 증상이 돌아온다.
+//     잠금: src/components/transitionDevices.contract.test.ts (d) · e2e/tab-instant-swap.spec.ts · e2e/pill-flash.spec.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+export const FADE_FROM = 0.55;
+export const FADE_MS = 220;
+export const FADE_EASE = 'cubic-bezier(.22,.61,.36,1)';
+/** 걷기를 한 프레임(60Hz)만큼 진행한 자리에서 시작한다 — 아래 coverAt 주석. */
+const FADE_LEAD_MS = 16;
+
+type Rect = { top: number; left: number; width: number; bottom: number };
+let fadeEl: HTMLElement | null = null;
+let fadeGen = 0;
+/** 메인 탭 이동이 시작됐다(notePaneLeaving) — 첫 마운트·같은 탭 재렌더의 handOffPane 은 막을 깔지 않는다. */
+let mainArmed = false;
+
+const fadeNode = (): HTMLElement => {
+  if (fadeEl?.isConnected) return fadeEl;
+  const d = document.createElement('div');
+  d.setAttribute('aria-hidden', 'true');
+  d.setAttribute('data-pane-fade', '');
+  // will-change — 정지값으로 깔리는 커밋 프레임부터 막이 제 층이다. 걷기 시작 때 승격되면 그 순간 아래 판 전체를 막 없이 다시 래스터해야 한다.
+  d.style.cssText = 'position:fixed;pointer-events:none;display:none;opacity:0;will-change:opacity;';
+  document.body.appendChild(d);
+  return (fadeEl = d);
+};
+const hideFade = (): void => {
+  if (!fadeEl) return;
+  fadeEl.getAnimations?.().forEach((a) => a.cancel());
+  fadeEl.style.display = 'none';
+};
+const fadeOff = (): boolean => document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isPc = (): boolean => window.matchMedia('(min-width: 1024px)').matches;
+
+/**
+ * 커밋 순간 — 막을 r 자리에 정지값(FADE_FROM)으로 깐다(애니가 아니다 — 스왑 프레임 래스터 대기를 깨지 않는다).
+ * 돌려준 함수를 새 판 첫 프레임 **다음**에 부르면 FADE_MS 동안 0 으로 걷고 숨긴다. 새 이동이 오면(연타) 이전 막은 버린다.
+ */
+function coverAt(r: Rect | null, z: string, bg: string): () => void {
+  const my = ++fadeGen;
+  hideFade();
+  if (!r || r.bottom - r.top < 1 || r.width < 1 || fadeOff()) return () => {};
+  const el = fadeNode();
+  const s = el.style;
+  s.top = `${r.top}px`; s.left = `${r.left}px`; s.width = `${r.width}px`; s.height = `${r.bottom - r.top}px`;
+  s.zIndex = z; s.background = bg; s.opacity = String(FADE_FROM); s.display = 'block';
+  window.setTimeout(() => { if (my === fadeGen) hideFade(); }, SWAP_GUARD_MS); // 안전망 — rAF 가 멈춰도 막이 눌러앉지 않는다
+  return () => {
+    if (my !== fadeGen) return;
+    if (typeof el.animate !== 'function') { hideFade(); return; }
+    s.opacity = '0'; // 애니가 끝난 프레임에 정지값(0.55)으로 되돌아 번쩍이지 않게 — 도는 동안은 애니가 이긴다
+    // delay −FADE_LEAD_MS — 첫 걷기 프레임이 정지값(0.55)을 한 번 더 그리지 않게 한 프레임만큼 진행한 자리에서 시작한다
+    //   (막 ≥0.5 = 커밋 프레임 하나. CPU 4배 실측에서 시작 프레임까지 세면 4프레임이 나와 A5(≤3)를 넘었다).
+    const a = el.animate([{ opacity: FADE_FROM }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -FADE_LEAD_MS });
+    a.onfinish = () => { if (my === fadeGen) hideFade(); };
+  };
+}
+
+/** 메인 탭 막 자리 — 모바일: 헤더 밑 전폭 ~ 화면 아래 · PC: GNB 밑 · 콘텐츠 열 폭 · 판 아래끝까지(좌우 채움·푸터는 안 덮는다 — 2026-09-19 '좌우 깜빡'). */
+function mainRect(): Rect | null {
+  if (document.documentElement.hasAttribute('data-overlay')) return null;
+  const p = [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((e) => e.style.display !== 'none' && e.getClientRects().length > 0);
+  if (!p) return null;
+  const bottomOf = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().bottom ?? 0;
+  const top = Math.max(0, bottomOf('[data-stack-header]'), isPc() ? bottomOf('[data-stack-tabbar]') : 0);
+  if (!isPc()) return { top, left: 0, width: window.innerWidth, bottom: window.innerHeight };
+  const r = p.getBoundingClientRect();
+  return { top, left: r.left, width: r.width, bottom: Math.min(window.innerHeight, Math.max(r.bottom, top)) };
+}
+/** 하위 탭 막 자리 — 판의 화면 영역만(레일·알약·헤더·PC GNB·판을 품은 스크롤 상자 밖은 안 덮는다). 옛 하위 덮개(5a3674d3^)의 자리 규칙. */
+function subRect(sp: { rail: Element | null }, root: Element): Rect | null {
+  const r = root.getBoundingClientRect();
+  const sc = scroller(root);
+  const box = sc?.getBoundingClientRect();
+  const bottomOf = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().bottom ?? 0;
+  let top = box ? box.top : Math.max(bottomOf('[data-stack-header]'), isPc() ? bottomOf('[data-stack-tabbar]') : 0);
+  // 판 **위**에 가로로 걸친 레일만 윗변을 민다 — 판 옆에 선 PC 세로 사이드바는 가로로 안 겹치니 무시(alignSubTabPanel 과 같은 판정).
+  const q = sp.rail?.isConnected ? sp.rail.getBoundingClientRect() : null;
+  if (q && q.right > r.left && q.left < r.right) top = Math.max(top, q.bottom);
+  top = Math.max(top, r.top);
+  const bottom = Math.min(window.innerHeight, box ? box.bottom : Infinity, r.bottom);
+  return bottom - top < 1 ? null : { top, left: r.left, width: r.width, bottom };
+}
+/** 판이 속한 전면 화면(fixed 오버레이)의 z-index — 막이 그 위·그 영역에만 깔리게. 없으면 메인 막과 같은 45. */
+function zFor(el: Element): string {
+  let z = '45';
+  for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    if (cs.position === 'fixed' && cs.zIndex !== 'auto') z = cs.zIndex; // 가장 바깥 fixed 가 층을 정한다
+  }
+  return z;
+}
+/** 판 뒤로 실제로 보이는 불투명 배경색 — 막이 그 색이어야 '반투명 지면 → 내용' 이 한 장으로 풀린다(시트 안 판은 시트 색). */
+function bgFor(el: Element): string {
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const m = /rgba?\(([^)]+)\)/.exec(getComputedStyle(n).backgroundColor);
+    if (m) { const a = m[1].split(/[ ,/]+/).filter(Boolean); if (a.length < 4 || Number(a[3]) >= 1) return `rgb(${a.slice(0, 3).join(',')})`; }
+  }
+  return 'rgb(var(--surface-base))';
+}
 
 /** 커밋을 기다리는 하위 탭 판 교체를 끝낸다. 있으면 다음 이동은 연타다(새 이동이 이긴다). */
 let pending: (() => void) | null = null;
@@ -271,16 +384,28 @@ const afterFirstFrame = (fn: () => void) => requestAnimationFrame(() => requestA
 export function notePaneLeaving(from: string, to: string): void {
   if (typeof document === 'undefined') return;
   pending?.(); // 연타 — 커밋을 기다리던 하위 탭 교체는 버린다(연출보다 응답)
-  if (from === to) { releaseSwap(); return; }
+  if (from === to) { mainArmed = false; releaseSwap(); return; }
+  mainArmed = true;
   holdSwap();
   // 도는 부드러운 스크롤(같은 탭 재탭 = 맨 위로 smooth)을 지금 자리에서 멈춘다 — 합성 스크롤 애니가 돌면 새 판 래스터를 안 기다린다.
   window.scrollTo({ top: window.scrollY, behavior: 'instant' as ScrollBehavior });
 }
 
-/** 메인 탭이 커밋된 layout effect(첫 페인트 전)에서 부른다 — 새 판 첫 프레임이 나간 **다음** 프레임에 정적화를 푼다. */
+/**
+ * 메인 탭이 커밋된 layout effect(첫 페인트 전)에서 부른다 — 새 판 첫 프레임이 나간 **다음** 프레임에 정적화를 푼다.
+ * 9차: 이동(notePaneLeaving 이 켠 것)이면 첫 rAF(같은 layout effect 의 맨 위 스크롤·헤더 반영 뒤 · 첫 페인트 전)에 막을 정지값으로 깔고,
+ *   정적화를 푸는 같은 콜백에서 걷기 시작한다.
+ */
 export function handOffPane(): void {
   if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
-  afterFirstFrame(releaseSwap);
+  const armed = mainArmed;
+  mainArmed = false;
+  if (armed) fadeGen++; // 연타 — 아직 걷기를 시작 안 한 이전 막은 지금 버린다(다음 rAF 에서 이 이동의 막이 덮는다)
+  let fadeOut = () => {};
+  requestAnimationFrame(() => {
+    if (armed) fadeOut = coverAt(mainRect(), '45', 'rgb(var(--surface-base))');
+    requestAnimationFrame(() => { releaseSwap(); fadeOut(); });
+  });
 }
 
 /**
@@ -371,7 +496,8 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     else if (rail && recs.every((r) => rail.contains(r.target))) return; // 레일만 바뀜 — 판 변화를 태스크 끝까지 기다린다
     flush(); // P2 스크롤 — 커밋과 같은 순간(첫 페인트 전)
     cancel();
-    afterFirstFrame(releaseSwap);
+    const fadeOut = coverAt(subRect(sp!, root), zFor(root), bgFor(root)); // 9차 — 커밋 순간 막(P2 스크롤 뒤 자리)
+    afterFirstFrame(() => { releaseSwap(); fadeOut(); });
   });
   mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });
   if (root.parentElement) mo.observe(root.parentElement, { childList: true });
