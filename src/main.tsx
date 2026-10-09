@@ -13,6 +13,10 @@ import { ToastProvider } from './components/atoms/Toast';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import { initErrorLog } from './lib/errorLog';
 import { initMonitoring, initMotionTelemetry } from './lib/monitoring';
+import { installTouchContextMenuGuard } from './lib/touchContextMenuGuard';
+
+// 버튼·탭을 손가락으로 길게 눌러도 브라우저 메뉴·안내 말풍선이 뜨지 않게(2026-10-09 오너 삼성 인터넷 '텍스트만 선택하세요').
+installTouchContextMenuGuard();
 
 // 초기 테마 클래스는 ThemeProvider 가 마운트 시 적용한다.
 // FOUC(깜빡임) 최소화를 위해 마운트 전에 저장된 테마를 즉시 반영.

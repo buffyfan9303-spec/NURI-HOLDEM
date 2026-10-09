@@ -90,7 +90,9 @@ export const TIER_META: Record<number, { label: string; short: string; ring: str
   4: { label: '4등', short: '4', ring: 'border-emerald-400/55', text: 'text-emerald-300', glow: '',                                            bg: 'bg-emerald-400/10', dot: 'bg-emerald-400' },
 };
 
-/** 확률 공개용 한 줄. 서버가 준 실제 수량으로만 만든다(상수 금지 — 어긋나면 그게 곧 허위 고지다). */
+/** 등급별 수량·비율 한 줄. 서버가 준 실제 수량으로만 만든다(상수 금지 — 어긋나면 그게 곧 허위 고지다).
+ *  ⚠ 2026-10-09 §28: 손님 화면(EventPage)은 더 이상 이 표를 그리지 않는다 — 이용권 장수·확률은 손님에게 보이지 않는다.
+ *  집계·관리 화면용으로 남겨 둔 함수이니, 손님 화면에 다시 연결하지 마라(eventOddsHidden.contract.test 가 막는다). */
 export interface OddsRow { key: string; label: string; prize: string; total: number; left: number; pct: string }
 export function oddsRows(b: EventBoard): OddsRow[] {
   const cards = b.cards.length || 1;

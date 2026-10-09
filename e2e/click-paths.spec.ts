@@ -90,28 +90,32 @@ test('이벤트 새로고침 — 같은 판으로 돌아온다(홈으로 떨어�
     '새로고침했더니 이벤트 판이 사라졌다 — ?event 가 주소에 남지 않는다').toBeVisible({ timeout: 15_000 });
 });
 
-test('이벤트 페이지 — 확률 공개가 **최하단에** 있고 합이 100%다', async ({ page }) => {
+test('이벤트 페이지 — 이용권 장수·당첨 확률은 손님 화면에 없고 참여 안내가 최하단에 있다 (§28)', async ({ page }) => {
   await page.goto('/?event=1');
   const dlg = page.getByRole('dialog', { name: '이벤트' });
   await expect(dlg).toBeVisible({ timeout: 15_000 });
 
-  // ⚠ 다이얼로그가 보이는 시점은 아직 **로딩 스켈레톤**이다 — 그때 표를 세면 0 이라 조용히 skip 된다
-  //   (이 테스트가 처음에 그렇게 자기 자신을 꺼 버렸다). 표나 '이벤트 없음' 중 하나가 나올 때까지 기다린다.
-  const table = dlg.locator('table');
-  // 이벤트는 mockEvent 로 보장된다 — '이벤트 없음' 이면 건너뛰지 않고 실패다(예전엔 skip 이라 조용히 꺼졌다).
-  await expect(table, '확률 표가 없다 — mockEvent 가 안 먹었거나 이벤트 판이 표를 안 그린다').toBeVisible({ timeout: 20_000 });
+  // 오너 결정(2026-10-09): 확률로 이용권을 주는 모양(§28)이라 표·장수·확률을 뺐다. 지급 로직은 그대로다.
+  // ⚠ 다이얼로그가 보이는 시점은 아직 로딩 스켈레톤일 수 있다 — 안내 구역이 뜰 때까지 기다린 뒤에야 '없음' 이 의미가 있다
+  //   (기다리지 않으면 아직 아무것도 안 그려서 '없다' 가 거짓 통과한다).
+  const guide = dlg.getByTestId('event-guide');
+  await expect(guide, '참여 안내가 없다 — mockEvent 가 안 먹었거나 이벤트 판이 안내를 안 그린다').toBeVisible({ timeout: 20_000 });
+  await expect(guide).toContainText('카드 1장');
+  await expect(guide).toContainText('하루 1회');
+  await expect(guide).toContainText('매장 안내');
 
-  await expect(dlg.getByText('당첨 확률 공개')).toBeVisible();
-  const pcts = await table.locator('tbody tr td:nth-child(4)').allInnerTexts();
-  const sum = pcts.reduce((a, t) => a + parseFloat(t.replace('%', '')), 0);
-  expect(Math.round(sum), `확률 합이 100%가 아니다: ${pcts.join(' ')}`).toBe(100);
+  await expect(dlg.locator('table'), '확률 표가 다시 나타났다').toHaveCount(0);
+  const text = await dlg.innerText();
+  expect(text, "손님 화면에 '이용권' 글자가 있다").not.toContain('이용권');
+  expect(text, "손님 화면에 '확률' 글자가 있다").not.toContain('확률');
+  expect(text, '손님 화면에 당첨 확률 숫자(예: 3.33%)가 있다').not.toMatch(/\d+(?:\.\d+)?\s*%/);
 
-  // '최하단' — 확률 표 아래에 카드판이 오면 안 된다
-  const tableY = (await table.boundingBox())!.y;
+  // '최하단' — 안내가 카드판보다 아래에 있어야 한다
+  const guideY = (await guide.boundingBox())!.y;
   const lastCard = dlg.locator('button[aria-label$="카드 열기"]').last();
   if (await lastCard.count() > 0) {
     const cardY = (await lastCard.boundingBox())!.y;
-    expect(tableY, '확률 표가 카드판보다 위에 있다 — 최하단이어야 한다').toBeGreaterThan(cardY);
+    expect(guideY, '참여 안내가 카드판보다 위에 있다 — 최하단이어야 한다').toBeGreaterThan(cardY);
   }
 });
 

@@ -16,6 +16,7 @@
 // 조건: TC0 일반 · TC1 CPU 6배 · TC5 늦은 판 공개(GTO 청크를 붙잡아 Suspense 폴백이 먼저 서는 첫 방문) ·
 //   TC2 `?fx=` 옛 스위치 값과 무관(스위치는 걷었다 — 저장소에 아무것도 쓰지 않는다) · TC3 PC 1024 · TC4 동작 줄이기.
 // 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 돌리면 TC0·TC1·TC3·TC5 의 ① 이 빨개진다.
+// 9차 PANE-FADE(2026-10-09): 판 밖 지면색 막([data-pane-fade])은 옛 덮개와 따로 본다 — 최댓값 ≤ 0.6 · ≥0.5 프레임 ≤ 3 · TC4(동작 줄이기)는 0.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/tab-cover.spec.ts
 //  ⚠ 하네스 Chromium 만 본다. 삼성 인터넷 GPU 의 밝기는 재현하지 못한다(재현 못 함 ≠ 없음).
 import type { Page } from '@playwright/test';
@@ -23,7 +24,7 @@ import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 
-type Frame = { t: number; disp: string; op: number; dur: number; props: string; ready: boolean; spin: boolean };
+type Frame = { t: number; disp: string; op: number; dur: number; props: string; ready: boolean; spin: boolean; fade: number };
 type Cov = { frames: Frame[]; paneWaapi: string[]; rec: boolean; dest: string };
 
 const RECORDER = () => {
@@ -52,7 +53,9 @@ const RECORDER = () => {
       const cv = document.querySelector<HTMLElement>('[data-tab-cover]');
       const cs = cv ? getComputedStyle(cv) : null;
       const ef = cv?.getAnimations()[0]?.effect as KeyframeEffect | undefined;
-      frames.push({ t: ts, ready, spin, disp: cs?.display ?? 'missing', op: cs ? Number(cs.opacity) : -1,
+      const pf = document.querySelector('[data-pane-fade]'); const pcs = pf ? getComputedStyle(pf) : null;
+      const fade = pcs && pcs.display !== 'none' ? Number(pcs.opacity) : 0;
+      frames.push({ t: ts, ready, spin, fade, disp: cs?.display ?? 'missing', op: cs ? Number(cs.opacity) : -1,
         dur: Number(ef?.getTiming().duration ?? 0),
         props: ef ? [...new Set(ef.getKeyframes().flatMap((k) => Object.keys(k)).filter((k) => !['offset', 'computedOffset', 'easing', 'composite'].includes(k)))].join('+') : '' });
     }
@@ -128,6 +131,8 @@ function expectNoCover(r: Result, label: string) {
   expect(f.filter((x) => x.disp !== 'none' && x.disp !== 'missing').map((x) => `${Math.round(x.t)}ms op=${x.op}`),
     `${label}: 덮개(지면색 판)가 그려졌다 — 이미 그려진 본문을 가렸다 드러내는 '검정 → 콘텐츠' 깜빡임`).toEqual([]);
   expect(r.paneWaapi, `${label}: 본문(.tab-pane)이나 그 조상에 WAAPI 가 시작됐다`).toEqual([]);
+  expect(Math.max(0, ...f.map((x) => x.fade)), `${label}: 판 전환 막이 0.6 넘게 시작했다 — 5차 덮개 부류`).toBeLessThanOrEqual(0.6);
+  expect(f.filter((x) => x.fade >= 0.5).length, `${label}: 판 전환 막을 ≥0.5 로 3프레임 넘게 붙잡았다`).toBeLessThanOrEqual(3);
   expect(r.coverInPane, '덮개 요소가 .tab-pane 안에 들어갔다').toBe(false);
   expect(r.endDisplay, `${label}: 덮개 요소가 되살아났다(2026-09-26 걷음)`).toBe('missing');
   expect(r.endAnims).toBe(-1);
@@ -239,5 +244,6 @@ test.describe('동작 줄이기', () => {
     const r = await move(page, 'GTO', 'tools');
     expect(r.frames.length).toBeGreaterThan(3);
     expect(r.frames.filter((f) => f.disp !== 'none' && f.disp !== 'missing')).toEqual([]);
+    expect(r.frames.filter((f) => f.fade > 0).map((f) => `${Math.round(f.t)}ms ${f.fade}`), '동작 줄이기인데 판 전환 막이 깔렸다').toEqual([]);
   });
 });

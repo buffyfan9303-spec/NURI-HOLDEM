@@ -7,6 +7,7 @@
 //              앱 첫 페인트 = 정적 셸 DOM 교체 뒤 화면이 실제로 바뀐 첫 프레임(20×N 썸네일 평균 차 > 1.5).
 //              DOM 이 바뀌었어도 메인스레드가 붙잡혀 아직 셸이 보이는 프레임은 깜빡임이 아니라 '정지' 라 세지 않는다.
 //   · cover/ov — DOM 표본(rAF): 전환용 덮개([data-tab-cover]·[data-sub-cover]) 가 보이는 프레임 · 전면 폴백(fixed inset-0 aria-busy) 프레임.
+//   · fade     — DOM 표본(rAF): 9차 판 전환 막([data-pane-fade], 2026-10-09)의 opacity. 옛 덮개와 따로 센다 — 최댓값 ≤ 0.6 · ≥0.5 프레임 ≤ 3 을 판정한다.
 // 왜 픽셀인가: document.fonts.check() 는 없는 폰트에도 true, computed style 은 FOIT 를 모르고, DOM 표본은 '덮개' 처럼 이름 붙은 것만 본다.
 //   픽셀은 다음에 어떤 방식으로 빈 판을 다시 만들어도 잡는다.
 // ⚠ 하네스 Chromium 만 본다(삼성 인터넷 GPU·주소창 접힘·느린 네트워크는 재현 못 함 — 재현 못 함 ≠ 없음).
@@ -17,9 +18,11 @@ import sharp from 'sharp';
 export type Frame = { t: number; L: number; std: number; ink: number; th: Float32Array; bL?: number; bStd?: number };
 /** 본문 영역(CSS px) — 헤더 아래 ~ 하단바 위. w = 그때 innerWidth(프레임 폭과 CSS px 의 비율). */
 export type Crop = { top: number; bottom: number; w: number };
-export type Sample = [t: number, busy: number, ov: number, cover: number];
+export type Sample = [t: number, busy: number, ov: number, cover: number, fade: number];
 export type Verdict = {
   id: string; frames: number; rafFrames: number; flat: number[]; blink: string[]; foit: number[]; coverFrames: number; ovFrames: number;
+  /** 9차 막 — 최댓값 · ≥0.5 프레임 수 · 보인(>0.02) 프레임 수 */
+  fadeMax: number; fadeHeld: number; fadeFrames: number;
   firstApp?: number; fontsAt?: number; lastStd: number; settledInk: number;
 };
 
@@ -43,9 +46,8 @@ export const RECORDER = () => {
     if (R.on) {
       let busy = 0, ov = 0;
       for (const el of document.querySelectorAll('[aria-busy="true"]')) if (vis(el)) { busy++; if (el.classList.contains('fixed') && el.classList.contains('inset-0')) ov++; }
-      const cov = document.querySelector('[data-tab-cover],[data-sub-cover]');
-      const co = cov ? getComputedStyle(cov) : null;
-      R.f.push([performance.timeOrigin + performance.now(), busy, ov, co && co.display !== 'none' && vis(cov!) ? Number(co.opacity) : 0]);
+      const op = (sel: string) => { const el = document.querySelector(sel); const cs = el ? getComputedStyle(el) : null; return cs && cs.display !== 'none' && vis(el!) ? Number(cs.opacity) : 0; };
+      R.f.push([performance.timeOrigin + performance.now(), busy, ov, op('[data-tab-cover],[data-sub-cover]'), op('[data-pane-fade]')]);
     }
     requestAnimationFrame(loop);
   };
@@ -102,7 +104,8 @@ const diff = (a: Frame, b: Frame) => { let d = 0; for (let i = 0; i < a.th.lengt
 export function analyze(id: string, cast: Frame[], f: Sample[], t0: number, tEnd: number, shellAt = 0, fontsAt = 0): Verdict {
   const c = cast.filter((x) => x.t >= t0 && x.t <= tEnd);
   const ff = f.filter((x) => x[0] >= t0 && x[0] <= tEnd);
-  const empty: Verdict = { id, frames: c.length, rafFrames: ff.length, flat: [], blink: [], foit: [], coverFrames: ff.filter((x) => x[3] > 0.05).length, ovFrames: ff.filter((x) => x[2] > 0).length, lastStd: -1, settledInk: 0 };
+  const empty: Verdict = { id, frames: c.length, rafFrames: ff.length, flat: [], blink: [], foit: [], coverFrames: ff.filter((x) => x[3] > 0.05).length, ovFrames: ff.filter((x) => x[2] > 0).length, lastStd: -1, settledInk: 0,
+    fadeMax: Math.max(0, ...ff.map((x) => x[4] ?? 0)), fadeHeld: ff.filter((x) => (x[4] ?? 0) >= 0.5).length, fadeFrames: ff.filter((x) => (x[4] ?? 0) > 0.02).length };
   if (c.length < 3) return empty;
   const tail = c.slice(-5); const settled = tail.map((x) => x.ink).sort((a, b) => a - b)[Math.floor(tail.length / 2)];
   let from = shellAt || t0; let firstApp: number | undefined;
@@ -148,5 +151,5 @@ export async function center(page: Page, f: Finder): Promise<{ x: number; y: num
 }
 
 export function describe(v: Verdict): string {
-  return `${v.id}: frames=${v.frames} raf=${v.rafFrames} flat=${v.flat.length}${v.flat.length ? '@' + v.flat.slice(0, 3).join(',') : ''} blink=${v.blink.join('|') || 0} foit=${v.foit.length}${v.foit.length ? '@' + v.foit.slice(0, 3).join(',') : ''} cover=${v.coverFrames} ov=${v.ovFrames}${v.firstApp !== undefined ? ` app@${v.firstApp}` : ''}${v.fontsAt ? ` fonts@${v.fontsAt}` : ''} lastStd=${v.lastStd.toFixed(1)}`;
+  return `${v.id}: frames=${v.frames} raf=${v.rafFrames} flat=${v.flat.length}${v.flat.length ? '@' + v.flat.slice(0, 3).join(',') : ''} blink=${v.blink.join('|') || 0} foit=${v.foit.length}${v.foit.length ? '@' + v.foit.slice(0, 3).join(',') : ''} cover=${v.coverFrames} fade=${v.fadeMax.toFixed(2)}/${v.fadeHeld}/${v.fadeFrames} ov=${v.ovFrames}${v.firstApp !== undefined ? ` app@${v.firstApp}` : ''}${v.fontsAt ? ` fonts@${v.fontsAt}` : ''} lastStd=${v.lastStd.toFixed(1)}`;
 }

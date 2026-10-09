@@ -34,6 +34,7 @@ import { josa } from '../../lib/josa';
 import { SPOT_AI_DAILY_LIMIT, SPOT_AI_FREE_COUNT, SPOT_AI_PRICE } from '../../lib/spotAiLimits';
 import { useReloadState } from '../../lib/reloadTab';
 import BrandDiamond from '../atoms/BrandDiamond';
+import SpotHeroSheen from './SpotHeroSheen';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
@@ -777,8 +778,10 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
       data-aura data-aura-level="hero" data-aura-variant="violet"
       aria-label="NURI SPOT"
     >
-      {/* 오른쪽 위 비스듬한 빛줄기 — 정적 장식(반복 반짝임·애니메이션 없음, 가이드 §2·§6). 4안의 자개 이미지는 이 카드에서 이 빛줄기로 대체했다
-          (public/banners/spot-nacre-* 파일은 그대로 둔다). 둥근 모서리로 자르고 클릭은 통과. 색은 --hero-shine 이라 라이트에서 옅은 청회색. */}
+      {/* 오른쪽 위 비스듬한 빛줄기 — 곡선 자체는 정적이다. 4안의 자개 이미지는 이 카드에서 이 빛줄기로 대체했다
+          (public/banners/spot-nacre-* 파일은 그대로 둔다). 둥근 모서리로 자르고 클릭은 통과. 색은 --sh-ray 라 라이트에서 옅은 청회색.
+          2026-10-09 오너 "한 번 나오고 안 나와서 인지를 못 한다 · 계속 반복" → 그 위로 옅은 사선 빛 띠가 9초마다 천천히 지나간다(SpotHeroSheen —
+          SVG 그라디언트만 움직여 레이아웃·transform 0, 숨은 탭·화면 밖·입력 중·reduced-motion 에서는 멈춘다). */}
       <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
           <defs>
@@ -800,6 +803,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-glowc)" strokeWidth="4" opacity="0.55" filter="url(#spot-hero-glow)" vectorEffect="non-scaling-stroke" />
           <path d="M 69 -1 C 80 8, 91 20, 101 42" fill="none" stroke="url(#spot-hero-ray)" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
         </svg>
+        <SpotHeroSheen />
       </span>
       {/* 2026-10-06 시안: 왼쪽 원형 배지가 제목·안내 두 줄을 함께 받친다(배지 2행 걸침).
           ⚠ 360 미만(320)은 안내 줄이 배지 옆 칸(218px)에 한 줄로 안 들어간다(글자 폭 약 237px, 13px 기준 실측) —

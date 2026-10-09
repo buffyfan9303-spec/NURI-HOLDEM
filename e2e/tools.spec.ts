@@ -101,7 +101,11 @@ test.describe('도구 탭 — 전체화면 실행', () => {
     await expect.poll(pctOf).toBeGreaterThan(btn10);
 
     // UTG(9인)는 훨씬 좁아진다
+    // 🔴 2026-10-09 오너 GTO-F1: UTG 10bb 는 '다인 콜 근사(추정)' 칸이라 '준비 중' 안내로 가린다 → 행렬이 없다.
+    //   가린 것을 먼저 확인하고, 정식 등급 첫 깊이(12bb)에서 넓이를 비교한다(12bb UTG 가 10bb BTN 보다 좁다는 것은 같은 주장이다).
     await dialog.getByRole('button', { name: 'UTG(9인)' }).click();
+    await expect(dialog.getByTestId('pushfold-no-data')).toContainText('이 스택은 정확한 계산을 준비 중입니다');
+    await dialog.locator('[data-testid="pushfold-stack-picker"] button[data-stack="12"]').click();
     await expect.poll(pctOf).toBeLessThan(btn10);
   });
 

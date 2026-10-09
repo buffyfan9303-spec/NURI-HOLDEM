@@ -46,6 +46,7 @@ const DealerShiftsModal = lazyWithReload(() => import('./DealerShiftsModal'));
 import Modal from '../atoms/Modal';
 import { getAppSetting, BOOST_CONTACT_EMAIL_KEY } from '../../api/settings';
 import { BIZ_REQUIRED } from './BusinessFooter';
+import { PAID_EXPOSURE_ON } from '../../lib/paidExposure';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
 import { relativeTime } from '../../lib/relativeTime';
@@ -1213,11 +1214,15 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고
              누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼. `caps.issueVoucher`(= 서버 can_manage_pos)로 바꾼다. */}
       <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); void reloadRange(); }}venueId={venueId} canIssue={caps.issueVoucher} canStaffCheckin={caps.manage} />
-      <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
+      {/* F-04·RECUR-P2-2(2026-10-09) — 유료 노출 스위치(lib/paidExposure)가 꺼져 있으면 손님 화면에 TOP 배지·맨 앞 표시가 없다.
+          그런데 이 문의 링크·시트는 그 효과를 약속하며 문의를 받았다(효과 없는 상품 안내 = 과다·허위 고지 소지, 아래 시트 주석의 전자상거래법 §21).
+          같은 스위치로 링크와 시트를 함께 숨긴다. 데이터(schedules.premium_until)·관리자 설정(부스트 지정·문의 연락처)은 그대로 —
+          PAID_EXPOSURE_ON 을 true 로 돌리면 링크·시트가 그대로 돌아온다. */}
+      {PAID_EXPOSURE_ON && <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />}
 
       {/* 포스터 상단 고정 문의 — 오너 2026-10-07 "문의 위로 올려 맨 위로". 종전엔 맨 아래 유틸 줄 끝(모바일은 '더 보기' 아래)이었다.
           대시보드 맨 위 오른쪽 한 줄 링크. 누름 상자는 before 로 위아래 14px 씩 보태 44px 이상(줄 높이는 글자 그대로). */}
-      {caps.manage && (
+      {caps.manage && PAID_EXPOSURE_ON && (
         <div className="flex justify-end">
           <button type="button" onClick={() => setBoostOpen(true)} data-testid="boost-inquiry"
             className="relative inline-flex items-center gap-1 text-2xs font-bold text-ink-muted transition-colors before:absolute before:inset-x-0 before:-inset-y-[14px] hover:text-accent-300">
