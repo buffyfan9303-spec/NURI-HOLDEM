@@ -30,7 +30,7 @@ import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '
 // msToRegClose 는 이 파일에서 더 쓰지 않는다 — 상류 03cd8bb 가 등록 마감 표시를 ClockStage 로 옮겼다.
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
-import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
+import { applyToClock, clockAddonFromSession, presetFromClockConfig } from '../../../lib/gameInherit';
 /** 상금표가 가리키는 자리 수 — 범위 순위('11-15th' = 5)까지 센다(W-12). 순위 입력 빈 줄 수로 쓴다. */
 const prizePlaces = (prizes: readonly ClockPrizeRow[]) => prizes.reduce((n, p) => n + Math.max(1, p.count ?? 1), 0);
 import PresetPicker from '../PresetPicker';
@@ -185,11 +185,11 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   const seededInitial = useMemo<ClockConfig>(() => {
     const base = state?.config ?? defaultClockConfig();
     if (!seedSession) return withDerivedEarly(base);
+    // 애드온 두 칸은 함께 — 세션이 애드온 없음이면 스택도 0(isAddon 만 끄면 TV 는 스택만으로 ADD-ON 을 띄운다, roti-1009 P3).
     return withDerivedEarly({
       ...base,
       title: seedSession.title || base.title,
-      isAddon: seedSession.isAddon ?? base.isAddon,
-      addonStack: (seedSession.isAddon && seedSession.addonStack) ? seedSession.addonStack : base.addonStack,
+      ...clockAddonFromSession(seedSession, base),
     });
   }, [state, seedSession]);
 

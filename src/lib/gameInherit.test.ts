@@ -62,11 +62,14 @@ describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
     expect(p.isAddon).toBe(true);
   });
 
-  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 · 부분 상속 허용)', () => {
+  // 🔴 roti-1009 — 애드온만 계약을 뒤집었다: 예전엔 isAddon 키가 없어(undefined) 지난 클락의 애드온(부스터데이 50,000)이 이 게임에 남았다.
+  //   포스터가 연결되면 애드온은 포스터가 정본이다(없으면 끈다) — 리엔트리 계단·얼리 단계와 같은 규칙.
+  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 · 부분 상속 허용) — 단 애드온은 꺼짐을 명시', () => {
     const p = clockPatchFromSchedule(sched({ structure: undefined, buyIn: { amount: 30_000 } }));
     expect(p.levels).toBeUndefined();
     expect(p.startStack).toBeUndefined();
-    expect(p.isAddon).toBeUndefined();
+    expect(p.isAddon).toBe(false);
+    expect(p.addonStack).toBe(0);
   });
 
   it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · 0 제외 · 1만 배 오기록 차단 · %는 입력 단위 그대로(W-25)', () => {
