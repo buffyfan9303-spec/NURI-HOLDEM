@@ -7,7 +7,7 @@
 // 고침(8차): 판은 한 프레임에 바뀐다. 스왑 프레임 정적화(빠진 타일 방지)와 하위 탭 P2 스크롤만 남는다.
 //
 // 9차 PANE-FADE(오너 2026-10-09 "블러모션을 없애라고 했더니 너무 딱딱해졌어") — 8차 한 프레임 교체는 그대로(떠나는 판 겹침 0),
-//   새 판 위 판 밖 지면색 막([data-pane-fade]) 한 장이 0.55 에서 곧바로 220ms 에 걷힌다(src/lib/tabCover.ts 9차 절).
+//   새 판 위 판 밖 지면색 막([data-pane-fade]) 한 장이 0.4 에서 곧바로 220ms 에 걷힌다(src/lib/tabCover.ts 9차 절).
 // 계약(메인 탭 순회 + 하위 탭 2종 · 모바일 390 · PC 1440):
 //   ① 누른 뒤 500ms 동안 **판을 덮는 큰 투명도 애니**(대상 넓이 > 뷰포트 25%, keyframe 에 opacity)가 도는 프레임 0 — 단 [data-pane-fade] 막은 뺀다
 //      (막의 keyframe 은 opacity 시작 ≤ 0.6 → 끝 0 이어야 한다 — 아니면 그 자체로 위반).
@@ -117,7 +117,7 @@ for (const [w, h] of [[390, 844], [1440, 900]] as const) {
   test.describe(`INSTANT-SWAP ${w}px`, () => {
     test.use({ viewport: { width: w, height: h }, ...(pc ? { isMobile: false, hasTouch: false, deviceScaleFactor: 1 } : {}) });
 
-    test(`메인 탭 순회 — 떠나는 판 겹침 0 · 막 0.55→0 220ms · 목적지 판 150ms 안 (${w})`, async ({ page }) => {
+    test(`메인 탭 순회 — 떠나는 판 겹침 0 · 막 0.4→0 220ms · 목적지 판 150ms 안 (${w})`, async ({ page }) => {
       await page.goto('/');
       await page.waitForFunction(() => document.querySelectorAll('.tab-pane').length >= 2, null, { timeout: 15_000 });
       await page.waitForTimeout(1500);
@@ -143,7 +143,7 @@ for (const [w, h] of [[390, 844], [1440, 900]] as const) {
       expect(rows, '판 전환에 옛 판이 겹치는 연출이 돌아왔다(블러·네모칸 부류) · 전환이 느리다 · 딱딱하다(막 없음) · 막을 붙잡았다').toEqual([]);
     });
 
-    test(`하위 탭(커뮤니티 섹션 · GTO 레인) — 떠나는 판 겹침 0 · 막 0.55→0 (${w})`, async ({ page }) => {
+    test(`하위 탭(커뮤니티 섹션 · GTO 레인) — 떠나는 판 겹침 0 · 막 0.4→0 (${w})`, async ({ page }) => {
       await page.goto('/');
       await page.waitForFunction(() => document.querySelectorAll('.tab-pane').length >= 2, null, { timeout: 15_000 });
       const rows: string[] = [];
