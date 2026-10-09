@@ -191,15 +191,9 @@ export default function Modal({
   //   클릭 직전 뷰포트 중앙에 잡히는 것이 스크림이 아니라 배경 섹션이었다).
   //   같은 결함을 `NotificationPanel.tsx:88` 에서 먼저 찾아 같은 처방으로 고쳤다 — 여기가 그 형제다.
   //   `useLayoutEffect` 는 페인트 **전에** 동기 실행되므로 '아무것도 없는 프레임' 자체가 생기지 않는다.
-  //   ⚠ 닫힘 쪽 200ms 타이머는 그대로 둔다 — 퇴장 애니메이션은 그 지연으로 산다.
   //   ⚠ 평범한 Playwright click 으로는 잘 안 난다. 콘텐츠를 기다리는 단언(`toBeVisible`)이 끼면
   //     그 프레임이 지나가 버린다 — 응답을 hold 시켜 대기 없는 경로를 만들어야 재현된다.
-  useLayoutEffect(() => {
-    if (open) { setRender(true); setClosing(false); return; }
-    setClosing(true);
-    const t = window.setTimeout(() => setRender(false), 200);
-    return () => window.clearTimeout(t);
-  }, [open]);
+  //   (이 효과와 짝인 닫기 효과는 contentRef·backdropRef 를 읽어야 해서 아래 useDialogFocus 바로 앞에 있다.)
 
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
@@ -382,6 +376,49 @@ export default function Modal({
   //   작성 시트에 헤더 드래그를 안 붙인 이유는 '쓰던 글이 스와이프 한 번에 날아간다' 였는데, confirmClose 가 있는 시트는
   //   onSheetEnd 가 **던지기 전에** 묻는다(취소 = 제자리). 그래서 그 이유가 성립하지 않는다 — 확인이 없는 작성 시트는 종전 그대로다.
   const headerDrag = variant === 'sheet' && dismissible && (compact || bodyDrag || !!confirmClose);
+  // ── 열기/닫기 상태 전환과 닫힘 모션(2026-10-09 P3 ①②③, 390 하네스 실측) ─────────────────────────
+  //  ① 열리는 도중에 닫으면 닫힘 키프레임이 **끝값**에서 출발했다 — 시트는 150px 위로, 가운데 모달 본문은 1.6px 위·투명도 +0.2,
+  //     딤은 0.07→1, 전면 page 는 투명도 +0.55 로 한 프레임 튀었다. 그래서 클래스가 닫힘으로 바뀌기 **전**에 보이는 값을 읽고,
+  //     닫힘 CSS 애니의 출발 키프레임을 그 값으로 바꿔(setKeyframes) 같은 길이·곡선으로 끝값까지 잇는다(되감기 없음). 가운데 모달의 딤은
+  //     dim-in 을 떼지 않아 돌던 곳에서 이어 가고 래퍼 fade-out 이 걷는다. 다 열린 뒤 닫기는 읽은 값이 원래 출발값과 같아 종전과 같다.
+  //  ② 내리는 시점은 고정 200ms 타이머가 아니라 **닫힘 모션이 실제로 끝난 때**(finished)다 — 프레임이 굶어 첫 프레임이 늦으면
+  //     애니 시작도 늦어 타이머가 모션을 잘랐다(시트가 12% 불투명한 채 사라짐). 고정 상한은 두지 않는다 —
+  //     닫힘 애니는 모두 유한하고(무한 애니가 붙는 요소가 아니다), 취소되면 finished 가 거절돼 그때도 내린다. 숨은 탭이면 보일 때 끝나고 내린다.
+  //  ③ reduced-motion 이면 닫힘 모션 자체가 없으므로 같은 커밋에서 내린다(종전: 움직임 없이 200ms 그대로 보였다). 돌 애니 0개로 판정한다.
+  const caught = useRef<[HTMLElement, Keyframe][]>([]);
+  useLayoutEffect(() => {
+    if (open) { setRender(true); setClosing(false); return; }
+    // 가운데 모달의 딤은 읽지 않는다 — 닫혀도 dim-in 클래스를 그대로 두어(아래 dimIn) 돌던 곳에서 계속 가고 래퍼 fade-out 이 걷는다.
+    //  다 열린 뒤 닫기도 같은 길을 지나지만 그때 읽는 값은 닫힘 키프레임의 출발값과 같다(0 · 불투명) — 곡선이 종전과 같다.
+    caught.current = ([contentRef.current, variant === 'sheet' ? backdropRef.current : null].filter(Boolean) as HTMLElement[])
+      .map((el) => { const cs = getComputedStyle(el); return [el, { transform: cs.transform, opacity: cs.opacity }]; });
+    setClosing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useLayoutEffect(() => {
+    // 🔴 open 도 본다(2026-10-09 #246 CI 회귀 — spot-tab-keepalive '공유 확인 시트가 열리지 않는다').
+    //   닫힌 채 마운트된 모달은 첫 커밋에서 위 효과가 setClosing(true) 를 건다. 같은 커밋의 다른 효과가 곧바로 open 을 올리면
+    //   (SpotReport 공유 확인 시트 — shareIntent 효과가 마운트하자마자 setConfirming(true)) React 19 가 두 갱신을 한 렌더로 묶어
+    //   이 효과가 open=true · closing=true 로 돈다. 그때 본문이 아직 없어 돌 애니 0개 → setRender(false) 가
+    //   위 효과의 setRender(true) 뒤에 실려 이겼다 — open 인데 끝내 그려지지 않았다. 열려 있으면 닫힘 단계가 아니다.
+    //   deps 의 open 은 닫히는 도중 다시 열릴 때 정리(done)를 그 커밋에 바로 돌리는 몫도 한다.
+    if (!closing || open) return;
+    // 방금 붙은 닫힘 키프레임의 끝값·길이는 그대로, 출발점만 보이는 값으로 바꾼다(빠진 속성은 그 값에 멈춘다 — 가운데 본문 투명도).
+    // 곡선은 닫힘 키프레임 넷(slide-down·nudge-down·fade-out·dim-out)이 모두 쓰는 --ease 와 같은 값이다.
+    // CSS 애니 자신을 고치므로 다시 열 때(클래스가 바뀌면) 브라우저가 알아서 걷는다.
+    for (const [el, from] of caught.current.splice(0)) {
+      const fx = el.getAnimations?.().find((a) => 'animationName' in a)?.effect as KeyframeEffect | undefined;
+      fx?.setKeyframes([{ ...from, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' }, { ...from, ...fx.getKeyframes().pop() }]);
+    }
+    let done = false;
+    const unmount = () => done || setRender(false);
+    // 본문만 기다린다 — 래퍼 fade-out 은 본문(nudge-down)과 같은 0.18s 에 같은 프레임에서 출발하고, 시트의 딤(0.05s)은 본문(0.2s)보다 먼저 끝난다.
+    const anims = contentRef.current?.getAnimations?.() ?? [];
+    // 돌 모션이 없으면(reduced-motion · 드래그로 이미 화면 밖에 나간 시트) 같은 커밋에서 내린다 — 페인트 전이라 한 프레임도 안 남는다.
+    if (anims.length) void Promise.all(anims.map((a) => a.finished)).then(unmount, unmount); else unmount();
+    return () => { done = true; };   // 다시 열리면 남은 finished 가 내리지 못하게
+  }, [closing, open]);
+
   // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
   //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
   //   첫 포커스·트랩·복원이 전부 죽었다(2026-09-10 e2e 실측). render 가 오르는 커밋에서 다시 돈다.
@@ -476,7 +513,8 @@ export default function Modal({
 
   /** 딤 애니 — 열기: 본문 진입과 같은 길이(시트 sheet-up 0.26s · 가운데 slide-up 0.32s, ease-in-out). 닫기: 시트는 딤만 먼저 걷고(dim-out 0.05s)
    *  시트는 slide-down(이동+투명도)으로 내려간다, 가운데 모달은 래퍼 fade-out 이 맡는다. 값의 근거는 tailwind.config.js keyframes 주석. */
-  const dimIn = closing ? (variant === 'sheet' && !dragClosed ? 'animate-dim-out' : '') : variant === 'sheet' ? 'animate-dim-in-sheet' : 'animate-dim-in';
+  //  가운데 모달이 닫힐 때도 dim-in 을 떼지 않는다 — 열리는 도중이면 돌던 곳에서 이어 가고(떼면 0.13→1 로 튄다), 끝난 뒤면 이름이 그대로라 다시 돌지 않는다.
+  const dimIn = closing ? (variant !== 'sheet' ? 'animate-dim-in' : dragClosed ? '' : 'animate-dim-out') : variant === 'sheet' ? 'animate-dim-in-sheet' : 'animate-dim-in';
   return (
     // z-60: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
     // z-65: layer='gate' — 로그인·본인인증 시트가 z-60 시트 위에서 열려도 DOM 순서와 무관하게 위에 온다(ModalProps.layer 참고)

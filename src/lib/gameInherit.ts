@@ -35,14 +35,15 @@ export function posterAddonOf(sc: Pick<Schedule, 'buyIn'>): { isAddon: boolean; 
   return { isAddon: addonStack > 0 || addonAmount > 0, addonStack, addonAmount };
 }
 
-/** 연동 장부 세션 → 클락 애드온 두 칸(클락 설정 화면의 시드). 세션이 애드온 없음이면 **둘 다** 끈다 —
- *  isAddon 만 끄고 스택을 남기면 체크박스는 꺼졌는데 TV 는 ADD-ON 을 띄운다(roti-1009 P3). 세션 스택이 없으면 클락 스택을 둔다. */
+/** 연동 장부 세션 → 클락 애드온 두 칸(클락 설정 화면의 시드). 세션 = 클락 — 세션이 애드온 없음이면 **둘 다** 끈다
+ *  (isAddon 만 끄고 스택을 남기면 체크박스는 꺼졌는데 TV 는 ADD-ON 을 띄운다, roti-1009 P3).
+ *  세션 스택이 0 이면 0 — 클락에 남은 스택(지난 게임일 수 있다)으로 되돌리지 않는다(posterAddonOf 와 같은 원칙, review-256 P3-2). */
 export function clockAddonFromSession(
   sess: Pick<LedgerSession, 'isAddon' | 'addonStack'>, base: Pick<ClockConfig, 'isAddon' | 'addonStack'>,
 ): Pick<ClockConfig, 'isAddon' | 'addonStack'> {
   if (sess.isAddon == null) return { isAddon: base.isAddon, addonStack: base.addonStack };
   if (!sess.isAddon) return { isAddon: false, addonStack: 0 };
-  return { isAddon: true, addonStack: sess.addonStack > 0 ? sess.addonStack : base.addonStack };
+  return { isAddon: true, addonStack: sess.addonStack > 0 ? sess.addonStack : 0 };
 }
 
 /** 포스터 → 장부 세션 칸(W-06 애드온 엔트리 · W-19 기준 엔트리 = GTD ÷ 참가비). '있는 것만' 키를 만든다. */
@@ -55,14 +56,20 @@ export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSessio
   return p;
 }
 
-/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
+/** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별).
+ *  브레이크 원문 label 도 넘긴다(2026-10-09 — 버려져서 장부(포스터 연결)로 시작한 클락 TV 에 'BREAK' 만 보였다).
+ *  저장 규칙(posterPayload.cleanLevels)과 같이 브레이크 행에만, 빈 값이면 키를 만들지 않는다. */
 export function posterLevelsToClock(
   levels: NonNullable<NonNullable<Schedule['structure']>['levels']>,
 ): ClockLevel[] {
-  return levels.map((l) => ({
-    kind: l.isBreak ? 'break' as const : 'level' as const,
-    minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
-  }));
+  return levels.map((l) => {
+    const label = l.isBreak ? l.label?.trim() : '';
+    return {
+      kind: l.isBreak ? 'break' as const : 'level' as const,
+      minutes: l.minutes, sb: l.sb, bb: l.bb, ante: l.ante ?? 0,
+      ...(label ? { label } : {}),
+    };
+  });
 }
 
 /** PL1a 무금액 상속 — 클락 cfg 병합 패치. 소비처는 반드시 '진행 중 아님'을 확인할 것(비파괴 병합 가드). */

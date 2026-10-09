@@ -2652,11 +2652,15 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
               : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
-          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 truncate">
-            {cur.kind === 'break'
-              ? (cur.label || 'BREAK')
-              : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{formatCountdown(rem)}</span>
+          {/* 라벨(블라인드)과 남은 시간은 따로 — 긴 브레이크 라벨('BREAK 10 MINS & REG …')이 한 말줄임 안에서 시간까지 잘라 먹었다(390, review-251 P2-②).
+              시간은 줄지 않고(shrink-0) 라벨만 말줄임한다. */}
+          <p className="text-base font-extrabold text-ink-primary tabular-nums mt-0.5 flex min-w-0 items-baseline">
+            <span data-testid="ledger-clock-level" className="min-w-0 truncate">
+              {cur.kind === 'break'
+                ? (cur.label || 'BREAK')
+                : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+            </span>
+            <span data-testid="ledger-clock-remaining" className={clock.running ? 'ml-2 shrink-0 text-emerald-300' : 'ml-2 shrink-0 text-accent-300'}>{formatCountdown(rem)}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
@@ -3277,7 +3281,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       // 병합(포스터 구조·레지·얼리 단계·계단 스택·상금 → 프리셋 패치 → 폼)과 레벨→분 환산은 lib/ledgerStart 한 곳.
       //   clockPatchFromSchedule(linkedSched) · withDerivedEarly 가 그 안에서 돈다(포스터 등록 기준 — 클락 #1).
       const cfg = ledgerStartClockConfig(baseCfg, linkedSched, inheritClockRef.current.patch,
-        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
+        // 애드온은 폼(= 아래 onSubmit 이 세션에 저장하는 값)을 그대로 — 세션과 클락이 같은 애드온을 말한다(review-256 P2-1).
+        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack, addon: { isAddon, addonStack } });
       const early = sessionEarlyOf(cfg);
       earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin; earlyTiers = early.earlyTiers;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
@@ -3639,6 +3644,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-2xs text-ink-muted">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
         </div>
+        {/* review-256 P3-1 — 가격만 있는 포스터는 스택을 추측하지 않고 0 으로 둔다. 그대로 시작하면 클락 총 칩에 애드온 칩이 안 더해진다. */}
+        {isAddon && addonStack <= 0 && (
+          <p data-testid="ledger-addon-stack-warn" className="mt-1 text-2xs font-semibold text-amber-300">애드온 스택이 비어 있어요. 넣지 않으면 클락 총 칩에 애드온 칩이 더해지지 않아요.</p>
+        )}
       </Field>
 
       <Field label="매장이용권 전송/시상 · 선택 (당일 전송 장수)">

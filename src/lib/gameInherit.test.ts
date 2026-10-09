@@ -34,6 +34,23 @@ describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
     expect(lv[2].ante).toBe(400);
   });
 
+  it('levels 변환: 브레이크 원문 label 을 보존한다(없거나 빈 값이면 키 없음 → TV 는 기본 BREAK) · 레벨 행 label 은 싣지 않는다', () => {
+    const lv = posterLevelsToClock([
+      { sb: 100, bb: 200, ante: 0, minutes: 30, label: '레벨 행 메모' },
+      { sb: 0, bb: 0, ante: 0, minutes: 8, isBreak: true, label: '  BREAK TIME 8 MINS / 1,000칩 레이스 ' },
+      { sb: 0, bb: 0, ante: 0, minutes: 10, isBreak: true, label: '   ' },
+      { sb: 0, bb: 0, ante: 0, minutes: 10, isBreak: true },
+    ]);
+    expect(lv[1]).toEqual({ kind: 'break', minutes: 8, sb: 0, bb: 0, ante: 0, label: 'BREAK TIME 8 MINS / 1,000칩 레이스' });
+    expect('label' in lv[0]).toBe(false);
+    expect('label' in lv[2]).toBe(false);
+    expect('label' in lv[3]).toBe(false);
+    // 장부 시작 경로(clockPatchFromSchedule)와 프리셋 경로(presetFromSchedule → applyToClock)도 같은 변환을 탄다.
+    const sc = sched({ structure: { levels: [{ sb: 0, bb: 0, ante: 0, minutes: 20, isBreak: true, label: 'DINNER BREAK 20MIN' }] } });
+    expect(clockPatchFromSchedule(sc).levels?.[0].label).toBe('DINNER BREAK 20MIN');
+    expect(applyToClock(presetFromSchedule(sc)).levels?.[0].label).toBe('DINNER BREAK 20MIN');
+  });
+
   it('무금액 패치(PL1a): 제목·레벨·레지레벨·스택·애드온', () => {
     const p = clockPatchFromSchedule(sched());
     expect(p.title).toBe('데일리 6만');
