@@ -142,8 +142,8 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       {/* 출처는 결과 **바로 옆**에 붙인다 — 하단 ※ 고지는 스크롤 밖이라 읽히지 않았다(2026-09-11). */}
       <div className="flex flex-col items-center gap-0.5">
         <SourceBadge kind="chart" note="100bb" />
-        {/* 기준 한 줄(A-012, 2026-10-09) — 차트가 9인 토너먼트 기준임을 배지 바로 아래에 못박는다. nowrap: 320px 에서도 한 줄(높이 고정). */}
-        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="range-basis">9인 토너먼트 기준</p>
+        {/* 기준 한 줄(A-012, 2026-10-09) — 차트가 9인 대회 기준임을 배지 바로 아래에 못박는다. nowrap: 320px 에서도 한 줄(높이 고정). */}
+        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="range-basis">9인 대회 기준</p>
       </div>
       <RangeMatrix13 actions={actions} initialSel={highlight} />
 

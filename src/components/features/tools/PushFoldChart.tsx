@@ -155,7 +155,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       <div className="flex flex-col items-center gap-0.5" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
         {/* 기준 한 줄(A-012, 2026-10-09) — 항상 같은 한 줄이라 자리·스택·보기를 바꿔도 높이가 변하지 않는다. */}
-        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="pushfold-basis">9인 토너먼트 기준</p>
+        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="pushfold-basis">9인 대회 기준</p>
       </div>
       {hasData && isMultiwayUncapped(stack, k, true) && <MultiwayNotice className="-my-1" />}
       {hasData
