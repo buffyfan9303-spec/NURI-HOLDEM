@@ -246,10 +246,13 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
       const r = await page.evaluate(() => ({
         stuck: [...document.querySelectorAll('[data-pane-leaving], footer[aria-hidden="true"]')].map((e) => e.tagName + ':' + (e.getAttribute('data-tab') ?? 'clone')).join(','),
         swap: document.documentElement.hasAttribute('data-tab-swap'),
+        // 9차 판 전환 막([data-pane-fade]) — 연타·되돌림 뒤 1.5s 에 남아 있으면 안 된다(A13)
+        fade: (() => { const f = document.querySelector('[data-pane-fade]'); return !!f && getComputedStyle(f).display !== 'none'; })(),
         visible: [...document.querySelectorAll<HTMLElement>('.tab-pane')].filter((p) => p.style.display !== 'none').map((p) => p.getAttribute('data-tab')),
       }));
       if (r.stuck) left.push(`${id} 남음: ${r.stuck}`);
       if (r.swap) left.push(`${id} data-tab-swap 남음`);
+      if (r.fade) left.push(`${id} 판 전환 막([data-pane-fade]) 남음`);
       if (r.visible.length !== 1) left.push(`${id} 보이는 판이 ${r.visible.length}개(${r.visible.join(',')})`);
     };
     // 연타 — 라이브 → 커뮤니티 를 40ms 간격으로
@@ -272,8 +275,10 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     await scrollOrigin(page, '동작줄이기');
     await tapTab(page, cdp, 'GTO', '동작줄이기');
     const rmLeaving = await page.evaluate(() => !!document.querySelector('[data-pane-leaving]'));
+    const rmFade = await page.evaluate(() => { const f = document.querySelector('[data-pane-fade]'); return !!f && getComputedStyle(f).display !== 'none'; });
     await check('동작줄이기');
     if (rmLeaving) left.push('동작줄이기: 떠나는 판이 섰다(페이드가 돌았다)');
+    if (rmFade) left.push('동작줄이기: 판 전환 막이 깔렸다(동작 줄이기는 한 프레임 교체 그대로여야 한다)');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     expect(left).toEqual([]);
   });

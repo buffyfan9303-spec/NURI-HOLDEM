@@ -17,10 +17,12 @@ describe('compareByStartThenBoost · 날짜+시각 1차, 부스트는 동시각 
     expect([lateBoosted, early].sort(compareByStartThenBoost)[0]).toBe(early);
   });
 
-  it('날짜+시각이 완전히 같을 때만 부스트가 위로 온다', () => {
+  // 2026-10-09 오너 결정 "유료 광고 노출 하지마"(lib/paidExposure) — 부스트는 동시각에서도 순서를 바꾸지 않는다.
+  it('유료 노출 꺼짐: 날짜+시각이 같아도 부스트가 위로 오지 않는다(0 반환 → 입력 순서 유지)', () => {
     const plain = s('2026-08-26', '19:30', false);
     const boosted = s('2026-08-26', '19:30', true);
-    expect([plain, boosted].sort(compareByStartThenBoost)[0]).toBe(boosted);
+    expect(compareByStartThenBoost(plain, boosted)).toBe(0);
+    expect([plain, boosted].sort(compareByStartThenBoost)[0]).toBe(plain);
   });
 
   it('동시각·동부스트는 0 반환(안정 정렬에 위임)', () => {

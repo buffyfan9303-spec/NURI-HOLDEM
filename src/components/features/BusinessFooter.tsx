@@ -5,7 +5,7 @@ import { onSummaryClick } from '../atoms/Fold';
 import type { LegalDoc } from './LegalDocsModal';
 // 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
 import { LEGAL_PREV_ARCHIVE_URL, PRIVACY_EFFECTIVE_DATE } from '../../lib/legalVersion';
-import { TERMS_V3_EFFECTIVE_DATE, TERMS_V2_ARCHIVE_URL } from '../../lib/legalDeploy';
+import { TERMS_V4_EFFECTIVE_DATE, TERMS_V3_ARCHIVE_URL } from '../../lib/legalDeploy';
 
 type FooterActions = { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void };
 // 🔴 전면 오버레이(매장·그룹·내 정보·이벤트·Modal page 변형) 안에도 **이 푸터를 그대로** 렌더한다(2026-09-29 최종 점검 D1).
@@ -134,7 +134,7 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
           </div>
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다(연결화면 허용, 위 지침).
               ⚠ 날짜가 내부 공백에서 끊겨 '2026년 9월' / '29일' 로 갈라졌다(412 실측). 상수는 그대로 — textContent 불변이라 legalVersion 검사에 영향 없다. */}
-          <p data-testid="footer-revision-notice" className="mt-2">약관 개정 안내: 이용약관 제3판 <span className="whitespace-nowrap">{TERMS_V3_EFFECTIVE_DATE}</span> 시행 · 개인정보처리방침 제3판 <span className="whitespace-nowrap">{PRIVACY_EFFECTIVE_DATE}</span> 시행 (<a href={TERMS_V2_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-terms-v2" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관 제2판</a> · <a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-prev-edition" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이전판 보기</a>)</p>
+          <p data-testid="footer-revision-notice" className="mt-2">약관 개정 안내: 이용약관 제4판 <span className="whitespace-nowrap">{TERMS_V4_EFFECTIVE_DATE}</span> 시행 · 개인정보처리방침 제3판 <span className="whitespace-nowrap">{PRIVACY_EFFECTIVE_DATE}</span> 시행 (<a href={TERMS_V3_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-terms-v3" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관 제3판</a> · <a href={LEGAL_PREV_ARCHIVE_URL} target="_blank" rel="noopener" data-testid="footer-prev-edition" className="inline-flex min-w-[44px] justify-center items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이전판 보기</a>)</p>
         </details>
 
         {/* 사행성 배제 고지 — §7 P0-C: `/80` 반투명이 라이트 3.37:1·다크 3.72:1 로 AA 미달이었다.

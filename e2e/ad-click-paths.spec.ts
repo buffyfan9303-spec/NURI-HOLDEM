@@ -95,7 +95,8 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
     expect(page.url(), '위험 링크로 이동했다').toBe(before);
   });
 
-  test('🔴 유료 노출 매장 카드(AD 배지)는 카드 전체가 매장 상세로 간다', async ({ page }) => {
+  // 2026-10-09 오너 결정 "유료 광고 노출 하지마"(lib/paidExposure) — 유료 매장도 AD 배지 없이 일반 카드로 선다.
+  test('🔴 유료 노출 매장 카드는 AD 배지 없이 일반 카드로 서고, 카드 전체가 매장 상세로 간다', async ({ page }) => {
     await stabilizeBackstack(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await mockPaidVenue(page);   // 유료 노출 매장 1곳을 보장 — 운영에 없어도 같은 판정(예전엔 skip)
@@ -106,11 +107,13 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
     await bar.getByRole('button', { name: '홀덤펍', exact: true }).click();
     await page.waitForTimeout(1200);
 
-    // AD 배지가 붙은 매장 카드가 있으면 그 루트가 버튼이어야 한다(배지만 클릭되는 구조 금지).
-    const adBadge = page.locator('[data-tab="community"] span', { hasText: /^AD$/ }).first();
-    await expect(adBadge, 'AD 배지가 없다 — mockPaidVenue 가 안 먹었거나 배지 렌더가 끊겼다').toBeVisible({ timeout: 10_000 });
-    const root = adBadge.locator('xpath=ancestor::button[1]');
-    await expect(root, 'AD 배지가 버튼 안에 있지 않다 — 카드 전체가 클릭 대상이 아니다').toHaveCount(1);
+    // 유료 매장 카드(mockPaidVenue 의 is_paid_ad:true)가 서되 AD 배지는 없다. 카드 루트는 버튼이다(배지만 클릭되는 구조 금지).
+    const card = page.getByTestId('venue-card').filter({ hasText: 'E2E 목 광고 매장' });
+    await expect(card, '유료 매장 카드가 없다 — mockPaidVenue 가 안 먹었다(측정 전제 없음)').toBeVisible({ timeout: 10_000 });
+    await expect(card.locator('span', { hasText: /^AD$/ }), '유료 노출이 꺼졌는데 AD 배지가 붙었다').toHaveCount(0);
+    // 목록 위 정렬 안내도 같다 — '정렬: 인증 → 유료광고 → 팔로워순' 이 남아 있었다(독립 검증 2026-10-09). 유료 표시 글자 0.
+    await expect(page.locator('[data-tab="community"]').getByText('유료광고', { exact: true }), '유료 노출이 꺼졌는데 정렬 안내에 유료광고가 보인다').toHaveCount(0);
+    await expect(card).toHaveJSProperty('tagName', 'BUTTON');
   });
 
   test('🔴 유료 노출(TOP) 일정 카드가 키보드로 열린다', async ({ page }) => {

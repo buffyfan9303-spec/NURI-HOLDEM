@@ -29,6 +29,7 @@
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
+import { thumbUrl } from '../../lib/imageUrl';
 import { BRAND_SLIDE_TITLES, type BrandSlideKey, type HomeCarouselItem } from '../../lib/homeCarousel';
 
 export type BannerAction = 'tools' | 'explore' | 'nurimind';
@@ -91,6 +92,8 @@ export interface EventSlide {
   live: boolean;
   /** 응답 전 — 문구는 '불러오는 중…' 이고 그래도 누를 수 있다 */
   pending?: boolean;
+  /** 참여권 매장 로고 URL(api/events EventBrand) — 오른쪽 위 빈 칸에 그린다 */
+  logo?: string;
   onClick: () => void;
 }
 
@@ -295,6 +298,14 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
               <span className="font-display text-xl font-extrabold leading-[28px] text-ink-primary md:text-[22px] md:leading-[30px]">{ev.title}</span>
             </span>
             <span className="text-[13px] font-medium leading-[19px] tabular-nums text-ink-secondary" aria-busy={ev.pending || undefined}>{ev.sub}</span>
+            {/* 참여권 매장 로고(2026-10-09) — 글자 칸이 비워 둔 오른쪽 36% 의 **위** 모서리(아래는 'n / N' 칩 띠). absolute 라 글자·프레임 높이는 그대로.
+                위치 기준 = 이 글자 span(relative · 프레임 전체 크기). 판·목록의 EventVenueLogo 와 같은 조리법을 여기만 인라인으로 —
+                첫 화면 청크에 컴포넌트 하나를 더 싣지 않으려고(번들 예산). 변형본 실패 → 원본 → 그래도 실패면 숨김(종전 슬라이드 그대로). */}
+            {ev.logo && (
+              <img key={ev.logo} src={thumbUrl(ev.logo, 128)} alt="" decoding="async" data-testid="event-venue-logo"
+                className="pointer-events-none absolute right-4 top-3 h-[44px] w-[44px] rounded-full bg-surface-high object-cover ring-1 ring-white/10"
+                onError={(e) => { const el = e.currentTarget; if (el.dataset.fb) el.hidden = true; else { el.dataset.fb = '1'; el.src = String(ev.logo); } }} />
+            )}
           </span>
         ) : b ? (
           <>

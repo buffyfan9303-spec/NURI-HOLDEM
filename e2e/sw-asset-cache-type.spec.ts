@@ -24,7 +24,7 @@ test('SW 는 /assets 의 200 text/html 을 ?r= 주소마다 담지 않고, JS �
   const keys = await page.evaluate(async () => {
     for (let n = 1; n <= 3; n++) await fetch(`/assets/zz-gone-OLD.js?r=${n}`);
     await fetch('/assets/zz-live-NEW.js');
-    const c = await caches.open('nuri-shell-v2');
+    const c = await caches.open('nuri-shell-v3');
     return (await c.keys()).map((k) => new URL(k.url).pathname + new URL(k.url).search).filter((u) => u.includes('/zz-'));
   });
   // ② JS 는 담겼고 ③ html 은 하나도 없다

@@ -10,6 +10,7 @@ import type { ViewMode } from '../atoms/ViewModeToggle';
 import { TICKET_WON } from '../../lib/units';
 import { posterFallbackBg } from '../../lib/posterFallbackBg';
 import { gameTypeLabel } from '../../lib/gameTypeLabel';
+import { paidShown } from '../../lib/paidExposure';
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
 
@@ -473,7 +474,7 @@ function ListCard({
         'flex flex-wrap items-center gap-x-1 gap-y-1 cursor-pointer px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
         'min-[360px]:gap-x-2',
         // 프리미엄(TOP)은 행 틴트 + 매장 줄 마커로 차별(박스 글로우 제거 — 목록 결 유지)
-        schedule.isPremium ? 'bg-accent-300/5' : '',
+        paidShown(schedule.isPremium) ? 'bg-accent-300/5' : '',
       ].join(' ')}
     >
       {/* ① 매장 로고 — 정사각 타일. 줄마다 같은 자리·같은 크기라 눈이 세로로 훑기 좋다.
@@ -516,7 +517,7 @@ function ListCard({
           sizeCls="text-2xs"
           onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
         />
-        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
+        {paidShown(schedule.isPremium) && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
         {rating && rating.count > 0 && (
           <span className="text-2xs tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>
             ★{rating.avg.toFixed(1)}
@@ -711,7 +712,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         //   들어올림(transform)은 그대로 — 마우스 유저의 손맛은 잃지 않는다.
         'flex flex-col overflow-hidden rounded-aura border transition-transform duration-(--dur-panel) ease-out active:duration-(--dur-fast)',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
-        schedule.isPremium
+        paidShown(schedule.isPremium)
           ? 'border-accent-400 bg-surface-low'
           // card-elev: 단색 채움 위 수직 광원+헤어라인(DatawizzAI 문법). 프리미엄(TOP)은 자체 글로우
           // 섀도가 있어 제외 — card-elev 의 box-shadow 가 캐스케이드로 글로우를 덮어쓴다.
@@ -732,7 +733,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           {/* 배지 예산: TOP(유료 노출) + 상태 1개만 — 포맷 무지개 배지는 본문 메타 텍스트로 강등 */}
           <div className="flex flex-col gap-1 items-start">
-            {schedule.isPremium && (
+            {paidShown(schedule.isPremium) && (
               <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                 TOP
               </span>
@@ -775,7 +776,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           // 2줄 자리를 항상 예약해 아래 행들이 카드 사이에서 같은 y 에 오게 한다(2.5em = 2 × leading-tight 1.25).
           'min-h-[2.5em] text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep wrap-anywhere',
           // accent-300 은 다크 카드 위 3.71:1(AA 미달) — 액센트 '텍스트' 토큰인 200 으로(8.18 / 6.34)
-          schedule.isPremium ? 'text-accent-200' : 'text-ink-primary',
+          paidShown(schedule.isPremium) ? 'text-accent-200' : 'text-ink-primary',
         ].join(' ')}>
           {schedule.title}
         </h3>
@@ -886,7 +887,7 @@ function TimetableCard({
         // 오른쪽 칸(auto)은 안쪽 w-[…] 로 고정 — 가운데(1fr)가 남는 폭을 전부 갖고 세로선 x 는 카드마다 같다.
         // md~: 가운데 상한 17rem + justify-start — 넓은 카드에서 금액 칸이 카드 끝으로 떨어지지 않는다(HOME-LAYOUT-STRETCH).
         'grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,17rem)_auto] md:justify-start',
-        schedule.isPremium ? 'bg-accent-300/5' : '',
+        paidShown(schedule.isPremium) ? 'bg-accent-300/5' : '',
       ].join(' ')}
     >
       <PosterArea
@@ -926,7 +927,7 @@ function TimetableCard({
             wrap
             sizeCls="text-2xs"
           />
-          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
+          {paidShown(schedule.isPremium) && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">TOP</span>}
           {rating && rating.count > 0 && (
             <span className="text-2xs tabular-nums leading-tight text-ink-secondary" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}

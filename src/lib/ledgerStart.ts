@@ -15,18 +15,35 @@ import { earlyTierWindows } from './chipRules';
 export interface LedgerStartForm {
   earlyBonus: number; doubleEarlyBonus: number; earlyDoubleLevel: number; earlySingleLevel: number;
   startStack: number; rebuyStack: number;
+  /** 폼의 애드온(= 세션에 저장되는 값). 포스터가 연결됐거나 켜져 있으면 클락 애드온이 **이 값을 따른다**(세션 = 클락).
+   *  없으면(옛 호출) 클락 애드온은 베이스 → 포스터 → 프리셋 병합 그대로. */
+  addon?: { isAddon: boolean; addonStack: number };
+}
+
+/** 폼 애드온이 클락 애드온을 정하는가 — 포스터가 연결됐거나 폼이 켜져 있을 때.
+ *  🔴 review-256 P2-1 — 포스터 혼자 클락 애드온을 정하면, 포스터를 고른 **뒤** 폼에서 바뀐 애드온(수동 토글·게임 프리셋·
+ *    지난 게임 그대로 열기·메인 복사)이 클락에 안 가서 세션과 클락이 갈렸다(깐부전 연결 + 수동 켬 → 세션 5만 / 클락 0 → TV 총 칩 애드온 누락).
+ *  · 포스터도 없고 폼도 꺼짐이면 정하지 않는다 — 업주가 클락 설정에서 직접 불러온 애드온 프리셋을, 손대지 않은 폼 기본값(꺼짐)이 지우지 않게. */
+function formClockAddon(sched: Schedule | null, a: LedgerStartForm['addon']): Pick<ClockConfig, 'isAddon' | 'addonStack'> | null {
+  if (!a || (!sched && !a.isAddon)) return null;
+  const stack = Math.round(Number(a.addonStack) || 0);
+  return { isAddon: a.isAddon, addonStack: a.isAddon && stack > 0 ? stack : 0 };
 }
 
 /** 장부 시작 시 클락에 넘길 설정. 병합 순서: 베이스(지난 회차·현재 클락·기본) → 포스터 → 프리셋 패치 → 폼.
  *  · 포스터가 연결됐으면 상금표는 **포스터 것으로 교체**한다 — 시상이 없거나 비화폐 단위뿐이어도 빈 표로(W-13).
+ *  · 애드온 두 칸은 폼(= 세션) 값이 마지막에 이긴다(formClockAddon).
  *  · withDerivedEarly 가 레벨 → 분 환산과 얼리 단계·두 칸 정합을 한 번에 맞춘다. */
 export function ledgerStartClockConfig(
   baseCfg: ClockConfig, sched: Schedule | null, presetPatch: Partial<ClockConfig> | null, form: LedgerStartForm,
 ): ClockConfig {
   const schedPatch = sched ? clockPatchFromSchedule(sched) : {};
   const prizes = sched ? { prizes: clockPrizesFromSchedule(sched) } : {};
+  // ⚠ addon 은 applyEarlyEdit 에 넘기지 않는다 — 그 함수는 패치를 config 에 그대로 펴서 `addon` 키가 클락 설정에 실린다.
+  const { addon, ...early } = form;
   // 폼의 얼리 두 칸은 applyEarlyEdit 로 — 포스터 단계가 있으면 1·2단만 바꾸고 3·4단(키키 10k·5k)은 지킨다.
-  return withDerivedEarly(applyEarlyEdit({ ...baseCfg, ...schedPatch, ...prizes, ...(presetPatch ?? {}) }, form));
+  const merged = applyEarlyEdit({ ...baseCfg, ...schedPatch, ...prizes, ...(presetPatch ?? {}) }, early);
+  return withDerivedEarly({ ...merged, ...(formClockAddon(sched, addon) ?? {}) });
 }
 
 /** 장부 세션에 굳힐 얼리 창 — 두 칸(분)은 언제나, 단계는 클락 설정에 단계가 있을 때만(W-04, 오너 결정 #1: 등록 시점 기준). */

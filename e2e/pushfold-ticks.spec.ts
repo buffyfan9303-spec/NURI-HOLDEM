@@ -12,19 +12,22 @@
 //   ③ 경계 — **11bb 는 눈금에 없으므로 10bb ↔ 12bb 가 바로 이웃**이다. CO 에서 눈금 하나 차이로 등급이 갈리는 것을 직접 누른다
 //   ④ SB(뒤 1명)는 2bb 부터 전 깊이 정식 등급 — 자리 기준으로 계산한다
 //   ⑤ 자리 기준이다 — 같은 6bb 에서 BTN 정식 ↔ CO 추정이 자리 버튼 하나로 갈린다
+// 🔴 2026-10-09 오너 결정(GTO-F1 · 이전 지시 A-059·B-041): 추정 칸(뒤 3명+ · 6~10bb · 올인/BB 콜/SB 콜 90칸)은 **'준비 중' 으로 가린다.**
+//   ② 는 이제 'CO 6~10bb 는 행렬 대신 「이 스택은 정확한 계산을 준비 중입니다」 안내 · 배지에 '추정' 없음 · 390px 가로 넘침 없음' 을 본다.
+//   ③ 경계는 10bb(준비 중) ↔ 12bb(행렬). 단위 계약: src/components/features/tools/pushfoldQuarantine.test.tsx(가린 90칸 · 나머지 186칸 값 불변).
 // ⚠ 로그인은 stubLogin(로컬). 운영 DB 무접촉.
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, stubLogin } from './_session';
 
 const SHALLOW = [2, 3, 4, 5, 6, 7, 8, 9, 10];   // BTN·SB 는 이 깊이도 정식
-const APPROX = [6, 7, 8, 9, 10];   // 빅앤티 k≥3 추정 구간 — nash.data.ts 의 NASH_ANTE_APPROX 와 같아야 한다
+const HIDDEN = [6, 7, 8, 9, 10];   // 빅앤티 k≥3 추정 구간 — 2026-10-09 부터 차트도 '준비 중'(GTO-F1)
 const MULTI = [2, 3, 4, 5];        // 2026-10-02 N7 2단계 — 빅앤티 k≥3 다인 균형(정식 등급). 10-01 에는 '준비 중' 이었다
 const EXACT = [12, 15, 20];
 
 test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, height: 844 }); });
 
-  test('🔴 BTN 은 2bb 부터 전 깊이 정식 등급 · CO 는 2~5bb 다인 균형 · 6~10bb 추정 · 12bb 부터 정식 · SB 는 2bb 부터 정식', async ({ page }) => {
+  test('🔴 BTN 은 2bb 부터 전 깊이 정식 등급 · CO 는 2~5bb 다인 균형 · 6~10bb 준비 중 · 12bb 부터 정식 · SB 는 2bb 부터 정식', async ({ page }) => {
     await stubLogin(page);
     await stabilizeBackstack(page);
     await page.goto('/?tab=tools#tool=pushfold');
@@ -61,11 +64,12 @@ test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', 
       expect(await colored(), `${s}bb BTN 행렬에 색칠된 셀이 없다`).toBeGreaterThan(10);
     }
 
-    // ② CO(뒤 3명) — 같은 6bb 가 자리 버튼 하나로 추정 등급이 된다(⑤ 자리 기준). 행렬은 그려지고 배지가 '추정' 이라고 말한다
+    // ② CO(뒤 3명) — 같은 6bb 가 자리 버튼 하나로 '준비 중' 이 된다(⑤ 자리 기준). 2026-10-09 GTO-F1: 추정 칸은 가린다
     await dlg.getByRole('button', { name: 'CO', exact: true }).click();
-    for (const s of [...APPROX, ...EXACT]) {
-      await expect(tick(s), `CO ${s}bb 눈금이 '없음' 으로 표시됐다 — 추정값(NASH_ANTE_APPROX)이 안 실렸다`).toHaveAttribute('data-has-data', 'true');
+    for (const s of HIDDEN) {
+      await expect(tick(s), `CO ${s}bb 눈금이 '있음' 이다 — 추정 칸이 다시 차트에 실렸다(GTO-F1)`).toHaveAttribute('data-has-data', 'false');
     }
+    for (const s of EXACT) await expect(tick(s), `CO ${s}bb 정식 등급 눈금이 '없음' 이다`).toHaveAttribute('data-has-data', 'true');
     // ②-0 N7(2026-10-02): CO 2~5bb 는 다인 균형으로 다시 그려진다 — 행렬이 있고 '추정' 배지가 아니다(숨김 커밋으로 되돌리면 여기서 빨개진다)
     for (const s of MULTI) await expect(tick(s), `CO ${s}bb 가 아직 '없음' 이다 — 다인 균형 표가 안 실렸다`).toHaveAttribute('data-has-data', 'true');
     for (const s of [2, 5]) {
@@ -84,22 +88,45 @@ test.describe('푸시·폴드 눈금 — 깊이의 등급을 미리 말한다', 
       await expect(notice).toContainText('콜 인원 제한 없음');
       await sum.click();
     }
-    await tick(6).click();
-    await expect(dlg.getByTestId('multiway-notice'), '6bb 는 추정 등급이라 다인 균형 안내가 없다').toHaveCount(0);
-    await expect(dlg.getByTestId('pushfold-no-data'), '6bb CO 에 안내 상자가 떴다 — 추정값이 안 읽힌다').toHaveCount(0);
-    await expect(cells, '6bb CO 행렬이 없다').toHaveCount(169);
-    expect(await colored(), '6bb CO 행렬에 색칠된 셀이 없다(전부 0 = 전부 폴드)').toBeGreaterThan(20);
-    await expect(source, '6bb CO 배지가 추정 등급을 말하지 않는다').toHaveAttribute('data-approx', 'true');
-    await expect(source).toContainText('추정');
+    const noData = dlg.getByTestId('pushfold-no-data');
+    const hiddenAt = async (label: string, s: number) => {
+      await tick(s).click();
+      await expect(noData, `${label} ${s}bb 에 준비 중 안내가 없다 — 추정 칸이 정답처럼 그려진다`).toBeVisible();
+      await expect(noData).toContainText('이 스택은 정확한 계산을 준비 중입니다');
+      await expect(cells, `${label} ${s}bb 에 행렬이 남았다`).toHaveCount(0);
+      await expect(source, `${label} ${s}bb 배지가 추정 등급을 말한다`).toHaveAttribute('data-approx', 'false');
+      await expect(source).not.toContainText('추정');
+      await expect(dlg.getByTestId('multiway-notice')).toHaveCount(0);
+      // 390px — 빈 표·깨진 레이아웃 금지: 안내 상자가 실제 높이를 갖고, 대화상자 폭 안에 있고, 문서가 가로로 넘치지 않는다
+      const geo = await noData.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const d = (el.closest('[role="dialog"]') as HTMLElement).getBoundingClientRect();
+        return { h: r.height, l: r.left, rr: r.right, dl: d.left, dr: d.right, sw: document.documentElement.scrollWidth, vw: window.innerWidth };
+      });
+      expect(geo.h, `${label} ${s}bb 안내 상자가 비었다`).toBeGreaterThan(60);
+      expect(geo.l, `${label} ${s}bb 안내 상자가 왼쪽으로 넘쳤다`).toBeGreaterThanOrEqual(geo.dl - 0.5);
+      expect(geo.rr, `${label} ${s}bb 안내 상자가 오른쪽으로 넘쳤다`).toBeLessThanOrEqual(geo.dr + 0.5);
+      expect(geo.sw, `${label} ${s}bb 문서가 가로로 넘친다`).toBeLessThanOrEqual(geo.vw);
+    };
+    await hiddenAt('CO', 6);
+    await expect(noData, '안내가 쓸 수 있는 깊이를 정확히 말하지 않는다').toContainText('2·3·4·5·12·15·20bb');
 
     // ③ 경계 — 눈금 하나 차이(10bb ↔ 12bb). 11bb 는 NASH_STACKS 에 없어 이 둘이 바로 이웃이다.
-    await tick(10).click();
-    await expect(source, '10bb CO 가 추정 등급이 아니다 — 경계 상한이 밀렸다').toHaveAttribute('data-approx', 'true');
-    expect(await colored(), '10bb CO 행렬에 색칠된 셀이 없다').toBeGreaterThan(20);
+    await hiddenAt('CO', 10);
     await tick(12).click();
+    await expect(noData, '12bb CO 가 준비 중이다 — 경계가 밀렸다').toHaveCount(0);
     await expect(source, '12bb CO 가 추정 등급으로 표시됐다 — 경계가 밀렸다').toHaveAttribute('data-approx', 'false');
     await expect(source).not.toContainText('추정');
     expect(await colored(), '12bb CO 행렬에 색칠된 셀이 없다').toBeGreaterThan(20);
+
+    // ③-2 보기 갈래도 같이 가린다 — UTG(9인) 8bb BB 콜 · HJ 9bb SB 콜
+    await dlg.getByRole('button', { name: 'UTG(9인)', exact: true }).click();
+    await dlg.getByRole('tab', { name: 'BB 콜', exact: true }).click();
+    await hiddenAt('UTG BB 콜', 8);
+    await dlg.getByRole('button', { name: 'HJ', exact: true }).click();
+    await dlg.getByRole('tab', { name: 'SB 콜', exact: true }).click();
+    await hiddenAt('HJ SB 콜', 9);
+    await dlg.getByRole('tab', { name: '올인', exact: true }).click();
 
     // ④ SB(뒤 1명)는 2bb 부터 전 깊이 정식 — k=1 은 상대가 하나뿐이라 추정 구간이 아니다
     await dlg.getByRole('button', { name: 'SB', exact: true }).click();

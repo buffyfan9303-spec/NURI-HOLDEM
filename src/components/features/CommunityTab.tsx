@@ -44,6 +44,7 @@ import { markProgrammaticScroll, notifyScrollNow } from '../../lib/useScrollY';
 import { restoreScrollTop } from '../../lib/headerShrink';
 import { msgOf } from '../../lib/dbError';
 import { reloadSaved, saveForReload, useReloadState } from '../../lib/reloadTab';
+import { PAID_EXPOSURE_ON, paidShown } from '../../lib/paidExposure';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -429,7 +430,7 @@ function CommunityTab({
         const bv = b.venue.verificationStatus === 'verified' ? 1 : 0;
         if (av !== bv) return bv - av;
         // 2순위: isPaidAd (true가 먼저)
-        if (a.venue.isPaidAd !== b.venue.isPaidAd) return a.venue.isPaidAd ? -1 : 1;
+        if (paidShown(a.venue.isPaidAd) !== paidShown(b.venue.isPaidAd)) return paidShown(a.venue.isPaidAd) ? -1 : 1;
         // 3순위: 관리자가 드래그로 정한 노출 순서(display_order) — 이걸 안 보면 관리자 드래그가 죽은 컨트롤이 된다
         const ao = a.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
         const bo = b.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
@@ -775,7 +776,8 @@ function FeedSection({
     getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setAdsEvery(parseAdsEvery(v))).catch(() => {});
   }, []);
   useEffect(() => {
-    if (!enableCategory) return;
+    // 유료 노출 스위치가 꺼져 있으면 광고 칸을 아예 받지 않는다 — 승격 글은 제 게시판의 일반 글로 남는다.
+    if (!enableCategory || !PAID_EXPOSURE_ON) return;
     loadAds();
     window.addEventListener('nuri:ads-changed', loadAds);
     return () => window.removeEventListener('nuri:ads-changed', loadAds);
@@ -1592,7 +1594,7 @@ function VenuesSection({
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-bold text-ink-primary">{VENUE_FILTERS.find((f) => f.key === kindFilter)?.label ?? '전체'}</h2>
           {!loading && loadErr == null && <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>}
-          {/* 정렬 안내 — 실제 정렬(인증 → 유료광고 → 팔로워순)과 일치 */}
+          {/* 정렬 안내 — 실제 정렬과 일치(인증 → [유료 노출 켜짐일 때만 유료] → 팔로워순) */}
           {/* ⚠ shrink-0 + whitespace-nowrap 이라 좁아져도 줄지도 접히지도 않아, 390·200% 에서
               "→ 팔로워순" 이 뷰포트 밖으로 나갔다(실측 2026-09-18). 이건 안내 문구이므로
               접히는 편이 사라지는 편보다 낫다 — 접을 수 있게 풀어 준다. */}
@@ -1607,8 +1609,11 @@ function VenuesSection({
             <span className="text-ink-muted">→</span>
             {/* accent-300 은 다크 지면(surface-base)에서 3.6:1 로 AA(4.5) 미달이다 — accent-200 은 6.94:1.
                 대비는 순백이 아니라 **실제 지면**으로 잰다(.cursor/rules/30-traps.mdc). */}
-            <span className="text-accent-200 font-semibold">유료광고</span>
-            <span className="text-ink-muted">→</span>
+            {/* 유료 노출이 꺼져 있으면(lib/paidExposure) 정렬에도 없으니 안내에서도 뺀다 — 손님 화면에 '유료광고' 0. */}
+            {PAID_EXPOSURE_ON && (<>
+              <span className="text-accent-200 font-semibold">유료광고</span>
+              <span className="text-ink-muted">→</span>
+            </>)}
             <span className="text-ink-secondary">팔로워순</span>
           </span>
         </div>
@@ -1643,7 +1648,7 @@ function VenuesSection({
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-(--dur-fast) cursor-pointer active:bg-surface-high',
-                  venue.isPaidAd
+                  paidShown(venue.isPaidAd)
                     ? 'bg-surface-low border-accent-400/50 hover:border-accent-400'
                     : 'card-aura',
                 ].join(' ')}
@@ -1655,7 +1660,7 @@ function VenuesSection({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 mb-0.5">
-                        {venue.isPaidAd && (
+                        {paidShown(venue.isPaidAd) && (
                           <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                             AD
                           </span>

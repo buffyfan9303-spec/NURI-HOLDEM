@@ -7,7 +7,7 @@ import {
 import type { Schedule } from '../api/schedules';
 import type { GamePresetData } from '../api/presets';
 import type { ClockConfig } from '../api/clock';
-import type { LedgerSession } from '../api/ledger';
+import { autoDiscountIndex, discountAllowed, buyinFinance, nonSplitSnapshot, type LedgerSession, type LedgerBuyin } from '../api/ledger';
 
 const sched = (over: Record<string, unknown> = {}): Schedule => ({
   id: 's1', title: '데일리 6만', date: '2026-08-26', startTime: '19:00',
@@ -34,6 +34,23 @@ describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
     expect(lv[2].ante).toBe(400);
   });
 
+  it('levels 변환: 브레이크 원문 label 을 보존한다(없거나 빈 값이면 키 없음 → TV 는 기본 BREAK) · 레벨 행 label 은 싣지 않는다', () => {
+    const lv = posterLevelsToClock([
+      { sb: 100, bb: 200, ante: 0, minutes: 30, label: '레벨 행 메모' },
+      { sb: 0, bb: 0, ante: 0, minutes: 8, isBreak: true, label: '  BREAK TIME 8 MINS / 1,000칩 레이스 ' },
+      { sb: 0, bb: 0, ante: 0, minutes: 10, isBreak: true, label: '   ' },
+      { sb: 0, bb: 0, ante: 0, minutes: 10, isBreak: true },
+    ]);
+    expect(lv[1]).toEqual({ kind: 'break', minutes: 8, sb: 0, bb: 0, ante: 0, label: 'BREAK TIME 8 MINS / 1,000칩 레이스' });
+    expect('label' in lv[0]).toBe(false);
+    expect('label' in lv[2]).toBe(false);
+    expect('label' in lv[3]).toBe(false);
+    // 장부 시작 경로(clockPatchFromSchedule)와 프리셋 경로(presetFromSchedule → applyToClock)도 같은 변환을 탄다.
+    const sc = sched({ structure: { levels: [{ sb: 0, bb: 0, ante: 0, minutes: 20, isBreak: true, label: 'DINNER BREAK 20MIN' }] } });
+    expect(clockPatchFromSchedule(sc).levels?.[0].label).toBe('DINNER BREAK 20MIN');
+    expect(applyToClock(presetFromSchedule(sc)).levels?.[0].label).toBe('DINNER BREAK 20MIN');
+  });
+
   it('무금액 패치(PL1a): 제목·레벨·레지레벨·스택·애드온', () => {
     const p = clockPatchFromSchedule(sched());
     expect(p.title).toBe('데일리 6만');
@@ -45,11 +62,14 @@ describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
     expect(p.isAddon).toBe(true);
   });
 
-  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 · 부분 상속 허용)', () => {
+  // 🔴 roti-1009 — 애드온만 계약을 뒤집었다: 예전엔 isAddon 키가 없어(undefined) 지난 클락의 애드온(부스터데이 50,000)이 이 게임에 남았다.
+  //   포스터가 연결되면 애드온은 포스터가 정본이다(없으면 끈다) — 리엔트리 계단·얼리 단계와 같은 규칙.
+  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 · 부분 상속 허용) — 단 애드온은 꺼짐을 명시', () => {
     const p = clockPatchFromSchedule(sched({ structure: undefined, buyIn: { amount: 30_000 } }));
     expect(p.levels).toBeUndefined();
     expect(p.startStack).toBeUndefined();
-    expect(p.isAddon).toBeUndefined();
+    expect(p.isAddon).toBe(false);
+    expect(p.addonStack).toBe(0);
   });
 
   it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · 0 제외 · 1만 배 오기록 차단 · %는 입력 단위 그대로(W-25)', () => {
@@ -279,5 +299,46 @@ describe('할인 level 왕복 보존 (#20 회귀 방지)', () => {
     expect(back).toEqual(ledgerDiscounts);
     // 핵심: level 이 0 으로 떨어지지 않는다 — 떨어지면 autoDiscountIndex 가 영영 0 을 돌려준다
     expect(back.every((d) => d.level > 0)).toBe(true);
+  });
+});
+
+// ── 할인 적용 조건(kind)이 프리셋 왕복에서 살아남는가 (roti-1009 audit-ledger C-2) ─────────
+// 2026-10-09 감사: presetFromRound·applyToLedger 가 label·amount·level 만 옮겨 kind 가 빠졌다. 로티 깐부전처럼
+//   '첫 바인 3만(16LV 까지 자동)' 회차를 프리셋으로 저장해 다시 쓰면 조건이 풀려 5LV **리엔트리**에도 3만이 자동으로 걸렸다(70,000 · 포스터는 정가 10만).
+// 음성 대조: gameInherit.ts 두 줄의 `...(x.kind ? { kind: x.kind } : {})` 를 빼면 아래 첫 케이스가 빨개진다.
+describe('할인 kind 왕복 보존 (C-2)', () => {
+  const roti = {
+    venueId: 'v1', sessionDate: '2026-10-09', gameSeq: 1, buyinAmount: 100_000, cardAmount: null, gameType: 'gtd', targetEntries: 150, maxEntries: 0,
+    isAddon: false, addonStack: 0, regClosed: false, closed: true, earlyDoubleMin: 30, earlySingleMin: 128,
+    discounts: [
+      { label: '1레벨', amount: 50_000, level: 1 },
+      { label: '첫 바인', amount: 30_000, level: 16, kind: 'firstBuyin' },
+      { label: '팀 리바인 1회 5만', amount: 50_000, level: 0, kind: 'rebuy' },
+    ],
+  } as unknown as LedgerSession;
+  const rotiBuyin: LedgerBuyin = {
+    id: 'b', venueId: 'v1', sessionDate: '2026-10-09', gameSeq: 1, playerName: 'P', entryNo: 1, paymentMethod: 'cash', isUnpaid: false,
+    buyinAt: '2026-10-09T08:00:00.000Z', isSplit: false, cashAmount: 0, cardAmount: 0, transferAmount: 0, ticketCount: 0, unpaidAmount: 0,
+    discountLevel: 0, discountIndex: 0, earlyOverride: null,
+  };
+
+  it('장부 → presetFromRound → applyToLedger 로 돌아도 kind·level 이 그대로다 · 5LV 리엔트리는 정가', () => {
+    const back = applyToLedger(presetFromRound(roti, null, null)).discounts ?? [];
+    const session = { ...roti, discounts: back };
+    // 결제창 자동 선택(autoDiscountIndex → discountAllowed) 그대로 — P = 첫 바인 2LV · R = 같은 손님의 5LV 리엔트리
+    const pick = (lv: number, entryNo: number) => { const i = autoDiscountIndex(back, lv); return i > 0 && discountAllowed(back[i - 1], entryNo) ? i : 0; };
+    const value = (lv: number, entryNo: number) => {
+      const idx = pick(lv, entryNo), snap = nonSplitSnapshot('cash', idx, session);
+      return buyinFinance({ ...rotiBuyin, entryNo, discountIndex: idx, cashAmount: snap.cash_amount }, session).value;
+    };
+    expect([value(1, 1), value(2, 1), value(5, 2), value(16, 1), value(17, 1)]).toEqual([50_000, 70_000, 100_000, 70_000, 100_000]);
+    expect(back).toEqual(roti.discounts);
+  });
+
+  it('옛 프리셋(kind 없음)은 지금처럼 — 결과에 kind 칸이 생기지 않는다(하위 호환)', () => {
+    const old = applyToLedger({ ledger: { discounts: [{ label: '1레벨', amountWon: 50_000, level: 1 }, { label: '첫 바인', amountWon: 30_000 }] } }).discounts;
+    expect(old).toEqual([{ label: '1레벨', amount: 50_000, level: 1 }, { label: '첫 바인', amount: 30_000, level: 0 }]);
+    expect(presetFromRound({ ...roti, discounts: [{ label: '1레벨', amount: 50_000, level: 1 }] }, null, null).ledger?.discounts)
+      .toEqual([{ label: '1레벨', amountWon: 50_000, level: 1 }]);
   });
 });

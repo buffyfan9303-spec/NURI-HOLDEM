@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect, NoRowsAffectedError } from './_mustAffect';
 import type { DiscountType } from '../lib/promotionLabel';
+import { paidShown } from '../lib/paidExposure';
 
 export type { DiscountType };
 
@@ -204,7 +205,7 @@ export async function getSchedules(): Promise<Schedule[]> {
   if (error) throw error;
   // 부스트(premium_until)는 DB 정렬에 안 잡히므로 매핑 후 한 번 더 정렬
   return (data ?? []).map(rowToSchedule)
-    .sort((a, b) => Number(b.isPremium) - Number(a.isPremium) || a.displayOrder - b.displayOrder);
+    .sort((a, b) => Number(paidShown(b.isPremium)) - Number(paidShown(a.isPremium)) || a.displayOrder - b.displayOrder);
 }
 
 // ── 단건 조회 ─────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 import { BIZ_REQUIRED } from '../src/components/features/BusinessFooter';
+import { PAID_EXPOSURE_ON } from '../src/lib/paidExposure';
 
 type R = Record<string, unknown>;
 const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
@@ -152,8 +153,11 @@ test('B3b 390 — 클락이 없으면 토글 이름의 «클락» 칸이 실제�
 });
 
 // ── (A) 포스터 상단 고정 문의 ─────────────────────────────────────────────────────────
+// 2026-10-09 F-04 — 유료 노출 스위치(lib/paidExposure)가 꺼져 있으면 링크·시트를 숨긴다. A1~A4 는 스위치를 켰을 때의 계약이라
+//   꺼진 동안은 건너뛴다(지우지 않는다 — 켜면 그대로 다시 돈다). 꺼진 상태의 '숨김' 은 e2e/open-fix-store-1009.spec.ts F-04 가 잰다.
 for (const [W, H] of [[390, 844], [1440, 900]] as const) {
   test(`A1 ${W} — '포스터 상단 고정 문의' 가 대시보드 맨 위(첫 칸보다 위)에 있다`, async ({ page }) => {
+    test.skip(!PAID_EXPOSURE_ON, '유료 노출 스위치 꺼짐 — 문의 링크·시트가 숨는다(F-04, e2e/open-fix-store-1009 가 숨김을 잰다)');
     test.setTimeout(90_000);
     await boot(page, W, H);
     const r = await page.evaluate(() => {
@@ -172,6 +176,7 @@ for (const [W, H] of [[390, 844], [1440, 900]] as const) {
 }
 
 test('A2 390 — 문의 창의 전화는 고객센터 번호(사업자 정보)이고 관리자 설정의 옛 번호가 아니다', async ({ page }) => {
+  test.skip(!PAID_EXPOSURE_ON, '유료 노출 스위치 꺼짐 — 문의 링크·시트가 숨는다(F-04, e2e/open-fix-store-1009 가 숨김을 잰다)');
   test.setTimeout(90_000);
   await boot(page, 390, 844);
   await dash(page).getByRole('button', { name: /포스터 상단 고정 문의/ }).click();
@@ -203,6 +208,7 @@ async function openBoost(page: Page) {
 }
 
 test('A3 390 — 제목을 톡 치면(3px) 그대로다 · 닫기 버튼 탭은 버튼으로 닫는다 · 제목 줄(헤더)에서 끌어내리면 닫힌다', async ({ page }) => {
+  test.skip(!PAID_EXPOSURE_ON, '유료 노출 스위치 꺼짐 — 문의 링크·시트가 숨는다(F-04, e2e/open-fix-store-1009 가 숨김을 잰다)');
   test.setTimeout(90_000);
   await boot(page, 390, 844);
   let dialog = await openBoost(page);
@@ -223,6 +229,7 @@ test('A3 390 — 제목을 톡 치면(3px) 그대로다 · 닫기 버튼 탭은 
 });
 
 test('A4 390 — 본문(맨 위)에서 끌어내려도 닫힌다 · 그립은 종전대로', async ({ page }) => {
+  test.skip(!PAID_EXPOSURE_ON, '유료 노출 스위치 꺼짐 — 문의 링크·시트가 숨는다(F-04, e2e/open-fix-store-1009 가 숨김을 잰다)');
   test.setTimeout(90_000);
   await boot(page, 390, 844);
   let dialog = await openBoost(page);

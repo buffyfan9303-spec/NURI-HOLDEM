@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { useVenueScope } from '../../lib/useVenueScope';
-import { venueScheduleList, compareByStartThenBoost } from '../../lib/scheduleSort';
+import { venueScheduleList, notEnded, compareByStartThenBoost } from '../../lib/scheduleSort';
 import { goSubTab } from '../../lib/subTabTransition';
 import { heroTouchIntent } from '../../lib/heroTouch';
 import { onColorInkClass } from '../../lib/color';
 import { visitCountRows } from '../../lib/venueVisitRank';
+import { paidShown } from '../../lib/paidExposure';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import {
   naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, naverMaps, geocodeAddress, probeNaverAuth,
@@ -60,6 +61,8 @@ import SlidingPill from '../atoms/SlidingPill';
 import { msgOf } from '../../lib/dbError';
 import { requestCheckinRetrySheet } from '../../lib/checkinGeoRetry';
 import VenueShareNote from './VenueShareNote';
+import { LinkifiedText } from './LinkifiedText';
+import { linkify } from '../../lib/linkify';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -67,7 +70,10 @@ interface VenuePageProps {
   onClose: () => void;
   schedules: Schedule[];
   comments: Comment[];
-  /** 포스터 탭의 '금일 포스터'에 함께 노출할 공지글 */
+  /** 플랫폼 공지(일정 탐색 상단 '공지사항'과 같은 목록).
+   *  🔴 2026-10-09 VEN-03 — 매장 페이지에는 **그리지 않는다.** 예전엔 포스터 탭 '금일 포스터' 안에 매장 공지처럼 나와
+   *  이용약관 개정 같은 플랫폼 공지가 로티아레나 공지로 읽혔다. 그 자리는 이제 **이 매장의 공지**(venue_notices)다.
+   *  prop 은 호출부(App.tsx — 다른 편집자 소유) 호환을 위해 남겨 두고 읽지 않는다. 플랫폼 공지는 일정 탐색 상단에 그대로 있다. */
   notices?: MarketplaceNotice[];
   // N04(2026-09-12): CommentThread 와 같은 Promise 계약 — 성공을 기다린 뒤에만 입력을 비운다.
   // App.tsx 의 handleSubmitVenueComment 가 이 계약(await + 실패 시 throw)을 따라야 한다.
@@ -104,7 +110,7 @@ const TAB_LABEL: Record<Tab, string> = {
  * - 브라우저 뒤로가기 지원 (popstate)
  */
 export default function VenuePage({
-  venue, open, onClose, schedules, comments, notices = [],
+  venue, open, onClose, schedules, comments,
   onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage, onUpdateImages,
   onSelectSchedule, onOpenWallet,
 }: VenuePageProps) {
@@ -162,6 +168,21 @@ export default function VenuePage({
     return () => { alive = false; };
   }, [venue?.id]);
   const orderedTabs = tabOrder ?? TABS;
+
+  // 매장 공지(venue_notices) — **매장마다 한 번만** 받아 포스터 탭·커뮤니티 탭이 같은 목록을 본다(2026-10-09 PR #258 독립 검증 P2).
+  //   종전엔 포스터 탭 판(PostersPanel)이 열릴 때마다 새로 받아(탭 왕복 3번 = 요청 3번) 늦게 온 공지가 오늘 대회 카드를 +160px 밀었다.
+  //   null = 아직 안 왔다. 요청 매장 = 응답 매장(useVenueScope) — 늦게 온 앞 매장 공지가 지금 매장에 그려지지 않는다.
+  const [venueNotices, setVenueNotices] = useState<VenueNotice[] | null>(null);
+  const noticeRun = useVenueScope(venue?.id ?? '');
+  const reloadNotices = useCallback(
+    () => noticeRun('notices', getVenueNotices, setVenueNotices, () => setVenueNotices((cur) => cur ?? [])),
+    [noticeRun],
+  );
+  useEffect(() => {
+    setVenueNotices(null);
+    if (!venue?.id) { noticeRun.cancel('notices'); return; }
+    void reloadNotices();
+  }, [venue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 탭 전환에 방향성 View Transition 을 건다(2026-08-29 오너 지적:
@@ -228,6 +249,9 @@ export default function VenuePage({
 
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
   if (!venue) return null;
+
+  // 「예정 대회」·「진행 예정」 탭은 끝난 회차를 뺀다 — venueSchedules 는 지난 회차를 품은 채로 둔다(배너 매칭·폴백이 쓴다).
+  const upcomingSchedules = notEnded(venueSchedules);
 
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
@@ -365,7 +389,7 @@ export default function VenuePage({
 
         {/* 매장 아이덴티티 — 오버랩 로고 아바타 + 중앙 정렬 + 3-스탯 행(오너 레퍼런스 2026-08-27).
             대표 이미지(image_url)를 원형 아바타로 재사용 — 새 fetch 0. 스탯 행은 비인터랙티브라
-            venue-ia 첫 뷰포트 행동 예산(≤6)에 셈되지 않는다. */}
+            venue-ia 첫 뷰포트 행동 예산(≤7)에 셈되지 않는다. */}
         <div className="px-page-x pb-3 border-b border-border-subtle">
           {/* relative: HeroSection(positioned)이 static 아바타 위에 페인트돼 로고 상반이
               히어로에 가려 반원으로 잘렸다(PC 점검 2026-08-28) — 오버랩 의도(-mt-8·border 링)대로 위로.
@@ -401,7 +425,7 @@ export default function VenuePage({
               <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
                 {venue.region}
               </span>
-              {venue.isPaidAd && (
+              {paidShown(venue.isPaidAd) && (
                 <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
                   프리미엄
                 </span>
@@ -453,7 +477,9 @@ export default function VenuePage({
             매장 상세의 물리적 최종 행동은 '도착을 알리거나(체크인)·걸거나(전화)·묻거나(카카오톡)·
             찾아가는(길찾기)' 것이다 — 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
             4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더.
-            행동 예산(venue-ia ≤6): 체크인+전화+길찾기+카카오=4 + 헤더 팔로우·공유=6 — 여기에 더 추가 금지. */}
+            행동 예산(venue-ia ≤7): 오늘의 대회 카드 + 출석 QR + 전화 + 길찾기 + 카카오 = 5 · 헤더 팔로우·공유 = 7 — 여기에 더 추가 금지.
+            (종전 '…=4 + 팔로우·공유=6' 은 오늘의 대회 카드를 빠뜨린 셈이었다 — 카카오 링크·오늘 대회가 함께 있는 매장은 늘 7.
+             2026-10-09 리드 결정: 화면은 그대로 두고 예산을 7 로 바로잡음. 경위는 e2e/venue-ia.spec.ts 머리말.) */}
         <div className="px-page-x py-2.5 border-b border-border-subtle space-y-2">
           {todayPosters.length > 0 && (() => {
             const t0 = todayPosters[0];
@@ -487,7 +513,7 @@ export default function VenuePage({
               438px 이라 375 뷰포트에서 scrollWidth 457 > clientWidth 375 — **카카오톡 버튼이 화면 밖으로
               잘려 나가 있었다**(오너가 직접 지목한 행이다). 버튼을 줄이거나 라벨을 깎는 대신
               위계대로 2행으로 쌓는다: 프라이머리(QR 체크인)는 전폭, 보조 3개는 균등 분할.
-              행동 개수는 그대로 4개 — 행동 예산(체크인·전화·길찾기·카카오 + 헤더 팔로우·공유 = 6)은 불변.
+              행동 개수는 그대로 4개 — 행동 예산(위 Tier 1 주석, ≤7)은 불변.
               보조 행은 `flex` + `flex-1` 이라 전화·주소가 없는 매장에서도 남은 것끼리 자동 균등이 된다
               (grid-cols-3 고정이면 빈 칸이 생긴다). */}
           <div className="space-y-2">
@@ -518,7 +544,7 @@ export default function VenuePage({
                   '아직 등록 안 했어요' 토스트가 떴다 — 즉 손님에게 이 버튼은 눌러도 아무 데도 못 가는,
                   '없다'는 사실만 알려 주는 컨트롤이었다. 그건 행동이 아니라 상태다. 라벨에 '미등록'을
                   적으면 **누르기 전에** 같은 사실을 알 수 있어 '무반응 클릭 금지' 의도에 더 충실하고,
-                  첫 뷰포트 행동 예산(≤6, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
+                  첫 뷰포트 행동 예산(≤7, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
                   자리(오너 지시의 핵심)는 그대로 지킨다 — 업주 본인에게는 여전히 등록 버튼이다. */}
             <KakaoActionButton kakao={kakao} />
             </div>
@@ -626,16 +652,17 @@ export default function VenuePage({
           {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} viewerIsManager={isMyVenue || user?.role === 'admin'} /></div></>}
           {tab === 'posters' && (
             <PostersPanel
+              key={venue.id}
               todayPosters={todayPosters}
-              allPosters={venueSchedules}
-              notices={notices}
+              allPosters={upcomingSchedules}
+              notices={venueNotices}
               onSelect={onSelectSchedule}
             />
           )}
-          {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} onSelect={onSelectSchedule} />}
+          {tab === 'schedules' && <SchedulesPanel schedules={upcomingSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
             <div className="space-y-3">
-              <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />
+              <VenueNoticeBoard venueId={venue.id} notices={venueNotices} onReload={reloadNotices} canManage={isMyVenue || user?.role === 'admin'} />
               {/* 모든 커뮤니티 공통 구성(그룹과 동일): 실시간 채팅 | 게시판 */}
               <VenueCommunitySection
                 venueId={venue.id}
@@ -839,7 +866,7 @@ function HeroSection({
         style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)' }}
       />
 
-      {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤6 행동 예산).
+      {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤7 행동 예산).
           모바일은 스와이프 + 자동 슬라이드가 내비게이션을 담당하므로 버튼 2개는 소음이다. */}
       {/* 배너 활성화 — 터치는 onTouchEnd 의 '탭' 판정이 처리하고, 여기는 **마우스·키보드** 몫이다.
           슬라이드마다 버튼을 두면 사진 n장 = 버튼 n개가 되어 보조기술에 n개로 읽힌다.
@@ -875,7 +902,7 @@ function HeroSection({
       )}
 
       {/* 슬라이드 점 — 상태 표시기(비인터랙티브). 이동은 스와이프(모바일)·화살표(PC)가 담당 —
-          도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤6)이 데이터에 따라 무너진다. */}
+          도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤7)이 데이터에 따라 무너진다. */}
       {/* 인디케이터 — 하단 **오른쪽**. 예전엔 하단 중앙이었는데, 히어로 아래 원형 로고 아바타가
           가운데에서 위로 겹쳐 올라오기(-mt-8) 때문에 도트가 아바타에 정면으로 깔렸다
           (2026-08-29 오너 지적: "동그라미 프로필에 겹쳐 스크롤바가 있다").
@@ -1067,7 +1094,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   return (
     // data-nav="venue-tab": 이 버튼의 행동은 setTab('ranking') 하나 — 매장 페이지 '자기 탭'으로의
     // 셔틀이라 콘텐츠 행동이 아니라 내비게이션 레벨이다(venue-ia 게이트가 role=tab 을 제외하는 것과
-    // 동일 근거). 게이트(첫 뷰포트 행동 ≤6)는 이 속성이 붙은 요소를 세지 않는다.
+    // 동일 근거). 게이트(첫 뷰포트 행동 ≤7)는 이 속성이 붙은 요소를 세지 않는다.
     // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
     <button type="button" onClick={onRanking} data-nav="venue-tab"
       className="flex w-full items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/6 px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
@@ -1482,7 +1509,9 @@ function AboutPanel({
           </div>
         ) : (
           venue.description ? (
-            <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{venue.description}</p>
+            // VEN-02(2026-10-09): 소개 안의 http(s) 링크·전화번호를 누를 수 있게 — HTML 주입 없이 React 요소로(LinkifiedText).
+            // wrap-break-word: 긴 URL·영문 덩어리가 390 폭을 넘지 않게.
+            <p data-testid="venue-description" className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap wrap-break-word"><LinkifiedText text={venue.description} /></p>
           ) : editable ? (
             <button type="button" onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
               className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 px-3.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
@@ -1501,7 +1530,7 @@ function AboutPanel({
           두 단계를 거쳐야 보였다. '지금 문 열었나'는 갈까 말까의 1차 판단 재료인데 두 번 숨어 있었다.
           → 요약(주소·영업시간)은 첫 화면 아이덴티티 블록으로 승격했고(위), 여기는 '확인·복사·지도'
             계층으로 남긴다. 기본 펼침도 검토했으나 그러면 주소 복사 버튼이 첫 뷰포트로 올라와
-            행동 예산(≤6, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
+            행동 예산(≤7, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
           손잡이(summary)는 44px 히트영역을 갖도록 py-1 → py-3. */}
       <details className="group/vinfo" open={editable || undefined}>
         <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
@@ -1748,9 +1777,9 @@ function MapSpinner() {
 }
 
 /** 지도를 못 띄우는 모든 경우의 **보이는** 안내. 빈 화면으로 남기지 않는 것이 이 컴포넌트의 목적이다. */
-function MapNotice({ icon, title, desc }: { icon: 'map-pin' | 'alert'; title: string; desc: string }) {
+function MapNotice({ icon, title, desc, testId }: { icon: 'map-pin' | 'alert'; title: string; desc: string; testId?: string }) {
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-surface-high px-4 text-center">
+    <div data-testid={testId} className="w-full h-full flex flex-col items-center justify-center gap-1 bg-surface-high px-4 text-center">
       <Icon name={icon} size={18} className="text-ink-muted" />
       <p className="text-xs font-semibold text-ink-secondary">{title}</p>
       <p className="text-2xs leading-relaxed text-ink-muted">{desc}</p>
@@ -1833,12 +1862,16 @@ function NaverVenueMap({
         <MapNotice icon="alert" title="지도를 불러올 수 없습니다"
           desc="네트워크 상태를 확인한 뒤 다시 시도해 주세요." />
       ) : geoFailed ? (
-        <MapNotice icon="map-pin" title="지도 위치를 찾지 못했습니다"
-          desc={address} />
+        /* 🔴 2026-10-09 VEN-01 — 종전 문구 '지도 위치를 찾지 못했습니다' + 주소는 **주소가 틀린 것처럼** 읽혔다.
+           실제 원인은 매장 좌표(venues.lat/lng)가 아직 없고 주소→좌표 변환(geocode)이 막힌 것이다(운영 403).
+           주소는 바로 위 '주소' 행·아래 지도 앱 버튼에 그대로 있으니 여기서는 '준비 중' 과 대안만 말한다.
+           좌표가 채워지면 지오코딩 없이 이 분기를 건너뛰고 지도를 그린다(useState 초기값·effect). */
+        <MapNotice icon="map-pin" title="지도를 준비 중입니다"
+          desc="아래 카카오맵·네이버지도 버튼으로 위치와 길찾기를 볼 수 있습니다." testId="venue-map-pending" />
       ) : state !== 'ready' || !coords ? (
         <MapSpinner />
       ) : (
-        <div ref={boxRef} className="w-full h-full" />
+        <div ref={boxRef} data-testid="venue-map-canvas" className="w-full h-full" />
       )}
     </MapShell>
   );
@@ -1864,16 +1897,28 @@ function VenueLocationMap({
 
 // ── 포스터 탭 ────────────────────────────────────────────────────────────────
 // '금일 포스터' 카테고리 — 클릭 시 공지글이 포함된 상태로 아코디언이 열린다.
-// (오늘 진행 포스터 + 운영 공지를 함께 묶어 보여줌)
+// (오늘 진행 포스터 + **이 매장의** 공지를 함께 묶어 보여줌)
+// 🔴 2026-10-09 VEN-03 — 공지는 플랫폼 공지(marketplace_notices)가 아니라 매장 공지(venue_notices)다.
+//   종전엔 이용약관 개정 같은 플랫폼 공지 3건이 여기서 로티아레나 공지처럼 보였고, 정작 로티 공지는 커뮤니티 탭에만 있었다.
+
+/** 매장 공지 한 건을 카드 두 줄로 — 첫 줄은 제목, 나머지는 본문(두 줄 말줄임). 공지 테이블에는 제목 칸이 없다. */
+function splitNoticeContent(content: string): { title: string; body: string } {
+  const lines = content.split(/\r?\n/);
+  const first = lines.findIndex((l) => l.trim() !== '');
+  if (first < 0) return { title: '', body: '' };
+  return { title: lines[first].trim(), body: lines.slice(first + 1).join('\n').trim() };
+}
 
 function PostersPanel({
-  todayPosters, allPosters, notices, onSelect,
+  todayPosters, allPosters, notices: noticesIn, onSelect,
 }: {
   todayPosters: Schedule[];
   allPosters: Schedule[];
-  notices: MarketplaceNotice[];
+  /** VenuePage 가 매장마다 한 번 받은 매장 공지(null = 아직 안 옴). 이 판은 조회하지 않는다 — 탭을 다시 열어도 요청 0. */
+  notices: VenueNotice[] | null;
   onSelect?: (s: Schedule) => void;
 }) {
+  const notices = noticesIn ?? [];
   // 금일 포스터가 있으면 기본 열림, 없으면 접힘
   const [open, setOpen] = useState(todayPosters.length > 0);
   const dows = ['일', '월', '화', '수', '목', '금', '토'];
@@ -1909,21 +1954,6 @@ function PostersPanel({
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
         <Fold open={open}>
           <div className="px-3 py-3 space-y-3 border-t border-accent-400/20">
-            {/* 공지글 (있을 때만) */}
-            {notices.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-2xs font-bold text-ink-muted">공지</p>
-                <ul className="space-y-1.5">
-                  {notices.slice(0, 3).map((n) => (
-                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-accent-400/50">
-                      <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
-                      {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             {/* 금일 포스터 목록 */}
             {todayPosters.length === 0 ? (
               <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다</p>
@@ -1955,6 +1985,28 @@ function PostersPanel({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* 공지글 (있을 때만) — 금일 포스터 목록 **아래**(2026-10-09 PR #258 P2): 공지가 늦게 와도 오늘 대회 카드(TODAY)가 밀리지 않는다.
+                본문에 링크·전화가 있으면 두 줄 말줄임을 풀어 링크가 잘려 숨지 않게 한다(숨은 링크에 키보드 포커스가 가던 P3). */}
+            {notices.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-2xs font-bold text-ink-muted">공지</p>
+                <ul className="space-y-1.5">
+                  {notices.slice(0, 3).map((n) => {
+                    const { title, body } = splitNoticeContent(n.content);
+                    const bodyHasLink = linkify(body).some((t) => t.kind !== 'text');
+                    return (
+                    // 2026-10-09 오너 "과한 디자인은 안 된다": 왼쪽 2px 강조색 띠 → 아래 포스터 카드와 같은 얇은 테두리.
+                    // 패딩은 테두리 두께 차(왼 −1px · 위·아래·오른 +1px)만큼 보정해 글자 위치를 그대로 둔다(e2e/venue-notice-card-1009).
+                    <li key={n.id} data-testid="venue-poster-notice" className="pl-[calc(0.625rem+1px)] pr-[calc(0.625rem-1px)] py-[calc(0.5rem-1px)] rounded-input bg-surface-high border border-border-subtle">
+                      <p className="text-xs font-semibold text-ink-primary wrap-break-word"><LinkifiedText text={title} /></p>
+                      {body && <p data-testid="venue-poster-notice-body" className={['text-2xs text-ink-muted mt-0.5 whitespace-pre-line wrap-break-word', bodyHasLink ? '' : 'line-clamp-2'].join(' ')}><LinkifiedText text={body} /></p>}
+                    </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </div>
         </Fold>
@@ -1997,17 +2049,20 @@ function PostersPanel({
 }
 
 // 매장 공지 — 업주 + 관리자만 작성/삭제, 누구나 열람
-function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: boolean }) {
+function VenueNoticeBoard({ venueId, notices: noticesIn, onReload, canManage }: {
+  venueId: string;
+  /** VenuePage 가 매장마다 한 번 받은 목록(null = 아직 안 옴) — 커뮤니티 탭을 다시 열어도 다시 받지 않는다. */
+  notices: VenueNotice[] | null;
+  /** 등록·삭제 뒤 다시 받기 — 요청 매장 = 응답 매장 가드(review-store-link-1002b A4)는 VenuePage 의 useVenueScope 가 쥔다. */
+  onReload: () => Promise<void>;
+  canManage: boolean;
+}) {
   const toast = useToast();
-  const [notices, setNotices] = useState<VenueNotice[]>([]);
+  const notices = noticesIn ?? [];
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  // 요청 매장 = 응답 매장(review-store-link-1002b A4) — 늦게 온 앞 매장 공지가 지금 매장 페이지에 그려지지 않게
-  const run = useVenueScope(venueId);
-  const reload = () => run('notices', getVenueNotices, setNotices);
-  useEffect(() => { reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reload = () => { void onReload(); };
 
   const submit = async () => {
     if (!draft.trim()) return;
@@ -2061,7 +2116,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
           {notices.map((n) => (
             <li key={n.id} className="px-3 py-2 border-b border-border-subtle last:border-b-0">
               <div className="flex items-start gap-2">
-                <p className="flex-1 text-xs text-ink-primary whitespace-pre-wrap wrap-break-word leading-relaxed">{n.content}</p>
+                <p data-testid="venue-notice-content" className="flex-1 min-w-0 text-xs text-ink-primary whitespace-pre-wrap wrap-break-word leading-relaxed"><LinkifiedText text={n.content} /></p>
                 {canManage && (
                   <button type="button" onClick={() => remove(n.id)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">삭제</button>
                 )}

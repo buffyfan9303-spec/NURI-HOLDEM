@@ -19,6 +19,7 @@ import { effectiveLevel, levelNumberAt } from './clockLevel';
 import { serverNow } from './serverTime';   // K10 — 기기 시계가 아니라 서버 기준
 import { matchClockScheduleDetailed } from './regStatus';
 import { compareByStartThenBoost } from './scheduleSort';
+import { paidShown } from './paidExposure';
 
 /** 진행 중 클락에서 홈이 말할 두 수 — 생존 인원과 레벨 번호(브레이크 제외). */
 export interface LiveFact { alive: number; levelNo: number }
@@ -57,7 +58,7 @@ export interface RailContext {
 /** 추천 근거 점수 — 클수록 앞. 부스트는 업주가 산 노출이라 맨 앞을 유지한다(§6 결정 그대로).
  *  그 다음은 저쪽이 못 아는 것 순: 내 예약 > 가 본 매장 > 지금 뛰는 판. 동점은 시작 순(기존 규칙). */
 export function railScore(s: Schedule, ctx: RailContext): number {
-  return (s.isPremium ? 8 : 0)
+  return (paidShown(s.isPremium) ? 8 : 0)
     + (ctx.reservedIds.has(s.id) ? 4 : 0)
     + ((ctx.visitsByVenue.get(s.venueId) ?? 0) > 0 ? 2 : 0)
     + (ctx.live.has(s.id) ? 1 : 0);
