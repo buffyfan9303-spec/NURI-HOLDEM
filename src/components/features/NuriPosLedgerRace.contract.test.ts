@@ -196,7 +196,9 @@ describe('H03-08 · 장부 시작/수정이 실패하면 클락을 건드리지 
     expect(readAt).toBeLessThan(submitAt);
     expect(body.slice(0, body.indexOf('syncClock = async'))).not.toMatch(/saveClockState\(/);
     // 세션 얼리와 클락 행이 같은 cfg 를 쓴다
-    expect(body).toMatch(/earlyDMin = cfg\.earlyDoubleMin; earlySMin = cfg\.earlySingleMin;/);
+    //   (2026-10-09) 단, 저장 직전 읽은 클락이 보호될(protect) 행이면 클락은 안 쓰이므로 세션은 그 클락 설정으로 — 판정은 lib/ledgerStart 한 곳.
+    expect(body).toMatch(/const earlyCfg = basisErr \? cfg : sessionEarlyBasis\(basis, base\.sessionDate, cfg\);/);
+    expect(body).toMatch(/const early = sessionEarlyOf\(earlyCfg\);\s*earlyDMin = early\.earlyDoubleMin; earlySMin = early\.earlySingleMin;/);
     expect(body).toMatch(/clockStartRow\(action, fresh, cfg,/);
     // 읽기 실패면 클락은 쓰지 않는다 · 그사이 설정이 바뀌었으면 덮지 않는다
     expect(body).toMatch(/if \(basisErr\) \{ formToast\.show\([^\n]*\); return; \}/);
