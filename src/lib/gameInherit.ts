@@ -121,6 +121,9 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
  *  · 그 밖의 단위(T·GP·포인트·초대권…)는 **입력한 단위 그대로**(W-25, 원 환산 병기 안 함 — §28).
  *  · 빈 문자열 단위('')는 돈으로도 단위로도 추측하지 않고 뺀다(PL1b).
  *  · '11-15th' 같은 범위 순위는 자리 수를 count 로 싣는다 — 총액 = Σ amount × count(W-12). */
+/** 순위 상금 행의 단위가 돈(원 환산 대상)인가 — 단위 없음(구형)·만원·원. T·GP·포인트 등은 아니다(W-25). */
+export const isMoneyUnit = (unit: string | null | undefined): boolean => unit == null || unit === '만원' || unit === '원';
+
 export function clockPrizeRowsOf(rows: readonly { rank: string; amount?: number; unit?: string; amountWon?: number }[] | null | undefined): ClockPrizeRow[] {
   const out: ClockPrizeRow[] = [];
   for (const r of rows ?? []) {
@@ -148,10 +151,11 @@ export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] {
  *  금액은 전부 원 정규형(*Won)으로 적고, 구형 필드는 표시 호환용으로만 함께 채운다. */
 export function presetFromSchedule(sc: Schedule): GamePresetData {
   const prizes = (sc.rankingPrizes ?? [])
-    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
-    // 티켓(unit 'T')은 장수·'T' 를 그대로 보존한다 — 만원으로 눌러 버리면 '1T' 표기를 복원할 수 없다.
-    .map((r) => r.unit === 'T'
-      ? ({ rank: r.rank, amount: r.amount, unit: 'T', amountWon: rankingPrizeWon(r) })
+    .filter((r) => (r.amount ?? 0) > 0 && (isMoneyUnit(r.unit) || !!r.unit?.trim()))
+    // LC-F1(2026-10-09) — 돈이 아닌 단위(T·GP·포인트…)는 장수·단위 그대로, 원 환산(amountWon)을 붙이지 않는다(W-25·§28).
+    //   예전엔 T 에 amountWon 을 붙여 applyToPoster 가 400T 를 400만원으로 바꿨고, GP 등은 아예 빠졌다.
+    .map((r) => !isMoneyUnit(r.unit)
+      ? ({ rank: r.rank, amount: r.amount, unit: r.unit!.trim() })
       : ({ rank: r.rank, amount: r.unit === '원' ? Math.round(r.amount / 10_000) : r.amount, unit: '만원', amountWon: rankingPrizeWon(r) }));
   return {
     title: sc.title,
@@ -254,9 +258,10 @@ export function applyToPoster(d: GamePresetData): Partial<PosterFormData> {
   if (d.isCompetition != null) p.isCompetition = d.isCompetition;
   if (d.rankingPrizes?.length) {
     // 정규형(amountWon·원)이 있으면 만원으로 환산, 구형·비화폐(%·pts) 행은 원문 그대로(무손실)
+    //   LC-F1 — amountWon 이 있어도 단위가 돈(만원·원·빈 단위)일 때만 환산한다. 이전 판이 T 행에 붙인 amountWon 은 무시.
     p.rankingPrizes = d.rankingPrizes.map((r) => (
-      r.amountWon != null
-        ? { rank: r.rank, amount: Math.round(r.amountWon / 10_000), unit: '만원' }
+      r.amountWon != null && (isMoneyUnit(r.unit) || !r.unit)
+        ?{ rank: r.rank, amount: Math.round(r.amountWon / 10_000), unit: '만원' }
         : { rank: r.rank, amount: r.amount, unit: r.unit ?? '' }
     ));
   }

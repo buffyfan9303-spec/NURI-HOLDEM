@@ -37,6 +37,8 @@ const TODAY_POSTER = {
 };
 async function routeRank(p: Page, n: number) {
   await p.route(/\/rest\/v1\/rpc\/ledger_business_date/, (r) => r.fulfill(json(MOCK_DAY)));
+  // 일정은 '조회 성공·오늘 포스터 없음'(P 는 뒤에서 오늘 포스터로 덮는다). 안 걸면 가짜 토큰 401 → 일정 실패 갈래가 섞인다(main CI run 37940996274).
+  await p.route(/\/rest\/v1\/schedules\?/, (r) => (r.request().method() === 'GET' ? r.fulfill(json(single(r) ? null : [])) : r.fallback()));
   await p.route(/\/rest\/v1\/ledger_sessions\?/, async (r) => {
     if (r.request().method() !== 'GET') return r.fallback();
     const u = decodeURIComponent(r.request().url());

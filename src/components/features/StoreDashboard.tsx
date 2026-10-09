@@ -121,6 +121,9 @@ interface Props {
   /** 모바일(<1024) 머리 칸 '오늘 장부 요약' 제목 줄의 오른쪽 자리(VenueManageTab). 있으면 갱신 시각·라이브·새로고침을 그리로 보낸다.
    *  오너 10-02 「중복 줄을 빈칸으로 올리기」 — 모바일에선 아래 표지판 줄(매장 · 날짜)이 위 요약 줄을 되풀이해 숨긴다. */
   refreshSlot?: HTMLElement | null;
+  /** 게임 목록(App 의 schedules) 조회 실패 — MyPostersTab 과 같은 값. 비었을 때 '예정된 게임이 없습니다' 대신 오류·재시도를 말한다. */
+  schedulesError?: unknown;
+  onRetrySchedules?: () => void;
 }
 
 /**
@@ -131,7 +134,7 @@ interface Props {
 // 소수 4자리·천단위 없이 떴다. 장부 바(NuriPosLedger '티켓')와 **같은 표기**(소수 1자리 + 천단위)로 맞춘다.
 const fmtT = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
-export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress, refreshSlot }: Props) {
+export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress, refreshSlot, schedulesError = null, onRetrySchedules }: Props) {
   const toast = useToast();
   // B1(2026-09-28) — '오늘'은 매장 **영업일**이다(서버 ledger_business_date 와 같은 값). 자정을 넘긴 토너에서
   //   달력 오늘을 쓰면 00:30 에 '미시작'이 뜨고 손님 바인 요청(날짜=어제 영업일)이 대기열에서 사라졌다.
@@ -1027,7 +1030,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               "예약이 없다"는 거짓 안심을 준다). */}
           <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
             badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {resCountsErr ? '—' : totalRes}</span>}>
-            {loading ? <EmptySkeleton /> : upcoming.length === 0 ? (
+            {loading ? <EmptySkeleton /> : upcoming.length === 0 && schedulesError ? (
+              <LoadFailRow what="게임 목록" onRetry={onRetrySchedules} />
+            ) : upcoming.length === 0 ? (
               <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
             ) : (
               <ul className="space-y-1">
@@ -1783,6 +1788,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요`,
             cta: '그대로 열기', onClick: gotoLedgerWithLastRound, tone: 'gold',
           };
+        } else if (schedulesError && !started && !todayPoster && (caps.ledger || caps.posters)) {
+          // R2M-03(2026-10-09) — 일정 조회 실패를 '오늘 포스터 없음'으로 읽으면 아래 갈래가 '대회 등록하기'(같은 날 중복 대회)를 권한다.
+          //   모르는 것은 모른다고 — 오류·재시도(다가오는 예약 LoadFailRow 와 같은 값). 실패일 때만이다(로딩·성공·빈 결과는 종전 그대로).
+          //   '그대로 열기'(위)는 가리지 않는다 — 포스터를 만들지 않고 장부 시작 화면만 연다(장부는 일정을 따로 다시 읽는다).
+          //   종전엔 이 갈래가 위에 있어 그것까지 가렸다(main CI e2e mystore-followup-1003 R 1024 · #271 되돌림).
+          todo = { icon: 'alert', title: '대회 일정을 불러오지 못했어요', desc: '오늘 대회가 없는 것과는 달라요 — 다시 불러온 뒤 확인해 주세요.', cta: '다시 시도', onClick: () => onRetrySchedules?.(), tone: 'warn' };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
           todo = { icon: 'plus', title: '오늘 등록된 대회가 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '대회 등록하기', onClick: onCreatePoster, tone: 'gold' };
         } else if (caps.ledger && session?.closed && !daySettled && todayGames.some((g) => !g.sx.closed)) {
@@ -2063,12 +2074,12 @@ function DashCard({ title, badge, onClick, children, show = true, more, stretch 
 /** 조회 실패 줄(F14) — '데이터가 없습니다'(성공했는데 빈 것)와 반드시 다르게 말한다.
  *  숫자 자리는 '—' 로 비우고 여기에 이유와 재시도를 붙인다. DashCard 의 children 은 헤더 button 밖이라
  *  진짜 <button> 을 쓸 수 있지만, 카드 전체 onClick 으로 새는 것은 stopPropagation 으로 막는다. */
-function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
+function LoadFailRow({ what, onRetry }: { what: string; onRetry?: () => void }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
       <span className="break-keep">{what}을(를) 불러오지 못했어요 — 0 과는 달라요.</span>
-      <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }}
-        className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
+      {onRetry && <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }}
+        className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>}
     </div>
   );
 }
