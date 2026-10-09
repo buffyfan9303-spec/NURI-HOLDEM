@@ -269,8 +269,11 @@ export default function StaffSchedule({ venueId, active = true, bare = false }: 
                     on ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{n}</button>
                 {on && (
                   <>
-                    <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-22" /></label>
-                    <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-22" /></label>
+                    {/* F-01(2026-10-09) — 시각 칸은 고정 폭(w-22=88px)을 두지 않고 브라우저 고유 폭(w-auto)을 쓴다.
+                        ko-KR '오전 11:00' 은 PC 120.6px·터치 147.8px 가 필요해(e2e/open-fix-store-1009 실측) 88px 에서 '오전 1'(11시가 1시로 읽힘)로 잘렸다.
+                        고유 폭은 브라우저가 그 칸의 표기(언어·글자 크기)에 맞춰 잡으므로 빈 칸 '-- --:--' 도 그대로 다 보인다. */}
+                    <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-auto shrink-0" /></label>
+                    <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-auto shrink-0" /></label>
                     {m && <span data-testid="schedule-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-emerald-700 dark:text-emerald-400 tabular-nums">{hoursText(m.net)}</span>}
                   </>
                 )}

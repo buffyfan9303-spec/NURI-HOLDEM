@@ -90,9 +90,12 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="딜러 이름" className="input min-w-0 flex-1 text-sm" />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input w-36 shrink-0 text-sm" />
           </div>
-          <div className="flex gap-1.5">
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input min-w-0 flex-1 text-sm" />
-            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input min-w-0 flex-1 text-sm" />
+          {/* F-01(2026-10-09) — 시각 칸은 고유 폭(로캘·글자 크기의 max-content) 아래로 줄지 않는다(min-w-max).
+              종전 min-w-0 flex-1 은 390 에서 106px 까지 줄어 '오전 11:00'(터치 16px 글자에 147.8px 필요)을 잘랐다.
+              줄이 모자라면 시급 칸이 다음 줄로 내려간다(flex-wrap). PC 는 한 줄 그대로. */}
+          <div className="flex flex-wrap gap-1.5">
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input min-w-max flex-1 text-sm" />
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input min-w-max flex-1 text-sm" />
             <div className="relative w-28 shrink-0">
               <input type="number" inputMode="numeric" value={wage || ''} onChange={(e) => setWage(parseInt(e.target.value, 10) || 0)} placeholder="시급" className="input w-full pr-7 text-sm tabular-nums" />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>

@@ -561,8 +561,9 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
+                  {/* F-01(2026-10-09) — w-24(96px) 가 '오전 11:00' 을 '오전 1' 로 잘랐다. 고유 폭(w-auto)은 브라우저가 표기·글자 크기에 맞춰 잡는다(StaffSchedule 과 같은 판정). */}
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-auto shrink-0 disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-auto shrink-0 disabled:opacity-60" /></label>
                   {m && <span data-testid="self-shift-hours" title={shiftHoursNote(m)} className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hoursText(m.net)}</span>}
                   {canSelfEdit(s.date) && note && <span data-testid="self-punch-note" data-reason={note[1]} className="basis-full text-2xs text-amber-700 dark:text-amber-300">{selfShiftNote(note[0], note[1])}</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
