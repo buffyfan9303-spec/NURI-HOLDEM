@@ -24,6 +24,9 @@ const LABELS = {
   long: 'BREAK TIME 8 MINS / 1,000칩 레이스',
   huge: 'DINNER BREAK 30 MINS / 1,000칩 레이스 · 컬러업 · 애드온 마감 · 다음 레벨 블라인드 인상 안내',
   token: 'BREAKTIME8MINS/1000CHIPRACE/COLORUP/ADDONCLOSE',
+  // review-251 P2-① — 이모지를 1em 으로 세던 추정이 한 줄 크기로 두 줄을 만들어 라벨 칸 위아래로 40px 넘고 'BREAK' 머리글을 덮었다.
+  emoji: '☕☕☕ BREAK ☕☕☕',
+  emoji2: '🍕 DINNER 🍕',
 } as const;
 type LabelKey = keyof typeof LABELS;
 /** 잘리지 않고 전부 보여야 하는 것 = 실제 포스터에 있는 길이(로티 5종 중 최단·최장). */
@@ -50,8 +53,8 @@ function body(label?: string) {
 
 type Box = { l: number; r: number; t: number; b: number };
 type M = {
-  text: string; vis: Box | null; lines: number; cut: boolean; font: number; cqmin: number;
-  content: Box; next: Box; timer: Box; cell: Box; pBox: Box; vw: number; vh: number;
+  text: string; vis: Box | null; lines: number; cut: boolean; font: number; cqmin: number; line2First: string;
+  content: Box; next: Box; timer: Box; cell: Box; pBox: Box; head: Box; span: Box; vw: number; vh: number;
 };
 
 async function render(page: Page, label: string | undefined, blockFonts: boolean): Promise<M> {
@@ -87,10 +90,21 @@ async function render(page: Page, label: string | undefined, blockFonts: boolean
     }
     const vis = rects.length ? rects.reduce((a, r) => ({ l: Math.min(a.l, r.l), r: Math.max(a.r, r.r), t: Math.min(a.t, r.t), b: Math.max(a.b, r.b) })) : null;
     const lines = new Set(rects.map((r) => Math.round(r.t))).size;
+    // 둘째 줄 첫 글자(공백 제외) — 구분자('/')로 시작하면 안 된다(review-251 P3).
+    let line2First = '';
+    const tn = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT).nextNode();
+    if (tn && tn.textContent) {
+      const rg = document.createRange(); let top0: number | null = null;
+      for (let i = 0; i < tn.textContent.length; i++) {
+        const ch = tn.textContent[i]; if (/\s/.test(ch)) continue;
+        rg.setStart(tn, i); rg.setEnd(tn, i + 1); const t = rg.getBoundingClientRect().top;
+        if (top0 === null) top0 = t; else if (t > top0 + 2) { line2First = ch; break; }
+      }
+    }
     const cb = cell.getBoundingClientRect(); const ccs = getComputedStyle(cell);
     const stage = document.querySelector('[data-testid="clk-timer"]')!.closest('[style*="--clk-bg"]')!.getBoundingClientRect();
     return {
-      text: (textEl.textContent ?? '').trim(), vis, lines,
+      text: (textEl.textContent ?? '').replace(/\u00a0/g, ' ').trim(), vis, lines, line2First,
       // 줄 높이 1 이라 글자 내용 영역(약 1.2em)이 scrollHeight 를 몇 px 늘린다 — 숨은 줄이 있으면 한 줄(≥1em)만큼 커진다.
       cut: textEl.scrollHeight > textEl.clientHeight + parseFloat(getComputedStyle(textEl).fontSize) * 0.5,
       font: parseFloat(getComputedStyle(textEl).fontSize),
@@ -98,7 +112,8 @@ async function render(page: Page, label: string | undefined, blockFonts: boolean
       content: { l: cb.left + parseFloat(ccs.paddingLeft), r: cb.right - parseFloat(ccs.paddingRight), t: cb.top, b: cb.bottom },
       next: B(document.querySelector('[data-testid="clk-next-blinds"]')!.getBoundingClientRect()),
       timer: B(document.querySelector('[data-testid="clk-timer"]')!.getBoundingClientRect()),
-      cell: B(cb), pBox: B(p.getBoundingClientRect()), vw: innerWidth, vh: innerHeight,
+      cell: B(cb), pBox: B(p.getBoundingClientRect()), head: B(p.previousElementSibling!.getBoundingClientRect()),
+      span: B(textEl.getBoundingClientRect()), vw: innerWidth, vh: innerHeight,
     };
   });
 }
@@ -115,6 +130,9 @@ function check(m: M, base: M, key: LabelKey) {
   expect(v.r, `라벨이 CURRENT 칸 오른쪽을 ${(v.r - m.content.r).toFixed(0)}px 넘는다`).toBeLessThanOrEqual(m.content.r + 0.5);
   expect(v.t, '라벨이 CURRENT 칸 위로 넘는다').toBeGreaterThanOrEqual(m.content.t - 0.5);
   expect(v.b, '라벨이 CURRENT 칸 아래로 넘는다').toBeLessThanOrEqual(m.content.b + 0.5);
+  // ①-b 위 'BREAK' 머리글을 덮지 않는다 · 글자 상자가 라벨 칸 높이를 15% 넘게 넘치지 않는다(이모지 회귀)
+  expect(v.t, `라벨이 위 'BREAK' 머리글을 ${(m.head.b - v.t).toFixed(0)}px 덮는다`).toBeGreaterThanOrEqual(m.head.b - 0.5);
+  expect(m.span.b - m.span.t, `글자 상자 ${(m.span.b - m.span.t).toFixed(0)}px 가 라벨 칸 ${(m.pBox.b - m.pBox.t).toFixed(0)}px 를 넘친다`).toBeLessThanOrEqual((m.pBox.b - m.pBox.t) * 1.15 + 0.5);
   // ② 화면 안
   expect(v.l, '라벨이 화면 왼쪽으로 잘린다').toBeGreaterThanOrEqual(-0.5);
   expect(v.r, '라벨이 화면 오른쪽으로 잘린다').toBeLessThanOrEqual(m.vw + 0.5);
@@ -134,6 +152,7 @@ function check(m: M, base: M, key: LabelKey) {
   // 글자 자체는 바뀌지 않는다(데이터 그대로)
   expect(m.text).toBe(LABELS[key]);
   // ⑥ 실제 포스터 길이 라벨은 말줄임 없이 두 줄 이하로 전부 보인다
+  expect(m.line2First, '둘째 줄이 구분자로 시작한다').not.toMatch(/^[/·|]$/);
   if (MUST_SHOW.includes(key)) {
     expect(m.cut, '포스터 길이 라벨이 말줄임으로 잘렸다').toBe(false);
     expect(m.lines, '두 줄을 넘는다').toBeLessThanOrEqual(2);

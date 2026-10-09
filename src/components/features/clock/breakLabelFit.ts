@@ -20,13 +20,17 @@
 
 const NARROW = new Set([...`Iijl.,:;!|'`]);
 const SLIM = new Set([...'frt()/-"']);
-const WIDE = new Set([...'MWmw&']);
+const WIDE = new Set([...'MWmw&%@']);
+// 이모지는 기기 글꼴마다 폭이 다르다(실측 1.27~1.37em, 독립 검토 review-251 P2-①) — 1em 으로 세면 한 줄 크기로 두 줄이 돼
+//   칸 높이를 넘고 위 'BREAK' 머리글을 덮었다. 넉넉히 1.5em. 그래도 넓은 기기는 ClockStage BreakLabel 의 높이 가드가 받는다.
+const PICTO = /\p{Extended_Pictographic}/u;
 
 /** 라벨 한 줄의 폭(em) 추정 — 실측보다 크거나 같게. */
 export function breakLabelEm(text: string): number {
   let em = 0;
   for (const c of text) {
     if (c === ' ') em += 0.35;
+    else if (PICTO.test(c)) em += 1.5;
     else if (c > '~') em += 1;              // 한글·기타 비ASCII(폴백 실측 1.0em)
     else if (WIDE.has(c)) em += 1.03;
     else if (NARROW.has(c)) em += 0.33;
@@ -40,10 +44,15 @@ export function breakLabelEm(text: string): number {
 
 /** 라벨 칸 높이 = 종전 한 줄 글자 크기(leading-none). 두 줄일 때 글자는 이것 ÷ 2.2(줄 높이 1.1 × 2). */
 export const BREAK_LABEL_H = 'clamp(24px, 6.4cqmin, 108px)';
-const BREAK_LABEL_FLOOR = `calc(${BREAK_LABEL_H} / 2.2)`;
+export const BREAK_LABEL_FLOOR = `calc(${BREAK_LABEL_H} / 2.2)`;
 
 /** CURRENT 칸 내용 폭(= --clk-half − 좌우 패딩 2×2cqmin)에 맞춘 글자 크기. */
 export function breakLabelFontSize(text: string): string {
   const fit = `calc((var(--clk-half, 50cqw) - 4cqmin) / ${breakLabelEm(text).toFixed(3)})`;
   return `max(${BREAK_LABEL_FLOOR}, min(${BREAK_LABEL_H}, ${fit}))`;
+}
+
+/** 그릴 글자 — ' / '·' · '·' | ' 구분자 앞 공백을 NBSP 로 바꿔 두 줄로 나뉠 때 둘째 줄이 구분자로 시작하지 않게 한다(첫 줄 끝에 남는다). */
+export function breakLabelText(text: string): string {
+  return text.replace(/ ([/·|]) /g, '\u00a0$1 ');
 }
