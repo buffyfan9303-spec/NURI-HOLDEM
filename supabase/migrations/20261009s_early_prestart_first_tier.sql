@@ -1,4 +1,7 @@
--- ⏳ 미적용 초안(2026-10-09 store-team · 적용 판단과 실행은 nuri-lead). 요구: roti-1009/audit-ledger.md C-1.
+-- ✅ 적용 완료 2026-10-09 09:22 KST(리드, 운영 배포 e0965338 = JS 같은 규칙 확인 직후 · 열린 장부 0). LF 본문으로 전송.
+--    전 단언 ① md5 331d3c7d 일치 → 적용 → 같은 트랜잭션 자가검사 ② 시작 전 도착 earlyChips '10000' · ③ md5 0e54421d · ④ anon·authenticated false / service_role true.
+--    리허설 PASS · 음성 대조(이 파일 없이) ② '0' 으로 FAIL. 독립 검토: roti-1009/verify-249.md(APPROVE 조건부, 조건 3개 충족).
+-- (작성 당시 메모) 미적용 초안(2026-10-09 store-team · 적용 판단과 실행은 nuri-lead). 요구: roti-1009/audit-ledger.md C-1.
 --
 -- 무엇: 얼리 자동 판정에서 **대회 시작 전 도착(m < 0)을 가장 이른 얼리 단계로** 본다. 함수 하나(_clock_ledger_part)의 한 줄 삭제.
 -- 왜:   "N레벨 시작 전" 창에는 시작 전도 들어간다(포스터 '2LV 시작 전 +1만'). 지금은 두 경로가 갈린다 —
