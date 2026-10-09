@@ -18,7 +18,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
-  setBuyinAddon, addonFinance, addonEntryOf, addonTotals, type AddonMethod, type AddonFinance,
+  setBuyinAddon, addonFinance, addonEntryOf, addonEntryNote, addonTotals, type AddonMethod, type AddonFinance,
   splitMismatch, summaryRowsOf,
 
   discountAmountOf, autoDiscountIndex, discountAllowed, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
@@ -39,7 +39,7 @@ import { unpaidItemsOf } from '../../lib/unpaidItems';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
+import { clockPatchFromSchedule, applyToLedger, applyToClock, presetFromRound, posterAddonOf } from '../../lib/gameInherit';
 import { ledgerStartClockConfig, sessionEarlyOf, sessionPatchFromSchedule, clockStartAction, clockStartRow } from '../../lib/ledgerStart';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
@@ -3049,8 +3049,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     if (start) setStartStack(start);
     const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
     if (rebuy) setRebuyStack(rebuy);
-    if (sc.buyIn?.addonStack) { setIsAddon(true); setAddonStack(sc.buyIn.addonStack); }
-    if (sc.buyIn?.addon) { setIsAddon(true); setAddonAmount(sc.buyIn.addon); }   // 포스터 애드온 비용 → 장부 애드온 가격
+    // 포스터 애드온(스택·비용 → 장부 애드온 스택·가격). 포스터에 없으면 **끈다** — 앞서 고른 부스터데이 포스터·지난 게임 값이
+    //   이 게임으로 넘어가지 않게(roti-1009). 클락 쪽 같은 판정은 clockPatchFromSchedule 이 같은 함수로 한다.
+    const addon = posterAddonOf(sc);
+    setIsAddon(addon.isAddon); setAddonStack(addon.addonStack); setAddonAmount(addon.addonAmount);
     // W-04 — 포스터 얼리 단계의 1·2단을 폼 두 칸에 보여 준다(단계 없음 = 0). 3·4단은 제출 때 포스터에서 그대로 온다.
     const cp = clockPatchFromSchedule(sc);
     posterEarlyRef.current = Array.isArray(cp.earlyTiers);
@@ -3971,7 +3973,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                   F2(2026-09-29): 예전엔 가게지원·분납 버튼 밑(모달 맨 끝)이라 할인 프리셋 게임의 1280×800 첫 화면에서
                   13.6/131.7px 만 보였다(스크롤 단서 없음). */}
               {session.isAddon && onSetAddon && (
-                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} busy={busy} onSet={onSetAddon} />
+                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} entry={session.addonEntry} busy={busy} onSet={onSetAddon} />
               )}
 
               {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다.
@@ -4085,14 +4087,16 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
 }
 
 /** 애드온 한 줄(2026-09-28 오너) — 완납/미수 수단 격자 **바로 밑**. 기록된 바인에만 붙는다(애드온은 앉은 자리에 얹는 것).
- *  ⚠ 애드온은 바인 횟수·엔트리·얼리·총 칩에 들어가지 않는다 — 돈만 따로 센다(ledger.ts addonFinance). */
+ *  ⚠ 애드온은 바인 횟수·얼리에 들어가지 않는다 — 돈은 따로 센다(ledger.ts addonFinance).
+ *    엔트리는 게임별 addonEntry 만큼 더해지고(addonEntryOf · 기본 0), 클락 총 칩에는 애드온 수 × addonStack 이 들어간다(clock.ts computeLiveStats).
+ *    머리 안내는 그 값(addonEntryNote)을 말한다 — roti-1009 전엔 '엔트리에 안 들어감' 고정이라 0.5엔트리 게임에서 틀렸다. */
 const ADDON_OTHER: { key: string; method: AddonMethod; unpaid: boolean; label: string }[] = [
   { key: 'card', method: 'card', unpaid: false, label: '카드 완납' }, { key: 'card-u', method: 'card', unpaid: true, label: '카드 미수' },
   { key: 'transfer', method: 'transfer', unpaid: false, label: '이체 완납' }, { key: 'transfer-u', method: 'transfer', unpaid: true, label: '이체 미수' },
   { key: 'ticket', method: 'ticket', unpaid: false, label: '티켓 완납' }, { key: 'ticket-u', method: 'ticket', unpaid: true, label: '티켓 미수' },
 ];
-function AddonRow({ buyin, amount, busy, onSet }: {
-  buyin: LedgerBuyin | null | undefined; amount: number; busy: boolean;
+function AddonRow({ buyin, amount, entry, busy, onSet }: {
+  buyin: LedgerBuyin | null | undefined; amount: number; /** 세션 addonEntry(애드온 1회 엔트리) */ entry: number | undefined; busy: boolean;
   onSet: (addon: { method: AddonMethod; unpaid: boolean } | null) => void;
 }) {
   const m = buyin?.addonMethod ?? null;
@@ -4109,7 +4113,7 @@ function AddonRow({ buyin, amount, busy, onSet }: {
     <div data-testid="ledger-addon-row" className="space-y-1.5 border-t border-border-subtle pt-2">
       <p className="flex items-center justify-between gap-2 whitespace-nowrap text-2xs">
         <span className="font-bold text-ink-secondary">애드온</span>
-        <span className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · 바인·엔트리에 안 들어감` : '가격 미설정'}</span>
+        <span data-testid="ledger-addon-note" className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · ${addonEntryNote({ addonEntry: entry })}` : '가격 미설정'}</span>
       </p>
       {/* 20260930i — 이용권 분납 애드온: 이용권 몫은 서버가 적는다(화면은 남은 금액의 수단만 바꾼다). */}
       {m && m !== 'ticket' && (buyin?.addonTicketCount ?? 0) > 0 && (

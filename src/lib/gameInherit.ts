@@ -23,6 +23,28 @@ export function posterChipRules(sc: Pick<Schedule, 'buyIn'>): PosterChipRules {
   };
 }
 
+/** 포스터가 말하는 애드온 — 장부 폼(isAddon·스택·가격)과 클락 패치(isAddon·스택)가 이 한 판정을 쓴다.
+ *  🔴 roti-1009(오너 '부스터데이는 애드온') — 예전엔 두 곳 다 애드온을 **켜기만** 했다. 부스터데이 클락이 남은 채
+ *    다음 날 애드온 없는 깐부전 장부를 시작하면 isAddon·스택 50,000 이 그대로 넘어가 TV 에 ADD-ON 이 떴다
+ *    (ClockStage 는 스택 > 0 만으로도 띄운다). 리엔트리 계단·얼리 단계처럼 '포스터에 없으면 끈다'로 맞췄다.
+ *  · 가격만 있고 스택이 없으면 애드온은 켜고 스택은 0 — 지난 게임의 스택을 이 게임 것으로 추측하지 않는다. */
+export function posterAddonOf(sc: Pick<Schedule, 'buyIn'>): { isAddon: boolean; addonStack: number; addonAmount: number } {
+  const stack = Math.round(Number(sc.buyIn?.addonStack) || 0);
+  const amount = Math.round(Number(sc.buyIn?.addon) || 0);
+  const addonStack = stack > 0 ? stack : 0, addonAmount = amount > 0 ? amount : 0;
+  return { isAddon: addonStack > 0 || addonAmount > 0, addonStack, addonAmount };
+}
+
+/** 연동 장부 세션 → 클락 애드온 두 칸(클락 설정 화면의 시드). 세션이 애드온 없음이면 **둘 다** 끈다 —
+ *  isAddon 만 끄고 스택을 남기면 체크박스는 꺼졌는데 TV 는 ADD-ON 을 띄운다(roti-1009 P3). 세션 스택이 없으면 클락 스택을 둔다. */
+export function clockAddonFromSession(
+  sess: Pick<LedgerSession, 'isAddon' | 'addonStack'>, base: Pick<ClockConfig, 'isAddon' | 'addonStack'>,
+): Pick<ClockConfig, 'isAddon' | 'addonStack'> {
+  if (sess.isAddon == null) return { isAddon: base.isAddon, addonStack: base.addonStack };
+  if (!sess.isAddon) return { isAddon: false, addonStack: 0 };
+  return { isAddon: true, addonStack: sess.addonStack > 0 ? sess.addonStack : base.addonStack };
+}
+
 /** 포스터 → 장부 세션 칸(W-06 애드온 엔트리 · W-19 기준 엔트리 = GTD ÷ 참가비). '있는 것만' 키를 만든다. */
 export function ledgerPatchFromSchedule(sc: Schedule): Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> {
   const p: Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> = {};
@@ -67,7 +89,9 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
   if (start) p.startStack = start;
   const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
   if (rebuy) p.rebuyStack = rebuy;
-  if (sc.buyIn?.addonStack) { p.addonStack = sc.buyIn.addonStack; p.isAddon = true; }
+  // 애드온 — 포스터에 없으면 **끈다**(posterAddonOf 주석). 키를 늘 만든다: 소비처가 `{ ...baseCfg, ...schedPatch }` 로 펴서 지난 클락 값을 덮어야 한다.
+  const addon = posterAddonOf(sc);
+  p.isAddon = addon.isAddon; p.addonStack = addon.addonStack;
   // W-10 — 회차별 리엔트리 스택. 포스터에 없으면 **빈 배열로 지운다** — 지난 포스터의 계단이 이 게임으로 새지 않게(단일값 = 기존 동작).
   const rules = posterChipRules(sc);
   p.rebuyStacks = rules.rebuyStacks ?? [];
