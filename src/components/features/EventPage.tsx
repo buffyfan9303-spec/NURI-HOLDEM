@@ -6,11 +6,11 @@
 // ⚠ 이 화면은 **무엇이 들었는지 모른다.** 서버(event_board)가 안 연 카드의 등급을 아예 안 내려주기 때문이다.
 //   그래서 여기에 확률 계산이나 미리보기 로직이 없다 — 있으면 그게 곧 유출이다.
 //   열린 뒤에야 tier 가 채워져 오고, 그때 화면이 그 결과를 보여 준다.
-//   최하단 확률 표의 숫자도 **서버가 준 실제 수량**으로만 만든다(상수로 적으면 어긋난 순간 허위 고지다).
+//   (2026-10-09 §28: 최하단의 이용권 장수·확률 표는 손님 화면에서 뺐다 — 아래 HowItWorks 주석.)
 //
 // 그림은 전부 CSS·인라인 SVG 다. 외부 이미지를 쓰지 않는 이유가 둘 있다 —
 // ① 스톡 이미지 미리보기는 라이선스가 없다(레퍼런스로만 참고했다) ② 네트워크 왕복 0 · 어느 해상도에서도 선명.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import BusinessFooter from './BusinessFooter';
@@ -21,7 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29) — 새 판정을 만들지 않고 재사용
 import { ensureVerified } from '../../lib/requireLogin'; // 본인인증 안내 시트(VerifyGateSheet)를 여는 기존 진입점 재사용
 import { useDialogFocus } from '../atoms/useDialogFocus'; // U06 공유 포커스 트랩(VenuePage·EventListPage 와 같은 계약)
-import { cachedEventBoard,getEventBoard, lastEventCardCount, openEventCard, oddsRows, TIER_META,
+import { cachedEventBoard,getEventBoard, lastEventCardCount, openEventCard, TIER_META,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
 /* 참여 가능 여부는 **여기서 다시 판단하지 않는다** — 홈·관리자와 같은 단일 판정 함수를 부른다.
@@ -137,8 +137,9 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
         tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
       } else {
         // 시트가 닫혔다(판 닫힘·언마운트) — 결과를 잃지 않게 번호를 붙여 알린다. 서버는 이미 확정했다.
+        // §28(2026-10-09): 이용권 이름·장수는 손님 화면에 싣지 않는다 — 지급 사실만 알린다.
         toast.show(r.tier
-          ? `${idx}번 카드 결과: ${TIER_META[r.tier]?.label ?? `${r.tier}등`} 당첨 — ${r.voucherTitle} ${r.voucherCount}장이 지갑에 들어갔습니다`
+          ? `${idx}번 카드 결과: ${TIER_META[r.tier]?.label ?? `${r.tier}등`} 당첨 — 혜택이 지급되었습니다`
           : `${idx}번 카드 결과: 꽝`, r.tier ? 'success' : 'info');
       }
       load(); // 참여권·남은 경품·다른 사람 개봉을 뒤에서 갱신
@@ -265,7 +266,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
             ))}
           </div>
 
-          <Odds board={board} />
+          <HowItWorks />
         </div>
       )}
       {/* 법정 상시 고지 — 이 판(fixed inset-0 z-55)이 App 문서 끝 푸터를 덮는다(2026-09-29 D1).
@@ -274,7 +275,6 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
 
       {pick && (
         <TearSheet card={pick} phase={phase} result={result} busy={busy}
-          voucherTitle={board?.voucherTitle ?? '매장이용권'}
           onOpen={doOpen} onClose={closeSheet} />
       )}
       </div>
@@ -342,7 +342,6 @@ function Hero({ board, left, total, user, onLogin, av }: {
         {[1, 2, 3, 4].map((t) => {
           const m = TIER_META[t];
           const l = board.remainByTier?.[String(t)] ?? 0;
-          const v = board.voucherByTier?.[String(t)] ?? 0;
           return (
             <div key={t} className="rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5">
               <p className={['flex items-center gap-1 text-2xs font-bold', m.text].join(' ')}>
@@ -352,7 +351,6 @@ function Hero({ board, left, total, user, onLogin, av }: {
               <p className="mt-0.5 whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-ink-primary">
                 {l}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">장</span>
               </p>
-              <p className="truncate text-2xs leading-tight text-ink-muted">이용권 {v}장</p>
             </div>
           );
         })}
@@ -409,7 +407,7 @@ function EventVerifyNotice({ idOn, live, loggedIn, verified }: {
       <section data-testid="event-killswitch-notice" className="mt-3 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-2xs leading-relaxed text-ink-secondary">
         <p className="flex items-start gap-1.5 font-bold text-ink-primary">
           <Icon name="alert" size={13} className="mt-px shrink-0" />
-          매장이용권이 현재 비활성화되어 있어 카드를 열 수 없습니다
+          카드 혜택이 현재 비활성화되어 있어 카드를 열 수 없습니다
         </p>
         <p className="mt-1">쌓인 참여권은 그대로 남아 있습니다. 준비되면 다시 열립니다.</p>
       </section>
@@ -463,8 +461,7 @@ function CardTile({ card, onPick, disabled }: { card: EventCard; onPick: () => v
         {m ? (
           <>
             <span className={['text-xs font-extrabold leading-none', m.text].join(' ')}>{m.short}등</span>
-            {/* 2026-10-04 중-1: 9px 글자라 4.5 가 기준 — ink-muted 는 2등 카드 틴트 위 라이트 4.28 이었다. */}
-            <span className="mt-0.5 text-[9px] font-semibold text-ink-secondary">×{card.count}</span>
+            {/* 2026-10-09 §28: 열린 카드의 ×N(그 카드에 든 장수)은 손님 화면에서 뺐다. */}
           </>
         ) : (
           // '/60' 을 뺐다 — 반투명 회색은 라이트 2.40 · 다크 2.93 이었다(작은 글자 4.5 미달).
@@ -495,9 +492,9 @@ const SHREDS = [
   { sx: '80%', sy: '92%', sr: '-30deg', l: '52%', t: '66%', w: 11, h: 16 },
 ];
 
-function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }: {
+function TearSheet({ card, phase, result, busy, onOpen, onClose }: {
   card: EventCard; phase: Phase; result: OpenResult | null; busy: boolean;
-  voucherTitle: string; onOpen: () => void; onClose: () => void;
+  onOpen: () => void; onClose: () => void;
 }) {
   const won = !!result && result.tier !== null;
   const m = result?.tier ? TIER_META[result.tier] : null;
@@ -527,9 +524,8 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
                 {won && m ? (
                   <>
                     <span className={['anim-prize-pop text-4xl font-extrabold leading-none', m.text].join(' ')}>{m.label}</span>
-                    <span className="mt-2 px-3 text-xs font-bold text-ink-primary break-keep">{voucherTitle}</span>
-                    <span className={['mt-1 text-3xl font-extrabold leading-none tabular-nums', m.text].join(' ')}>{result!.voucherCount}<span className="ml-0.5 text-sm">장</span></span>
-                    <span className="mt-2 flex items-center gap-1 text-2xs text-ink-muted"><Icon name="check-circle" size={11} className="shrink-0" />지갑에 바로 들어갔습니다</span>
+                    {/* §28(2026-10-09): 이용권 이름·장수 대신 지급 사실만. 실제 지급 로직은 서버가 그대로 한다. */}
+                    <span data-testid="event-result-granted" className="mt-3 flex items-center gap-1 px-3 text-xs font-bold text-ink-primary break-keep"><Icon name="check-circle" size={13} className="shrink-0" />혜택이 지급되었습니다</span>
                   </>
                 ) : (
                   <>
@@ -589,62 +585,26 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
   );
 }
 
-// ── 확률 공개(최하단) ─────────────────────────────────────────────────────────
-// 오너 지시: "확률공개는 필수". 숫자는 전부 서버가 준 실제 수량에서 계산한다 —
-// 여기에 상수를 적어 두면 캠페인을 바꾼 순간 화면이 거짓말을 한다.
-function Odds({ board }: { board: EventBoard }) {
-  const rows = useMemo(() => oddsRows(board), [board]);
-  const win = rows.filter((r) => r.key !== 'none').reduce((a, r) => a + r.total, 0);
-  const pct = board.cards.length ? ((win / board.cards.length) * 100).toFixed(2) : '0.00';
+// ── 참여 안내(최하단) ─────────────────────────────────────────────────────────
+// 2026-10-09 오너 결정(§28): 예전엔 여기에 등급별 이용권 장수·당첨 확률 표가 있었다. 확률로 이용권을 주는 모양이라
+// 환금성 프레이밍에 걸려 손님 화면에서 뺐다(감사 LEGAL-F1). 지급 로직·데이터·관리자/업주 설정은 그대로다.
+// 이 자리는 숫자 없이 "어떻게 참여하나" 만 말한다. `oddsRows`(api/events)는 관리자·집계가 쓸 수 있게 남겨 둔다.
+function HowItWorks() {
   return (
-    <section className="mt-6 rounded-aura border card-aura p-3.5">
+    <section data-testid="event-guide" className="mt-6 rounded-aura border card-aura p-3.5">
       <div className="flex items-center gap-2 border-b border-border-subtle pb-2">
         <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-input bg-surface-high text-ink-secondary">
           <Icon name="info" size={13} />
         </span>
-        <h3 className="text-sm font-bold text-ink-primary">당첨 확률 공개</h3>
-        <span className="ml-auto text-2xs font-semibold tabular-nums text-accent-200">전체 당첨 {pct}%</span>
+        <h3 className="text-sm font-bold text-ink-primary">참여 안내</h3>
       </div>
-      <p className="mt-2 text-2xs text-ink-secondary break-keep">경품은 <b className="text-ink-primary">{board.voucherTitle}</b>입니다.</p>
-
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full text-2xs">
-          <thead>
-            <tr className="text-ink-muted">
-              <th scope="col" className="py-1 pr-2 text-left font-normal">등급</th>
-              <th scope="col" className="py-1 pr-2 text-left font-normal">경품</th>
-              <th scope="col" className="py-1 pr-2 text-right font-normal">수량</th>
-              <th scope="col" className="py-1 pr-2 text-right font-normal">확률</th>
-              <th scope="col" className="py-1 text-right font-normal">남음</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-subtle">
-            {rows.map((r) => {
-              const m = r.key === 'none' ? null : TIER_META[Number(r.key)];
-              return (
-                <tr key={r.key}>
-                  <td className="py-1.5 pr-2">
-                    <span className={['inline-flex items-center gap-1 font-bold', m?.text ?? 'text-ink-muted'].join(' ')}>
-                      {m && <span aria-hidden className={['h-1.5 w-1.5 rounded-full', m.dot].join(' ')} />}
-                      {r.label}
-                    </span>
-                  </td>
-                  <td className="py-1.5 pr-2 text-ink-secondary break-keep">{r.prize}</td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums text-ink-secondary">{r.total}장</td>
-                  <td className="py-1.5 pr-2 text-right font-bold tabular-nums text-ink-primary">{r.pct}%</td>
-                  <td className="py-1.5 text-right tabular-nums text-ink-muted">{r.left}장</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
+      <p className="mt-2 text-2xs text-ink-secondary break-keep">
+        <b className="text-ink-primary">출석 QR</b>을 찍으면 카드 1장 — 하루 1회예요. 카드를 모으면 매장 혜택을 받을 수 있어요(자세한 내용은 매장 안내).
+      </p>
       <ul className="mt-2.5 space-y-1 text-2xs leading-relaxed text-ink-muted">
-        <li>· 확률은 전체 {board.cards.length}장 기준이며, 등급별 수량은 이벤트 시작 시 <b className="text-ink-secondary">고정</b>되어 이후 추가·변경되지 않습니다.</li>
-        <li>· 각 카드의 등급은 시작 전에 무작위로 배치되어 서버에 저장됩니다. 카드를 여는 시점에 다시 뽑지 않습니다.</li>
         <li>· 참여권은 매장 출석 QR 1회당 1장 지급되며, 별도의 구매나 비용이 필요하지 않습니다.</li>
-        <li>· 당첨 이용권은 개봉 즉시 지갑으로 전송됩니다. 남은 수량은 실시간으로 반영됩니다.</li>
+        <li>· 각 카드의 결과는 시작 전에 정해져 서버에 저장됩니다. 카드를 여는 시점에 바꾸지 않습니다.</li>
+        <li>· 카드를 열면 결과가 바로 반영되고, 남은 카드 수는 실시간으로 갱신됩니다.</li>
       </ul>
     </section>
   );
