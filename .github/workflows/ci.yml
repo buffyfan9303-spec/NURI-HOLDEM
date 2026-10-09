@@ -181,7 +181,7 @@ jobs:
           cache: npm
       - name: Install deps
         run: npm ci
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: all-blob-reports
           pattern: blob-*
