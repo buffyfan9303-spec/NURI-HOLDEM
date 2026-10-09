@@ -6,6 +6,7 @@ import type { LegalDoc } from './LegalDocsModal';
 // 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
 import { LEGAL_PREV_ARCHIVE_URL, PRIVACY_EFFECTIVE_DATE } from '../../lib/legalVersion';
 import { TERMS_V4_EFFECTIVE_DATE, TERMS_V3_ARCHIVE_URL } from '../../lib/legalDeploy';
+import { LBS_REPORT_LABEL, LBS_REPORT_NO, LBS_REPORT_OFFICE, LBS_REPORT_DATE_KO } from '../../lib/lbsReport';
 
 type FooterActions = { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void };
 // 🔴 전면 오버레이(매장·그룹·내 정보·이벤트·Modal page 변형) 안에도 **이 푸터를 그대로** 렌더한다(2026-09-29 최종 점검 D1).
@@ -111,6 +112,16 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
             </div>
           ))}
         </dl>
+        {/* 위치기반서비스사업 신고(위치정보법 제9조의2) 수리 사실 — 2026-10-08 수리, 값은 lib/lbsReport.ts 한 곳(위치 약관 제2조·사행성 배제 공지와 같은 값).
+            <dl> 에 넣지 않는다: 라벨이 길어 모바일 격자의 라벨 칸(max-content)을 넓히고 메일 하단(BIZ_EXTRA 로 생성)에도 번지기 때문이다.
+            라벨·값 덩어리를 nowrap 으로 묶어 390 에서 '(방송미디어통신사무소,' 가 중간에서 끊기지 않게 한다(줄은 덩어리 사이에서만 바뀐다). */}
+        <p data-testid="footer-lbs-report" className="t-desc text-ink-muted">
+          <span className="whitespace-nowrap">{LBS_REPORT_LABEL}</span>{' '}
+          <span className="text-ink-secondary">
+            <span className="whitespace-nowrap">{LBS_REPORT_NO}({LBS_REPORT_OFFICE},</span>{' '}
+            <span className="whitespace-nowrap">{LBS_REPORT_DATE_KO} 수리)</span>
+          </span>
+        </p>
         {/* 더보기 — 법정 '초기 화면 표시' 대상이 아닌 링크·개정 안내만 접는다(오너 2026-10-03 "필요 없는 건 접기").
             · 위치기반서비스 약관: 위치정보법 §18① 은 '이용약관 명시 + 동의'를 요구할 뿐 초기 화면 표시를 요구하지 않는다(동의는 가입·출석 동의 시트).
             · 약관 개정 안내: 공정위 전자상거래 소비자보호 지침 Ⅲ.4.가 — '초기화면 또는 초기화면과의 연결화면' 공지 허용.

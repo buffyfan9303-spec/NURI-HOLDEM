@@ -37,8 +37,16 @@ const coverAt = (page: Page, where: 'top' | 'mid' | 'end') => page.evaluate((wh)
   let area = 0; const hits: string[] = [];
   for (const el of document.querySelectorAll<HTMLElement>('input,select,textarea,button,[role=button]')) {
     if (bar.contains(el) || !el.offsetParent) continue;
-    let fixed = false; for (let p: HTMLElement | null = el; p; p = p.parentElement) if (getComputedStyle(p).position === 'fixed') { fixed = true; break; }
-    if (fixed) continue; // 하단 탭바·FAB 등은 막대 문제와 무관
+    // 하단 탭바·FAB(fixed)와 앱 상단 헤더([data-stack-header] = AppHeader 의 header, sticky top-0 z-50)만 뺀다 — 그 컨트롤은 막대 **위에** 그려진다.
+    //   2026-10-09 실측(PR #253, 360 'end'): 푸터가 48px 길어지자 끝 스크롤에서 static 막대가 top 14 로 올라가 헤더 밑에 들어갔고,
+    //   hits 5개가 전부 AppHeader 버튼(홈으로·테마·알림·이용권·업주 메뉴)이었다. 그 자리 elementFromPoint 는 헤더 버튼 자신(막대 아님).
+    //   ⚠ 면제를 '막대를 품지 않은 모든 sticky 조상'으로 넓히지 마라 — 장부 안 sticky 컨트롤이 막대 아래로 와도 못 잡게 된다(음성 대조로 확인).
+    //   막대 자신이 다시 sticky 로 떠서 입력칸을 덮는 원래 결함도 그대로 잡는다.
+    let fixed = false;
+    for (let p: HTMLElement | null = el; p; p = p.parentElement) {
+      if (getComputedStyle(p).position === 'fixed' || (p.hasAttribute('data-stack-header') && !p.contains(bar))) { fixed = true; break; }
+    }
+    if (fixed) continue;
     const r = el.getBoundingClientRect();
     const ix = Math.min(r.right, b.right) - Math.max(r.left, b.left), iy = Math.min(r.bottom, b.bottom, innerHeight) - Math.max(r.top, b.top, 0);
     if (ix > 0.5 && iy > 0.5) { area += ix * iy; hits.push(`${el.tagName}:${(el.textContent || (el as HTMLInputElement).placeholder || '').trim().slice(0, 12)} ${ix.toFixed(0)}×${iy.toFixed(0)}`); }
