@@ -62,9 +62,15 @@ const STRIP_DAYS = 64;
 const UPCOMING_SEEN = 'nuri:upcoming-seen';
 /** 지난 방문에 '오늘·내일 일정'이 **몇 줄**이었나(1~8). 스켈레톤을 4행 고정으로 그리면 실제가 8행일 때
  *  데이터 도착 순간 4행 × --card-h-list 만큼 아래가 통째로 밀린다(2026-09-10 용량·모션 점검에서
- *  '툭'의 최대 단일 원인으로 지목). 첫 방문 기본값은 종전과 같은 4. openNow 와 같은 조리법이다. */
+ *  '툭'의 최대 단일 원인으로 지목). openNow 와 같은 조리법이다.
+ *  🔴 첫 방문 기본값 4 → 1 (2026-10-09 H-01): 지난 기록이 없는 첫 방문자(오픈일 첫 방문자 전원)에게 뼈대 4줄(322px)이
+ *  그려졌다가 실제 1건으로 줄며 '오늘의 운세' 줄과 푸터가 208px 위로 튀었다(운영 느린 망 CLS 0.0706, 3/3).
+ *  운영 실측(10-09 읽기 전용 조회): 최근 30일·다음 14일 중 대회가 있는 날은 **모두 하루 1건**이다 — 기본값을 실제에 맞춘다.
+ *  0건 날은 빈 카드가 뼈대 높이를 물려받아(skelH) 줄지 않고, 2건 이상인 날은 다음 방문부터 저장된 줄 수로 예약한다.
+ *  매장·대회가 늘어 하루 평균이 바뀌면 이 값만 다시 맞춘다(같은 조회: 날짜별 schedules 건수). */
 // 조리법은 `src/lib/seenCount.ts` 한 곳에 있다 — 일정 탐색도 같은 함수를 쓴다(2026-09-17 통합).
-const upcomingSeenCount = () => readSeenCount(UPCOMING_SEEN, { fallback: 4, min: 1, max: 8 });
+const UPCOMING_FIRST_VISIT_ROWS = 1;
+const upcomingSeenCount = () => readSeenCount(UPCOMING_SEEN, { fallback: UPCOMING_FIRST_VISIT_ROWS, min: 1, max: 8 });
 const OPENNOW_SEEN = 'nuri:opennow-seen';
 /** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~5). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
  *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */

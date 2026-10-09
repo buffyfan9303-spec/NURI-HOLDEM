@@ -17,11 +17,12 @@ const VENUE_ROW = {
   id: VENUE_ID, name: '공지 카드 홀덤', region: '서울', address: '서울 1', approved: true, status: 'active',
   verification_status: 'verified', is_paid_ad: false, display_order: 1, follower_count: 0, rating: null,
 };
+// 2026-10-09 VEN-03: 이 카드의 공지는 플랫폼 공지(marketplace_notices)가 아니라 **이 매장 공지(venue_notices)** 다.
+//   매장 공지에는 제목 칸이 없어 첫 줄을 제목, 나머지를 본문으로 그린다 — 카드 모양(제목 p + 본문 p)은 그대로다.
 const NOTICES = [
-  { id: 'n1', type: 'pinned', title: '10월 운영 시간 안내', body: '평일 18시~새벽 4시, 주말 14시~새벽 6시로 운영합니다. 공휴일은 주말과 같습니다.',
-    author_name: '운영', created_at: '2026-10-01T00:00:00Z', board: 'all', sort_order: 2 },
-  { id: 'n2', type: 'event', title: '제목만 있는 공지', body: null,
-    author_name: '운영', created_at: '2026-10-02T00:00:00Z', board: 'all', sort_order: 1 },
+  { id: 'n1', venue_id: VENUE_ID, author_id: null, author_name: '운영',
+    content: '10월 운영 시간 안내\n평일 18시~새벽 4시, 주말 14시~새벽 6시로 운영합니다. 공휴일은 주말과 같습니다.', created_at: '2026-10-02T00:00:00Z' },
+  { id: 'n2', venue_id: VENUE_ID, author_id: null, author_name: '운영', content: '제목만 있는 공지', created_at: '2026-10-01T00:00:00Z' },
 ];
 const json = (b: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(b) });
 const SHOT_DIR = process.env.NOTICE_SHOT_DIR;
@@ -29,7 +30,7 @@ const SHOT_DIR = process.env.NOTICE_SHOT_DIR;
 async function open(page: Page, theme: 'dark' | 'light', width: number) {
   await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* 저장소 차단 */ } }, theme);
   await stabilizeBackstack(page);
-  await page.route(/\/rest\/v1\/marketplace_notices/, (r) =>
+  await page.route(/\/rest\/v1\/venue_notices/, (r) =>
     r.request().method() === 'GET' ? r.fulfill(json(NOTICES)) : r.fulfill(json({ message: 'blocked' }, 403)));
   await page.route(/\/rest\/v1\/venues\?/, (r) => {
     if (r.request().method() !== 'GET') return r.fallback();

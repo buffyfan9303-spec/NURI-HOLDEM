@@ -11,6 +11,9 @@ import { kstDay } from './_schedules';
 test('홈 0건 — 첫 화면은 스켈레톤 높이를 물려받고, 날짜를 바꾸면 빈 카드가 원래 높이로 돌아온다', async ({ page }) => {
   await stubLogin(page);
   await stabilizeBackstack(page);
+  // 2026-10-09 H-01: 첫 방문 기본 뼈대가 4줄 → 1줄(115px)로 줄어 '다른 날 빈 카드(104px)' 와 구별이 안 된다.
+  //   이 스펙이 지키는 것은 '이어받기와 비우기' 이므로 지난 방문 4줄 기록을 심어 뼈대를 키운다(재방문자 경로 — 같은 코드).
+  await page.addInitScript(() => { try { localStorage.setItem('nuri:upcoming-seen', '4'); } catch { /* 저장소 차단 */ } });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route(/\/rest\/v1\/schedules\?/, async (r) => {
     await new Promise((res) => setTimeout(res, 1500));
