@@ -12,6 +12,7 @@ const PUBLIC_FILES = [
   'src/components/features/ScheduleDetailModal.tsx',
   'src/components/features/ScheduleTable.tsx',
   'src/components/features/VenuePage.tsx',
+  'src/components/features/BrowseSideRail.tsx', // PC 레일 '광고 자리' 판매 안내 박스
   'src/lib/scheduleSort.ts',
   'src/lib/homeRail.ts',
 ];
@@ -37,9 +38,11 @@ describe('유료 노출 스위치(lib/paidExposure)', () => {
 
   // 값 읽기만 막으면 고정 문구는 샌다 — 정렬 안내 '인증 → 유료광고 → 팔로워순' 이 그랬다(독립 검증 2026-10-09).
   // 화면 글자(JSX 텍스트)로 쓴 유료 표시는 바로 앞에 스위치 가드가 있어야 한다.
+  // '광고 자리'·'광고 문의' 꼴은 손님에게 광고 판매를 안내하는 상단 고정 박스 문구다(BrowseSideRail, 2026-10-09 리드 결정).
+  //   '광고' 로 시작하는 문장 전체(예: '광고를 불러오지 못했습니다 …' 운영자 안내)는 잡지 않도록 뒤 단어까지 못박았다.
   it.each([...PUBLIC_FILES, 'src/components/features/clock/ClockStage.tsx'])('%s — 유료 표시 고정 문구는 스위치 가드 뒤에만 있다', (f) => {
     const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    const bare = [...code.matchAll(/>\s*(유료광고|유료 광고|광고|AD|TOP|프리미엄|스폰서|Sponsor)\s*</g)]
+    const bare = [...code.matchAll(/>\s*(유료광고|유료 광고|광고 자리|광고 문의|광고 신청|광고|AD|TOP|프리미엄|스폰서|Sponsor)\s*</g)]
       .filter((m) => !/paidShown\(|PAID_EXPOSURE_ON\s*&&/.test(code.slice(Math.max(0, m.index! - 400), m.index!)))
       .map((m) => m[1]);
     expect(bare).toEqual([]);

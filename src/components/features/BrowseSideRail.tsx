@@ -5,6 +5,7 @@ import Icon from '../atoms/Icon';
 import { useBlocks } from '../../contexts/BlockContext';
 import { upcomingSoon } from '../../lib/scheduleSort';
 import { serverNow } from '../../lib/serverTime';
+import { PAID_EXPOSURE_ON } from '../../lib/paidExposure';
 import type { Schedule } from '../../api/schedules';
 import type { CommunityPost } from '../../api/community';
 
@@ -73,11 +74,15 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
         </section>
       )}
 
-      {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯) */}
-      <section className="reveal rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
-        <p className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="megaphone" size={13} className="shrink-0" />광고 자리</p>
-        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">내 매장 → 포스터 상단 고정에서 문의하세요</p>
-      </section>
+      {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯).
+          유료 노출 스위치(lib/paidExposure)가 꺼져 있으면 손님에게 광고 판매 안내도 보이지 않는다(오너 2026-10-09).
+          지우지 않고 가드만 둔다 — 스위치를 켜면 그대로 돌아온다. aside 자체는 그대로라 본문 폭은 변하지 않는다. */}
+      {PAID_EXPOSURE_ON && (
+        <section className="reveal rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
+          <p className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="megaphone" size={13} className="shrink-0" />광고 자리</p>
+          <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">내 매장 → 포스터 상단 고정에서 문의하세요</p>
+        </section>
+      )}
     </aside>
   );
 });
