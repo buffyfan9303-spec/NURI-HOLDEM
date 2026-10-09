@@ -5,9 +5,11 @@
 //      (예전엔 clockPatchFromSchedule 이 켜기만 해서 50,000 이 남고 TV 에 ADD-ON 이 떴다). 애드온 있는 포스터는 그대로 켜지는가(양성).
 //   ② 장부 애드온 줄 머리 안내가 세션 addonEntry 를 말하는가(0 = 안 들어감 · 0.5 = 0.5엔트리).
 //   ③ 클락 설정 시드가 세션 '애드온 없음'이면 스택도 0 으로 맞추는가.
-//   + 화면 배선(장부 폼·애드온 줄·클락 시드)이 이 판정 함수를 쓰는가 — 화면 동작 자체는 e2e/ledger-addon-carry-1009.spec.ts.
+//   P2-1(review-256) 포스터를 고른 뒤 폼에서 바뀐 애드온(수동·게임 프리셋·지난 게임)도 클락에 가는가 — 세션 = 클락(F3·F4·F5).
+//   + 화면 배선(장부 폼·애드온 줄·클락 시드·장부 시작 폼 값)이 이 판정 함수를 쓰는가 — 화면 동작 자체는 e2e/ledger-addon-carry-1009.spec.ts.
 // 음성 대조(2026-10-09 실행 기록은 보고서): clockPatchFromSchedule 의 애드온 두 줄을 옛 `if (sc.buyIn?.addonStack) {…}` 로 되돌리면 ①이,
-//   addonEntryNote 를 고정 문구로 되돌리면 ②가, clockAddonFromSession 의 `return { isAddon: false, addonStack: 0 }` 을 base 스택으로 바꾸면 ③이 빨개진다.
+//   addonEntryNote 를 고정 문구로 되돌리면 ②가, clockAddonFromSession 의 `return { isAddon: false, addonStack: 0 }` 을 base 스택으로 바꾸면 ③이,
+//   ledgerStartClockConfig 끝의 formClockAddon 병합을 빼면 P2-1 이 빨개진다.
 // 실행: npx vitest run src/lib/addonCarry.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -57,7 +59,7 @@ describe('① 포스터 애드온 판정 — 없으면 끈다(장부 폼·클락
     expect([priceOnly.isAddon, priceOnly.addonStack]).toEqual([true, 0]);
   });
 
-  it('병합 순서 유지: 포스터 없는 장부는 클락 값 그대로 · 게임 프리셋 애드온은 포스터 꺼짐보다 이긴다', () => {
+  it('병합 순서 유지(폼 값 없는 옛 호출): 포스터 없는 장부는 클락 값 그대로 · 게임 프리셋 패치는 포스터 꺼짐보다 뒤에 온다', () => {
     const none = ledgerStartClockConfig(boosterLeftover(), null, null, FORM);
     expect([none.isAddon, none.addonStack]).toEqual([true, 50_000]);   // 포스터가 말하지 않으면 기존 동작
     const preset = applyToClock({ addonStack: 40_000 });
@@ -66,14 +68,77 @@ describe('① 포스터 애드온 판정 — 없으면 끈다(장부 폼·클락
   });
 });
 
+// 🔴 review-256 P2-1 — 클락 애드온을 포스터 혼자 정하면, 포스터를 고른 **뒤** 폼에서 바뀐 애드온이 클락에 안 가서 세션과 클락이 갈렸다.
+//   장부 폼은 마지막 동작이 이기고 그 값이 세션에 저장된다 → 클락도 같은 값(formClockAddon). 불변식: 세션 애드온 = 클락 애드온.
+//   세션 값 = submitOnce 가 저장하는 { isAddon, addonStack: isAddon ? addonStack : 0 }.
+describe('P2-1 세션 = 클락 — 폼 애드온이 클락 애드온을 정한다(포스터 연결 또는 폼 켜짐)', () => {
+  const formWith = (isAddon: boolean, addonStack: number) => ({ ...FORM, addon: { isAddon, addonStack } });
+  const sessionOf = (f: ReturnType<typeof formWith>) => [f.addon.isAddon, f.addon.isAddon ? f.addon.addonStack : 0];
+  const clockOf = (c: ClockConfig) => [c.isAddon, c.addonStack];
+
+  it('F1(그대로): 부스터 클락이 남음 + 깐부전 포스터 → 폼 = 포스터 꺼짐 → 세션·클락 꺼짐 0', () => {
+    const k = posterAddonOf(KKANBU);
+    const f = formWith(k.isAddon, k.addonStack);
+    const cfg = ledgerStartClockConfig(boosterLeftover(), KKANBU, null, f);
+    expect(clockOf(cfg)).toEqual(sessionOf(f));
+    expect(clockOf(cfg)).toEqual([false, 0]);
+  });
+
+  it('F3: 깐부전(애드온 칸 없음) 연결 → 폼에서 애드온 수동 켬 5만 → 세션·클락 켬 5만 · 총 칩에 애드온 2건 10만이 들어간다', () => {
+    const f = formWith(true, 50_000);
+    for (const base of [boosterLeftover(), { ...defaultClockConfig(), isAddon: false, addonStack: 0 }]) {
+      const cfg = ledgerStartClockConfig(base, KKANBU, null, f);
+      expect(clockOf(cfg)).toEqual(sessionOf(f));
+      expect(clockOf(cfg)).toEqual([true, 50_000]);
+    }
+    const cfg = ledgerStartClockConfig(boosterLeftover(), KKANBU, null, f);
+    const derived = { entries: 3, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 3, addons: 2 };
+    expect(computeLiveStats(emptyClockState('v', cfg, 1), derived, { ...cfg, earlyBonus: 0, doubleEarlyBonus: 0 }).totalStack).toBe(250_000);   // 3×5만 + 2×5만(수정 전 PR 판 15만)
+  });
+
+  it('F4: 게임 프리셋(애드온 4만) 적용 → 깐부전 포스터 선택(폼 꺼짐) → 세션·클락 꺼짐 · 프리셋 뒤 폼에서 다시 켜면 둘 다 켬', () => {
+    const preset = applyToClock({ addonStack: 40_000 });
+    const off = formWith(false, 0);
+    const a = ledgerStartClockConfig(defaultClockConfig(), KKANBU, preset, off);
+    expect(clockOf(a)).toEqual(sessionOf(off));
+    expect(clockOf(a)).toEqual([false, 0]);
+    const on = formWith(true, 40_000);   // 포스터 → 프리셋 순서(프리셋이 폼을 켠 채로 끝남)
+    const b = ledgerStartClockConfig(defaultClockConfig(), KKANBU, preset, on);
+    expect(clockOf(b)).toEqual(sessionOf(on));
+    expect(clockOf(b)).toEqual([true, 40_000]);
+  });
+
+  it("F5: 오늘 포스터(깐부전) 자동 연동 → '지난 게임 그대로 열기'(부스터) → 세션·클락 켬 5만", () => {
+    const f = formWith(true, 50_000);   // applyLastRound 가 폼을 부스터 세션 값으로 채운다(schedId 는 남는다)
+    const cfg = ledgerStartClockConfig(boosterLeftover() /* inheritClockRef.full */, KKANBU, null, f);
+    expect(clockOf(cfg)).toEqual(sessionOf(f));
+    expect(clockOf(cfg)).toEqual([true, 50_000]);
+  });
+
+  it('폼 켜짐·스택 0(가격만 포스터) → 켬 0 — 클락에 남은 스택을 쓰지 않는다 · 폼 꺼짐이면 폼 스택은 버린다', () => {
+    expect(clockOf(ledgerStartClockConfig(boosterLeftover(), KKANBU, null, formWith(true, 0)))).toEqual([true, 0]);
+    expect(clockOf(ledgerStartClockConfig(boosterLeftover(), KKANBU, null, formWith(false, 50_000)))).toEqual([false, 0]);
+  });
+
+  it('양성(기존 동작): 포스터 없음 + 폼 꺼짐 → 베이스 그대로(업주가 클락에서 불러온 애드온 프리셋을 지우지 않는다) · 포스터 없음 + 폼 켜짐 → 폼', () => {
+    expect(clockOf(ledgerStartClockConfig(boosterLeftover(), null, null, formWith(false, 0)))).toEqual([true, 50_000]);
+    expect(clockOf(ledgerStartClockConfig(defaultClockConfig(), null, null, formWith(true, 30_000)))).toEqual([true, 30_000]);
+  });
+
+  it('폼 애드온 키는 클락 설정에 새지 않는다(applyEarlyEdit 가 패치를 그대로 펴는 함정)', () => {
+    const cfg = ledgerStartClockConfig(defaultClockConfig(), KKANBU, null, formWith(true, 50_000)) as unknown as Record<string, unknown>;
+    expect('addon' in cfg).toBe(false);
+  });
+});
+
 describe('③ 클락 설정 시드 — 세션 애드온 없음이면 스택도 0', () => {
   const sess = (isAddon: boolean | undefined, addonStack: number) => ({ isAddon, addonStack }) as Pick<LedgerSession, 'isAddon' | 'addonStack'>;
   it('세션 꺼짐 → 둘 다 0(예전엔 isAddon 만 꺼지고 프리셋 스택 50,000 이 남아 TV 는 ADD-ON)', () => {
     expect(clockAddonFromSession(sess(false, 0), { isAddon: true, addonStack: 50_000 })).toEqual({ isAddon: false, addonStack: 0 });
   });
-  it('세션 켜짐 → 세션 스택, 세션 스택 없으면 클락 스택 · 세션 판정 없음 → 클락 그대로', () => {
+  it('세션 켜짐 → 세션 스택(0 이면 0 — 클락에 남은 스택으로 되돌리지 않는다, review-256 P3-2) · 세션 판정 없음 → 클락 그대로', () => {
     expect(clockAddonFromSession(sess(true, 30_000), { isAddon: false, addonStack: 50_000 })).toEqual({ isAddon: true, addonStack: 30_000 });
-    expect(clockAddonFromSession(sess(true, 0), { isAddon: true, addonStack: 50_000 })).toEqual({ isAddon: true, addonStack: 50_000 });
+    expect(clockAddonFromSession(sess(true, 0), { isAddon: true, addonStack: 50_000 })).toEqual({ isAddon: true, addonStack: 0 });
     expect(clockAddonFromSession(sess(undefined, 0), { isAddon: true, addonStack: 50_000 })).toEqual({ isAddon: true, addonStack: 50_000 });
   });
 });
@@ -94,6 +159,15 @@ describe('배선 — 화면이 같은 판정 함수를 쓴다', () => {
     const body = ledger.slice(ledger.indexOf('applySchedInheritRef.current = (sc: Schedule) => {'), ledger.indexOf('// A1(2026-09-28) — 게임관리'));
     expect(body).toMatch(/const addon = posterAddonOf\(sc\);\n\s*setIsAddon\(addon\.isAddon\); setAddonStack\(addon\.addonStack\); setAddonAmount\(addon\.addonAmount\);/);
     expect(body).not.toMatch(/if \(sc\.buyIn\?\.addon/);
+  });
+  it('장부 시작: 클락 설정에 폼 애드온(세션에 저장하는 같은 두 값)을 넘긴다 — review-256 P2-1', () => {
+    const body = ledger.slice(ledger.indexOf('const submitOnce = '), ledger.indexOf('const ok = await onSubmit({'));
+    expect(body).toMatch(/const cfg = ledgerStartClockConfig\(baseCfg, linkedSched, inheritClockRef\.current\.patch,[\s\S]*?addon: \{ isAddon, addonStack \} \}\);/);
+    const save = ledger.slice(ledger.indexOf('const ok = await onSubmit({'));
+    expect(save).toMatch(/isAddon, addonStack: isAddon \? addonStack : 0,/);
+  });
+  it('가격만 있는 포스터 등으로 애드온 켬·스택 0 이면 폼이 경고한다 — review-256 P3-1', () => {
+    expect(ledger).toMatch(/\{isAddon && addonStack <= 0 && \(\n\s*<p data-testid="ledger-addon-stack-warn"/);
   });
   it('애드온 줄: 세션 addonEntry 를 넘기고 addonEntryNote 로 말한다', () => {
     expect(ledger).toMatch(/<AddonRow buyin=\{cell\.buyin\} amount=\{session\.addonAmount \?\? 0\} entry=\{session\.addonEntry\}/);

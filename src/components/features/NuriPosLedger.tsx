@@ -3263,7 +3263,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       // 병합(포스터 구조·레지·얼리 단계·계단 스택·상금 → 프리셋 패치 → 폼)과 레벨→분 환산은 lib/ledgerStart 한 곳.
       //   clockPatchFromSchedule(linkedSched) · withDerivedEarly 가 그 안에서 돈다(포스터 등록 기준 — 클락 #1).
       const cfg = ledgerStartClockConfig(baseCfg, linkedSched, inheritClockRef.current.patch,
-        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
+        // 애드온은 폼(= 아래 onSubmit 이 세션에 저장하는 값)을 그대로 — 세션과 클락이 같은 애드온을 말한다(review-256 P2-1).
+        { earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack, addon: { isAddon, addonStack } });
       const early = sessionEarlyOf(cfg);
       earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin; earlyTiers = early.earlyTiers;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
@@ -3624,6 +3625,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-2xs text-ink-muted">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
         </div>
+        {/* review-256 P3-1 — 가격만 있는 포스터는 스택을 추측하지 않고 0 으로 둔다. 그대로 시작하면 클락 총 칩에 애드온 칩이 안 더해진다. */}
+        {isAddon && addonStack <= 0 && (
+          <p data-testid="ledger-addon-stack-warn" className="mt-1 text-2xs font-semibold text-amber-300">애드온 스택이 비어 있어요. 넣지 않으면 클락 총 칩에 애드온 칩이 더해지지 않아요.</p>
+        )}
       </Field>
 
       <Field label="매장이용권 전송/시상 · 선택 (당일 전송 장수)">

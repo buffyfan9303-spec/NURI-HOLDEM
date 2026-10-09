@@ -3,6 +3,7 @@
 //   ① 반례: 어제 부스터데이 클락이 남은 채, 오늘 포스터 둘 중 부스터데이를 골랐다가 깐부전(애드온 없음)으로 바꿔 장부를 시작한다
 //      → 장부 세션(is_addon·addon_stack·addon_amount)과 클락 설정(isAddon·addonStack) **둘 다** 애드온 0.
 //      (수정 전: 폼은 앞 포스터의 애드온을 그대로 들고, 클락은 남은 50,000 을 그대로 써서 TV 에 ADD-ON — 둘 다 빨간불)
+//   ① 수동 켬(review-256 F3): 깐부전 선택 뒤 폼에서 애드온을 켜고 5만/5만 → 세션·클락 모두 5만(세션 = 클락) · 스택이 비면 경고.
 //   ① 양성: 어제 깐부전 클락 위에서 부스터데이로 시작하면 애드온이 켜진다(스택 50,000 · 가격 50,000 · 0.5엔트리).
 //   ② 애드온 줄 머리 안내가 세션 addon_entry 를 말한다(0.5 = '1회 0.5엔트리', 없음 = '바인·엔트리에 안 들어감').
 // 음성 대조: 수정 전 빌드(origin/main 3872aa30)에서 ① 반례·② 0.5 가 빨간불, ① 양성·② 없음은 초록(양성 대조)이어야 한다 — 보고서 fix-addon-carry.md.
@@ -100,6 +101,30 @@ test('🔴 ① 반례 1440 — 부스터데이를 골랐다가 깐부전으로 �
   const cfg = probe.clockWrites[0].config as R;
   expect(cfg.title, '깐부전 설정으로 채웠다(전제)').toBe('단독 깐부전');
   expect.soft({ isAddon: cfg.isAddon, addonStack: cfg.addonStack }, '클락 애드온이 다음 경기로 남았다(TV ADD-ON)').toEqual({ isAddon: false, addonStack: 0 });
+});
+
+// review-256 P2-1(F3) — 포스터를 고른 **뒤** 폼에서 켠 애드온도 클락에 간다(세션 = 클락). 베이스는 애드온 없는 클락이라
+//   클락의 5만은 폼에서만 올 수 있다(수정 전 두 빌드 모두 클락 0 — origin/main · PR #256 1차).
+test('🔴 ① 수동 켬 1440 — 깐부전 선택 뒤 애드온을 손으로 켜고 5만/5만: 세션·클락 모두 5만 · 스택 비면 경고', async ({ page }) => {
+  test.setTimeout(120_000);
+  const probe = await bootStart(page, leftoverClock('단독 깐부전', { isAddon: false, addonStack: 0 }));
+  await page.locator('select').filter({ has: page.locator('option', { hasText: '연결 안 함 / 직접 입력' }) }).first().selectOption('p-kkanbu');
+  await expect(addonToggle(page), '깐부전 상속(전제) — 애드온 없음').toHaveText('애드온 없음');
+  await addonToggle(page).click();
+  await expect(addonToggle(page)).toHaveText('✓ 애드온 게임');
+  await expect.soft(page.getByTestId('ledger-addon-stack-warn'), '스택이 빈 애드온에 경고가 없다(P3-1)').toBeVisible();
+  await page.getByLabel('애드온 스택').fill('50000');
+  await page.getByTestId('ledger-addon-price').fill('50000');
+  await expect(page.getByTestId('ledger-addon-stack-warn'), '스택을 넣었는데 경고가 남았다').toHaveCount(0);
+  await page.getByRole('button', { name: '장부 시작', exact: true }).click();
+
+  await expect.poll(() => probe.sessions.length, { message: '장부 시작이 세션을 저장하지 않았다', timeout: 15_000 }).toBeGreaterThan(0);
+  expect(probe.sessions[0]).toMatchObject({ schedule_id: 'p-kkanbu', is_addon: true, addon_stack: 50_000, addon_amount: 50_000 });
+  await expect.poll(() => probe.clockWrites.length, { message: '장부 시작이 클락 행을 쓰지 않았다', timeout: 15_000 }).toBeGreaterThan(0);
+  const cfg = probe.clockWrites[0].config as R;
+  expect(cfg.title, '깐부전 설정으로 채웠다(전제)').toBe('단독 깐부전');
+  expect.soft({ isAddon: cfg.isAddon, addonStack: cfg.addonStack }, '폼에서 켠 애드온이 클락에 안 갔다 — 세션 5만 / 클락 0(TV 총 칩 애드온 누락)').toEqual({ isAddon: true, addonStack: 50_000 });
+  expect('addon' in cfg, '폼 애드온 키가 클락 설정에 샜다').toBe(false);
 });
 
 test('① 양성 1440 — 어제 깐부전 클락 위에서 부스터데이로 시작: 장부·클락 애드온이 켜진다', async ({ page }) => {
