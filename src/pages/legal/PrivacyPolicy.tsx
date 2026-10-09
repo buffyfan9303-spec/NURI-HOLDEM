@@ -15,6 +15,7 @@
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_PREV_ARCHIVE_URL, PRIVACY_VERSION } from '../../lib/legalVersion';
 import { RevisionHistory } from './RevisionBlocks';
+import { LBS_REPORT_LABEL, LBS_REPORT_VALUE } from '../../lib/lbsReport';
 import { CHECKIN_ALT_PATH, CHECKIN_SCOPE, CONSENT_NATURE, LOCATION_OFFICER, LOCATION_TERMS_EFFECTIVE_KO, PRIVACY_PRE_LOCATION_ARCHIVE_URL, LOCATION_TERMS_NOTICE } from '../../lib/locationTerms';
 import { OVERSEAS_CONTACT as OC } from '../../lib/overseasContacts';
 
@@ -202,6 +203,7 @@ export default function PrivacyPolicy() {
               `동의를 거부할 권리와 효과: ${CONSENT_NATURE}이며 다른 동의와 따로 받습니다. 위치 확인 출석을 켠 매장에서는 ${LOCATION_TERMS_EFFECTIVE_KO}부터 동의하지 않으면 ${CHECKIN_SCOPE}이 처리되지 않으며, ${CHECKIN_ALT_PATH}(업주가 승인한 출석도 같은 활동 점수·연속 출석·방문 기록이 쌓입니다). 그 밖의 서비스 이용에는 제한이 없습니다`,
               '권리 행사: 「내 정보 → 보안 → 위치정보 이용 동의」에서 동의·철회(일시 중지)와 이용 내역 열람을 바로 할 수 있고, 아래 연락처로도 요청할 수 있습니다',
               `위치정보관리책임자: ${LOCATION_OFFICER.name} · 연락처 ${LOCATION_OFFICER.contact} · 전화 ${LOCATION_OFFICER.phone}`,
+              `${LBS_REPORT_LABEL}: ${LBS_REPORT_VALUE}`,
               `보완 전(${LOCATION_TERMS_NOTICE} 이전) 처리방침 원문: https://nuriholdem.com${PRIVACY_PRE_LOCATION_ARCHIVE_URL}`,
             ]} />
           </div>

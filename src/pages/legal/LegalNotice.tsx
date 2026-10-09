@@ -23,6 +23,7 @@ import Icon, { type IconName } from '../../components/atoms/Icon';
 // 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
 import { RevisionNotice, RevisionHistory } from './RevisionBlocks';
+import { LBS_REPORT_LABEL, LBS_REPORT_VALUE } from '../../lib/lbsReport';
 
 function Section({ icon, title, children }: {
   icon: IconName; title: string; children: React.ReactNode;
@@ -284,6 +285,7 @@ export default function LegalNotice() {
             ['사업장 소재지', '경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호(다산동, 파인듀파크빌딩)'],
             ['업태 / 종목', '정보통신업, 도매 및 소매업 / 컴퓨터 프로그래밍 서비스업, 전자상거래 소매업, 전자상거래 소매 중개업, 포털 및 기타 인터넷 정보 매개 서비스업'],
             ['유선번호', '070-8098-1727'],
+            [LBS_REPORT_LABEL, LBS_REPORT_VALUE],
             ['고객센터', 'ace@nuriholdem.com'],
           ].map(([k, v], i) => (
             <p key={i} className="flex gap-2">

@@ -6,6 +6,7 @@
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE, PRIVACY_EFFECTIVE_DATE, PRIVACY_NOTICE_DATE, PRIVACY_VERSION } from './legalVersion';
 import { LOCATION_TERMS_EFFECTIVE, LOCATION_TERMS_NOTICE, LOCATION_TERMS_VERSION, PRIVACY_PRE_LOCATION_ARCHIVE_URL } from './locationTerms';
 import { TERMS_SUPPLEMENT_EFFECTIVE_DATE, TERMS_V3_NOTICE_DATE, TERMS_V3_EFFECTIVE_DATE, TERMS_V4_NOTICE_DATE, TERMS_V4_EFFECTIVE_DATE } from './legalDeploy';
+import { LBS_REPORT_VALUE, LBS_REPORT_ADDED } from './lbsReport';
 export type LegalDocKey = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
 
 export interface LegalRevision {
@@ -86,6 +87,7 @@ export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
         '실제 처리에 맞추어 정정했습니다(2026-10-06 정정). 제2조①에 구글 계정으로 가입할 때 받는 항목(이메일 주소·이름·프로필 사진·계정 식별자)과 이름이 첫 닉네임으로 쓰여 공개될 수 있고 가입 직후 바꿀 수 있다는 점을, 제2조⑤에 랭킹 프로필 공개 동의(선택)의 목적·공개 항목·보유 기간·철회 방법을, 제2조⑩에 동의 없이 처리하는 개인정보와 그 법적 근거(「개인정보 보호법」 제22조제3항)를 적었습니다. 제3조에서는 탈퇴 시 즉시 삭제된다고 잘못 적혀 있던 닉네임 변경 이력이 실제로는 탈퇴 전 기록의 주인 판정과 사칭 방지를 위해 탈퇴 계정 번호에 연결된 채 남는다는 사실(현재 따로 정한 삭제 시점 없음)과 매장 순위표의 닉네임이 매장 기록으로 남는다는 사실을 바로잡았습니다. 제5조에 이용 제한 중인 계정도 탈퇴할 수 있다는 점을, 제6조 국외 이전 표에 이전받는 자의 개인정보 문의 연락처(같은 법 제28조의8제2항제3호)를 추가했습니다. 이력·순위표·구글 항목은 처리 방식이 바뀌지 않은 정정이고 이용 제한 중 탈퇴는 회원에게 새로 열린 선택지라 고친 날부터 바로 적용합니다. 영구 이용 제한 회원의 변환값 보관 기간은 제3판에서 따로 공지합니다.',
         '서비스 화면 하단의 「개인정보처리방침」이 이 방침과 다른 문안(매장에 제공하지 않는다고 적힌 옛 문안)을 보여 주던 것을 바로잡아, 하단·가입 화면·공개 주소(/legal/privacy.html)가 모두 이 방침을 보여 주도록 통일했습니다(2026-10-06 정정).',
         `제2조에 ⑨(개인위치정보의 처리)를 추가했습니다(${LOCATION_TERMS_NOTICE}). 「위치정보의 보호 및 이용 등에 관한 법률」 제21조의2·같은 법 시행령 제25조의2에 따라 처리 목적·항목·보유기간(좌표 미저장·즉시 파기), 이용·제공사실 확인자료의 보유근거·기간(6개월), 파기 절차·방법, 제3자 제공 없음과 통보, 8세 이하 아동 등, 위치정보관리책임자 연락처를 적고, '현재 사용하지 않습니다' 문구를 바꿨습니다. 위치 확인 출석을 켠 매장에서 동의하지 않으면 그 매장의 출석(QR 스캔·매장 페이지 출석 버튼·앱 카메라)을 직접 할 수 없고 매장에서 출석 요청을 보내 업주 승인으로 같은 혜택의 출석을 할 수 있다는 점(제2조⑤·⑨)은 위치기반서비스 이용약관 제${LOCATION_TERMS_VERSION}판과 같이 ${LOCATION_TERMS_EFFECTIVE}(정식 오픈)부터 적용하며, ${LOCATION_TERMS_NOTICE}에 공지했습니다. 보완 전 원문은 ${PRIVACY_PRE_LOCATION_ARCHIVE_URL} 에 보존합니다.`,
+        `제2조⑨(개인위치정보의 처리)에 위치기반서비스사업 신고 ${LBS_REPORT_VALUE}를 추가했습니다(${LBS_REPORT_ADDED} 추가). 이미 수리된 신고 사실을 적은 것으로 회원에게 불리한 내용이 없어 적은 날부터 바로 적용했습니다.`,
       ],
     },
     { version: 1, effective: LEGAL_PREV_EFFECTIVE_DATE, notice: LEGAL_PREV_EFFECTIVE_DATE, changes: ['제정(제1조~제7조).'] },
@@ -98,6 +100,7 @@ export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
         '근거 조문 2건을 정정했습니다. 대리게임 금지의 근거를 「게임산업진흥에 관한 법률」 제28조에서 제32조제1항제11호로 바로잡고, 「국민체육진흥법」 제2조는 마인드 스포츠를 정의하지 않으므로 조문명을 ‘체육의 정의’로 바로잡고 마인드 스포츠는 ‘통칭’임을 밝히는 표현으로 바꿨습니다.',
         '위반 행위 제재 기준과 신고·상담 창구(1336·1488)를 표로 정리했습니다.',
         '사업자 정보의 업태·종목을 2026-10-06 발급 사업자등록증명의 기재에 맞추어 정정했습니다(2026-10-06 정정). 사업자 정보 표기를 바로잡은 것으로 회원의 권리·의무에는 변경이 없습니다.',
+        `사업자 정보에 위치기반서비스사업 신고 ${LBS_REPORT_VALUE}를 추가했습니다(${LBS_REPORT_ADDED} 추가). 이미 수리된 신고 사실을 적은 것으로 회원의 권리·의무에는 변경이 없어 적은 날부터 바로 적용했습니다.`,
       ],
     },
     { version: 1, effective: LEGAL_PREV_EFFECTIVE_DATE, notice: LEGAL_PREV_EFFECTIVE_DATE, changes: ['제정.'] },
