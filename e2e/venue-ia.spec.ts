@@ -24,13 +24,21 @@ import { kstDay } from './_schedules';
 
 const VID = '00000000-0000-4000-8000-0000000000c7';
 const KAKAO = 'https://open.kakao.com/o/e2e-venue-ia';
+/** 본문 링크 상한(2026-10-09 리드 결정 A — VEN-02 소개·공지 링크화).
+ *  소개·공지 본문 안의 링크(<a data-linkify>)는 매장이 쓴 **글의 일부**라 Tier1 행동이 아니다 → 행동 요소 7 에서 빼고 따로 센다.
+ *  ⚠ 우회 방지: data-linkify 는 소개·공지 본문(venue-description · venue-notice-content · venue-poster-notice) 안에서만 허용한다.
+ *    그 밖에서 발견되면 실패 — 행동 버튼에 이 속성을 붙여 계수를 비우는 길을 막는다.
+ *  음성 대조: 소개 첫 줄 링크를 3개로 늘린 사본에서 '본문 링크 3개' 로 실패, 이 사본(2개)에서 통과. */
+const BODY_LINK_MAX = 2;
+const BODY_LINKS_DESC = 'http://www.rotiarena.com · https://litt.ly/rotiarena\n목 매장 소개';
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 /** Tier1 이 가장 많이 그려지는 매장 — 전화·주소(길찾기)·카카오 링크가 다 있다.
  *  ⚠ kind 는 'venue' 여야 한다. venues 테이블에는 딜러팀·동호회 같은 커뮤니티 그룹도 같이 산다 —
  *    그룹이면 `/?v=` 는 VenuePage 가 아니라 GroupPage 를 연다(2026-08-30 실제로 그렇게 깨졌다). */
 const venueRow = {
   id: VID, name: 'E2E 목 매장', kind: 'venue', owner_id: '00000000-0000-4000-8000-0000000000b7', approved: true, join_approval: true,
-  status: 'active', region: '서울', address: '서울 강남구 테헤란로 1', description: '목 매장 소개', images: [], image_url: null,
+  // 소개 첫 줄에 링크 2개(최악 데이터 — 2026-10-09 리드 결정 A: 본문 링크는 행동 7 과 따로 세고 상한 2).
+  status: 'active', region: '서울', address: '서울 강남구 테헤란로 1', description: BODY_LINKS_DESC, images: [], image_url: null,
   follower_count: 0, is_paid_ad: false, display_order: 1, verification_status: 'verified',
   contact_phone: '010-0000-0000', contact_phones: [{ label: '대표', phone: '010-0000-0000' }], business_hours: 'OPEN 17:00',
   kakao_url: KAKAO, created_at: '2026-10-01T00:00:00Z',
@@ -51,7 +59,8 @@ const mockWorstVenue = async (page: Page) => {
 };
 
 test.describe('매장 페이지 — 3계층 IA', () => {
-  test('🔴 비로그인 첫 뷰포트(최악 데이터): 행동 요소 ≤7 · QR 체크인 존재 · 내 활동 미렌더', async ({ page }) => {
+  test('🔴 비로그인 첫 뷰포트(최악 데이터): 행동 요소 ≤7 · 본문 링크 ≤2 · QR 체크인 존재 · 내 활동 미렌더', async ({ page }) => {
+    test.setTimeout(90_000);
     await mockWorstVenue(page);
     await stabilizeBackstack(page);
     await page.goto(`/?v=${VID}`);
@@ -76,10 +85,14 @@ test.describe('매장 페이지 — 3계층 IA', () => {
     await expect(dlg.locator(`a[href="${KAKAO}"]`).first(), '카카오톡 링크가 없다(칩으로 그려짐)').toBeVisible();
 
     // 첫 뷰포트 콘텐츠 레벨 인터랙티브 ≤ 7 (뒤로가기·탭바 role=tab 제외)
-    const { count, navShuttles } = await page.evaluate(() => {
+    const { count, navShuttles, bodyLinks, strayLinkify, bodyLinksInDom } = await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"][aria-label*="매장 페이지"]');
-      if (!dlg) return { count: -1, navShuttles: 0 };
-      let n = 0, shuttles = 0;
+      if (!dlg) return { count: -1, navShuttles: 0, bodyLinks: 0, strayLinkify: 0, bodyLinksInDom: 0 };
+      const BODY = '[data-testid="venue-description"], [data-testid="venue-notice-content"], [data-testid="venue-poster-notice"]';
+      // data-linkify 는 본문 안에서만 허용 — 화면 어디든(첫 뷰포트 밖 포함) 본문 밖에 있으면 우회다.
+      const stray = [...document.querySelectorAll('[data-linkify]')].filter((el) => !el.closest(BODY)).length;
+      const inDom = dlg.querySelectorAll('[data-testid="venue-description"] a[data-linkify]').length;
+      let n = 0, shuttles = 0, body = 0;
       for (const el of dlg.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
         // ⚠ 크기 0 필터만으로는 부족해졌다 — Chrome 148+ 는 닫힌 <details> 내부(::details-content
         //   content-visibility:hidden)도 rect 를 반환한다(hidden=until-found 계열 변경).
@@ -95,10 +108,17 @@ test.describe('매장 페이지 — 3계층 IA', () => {
         // role=tab 제외와 동일 근거의 내비게이션 레벨. 앱이 data-nav="venue-tab" 으로 명시 선언한
         // 요소만 제외한다(콘텐츠 행동 버튼에 이 속성을 붙이는 것은 게이트 무력화 — 금지).
         if (el.getAttribute('data-nav') === 'venue-tab') { shuttles += 1; continue; }
+        if (el.hasAttribute('data-linkify') && el.closest(BODY)) { body += 1; continue; } // 본문 링크 — 따로 센다(상한 2)
         n += 1;
       }
-      return { count: n, navShuttles: shuttles };
+      return { count: n, navShuttles: shuttles, bodyLinks: body, strayLinkify: stray, bodyLinksInDom: inDom };
     });
+    console.log(`[venue-ia] 행동 ${count} · 본문 링크 ${bodyLinks}(DOM ${bodyLinksInDom}) · 본문 밖 data-linkify ${strayLinkify} · 셔틀 ${navShuttles}`);
+    // 최악 데이터: 목 소개의 링크 2개가 실제로 <a data-linkify> 로 그려져 첫 뷰포트에서 세어졌다(아니면 상한이 거짓 통과)
+    expect(bodyLinksInDom, '목 소개의 링크 2개가 링크로 그려지지 않았다(링크화 미동작 또는 목 미적용)').toBeGreaterThanOrEqual(2);
+    expect(bodyLinks, '본문 링크가 첫 뷰포트에서 세어지지 않았다 — 소개가 첫 뷰포트 밖이면 이 최악 데이터 단언을 다시 설계하라').toBeGreaterThanOrEqual(2);
+    expect(strayLinkify, `data-linkify 가 소개·공지 본문 밖에 ${strayLinkify}개 — 계수 우회다`).toBe(0);
+    expect(bodyLinks, `첫 뷰포트 본문 링크 ${bodyLinks}개 — ${BODY_LINK_MAX}개 이하여야 한다`).toBeLessThanOrEqual(BODY_LINK_MAX);
     // 제외 자체에도 상한을 둔다 — 이 속성을 여기저기 붙여 게이트를 비우는 우회를 원천 차단.
     // (탭 셔틀은 설계상 '시즌 선두 배너' 하나뿐이다)
     expect(navShuttles, `탭 셔틀(data-nav) 이 ${navShuttles}개 — 1개를 넘으면 게이트 우회다`).toBeLessThanOrEqual(1);
