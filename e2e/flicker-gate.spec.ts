@@ -58,6 +58,10 @@ function transitions(mobile: boolean): Step[] {
 async function boot(page: Page, scheme: 'dark' | 'light') {
   // stub 토큰은 서버가 401 → 읽기는 anon 으로 통과시킨다. **stubLogin 보다 먼저** 걸어야 한다(나중 route 가 이긴다).
   await page.route(/supabase\.co\/rest\/v1\//, (r) => r.continue({ headers: { ...r.request().headers(), authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY } }));
+  // 운영 홈 배너를 빈 목록으로 고정한다(_fixtures 의 home_banners 막음을 위 포괄 route 가 덮어 이 스펙만 운영 배너를 봤다).
+  //   2026-10-09 18:19 KST 운영 배너(어두운 전면 이미지)를 켜자 PC 1280 라이트 콜드 진입이 배너 이미지 도착 전 프레임을 'FOIT' 로 오판했다
+  //   (정착 ink 의 대부분이 배너 → 배너 전 프레임 13% < 35%). 글자는 보이고 있었다 — 운영 데이터에 묶인 거짓 양성(rc-flicker 진단).
+  await page.route(/supabase\.co\/rest\/v1\/home_banners/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.addInitScript((sch) => { try { localStorage.setItem('nuri-theme', sch); } catch { /* 차단 환경 */ } }, scheme);
   await page.addInitScript(RECORDER);
   await stubLogin(page);
