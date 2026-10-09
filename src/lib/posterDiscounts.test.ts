@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { discountsFromPromotions, MAX_LEDGER_DISCOUNTS } from './posterDiscounts';
+import { discountsFromPromotions, linkedPosterDiscounts, MAX_LEDGER_DISCOUNTS } from './posterDiscounts';
 import type { Promotion } from '../api/schedules';
+import { autoDiscountIndex, discountAllowed, buyinFinance, nonSplitSnapshot, type LedgerBuyin } from '../api/ledger';
 
 const p = (over: Partial<Promotion> = {}): Promotion => ({ title: '할인 이벤트', ...over });
 
@@ -107,5 +108,71 @@ describe('discountsFromPromotions', () => {
     const twice = discountsFromPromotions(promos, once.discounts);
     expect(twice.discounts).toEqual(once.discounts);
     expect(twice).toMatchObject({ added: 0, duplicates: 1 });
+  });
+});
+
+// PIPE-F1/F2(audit-open-1009 · 오너 A-055 "이벤트·얼리·할인이 장부에 바로") — 포스터를 연결하면 할인 칸이 바로 그 포스터 것이 된다.
+//   실행: npx vitest run src/lib/posterDiscounts.test.ts · 화면 배선(자동 연동·직전 게임 프리필 순서)은 e2e/ledger-poster-discount-1009.spec.ts.
+// 운영 포스터 d4a68be7(로티 단독 깐부전 2026-10-09)의 promotions 그대로 — 할인액 있는 3개 + 안내 문구 6개.
+const KKANBU_PROMOS: Promotion[] = [
+  { badge: '5만', level: 1, title: '1LV 바인 5만 할인', detail: '전체이벤트 · 사전예약 · 0.5엔트리 적용', discountWon: 50_000, discountType: 'level' },
+  { badge: '7만', level: 16, title: '첫 바인 3만 할인', detail: '첫바인은 무조건 7만으로 대동단결 · 0.7엔트리 적용', discountWon: 30_000, discountType: 'firstBuyin' },
+  { badge: '팀', title: '팀 리바인 1회 5만', detail: '팀이벤트 · 1LV에 두 명 바인 완료 시 해당 팀 "리바인 1회" 5만', discountWon: 50_000, discountType: 'rebuy' },
+  { badge: '팀', title: '9LV 이전 팀 결성', discountType: 'custom' },
+  { badge: '핀볼', title: '17LV 이전 핀볼', discountType: 'custom' },
+  { badge: '바인킹', title: '바인킹 이벤트 (팀·개인 모두 가능)', discountType: 'custom' },
+  { badge: '얼리칩', title: '2LV 시작 전 참가 +10,000칩', discountType: 'advance' },
+  { badge: '얼리칩', title: '5LV 시작 전 참가 +5,000칩', discountType: 'advance' },
+  { badge: '개인', title: '개인출전 가능 · 충분히 1등 가능', discountType: 'custom' },
+];
+const KKANBU_LEDGER_DISCOUNTS = [
+  { label: '1레벨', amount: 50_000, level: 1 },
+  { label: '첫 바인', amount: 30_000, level: 16, kind: 'firstBuyin' },
+  { label: '팀 리바인 1회 5만', amount: 50_000, level: 0, kind: 'rebuy' },
+];
+
+describe('linkedPosterDiscounts — 포스터 연결 시 할인 칸(포스터가 정본)', () => {
+  it('빈 칸 → 포스터 할인 3개(할인액 없는 안내 문구 6개는 빠진다)', () => {
+    expect(linkedPosterDiscounts(KKANBU_PROMOS, [], null)).toEqual(KKANBU_LEDGER_DISCOUNTS);
+  });
+
+  it('직전 게임·앞 포스터가 **자동으로** 채운 그대로면 이 포스터 것으로 바꾼다 — 할인 없는 포스터면 빈 칸', () => {
+    const yesterday = [{ label: '2레벨', amount: 30_000, level: 2 }];   // 다른 포스터의 레벨 자동 할인
+    expect(linkedPosterDiscounts(KKANBU_PROMOS, yesterday, yesterday)).toEqual(KKANBU_LEDGER_DISCOUNTS);
+    expect(linkedPosterDiscounts([{ title: '얼리칩', discountType: 'advance' }], yesterday, yesterday)).toEqual([]);
+  });
+
+  it('업주가 고친 칸(자동 값과 다른 배열)은 두고 null — 다시 가져오기 버튼이 덧붙인다', () => {
+    const auto = [{ label: '2레벨', amount: 30_000, level: 2 }];
+    const edited = [{ label: '2레벨', amount: 20_000, level: 2 }];
+    expect(linkedPosterDiscounts(KKANBU_PROMOS, edited, auto)).toBeNull();
+    expect(linkedPosterDiscounts(KKANBU_PROMOS, edited, null)).toBeNull();
+  });
+
+  // 손계산(10만 게임 · 할인은 금액에서만 빼고 엔트리 = 받은 가치 ÷ 정가, 오너 규칙 2026-09-11):
+  //   1LV 첫 바인 5만 할인 → 50,000 · 0.5 / 1LV 리바인 → 50,000 · 0.5(레벨 할인은 조건 없음)
+  //   2~16LV 첫 바인 3만 할인 → 70,000 · 0.7 / 5LV 리엔트리 → 첫 바인 조건 불가 → 100,000 · 1
+  //   팀 리바인(손 선택 3번, 2회차) → 50,000 · 0.5 / 17LV 첫 바인 → 자동 없음 → 100,000 · 1
+  it('🔴 로티 깐부전 손계산 — 연결만 하면(가져오기 안 눌러도) 결제창 자동 할인·금액·엔트리가 포스터대로', () => {
+    const discounts = linkedPosterDiscounts(KKANBU_PROMOS, [], null) ?? [];
+    const session = { buyinAmount: 100_000, cardAmount: null, discounts };
+    const bi: LedgerBuyin = {
+      id: 'b', venueId: 'v1', sessionDate: '2026-10-09', gameSeq: 1, playerName: 'P', entryNo: 1, paymentMethod: 'cash', isUnpaid: false,
+      buyinAt: '2026-10-09T08:00:00.000Z', isSplit: false, cashAmount: 0, cardAmount: 0, transferAmount: 0, ticketCount: 0, unpaidAmount: 0,
+      discountLevel: 0, discountIndex: 0, earlyOverride: null,
+    };
+    const at = (idx: number, entryNo: number) => {
+      const f = buyinFinance({ ...bi, entryNo, discountIndex: idx, cashAmount: nonSplitSnapshot('cash', idx, session).cash_amount }, session);
+      return [f.value, f.entry];
+    };
+    const auto = (lv: number, entryNo: number) => at(autoDiscountIndex(discounts, lv, entryNo), entryNo);
+    expect(auto(1, 1)).toEqual([50_000, 0.5]);
+    expect(auto(1, 2)).toEqual([50_000, 0.5]);
+    expect(auto(2, 1)).toEqual([70_000, 0.7]);
+    expect(auto(16, 1)).toEqual([70_000, 0.7]);
+    expect(auto(5, 2)).toEqual([100_000, 1]);
+    expect(auto(17, 1)).toEqual([100_000, 1]);
+    expect(discountAllowed(discounts[2], 2)).toBe(true);   // 팀 리바인은 리바인에만
+    expect(at(3, 2)).toEqual([50_000, 0.5]);
   });
 });

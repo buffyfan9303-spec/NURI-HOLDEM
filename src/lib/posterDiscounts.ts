@@ -65,3 +65,17 @@ export function discountsFromPromotions(
   }
   return { discounts, added, skipped, duplicates };
 }
+
+/** 새 장부 폼에서 포스터를 연결할 때의 할인 칸 — **포스터 할인이 정본**(PIPE-F1/F2, 오너 A-055 "이벤트·얼리·할인이 장부에 바로").
+ *  칸이 비었거나 앞서 **자동으로** 채운 그대로(autoFilled 와 같은 배열)면 이 포스터의 할인으로 바꾼다 — 할인 없는 포스터면 빈 칸.
+ *  그래서 직전 게임 프리필·앞서 고른 다른 포스터의 레벨 할인이 이 게임에 남지 않는다.
+ *  업주가 고친 칸(다른 배열)은 둔다(null) — 버튼 '다시 가져오기'가 덧붙인다.
+ *  ⚠ 새 장부(바인 0건)에서만 부른다 — 바인이 생긴 뒤 칸을 바꾸면 자리번호로 참조하는 지난 바인 금액이 바뀐다. */
+export function linkedPosterDiscounts(
+  promotions: readonly Promotion[] | undefined,
+  current: readonly DiscountPreset[],
+  autoFilled: readonly DiscountPreset[] | null,
+): DiscountPreset[] | null {
+  if (current.length > 0 && current !== autoFilled) return null;
+  return discountsFromPromotions(promotions, []).discounts;
+}
