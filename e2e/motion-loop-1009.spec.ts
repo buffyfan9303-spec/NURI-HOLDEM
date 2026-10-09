@@ -9,6 +9,7 @@
 //   ③ reduced-motion — 0회(정적 그림만).
 //   ④ 대비 — 빛 띠 한가운데가 제목·안내 줄·'내 스팟' 글자 위에 있을 때도 글자 대 배경 최악 픽셀이 AA(4.5:1) 이상(다크·라이트).
 //      'btn-primary'('새 스팟 작성')는 불투명 파랑 면이 띠를 가려 대상이 아니다.
+//   ⑤ 보이는가 — 띠 한가운데 휘도비 ≥ 1.25(다크·라이트). 라이트가 .19 그대로면 1.18 로 실패한다(fix-r1 음성 대조).
 // 음성 대조(2026-10-09, build.md): 반복 시계를 '첫 회차만' 으로 되돌린 빌드 사본에서 ① 의 두 번째 회차 단언이 실패한다.
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
@@ -50,6 +51,19 @@ async function openTools(page: Page, theme: 'dark' | 'light' = 'dark') {
   await page.goto('/?tab=tools');
   await expect(page.getByTestId('spot-hero')).toBeVisible({ timeout: 30_000 });
   await page.locator(SHEEN).waitFor({ state: 'attached' });
+}
+
+/** 위쪽 데이터가 들어와 카드가 밀리는 동안은 재지 않는다 — 카드 위치가 1초 동안 그대로일 때까지 */
+async function stillCard(page: Page) {
+  const card = page.getByTestId('spot-hero');
+  let last = '';
+  await expect.poll(async () => {
+    const b = JSON.stringify(await card.boundingBox());
+    const same = b === last;
+    last = b;
+    return same;
+  }, { timeout: 15_000, intervals: [1_000] }).toBe(true);
+  return card;
 }
 
 test.describe('NURI SPOT 카드 흐르는 빛(주기 반복)', () => {
@@ -110,15 +124,7 @@ test.describe('NURI SPOT 카드 흐르는 빛(주기 반복)', () => {
       // 동작 줄이기로 반복을 세워 두고(정적 측정), 띠 위치는 그라디언트 기본값으로 직접 놓는다.
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await openTools(page, theme);
-      const card = page.getByTestId('spot-hero');
-      // 위쪽 데이터가 들어와 카드가 밀리는 동안은 재지 않는다 — 카드 위치가 1초 동안 그대로일 때까지
-      let last = '';
-      await expect.poll(async () => {
-        const b = JSON.stringify(await card.boundingBox());
-        const same = b === last;
-        last = b;
-        return same;
-      }, { timeout: 15_000, intervals: [1_000] }).toBe(true);
+      const card = await stillCard(page);
       const targets = [
         ['제목', 'p:not([data-testid])'],
         ['안내 줄', '[data-testid="spot-hero-ai"]'],
@@ -187,6 +193,51 @@ test.describe('NURI SPOT 카드 흐르는 빛(주기 반복)', () => {
       }
       test.info().annotations.push({ type: 'contrast', description: `${theme}: ${report.join(' · ')}` });
       console.log(`[contrast ${theme}] ${report.join(' · ')}`);
+    });
+  }
+
+  // ⑤ 보이는가 — 띠 한가운데를 카드 가운데에 두었을 때 대기 프레임 대비 화소 휘도비의 최댓값.
+  //   r1 검토(2026-10-09): 라이트 1.18:1 은 '움직임이 안 생긴 것과 같다'(P2), 다크 1.84:1 은 은은하게 보인다.
+  //   1.25 = 안 보인 1.18~1.20 바로 위. 상한은 ④(글자 AA)가 막는다.
+  for (const theme of ['dark', 'light'] as const) {
+    test(`⑤ ${theme} — 띠가 눈에 보인다(카드 가운데 휘도비 ≥ 1.25)`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await openTools(page, theme);
+      const card = await stillCard(page);
+      const shot = async (placed: boolean) => {
+        const clip = await card.evaluate((el, p) => {
+          const svg = el.querySelector('[data-testid="spot-hero-sheen"]')!;
+          const s = svg.getBoundingClientRect();
+          const cy = s.height / 2;
+          const tx = s.width / 2 - (0.5 * (140 * 140 + 50 * 50) + 50 * cy) / 140;
+          svg.querySelector('linearGradient')!.setAttribute('gradientTransform', `translate(${p ? tx : -260} 0)`);
+          return { x: s.x, y: s.y, width: s.width, height: s.height };
+        }, placed);
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        return { clip, b64: (await page.screenshot({ clip })).toString('base64') };
+      };
+      const rest = await shot(false);
+      const band = await shot(true);
+      expect(band.clip, '두 장 사이 카드가 움직였다(화소 비교 무효)').toEqual(rest.clip);
+      const ratio = await page.evaluate(async ([a, b]) => {
+        const px = async (s: string) => {
+          const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${s}`)).blob());
+          const cx = new OffscreenCanvas(bmp.width, bmp.height).getContext('2d')!;
+          cx.drawImage(bmp, 0, 0);
+          return cx.getImageData(0, 0, bmp.width, bmp.height).data;
+        };
+        const lin = (c: number) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+        const L = (d: Uint8ClampedArray, i: number) => 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+        const [p, q] = [await px(a), await px(b)];
+        let max = 1;
+        for (let i = 0; i < p.length; i += 4) {
+          const [x, y] = [L(p, i), L(q, i)];
+          max = Math.max(max, (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05));
+        }
+        return max;
+      }, [rest.b64, band.b64]);
+      console.log(`[visible ${theme}] ${ratio.toFixed(2)}`);
+      expect(ratio, `${theme} 띠 한가운데 휘도비 ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(1.25);
     });
   }
 });

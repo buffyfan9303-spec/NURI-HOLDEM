@@ -14,6 +14,8 @@
  * 대비: 띠 가운데 최대 불투명도 .19, 양 날개 .07(다크 흰빛 · 라이트 --sh-ray 청회). .14 는 정지 프레임에서도 눈에 거의 안 띄었고(실측 캡처),
  *   .22 는 다크 안내 줄(accent-200)이 띠 한가운데에서 4.48:1 로 AA 에 못 미쳤다(실측) — 그 사이 값이다. 띠가 버튼·글자 뒤를 지나도(카드 내용은 이 층 위에 그린다)
  *   본문 글자·안내 줄 대비는 AA(4.5:1) 이상이다 — e2e/motion-loop-1009.spec.ts ④.
+ *   라이트만 .30 / .11 — 거의 흰 지면 위 청회 띠가 .19 로는 휘도비 1.18:1 이라 안 보였다(r1 검토 P2). 다크는 1.84:1.
+ *   올린 값에서 라이트 안내 줄은 띠 한가운데 4.5 이상을 지킨다(④) · 보이는지는 ⑤(휘도비 ≥ 1.25).
  * 쉬는 동안·reduced-motion 에서는 띠가 카드 왼쪽 밖(대기 위치)에 있어 정적 그림만 남는다(종전과 같은 화면).
  */
 import { useEffect, useId, useRef } from 'react';
@@ -64,13 +66,13 @@ export default function SpotHeroSheen() {
     return startGlintLoop(el, player, { first: FIRST, period: PERIOD, dur: DUR });
   }, []);
   return (
-    <svg ref={svg} data-testid="spot-hero-sheen" className="absolute inset-0 h-full w-full" focusable="false" aria-hidden="true">
+    <svg ref={svg} data-testid="spot-hero-sheen" className="absolute inset-0 h-full w-full [--sh-band:.19] [--sh-wing:.07] [html.light_&]:[--sh-band:.30] [html.light_&]:[--sh-wing:.11]" focusable="false" aria-hidden="true">
       <defs>
         <linearGradient ref={grad} id={gid} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={VX} y2={VY} gradientTransform={rest}>
           <stop offset="0" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0 }} />
-          <stop offset="0.38" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0.07 }} />
-          <stop offset="0.5" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0.19 }} />
-          <stop offset="0.62" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0.07 }} />
+          <stop offset="0.38" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 'var(--sh-wing)' }} />
+          <stop offset="0.5" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 'var(--sh-band)' }} />
+          <stop offset="0.62" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 'var(--sh-wing)' }} />
           <stop offset="1" style={{ stopColor: 'var(--sh-ray)', stopOpacity: 0 }} />
         </linearGradient>
       </defs>
