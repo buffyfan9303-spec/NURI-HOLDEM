@@ -2977,6 +2977,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //   포스터를 연결하면 자동 값만 그 포스터 것으로 바꾸고(linkedPosterDiscounts) 직전 게임명은 오늘 포스터 자동 연동을 막지 않는다.
   const autoDiscsRef = useRef<DiscountPreset[] | null>(null);
   const prefillTitleRef = useRef<string | null>(null);
+  // P2-1(review-260) — 업주가 명시로 불러온 설정(지난 게임 그대로 열기·프리셋·메인 복사·게임 프리셋)은 늦게 온 포스터 목록의
+  //   자동 연동이 덮지 않는다. 예전엔 게임명으로만 '자동 값인가'를 봐서, 지난 게임명 == 직전 게임명이면 자동 연동이 게임명·단가만
+  //   포스터 것으로 바꾸고 할인은 지난 게임 것(새 배열 = 업주 수정)으로 남겨 섞인 채 저장됐다. 포스터를 직접 고르는 길(칩·선택)은 그대로다.
+  const explicitPickRef = useRef(false);
+  const markExplicitPick = () => { explicitPickRef.current = true; prefillTitleRef.current = null; };
   useEffect(() => {
     if (mode !== 'open' || !prefilled) { prefillDone.current = false; return; }
     if (prefillDone.current) return;
@@ -3006,7 +3011,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //   오늘 포스터 대신 어제 게임명·할인으로 장부가 열렸다. 막는 것은 업주가 직접 친 게임명과 게임관리 '이 포스터로 새 장부'(base.scheduleId,
   //   아래 seed 상속이 맡는다)뿐이다 — 직전 게임이 채운 게임명은 오늘 포스터가 덮는다.
   useEffect(() => {
-    if (mode !== 'open' || base.scheduleId || autoLinked || schedId || (title.trim() && title !== prefillTitleRef.current)) return;
+    if (mode !== 'open' || base.scheduleId || autoLinked || schedId || explicitPickRef.current || (title.trim() && title !== prefillTitleRef.current)) return;
     const todays = schedules.filter((s) => s.date === base.sessionDate);
     if (todays.length === 1) {
       setAutoLinked(true);
@@ -3130,6 +3135,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
   const applyPreset = (p: LedgerPreset) => {
+    markExplicitPick();
     setTitle(p.title);
     setCash(p.buyinAmount || 0);
     setCard(p.cardAmount ?? 0);
@@ -3142,6 +3148,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 메인 게임 설정 그대로 복사(사이드 빠른 생성) — 단가·할인·딜러·게임유형·애드온
   const applyCopyMain = () => {
     if (!copyMain) return;
+    markExplicitPick();
     // 제목은 충돌 방지 위해 "(사이드N)" 접미사 자동(메인은 그대로)
     setTitle(copyMain.title ? `${copyMain.title} (사이드${(base.gameSeq ?? MAIN_GAME_SEQ) - 1})` : '');
     setCash(copyMain.buyinAmount || 0);
@@ -3178,6 +3185,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 담당 직원(operIds)과 날짜는 건드리지 않는다(사람 입력은 그 둘만 — DoD).
   const applyLastRound = (r: LastClosedRound) => {
     const s = r.session;
+    markExplicitPick();
     setTitle(s.title ?? '');
     setCash(s.buyinAmount || 0);
     setCard(s.cardAmount ?? 0);
@@ -3211,6 +3219,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // PL2c: 게임 프리셋 → 장부 폼(어댑터 경유 · '있는 것만'). 클락 몫은 시작 시 병합.
   const applyGamePresetToForm = (p: GamePreset) => {
     const d = applyToLedger(p.data);
+    markExplicitPick();
     if (d.title !== undefined) setTitle(d.title ?? '');
     if (d.buyinAmount !== undefined) setCash(d.buyinAmount);
     if (d.cardAmount !== undefined) setCard(d.cardAmount ?? 0);

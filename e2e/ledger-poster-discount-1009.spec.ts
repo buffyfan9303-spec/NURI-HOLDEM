@@ -44,7 +44,7 @@ const BOOSTER = poster('p-booster', '로티 부스터데이', '13:00', [
 // 어제 장부(다른 포스터) — getLastLedgerSettings 응답. '2레벨 3만'은 오늘 깐부전에 없는 레벨 자동 할인이다.
 const YESTERDAY_SETTINGS = { buyin_amount: 80_000, card_amount: null, target_entries: 0, title: '어제 데일리', dealers: null, event_memo: null, discounts: [{ label: '2레벨', amount: 30_000, level: 2 }] };
 
-interface Opts { posters: R[]; prefill?: R | null; prefillDelay?: number; schedDelayAtLedger?: number }
+interface Opts { posters: R[]; prefill?: R | null; prefillDelay?: number; schedDelayAtLedger?: number; lastRound?: R | null }
 
 async function bootStart(page: Page, o: Opts) {
   const sessions: R[] = [];
@@ -72,7 +72,8 @@ async function bootStart(page: Page, o: Opts) {
             if (o.prefillDelay) await sleep(o.prefillDelay);
             return r.fulfill(json(o.prefill ?? null)).catch(() => {});
           }
-          if (/session_date=lt\./.test(u)) return r.fulfill(json(single(r) ? null : []));   // 마지막 마감 회차 없음
+          if (/session_date=lt\./.test(u) && /closed=eq\.true/.test(u)) return r.fulfill(json(single(r) ? (o.lastRound ?? null) : (o.lastRound ? [o.lastRound] : [])));   // 마지막 마감 회차('지난 게임 그대로 열기')
+          if (/session_date=lt\./.test(u)) return r.fulfill(json(single(r) ? null : []));
           const date = new URL(u).searchParams.get('session_date');
           const rows = sessions.filter((s) => date === `eq.${String(s.session_date)}`);
           return r.fulfill(json(single(r) ? (rows[0] ?? null) : rows));
@@ -186,4 +187,30 @@ test('F1 1440 — 업주가 고친 할인 칸은 포스터를 바꿔도 덮지 �
   const s = await start(page, probe);
   expect(s.schedule_id).toBe('p-kkanbu');
   expect((s.discounts as R[]).map((d) => d.label), '업주가 고친 칸을 포스터가 덮었다').toEqual(['내가 고친 할인', '첫 바인']);
+});
+
+// P2-1(review-260) — '지난 게임 그대로 열기'(업주의 명시 선택) 뒤에 포스터 목록이 늦게 오면, 자동 연동이 게임명·단가만 포스터 것으로 덮고
+//   할인은 지난 게임 것(업주 수정으로 분류)으로 남아 섞인 채 저장됐다(로티 10만: 1~2LV 7만·0.7, 3~16LV 10만·1).
+//   지난 게임명 == 직전 게임명이어야 재현된다(가드가 게임명으로만 '자동 값인가'를 봤다). 업주의 선택은 자동 연동이 덮지 않는다.
+const LAST_ROUND = {
+  venue_id: MOCK_VENUE, session_date: '2026-01-01', game_seq: 1, closed: true, title: '어제 데일리', buyin_amount: 80_000, card_amount: 0,
+  target_entries: 0, game_type: 'entry', max_entries: 0, is_addon: false, addon_stack: 0, operators: [], event_memo: null, dealers: null,
+  schedule_id: null, discounts: [{ label: '2레벨', amount: 30_000, level: 2 }], early_double_min: 0, early_single_min: 0, tournament_start: null,
+};
+test("🔴 P2-1 1440 — '지난 게임 그대로 열기' 뒤 늦게 온 포스터가 게임명·단가만 덮어 할인이 섞이지 않는다", async ({ page }) => {
+  test.setTimeout(120_000);
+  const probe = await bootStart(page, { posters: [KKANBU], prefill: YESTERDAY_SETTINGS, schedDelayAtLedger: 9_000, lastRound: LAST_ROUND });
+  await expect(page.getByText('직전 게임 설정을 불러왔습니다'), '직전 설정이 먼저 도착(전제)').toBeVisible({ timeout: 15_000 });
+  const last = page.getByRole('button', { name: /지난 게임 그대로 열기/ });
+  await expect(last, "'지난 게임 그대로 열기'(전제)").toBeVisible({ timeout: 15_000 });
+  await last.click();
+  await expect(page.getByText(/설정을 그대로 불러왔어요/), '지난 게임 적용(전제)').toBeVisible({ timeout: 5_000 });
+  // 포스터 목록(9초 지연)이 도착해 자동 연동 이펙트가 다시 돌 시간을 준다 — 도착 전에 재면 아무것도 안 잰다.
+  await page.waitForResponse((r) => /\/rest\/v1\/schedules\?/.test(r.url()) && r.request().method() === 'GET', { timeout: 20_000 }).catch(() => {});
+  await page.waitForTimeout(1_500);
+  const s = await start(page, probe);
+  const got = { title: s.title, schedule_id: s.schedule_id ?? null, buyin_amount: s.buyin_amount, discounts: s.discounts };
+  expect(got, '게임명·단가는 포스터, 할인은 지난 게임 것이 섞여 저장됐다').toEqual({
+    title: '어제 데일리', schedule_id: null, buyin_amount: 80_000, discounts: [{ label: '2레벨', amount: 30_000, level: 2 }],
+  });
 });
