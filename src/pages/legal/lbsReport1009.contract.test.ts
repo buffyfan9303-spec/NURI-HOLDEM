@@ -9,6 +9,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { LBS_REPORT_LABEL, LBS_REPORT_VALUE } from '../../lib/lbsReport';
 import { LOCATION } from '../../components/features/LegalDocsModal';
+import { LEGAL_HISTORY } from '../../lib/legalHistory';
+import { PRIVACY_VERSION } from '../../lib/legalVersion';
 
 const ROOT = path.join(__dirname, '../../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8').replace(/\r\n/g, '\n');
@@ -51,6 +53,24 @@ describe('위치기반서비스사업 신고 제1717호', () => {
     const lt = read('src/lib/locationTerms.ts');
     expect(lt).toMatch(/LOCATION_TERMS_VERSION = 3\b/);
     expect(lt).not.toMatch(/LOCATION_TERMS_VERSION = 4\b/);
+  });
+
+  // PR #253 검토 P2-1·P2-2 — 사실 추가는 **현행 판(위치 약관 제3판 · 처리방침 제3판)** 쪽에 적는다.
+  //   이미 끝난 제2판 밑에 두면 '끝난 판을 10-09 에 고쳤다'로 읽힌다(위치정보법 제12조① '쉽게 알아볼 수 있도록').
+  //   음성 대조: 두 줄을 제2판 자리로 되돌리면 이 테스트가 실패한다.
+  it('사실 추가 이력은 현행 판(제3판) 쪽에 있다 — 끝난 제2판 밑이 아니다', () => {
+    const line = LOCATION.indexOf('2026-10-09: 제2조의 사업자 정보에');
+    const v3Start = LOCATION.search(/\n3\. 제3판은 /);
+    expect(v3Start, '부칙 3번(제3판 시행) 없음').toBeGreaterThan(0);
+    expect(line, '위치 약관 부칙의 신고 추가 줄이 제3판 항목보다 앞(제2판 하위)에 있다').toBeGreaterThan(v3Start);
+    const web = read('public/legal/location.html');
+    expect(web.indexOf('2026-10-09: 제2조의 사업자 정보에'), '웹 약관도 제3판 쪽이어야 한다(npm run legal)').toBeGreaterThan(web.search(/\n3\. 제3판은 /));
+
+    const priv = LEGAL_HISTORY.privacy;
+    const has = (v: number) => (priv.find((r) => r.version === v)?.changes ?? []).some((c) => c.includes(EXPECTED));
+    expect(PRIVACY_VERSION).toBe(3);
+    expect(has(PRIVACY_VERSION), '처리방침 현행 판(제3판) 이력에 신고 추가 줄이 없다').toBe(true);
+    expect(has(2), '처리방침 신고 추가 줄이 끝난 제2판 이력에 있다').toBe(false);
   });
 
   it('상시 푸터가 같은 상수로 신고 번호를 표시한다(390px 줄바꿈 덩어리 포함)', () => {
