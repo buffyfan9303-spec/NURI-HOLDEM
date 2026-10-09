@@ -272,7 +272,8 @@ export function applyToLedger(d: GamePresetData): Partial<LedgerSession> & { tou
   if (ns.targetEntries) p.targetEntries = ns.targetEntries;
   if (ns.maxEntries) p.maxEntries = ns.maxEntries;
   // level 까지 옮긴다 — 빠뜨리면 프리셋을 불러온 순간 레벨 자동 할인이 꺼진 채로 시작한다.
-  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0 }));
+  // kind(적용 조건)도 — 빠뜨리면 '첫 바인 16LV 까지' 가 리엔트리에도 자동으로 걸린다(roti-1009 C-2). 없으면 칸을 만들지 않는다(옛 프리셋 그대로).
+  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0, ...(x.kind ? { kind: x.kind } : {}) }));
   if (ns.dealers) p.dealers = ns.dealers;
   if (ns.eventMemo) p.eventMemo = ns.eventMemo;
   if (ns.tournamentStartTime) p.tournamentStartTime = ns.tournamentStartTime;
@@ -384,7 +385,7 @@ export function presetFromRound(sess: LedgerSession, clockCfg?: ClockConfig | nu
       cardAmountWon: sess.cardAmount ?? undefined,
       targetEntries: sess.targetEntries || undefined,
       maxEntries: sess.maxEntries || undefined,
-      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0 })) : undefined,
+      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0, ...(x.kind ? { kind: x.kind } : {}) })) : undefined,
       dealers: sess.dealers || undefined,
       eventMemo: sess.eventMemo || undefined,
       tournamentStartTime: localHHMM(sess.tournamentStart),

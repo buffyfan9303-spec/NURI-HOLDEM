@@ -8,17 +8,23 @@
 // ③ 만 있으면 글린트가 통째로 고장 나도 초록이다 — 그래서 ① 이 "실제로 생겼고 실제로 움직였다" 를 먼저 단언한다.
 // 음성 대조(2026-10-08): NuriClassicLogo 의 reduced-motion 판정 줄을 지우면 ③ 이, LogoGlint 의 setOn(false) 타이머를 지우면 ② 가 실패했다.
 // ④ 는 입력 양보 이전 빌드(90a36485)에서 3/3 실패(남은 노드 1), 수정 빌드에서 통과.
+// ① 의 셸 셀렉터(2026-10-09): 글린트 재생 구간에만 헤더·로고·탭바를 각각 1px 옮긴 빌드 사본에서 2/2 실패, 옮기지 않은 사본에서 통과.
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 
 const GLINT = '[data-testid="logo-glint"]';
 
-/** 홈 본문은 데이터가 들어오며 자라므로 빼고, 셸(헤더·헤더 버튼·로고·탭바)만 잰다. */
-const shellBoxes = (page: Page) => page.evaluate(() =>
-  [...document.querySelectorAll('header, header button, [aria-label="NURI HOLDEM"], nav')].map((e) => {
+/** 셸 헤더·하단 탭바 — 앱이 선언한 표지로만 고른다.
+ *  ⚠ 맨 `header`·`nav` 는 본문에도 있다(일정 섹션 HEADER · BusinessFooter 법정 링크 nav). 오늘 일정이 스켈레톤을 대신하며
+ *    푸터 nav 가 y 909→688 로 올라오자 글린트와 무관하게 '셸 상자 불변' 이 깨졌다(2026-10-09 CI, PR #244·#247 같은 줄). */
+const HEADER = '[data-stack-header]';
+const TABBAR = 'nav[aria-label="하단 내비게이션"]';
+/** 홈 본문은 데이터가 들어오며 자라므로 빼고, 셸(헤더·헤더 버튼·로고·탭바·탭 버튼)만 잰다. */
+const shellBoxes = (page: Page) => page.evaluate((sel) =>
+  [...document.querySelectorAll(sel)].map((e) => {
     const r = e.getBoundingClientRect();
     return [r.x, r.y, r.width, r.height].join(',');
-  }));
+  }), [HEADER, `${HEADER} button`, `${HEADER} [aria-label="NURI HOLDEM"]`, TABBAR, `${TABBAR} button`].join(', '));
 
 /** 보이는 로고 글린트의 그라디언트 이동량(SMIL animVal). 시작 전 null. */
 const glintX = (page: Page) => page.evaluate(() => {
@@ -33,6 +39,9 @@ test.describe('헤더 로고 글린트', () => {
     await page.goto('/');
     await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
     const before = await shellBoxes(page);
+    // 셀렉터가 셸을 실제로 잡았는가 — 못 잡으면 빈 배열끼리 같아 아래 불변 단언이 거짓 통과한다
+    await expect(page.locator(HEADER)).toHaveCount(1);
+    await expect(page.locator(TABBAR)).toHaveCount(1);
     // 시작 전 띠는 상자(x 9.18~) 밖에 있어야 한다 — 기본값이 비면 begin 전 항등 위치(다이아 한가운데)에 멈춰 보였다(PR #239 검토 P2)
     expect(await page.evaluate(() => (document.querySelector('[data-testid="logo-glint"] linearGradient') as SVGLinearGradientElement)
       .gradientTransform.baseVal.getItem(0).matrix.e)).toBeLessThanOrEqual(-18);
@@ -106,10 +115,51 @@ test.describe('헤더 로고 글린트', () => {
       await expect.poll(() => asked, { timeout: 10_000 }).toBeGreaterThan(0); // 실패 경로를 실제로 탔다
       await page.waitForTimeout(1_500);
       await expect(page.getByText('일시적인 문제가 발생했습니다')).toHaveCount(0);
-      await expect(page.locator('header').first()).toBeVisible();
+      await expect(page.locator(HEADER)).toBeVisible();
       await expect(page.getByRole('img', { name: 'NURI HOLDEM' }).filter({ visible: true })).toHaveCount(1);
-      await expect(page.locator('nav').filter({ visible: true }).first()).toBeVisible();
+      await expect(page.locator(TABBAR)).toBeVisible(); // 맨 nav 는 본문 푸터 nav 도 잡아 탭바가 없어도 통과했다
       await expect(page.locator(GLINT)).toHaveCount(0);
+    });
+  }
+
+  // 다이아만 보일 때(라이트 · <373) 빛이 다이아 위에 머무는 시간 — 글자까지 가는 범위·곡선 그대로면 82~101ms 라 '반짝' 으로 읽혔다(review-239b P3-a).
+  // 재생이 시작되면 SMIL 시계를 멈추고 시작점부터 10ms 씩 되감아 띠 위치를 읽는다(타이머·프레임 속도와 무관하게 결정적).
+  // 밝은 띠가 다이아(x 9.18~29.18) 위에 있는 구간은 이동량 −10~12 다(띠 기울기·정지점에서 계산한 평균 흰빛 기준 — 검토 실측 82~101ms 를 같은 기준으로 재현한 값).
+  // 음성 대조(2026-10-09): LogoGlint 의 '다이아만' 분기를 지우면 360·라이트가 ≈100ms 로 실패, 분기 조건을 항상 참으로 바꾸면 390 다크의 끝점 94 가 실패.
+  const shine = (page: Page) => page.evaluate(() => new Promise<{ ms: number; end: number }>((resolve) => {
+    const tick = () => {
+      const svg = [...document.querySelectorAll<SVGSVGElement>('[data-testid="logo-glint"]')].pop();
+      const a = svg?.querySelector('animateTransform') as SVGAnimationElement | null;
+      const g = svg?.querySelector('linearGradient') as SVGLinearGradientElement | null;
+      let start: number | null = null;
+      try { start = a ? a.getStartTime() : null; } catch { /* 아직 시작 전 */ }
+      if (!svg || !g || start === null) { requestAnimationFrame(tick); return; }
+      svg.pauseAnimations();
+      let ms = 0, end = 0;
+      for (let t = 0; t <= 850; t += 10) {
+        svg.setCurrentTime(start + t / 1000);
+        const x = g.gradientTransform.animVal.getItem(0).matrix.e;
+        if (x >= -10 && x <= 12) ms += 10;
+        end = x;
+      }
+      resolve({ ms, end });
+    };
+    tick();
+  }));
+  for (const [w, theme, gemOnly] of [[360, 'dark', true], [390, 'light', true], [390, 'dark', false]] as const) {
+    test(`${w} ${theme} — ${gemOnly ? '다이아만: 빛이 다이아 위에 400ms 이상' : '글자까지: 범위 그대로(끝 94)'}`, async ({ page }) => {
+      await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t); } catch { /* 차단 환경 */ } }, theme);
+      await page.setViewportSize({ width: w, height: 844 });
+      await page.goto('/');
+      await page.locator(GLINT).first().waitFor({ state: 'attached', timeout: 10_000 });
+      const r = await shine(page);
+      if (gemOnly) {
+        expect(r.ms, '다이아 위 밝은 띠 체류(ms)').toBeGreaterThanOrEqual(400);
+        expect(r.ms).toBeLessThanOrEqual(500);
+        expect(r.end, '끝에서는 다이아를 벗어나 있어야 지울 때 튀지 않는다').toBeGreaterThan(16);
+      } else {
+        expect(r.end).toBeCloseTo(94, 0);
+      }
     });
   }
 

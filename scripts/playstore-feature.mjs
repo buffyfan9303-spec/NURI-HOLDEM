@@ -9,15 +9,16 @@
 //   배너 #213956, 업적 금색 #DDC37B. (2026-10-08 갱신 — 옛 보라 블룸이 남아 스토어 그래픽만 옛 테마였다.)
 // 실행: node scripts/playstore-feature.mjs
 import { chromium } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const OUT = resolve('playstore');
 mkdirSync(OUT, { recursive: true });
 
-// 스페이드 글리프 — src/components/atoms/Icon.tsx 의 도메인 글리프와 같은 패스(24 viewBox)
-const SPADE =
-  'M12 3C10.03 7.03 5.72 9.19 5.72 13.03c0 2.72 2.25 4.13 4.5 3.28-.38 1.78-1.22 2.82-2.53 3.75h8.62c-1.31-.93-2.15-1.97-2.53-3.75 2.25.85 4.5-.56 4.5-3.28C18.28 9.19 13.97 7.03 12 3Z';
+// 브랜드 마크 = 골드 다이아(2026-10-09 오너: 앱 아이콘·스토어 그래픽도 앱 안 헤더와 같은 다이아). 원본은 gen-favicons.mjs 와 같은 사본.
+const DIAMOND = `data:image/webp;base64,${readFileSync(resolve('scripts/brand/nuri-diamond-source-400.webp')).toString('base64')}`;
+// 카드 무늬 — 다이아 무늬(마름모, 24 viewBox).
+const SUIT = 'M12 2.5 19 12 12 21.5 5 12Z';
 
 const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -41,7 +42,7 @@ const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
   .left{flex:1;min-width:0}
 
   .brand{display:flex;align-items:center;gap:18px;margin-bottom:26px}
-  .spade{width:62px;height:62px;flex-shrink:0}
+  .mark{height:62px;width:auto;flex-shrink:0;display:block}
   .word{line-height:.94}
   .word .n{font-size:62px;font-weight:800;letter-spacing:-1.5px;color:#fff;display:block}
   .word .h{font-size:27px;font-weight:700;letter-spacing:7.5px;color:#A8BAD2;display:block;margin-top:5px}
@@ -71,16 +72,16 @@ const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
   <div class="wrap">
     <div class="left">
       <div class="brand">
-        <svg class="spade" viewBox="0 0 24 24" fill="#E8B84B"><path d="${SPADE}"/></svg>
+        <img class="mark" src="${DIAMOND}" alt="">
         <span class="word"><span class="n">NURI</span><span class="h">HOLDEM</span></span>
       </div>
       <h1>전국 홀덤 대회 일정을<br><span class="g">한 곳에서</span></h1>
       <p>매장·일정·예약부터 커뮤니티와 GTO 학습까지</p>
     </div>
     <div class="art">
-      <div class="card c1"><svg class="pip" viewBox="0 0 24 24" fill="#475569"><path d="${SPADE}"/></svg></div>
-      <div class="card c2"><svg class="pip" viewBox="0 0 24 24" fill="#64748B"><path d="${SPADE}"/></svg></div>
-      <div class="card c3"><svg class="pip" viewBox="0 0 24 24" fill="#DDC37B"><path d="${SPADE}"/></svg></div>
+      <div class="card c1"><svg class="pip" viewBox="0 0 24 24" fill="#475569"><path d="${SUIT}"/></svg></div>
+      <div class="card c2"><svg class="pip" viewBox="0 0 24 24" fill="#64748B"><path d="${SUIT}"/></svg></div>
+      <div class="card c3"><svg class="pip" viewBox="0 0 24 24" fill="#DDC37B"><path d="${SUIT}"/></svg></div>
     </div>
   </div>
 </body></html>`;
