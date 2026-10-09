@@ -108,11 +108,18 @@ test.describe('me page return snapshots', () => {
   test.use({ contextOptions: { reducedMotion: 'no-preference' } });
   for (const width of [360, 390, 1024]) {
     const mobile = width < 1024;
+    // 🔴 2026-10-09 main CI 실패(run 37938566479, 재시도 3회 모두 'scrollY > 0' 단언) — 1024 는 PC 레이아웃이라 홈 문서가
+    //   모바일(1349px)보다 훨씬 짧다: 운영 데이터가 있을 때 933px, 일정·배너가 비면 868px(실측, 푸터 포함).
+    //   뷰포트가 844 면 스크롤 여유가 89px → 24px 로 줄다가, 저녁에 오늘 일정이 줄면(#253 푸터 +48px 이전 커밋은 약 820px 으로 추정) 0 이 되어
+    //   `scrollTo(0,140)` 가 걸리지 않는다. 제품 결함이 아니라 '운영 데이터 높이' 에 측정이 얹혀 있었던 것이다.
+    //   → 문서가 어떤 데이터에서도 확실히 넘치도록 PC 는 뷰포트 높이를 600 으로 둔다(데이터 전무일 때도 여유 286px, 140 이 그대로 걸린다).
+    //   측정 대상 DOM 은 건드리지 않았고 단언도 그대로다 — 360·390 은 844 유지(문서 1349px).
+    const height = mobile ? 844 : 600;
     test(`me open/close keeps live DOM at ${width}px (2026-09-26: no View Transition at any width)`, async ({ page }) => {
       test.setTimeout(60_000);
       await stabilizeBackstack(page);
       await stubLogin(page);
-      await page.setViewportSize({ width, height: 844 });
+      await page.setViewportSize({ width, height });
       await page.addInitScript(() => {
         const native = document.startViewTransition?.bind(document);
         let calls = 0;
