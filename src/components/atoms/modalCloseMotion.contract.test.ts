@@ -38,9 +38,23 @@ describe('M03 가운데 모달 닫기 모션', () => {
     // 읽기(getComputedStyle)가 setClosing(true) 보다 앞 — 뒤에 오면 열림 애니가 이미 취소돼 끝값만 읽힌다
     expect(openEff![0].indexOf('getComputedStyle')).toBeGreaterThan(-1);
     expect(openEff![0].indexOf('getComputedStyle')).toBeLessThan(openEff![0].indexOf('setClosing(true)'));
-    const closeEff = code.match(/useLayoutEffect\(\(\) => \{\s*if \(!closing\) return;[\s\S]*?\}, \[closing\]\);/);
-    expect(closeEff, '[closing] 효과를 못 찾았다').toBeTruthy();
+    const closeEff = code.match(/useLayoutEffect\(\(\) => \{\s*if \(!closing \|\| open\) return;[\s\S]*?\}, \[closing, open\]\);/);
+    expect(closeEff, '[closing, open] 효과를 못 찾았다').toBeTruthy();
     expect(closeEff![0]).toMatch(/setKeyframes\(\[\{ \.\.\.from,/);
+  });
+
+  // 🔴 #246 CI 회귀(2026-10-09, e2e/spot-tab-keepalive.spec.ts:109 '공유 확인 시트가 열리지 않는다' 3회 연속).
+  //   닫힌 채 마운트 → 같은 커밋의 효과가 open 을 올리면 React 19 가 setClosing(true) 와 묶어 한 렌더로 돌린다.
+  //   닫힘 효과가 open 을 안 보면 본문 없음(돌 애니 0개) → setRender(false) 가 setRender(true) 를 이겨 열린 모달이 안 그려진다.
+  //   실제 동작은 위 e2e 가 잠근다(jsdom 없음). 여기서는 '열려 있으면 닫힘 단계를 돌지 않는다' 배선만 본다.
+  it('열려 있는 동안에는 닫힘 단계(키프레임 교체·언마운트)를 돌지 않는다 — 닫힌 채 마운트 직후 열리는 모달', () => {
+    const code = modal.replace(/^\s*\/\/.*$/gm, '');
+    const closeEff = code.match(/useLayoutEffect\(\(\) => \{\s*(if \([^)]*\) return;)[\s\S]*?\}, \[([^\]]*)\]\);/g)
+      ?.find((m) => m.includes('setKeyframes'));
+    expect(closeEff, '닫힘 효과(setKeyframes 를 가진 useLayoutEffect)를 못 찾았다').toBeTruthy();
+    const [, guard, deps] = closeEff!.match(/^useLayoutEffect\(\(\) => \{\s*(if \([^)]*\) return;)[\s\S]*\}, \[([^\]]*)\]\);$/)!;
+    expect(guard, '닫힘 효과의 첫 줄이 open 을 보지 않는다 — 열린 채로 setRender(false) 가 돈다').toMatch(/\|\|\s*open\b/);
+    expect(deps.split(',').map((s) => s.trim()), '닫힘 효과 deps 에 open 이 없다 — 같은 렌더에서 open 이 올라도 다시 판정하지 않는다').toContain('open');
   });
 
   it('언마운트는 고정 타이머가 아니라 닫힘 모션 finished 뒤 · reduced-motion 이면 같은 커밋', () => {

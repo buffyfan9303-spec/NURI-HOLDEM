@@ -396,7 +396,13 @@ export default function Modal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   useLayoutEffect(() => {
-    if (!closing) return;
+    // 🔴 open 도 본다(2026-10-09 #246 CI 회귀 — spot-tab-keepalive '공유 확인 시트가 열리지 않는다').
+    //   닫힌 채 마운트된 모달은 첫 커밋에서 위 효과가 setClosing(true) 를 건다. 같은 커밋의 다른 효과가 곧바로 open 을 올리면
+    //   (SpotReport 공유 확인 시트 — shareIntent 효과가 마운트하자마자 setConfirming(true)) React 19 가 두 갱신을 한 렌더로 묶어
+    //   이 효과가 open=true · closing=true 로 돈다. 그때 본문이 아직 없어 돌 애니 0개 → setRender(false) 가
+    //   위 효과의 setRender(true) 뒤에 실려 이겼다 — open 인데 끝내 그려지지 않았다. 열려 있으면 닫힘 단계가 아니다.
+    //   deps 의 open 은 닫히는 도중 다시 열릴 때 정리(done)를 그 커밋에 바로 돌리는 몫도 한다.
+    if (!closing || open) return;
     // 방금 붙은 닫힘 키프레임의 끝값·길이는 그대로, 출발점만 보이는 값으로 바꾼다(빠진 속성은 그 값에 멈춘다 — 가운데 본문 투명도).
     // 곡선은 닫힘 키프레임 넷(slide-down·nudge-down·fade-out·dim-out)이 모두 쓰는 --ease 와 같은 값이다.
     // CSS 애니 자신을 고치므로 다시 열 때(클래스가 바뀌면) 브라우저가 알아서 걷는다.
@@ -411,7 +417,7 @@ export default function Modal({
     // 돌 모션이 없으면(reduced-motion · 드래그로 이미 화면 밖에 나간 시트) 같은 커밋에서 내린다 — 페인트 전이라 한 프레임도 안 남는다.
     if (anims.length) void Promise.all(anims.map((a) => a.finished)).then(unmount, unmount); else unmount();
     return () => { done = true; };   // 다시 열리면 남은 finished 가 내리지 못하게
-  }, [closing]);
+  }, [closing, open]);
 
   // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
   //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
