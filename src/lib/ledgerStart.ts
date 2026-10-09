@@ -54,6 +54,13 @@ export function sessionEarlyOf(cfg: ClockConfig): Pick<LedgerSession, 'earlyDoub
   };
 }
 
+/** H03-08 후속(2026-10-09) — 세션 얼리 창을 계산할 클락 설정. 장부 저장 직전에 읽은 클락(latest)이 **보호될(protect)** 행이면
+ *  클락은 덮이지 않으므로 그 클락이 실제로 돌리는 설정을, 아니면 이번에 클락에 쓸 cfg 를 쓴다.
+ *  왜: 폼을 연 뒤 클락이 시작되면 클락은 보호되는데 세션 얼리만 폼 값으로 계산돼, 장부 자동 얼리와 TV 얼리가 갈렸다. */
+export function sessionEarlyBasis(latest: ClockState | null, sessionDate: string, cfg: ClockConfig): ClockConfig {
+  return latest && clockStartAction(latest, sessionDate) === 'protect' ? withDerivedEarly(latest.config) : cfg;
+}
+
 /** 포스터 → 세션 칸(기준 엔트리 = GTD ÷ 참가비 · 애드온 엔트리). 포스터가 없으면 빈 패치. */
 export function sessionPatchFromSchedule(sched: Schedule | null): Pick<Partial<LedgerSession>, 'targetEntries' | 'addonEntry'> {
   return sched ? ledgerPatchFromSchedule(sched) : {};

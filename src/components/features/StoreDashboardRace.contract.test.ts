@@ -118,9 +118,11 @@ describe('F14 ⑦ · 14일 장부 조회 실패를 "데이터 없음"·0장과 �
     expect(code).toMatch(/\{caps\.ledger && \(todayGames\.length > 0 \|\| !!rangeErr\) && \(/);
   });
 
-  it('실패한 카드마다 재시도 경로가 붙어 있다(4곳: 7일 추세·전주 대비·이용권·오늘 게임)', () => {
-    expect((code.match(/<LoadFailRow /g) ?? []).length).toBe(4);
+  it('실패한 카드마다 재시도 경로가 붙어 있다(14일 장부 4곳: 7일 추세·전주 대비·이용권·오늘 게임 + 게임 목록 1곳)', () => {
+    // 2026-10-09 매장 P3 ① — '다가오는 예약' 의 게임 목록(App schedules) 실패 줄이 더해져 5곳. 그 줄의 재시도는 App 재조회다.
+    expect((code.match(/<LoadFailRow /g) ?? []).length).toBe(5);
     expect((code.match(/onRetry=\{reloadRange\}/g) ?? []).length).toBe(4);
+    expect(code).toMatch(/<LoadFailRow what="게임 목록" onRetry=\{onRetrySchedules\} \/>/);
     expect(code).toMatch(/function LoadFailRow\(/);
   });
 });
