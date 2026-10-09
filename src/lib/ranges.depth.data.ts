@@ -294,20 +294,21 @@ function bbDefend(d: RangeDepth, vs: TablePos): RangeScenario {
 
 // 오프너 vs BB 3벳 — 4벳은 올인. 밸류 4벳 혼합의 나머지 절반은 콜, 휠 에이스 블러프의 나머지 절반은 폴드.
 // 빈도는 '그 손으로 오픈했을 때' 기준이다(오픈하지 않은 손은 이 표에 없다 — 테스트가 오픈 레인지 ⊆ 를 잠근다).
-// 폭은 자체 제작이지만 **필요조건 검산**을 거쳤다(2026-10-09, 정확 전수 에퀴티 equity169-exact.mjs 위에서
-//   'BB 가 최선 응답으로 콜할 때 이 올인이 폴드보다 손해가 아닌가' — 보고서 impl.md 에 명령·해시).
-//   첫 판은 얼리 오프너가 40bb 에서 A5s 블러프·JJ 를, 60bb UTG 가 QQ 를 올인했는데 전부 폴드보다 손해였다:
-//   얼리 오픈을 상대로 한 BB 3벳은 밸류가 두꺼워 블러프 올인이 접히지 않고 QQ·JJ 는 콜당하면 진다. 그 손들은 콜로 옮겼다.
+// 폭은 전부 자체 제작이다. 40bb UTG~HJ · 60bb UTG/UTG+1 은 블러프 올인을 섞지 않은 **단순화 표**다(밸류 올인만).
+//   ⚠ 계산 근거가 아니다: BB 의 응답을 지금 표에 고정한 올인 EV 는 경로 의존이다 — 손을 하나 빼면 BB 의 콜이 좁아져
+//   같은 손이 다시 이득이 된다(2026-10-10 critical 재계산: utg_vs_bb3bet@40 A5s 올인 +5.19bb). 그래서 그 값으로 손을 고르지 않는다.
+// 표 사이 관계(테스트가 잠근다): 오픈한 손의 MDF 이상을 계속한다(노트가 그렇게 말한다) ·
+//   SB 는 3벳 콜 뒤 BB 보다 먼저 행동해(포지션 없음) BTN 보다 콜·계속이 좁고 4벳 비중은 같거나 높다(100bb 표도 같은 방향).
 const FOURBET: Record<40 | 60, Record<string, RangeSpec>> = {
   40: {
     UTG: { '1': 'AA KK AKs', '0.5': 'AKo' },
     'UTG+1': { '1': 'AA KK AKs', '0.5': 'QQ AKo' },
-    MP: { '1': 'AA KK AKs', '0.5': 'QQ AKo' },
+    MP: { '1': 'AA KK QQ AKs', '0.5': 'AKo' },
     LJ: { '1': 'AA KK QQ AKs', '0.5': 'JJ AKo' },
     HJ: { '1': 'AA KK QQ AKs AKo', '0.5': 'JJ' },
     CO: { '1': 'AA KK QQ AKs AKo', '0.5': 'JJ TT AQs A5s A4s' },
     BTN: { '1': 'AA KK QQ AKs AKo', '0.5': 'JJ TT AQs A5s A4s' },
-    SB: { '1': 'AA KK QQ AKs AKo', '0.5': 'JJ TT AQs A5s A4s' },
+    SB: { '1': 'AA KK QQ JJ AKs AKo', '0.5': 'TT AQs A5s A4s' },
   },
   60: {
     UTG: { '1': 'AA KK AKs', '0.5': 'AKo' },
@@ -317,19 +318,19 @@ const FOURBET: Record<40 | 60, Record<string, RangeSpec>> = {
     HJ: { '1': 'AA KK AKs', '0.5': 'QQ AKo A5s A4s' },
     CO: { '1': 'AA KK AKs', '0.5': 'QQ AKo A5s A4s' },
     BTN: { '1': 'AA KK AKs', '0.5': 'QQ AKo A5s A4s' },
-    SB: { '1': 'AA KK AKs', '0.5': 'QQ AKo A5s A4s' },
+    SB: { '1': 'AA KK AKs', '0.5': 'QQ JJ AKo A5s A4s' },
   },
 };
 const VS3BET_CALL: Record<40 | 60, Record<string, RangeSpec>> = {
   40: {
-    UTG: { '1': 'QQ JJ TT AQs AJs KQs', '0.5': 'AKo 99 AQo' },
-    'UTG+1': { '1': 'JJ TT 99 AQs AJs KQs', '0.5': 'QQ AKo 88 ATs AQo' },
-    MP: { '1': 'JJ TT 99 AQs AJs KQs AQo', '0.5': 'QQ AKo 88 ATs KJs' },
-    LJ: { '1': 'TT 99 88 AQs AJs KQs AQo', '0.5': 'JJ AKo 77 ATs KJs QJs' },
-    HJ: { '1': 'TT 99 88 AQs AJs ATs KQs AQo', '0.5': 'JJ 77 66 KJs QJs JTs AJo' },
+    UTG: { '1': 'QQ JJ TT 99 AQs AJs KQs AQo', '0.5': 'AKo' },
+    'UTG+1': { '1': 'JJ TT 99 AQs AJs KQs AQo', '0.5': 'QQ AKo 88 ATs' },
+    MP: { '1': 'JJ TT 99 88 AQs AJs ATs KQs KJs AQo', '0.5': 'AKo AJo' },
+    LJ: { '1': 'TT 99 88 77 AQs AJs ATs KQs KJs AQo', '0.5': 'JJ AKo QJs AJo' },
+    HJ: { '1': 'TT 99 88 77 AQs AJs ATs KQs KJs QJs AQo AJo', '0.5': 'JJ 66 JTs KQo' },
     CO: { '1': '99 88 77 66 AJs ATs A9s KQs KJs KTs QJs JTs AQo AJo KQo', '0.5': 'JJ TT AQs 55 44 A8s A7s QTs T9s 98s 87s ATo KJo' },
-    BTN: { '1': '99 88 77 66 55 AJs ATs A9s A8s KQs KJs KTs QJs QTs JTs T9s AQo AJo ATo KQo KJo', '0.5': 'JJ TT AQs 44 33 22 A7s A6s K9s Q9s J9s 98s 87s 76s KTo QJo A9o' },
-    SB: { '1': '99 88 77 66 55 AJs ATs A9s A8s KQs KJs KTs QJs QTs JTs T9s AQo AJo ATo KQo KJo', '0.5': 'JJ TT AQs 44 33 22 A7s A6s K9s Q9s J9s 98s 87s 76s KTo QJo A9o' },
+    BTN: { '1': '99 88 77 66 55 AJs ATs A9s A8s KQs KJs KTs K9s QJs QTs Q9s JTs J9s T9s 98s 87s AQo AJo ATo KQo KJo KTo QJo', '0.5': 'JJ TT AQs 44 33 22 A7s A6s 76s A9o' },
+    SB: { '1': '99 88 77 66 AJs ATs A9s A8s KQs KJs KTs QJs QTs JTs T9s AQo AJo ATo KQo KJo', '0.5': 'TT AQs 55 44 A7s A6s K9s Q9s J9s 98s A9o QJo' },
   },
   60: {
     UTG: { '1': 'QQ JJ TT 99 AQs AJs KQs AQo', '0.5': 'AKo 88 ATs KJs' },
@@ -339,7 +340,7 @@ const VS3BET_CALL: Record<40 | 60, Record<string, RangeSpec>> = {
     HJ: { '1': 'JJ TT 99 88 77 AQs AJs ATs KQs KJs QJs AQo', '0.5': 'QQ AKo 66 55 KTs JTs T9s AJo KQo' },
     CO: { '1': 'JJ TT 99 88 77 66 AQs AJs ATs A9s KQs KJs KTs QJs QTs JTs AQo AJo KQo', '0.5': 'QQ AKo 55 44 A8s A7s T9s 98s 87s ATo KJo' },
     BTN: { '1': 'JJ TT 99 88 77 66 55 44 AQs AJs ATs A9s A8s A7s KQs KJs KTs K9s QJs QTs JTs T9s 98s AQo AJo ATo KQo KJo', '0.5': 'QQ AKo 33 22 A6s Q9s J9s T8s 87s 76s 65s KTo QJo A9o QTo JTo' },
-    SB: { '1': 'JJ TT 99 88 77 66 55 44 AQs AJs ATs A9s A8s A7s KQs KJs KTs K9s QJs QTs Q9s JTs J9s T9s 98s AQo AJo ATo KQo KJo QJo', '0.5': 'QQ AKo 33 22 A6s T8s 87s 76s 65s KTo A9o QTo JTo' },
+    SB: { '1': 'TT 99 88 77 66 55 AQs AJs ATs A9s A8s KQs KJs KTs QJs QTs JTs T9s AQo AJo ATo KQo KJo', '0.5': 'QQ JJ AKo 44 33 22 A7s A6s K9s Q9s J9s 98s A9o KTo QJo' },
   },
 };
 
@@ -355,7 +356,7 @@ function vs3bet(d: 40 | 60, p: TablePos): RangeScenario {
       { key: 'fourbet', label: '올인', spec: FOURBET[d][p] },
       { key: 'call', label: '콜', spec: VS3BET_CALL[d][p] },
     ],
-    note: `MDF ${pct1(mdfVsBb3bet(m, sb))} — 오픈한 손의 그 이상을 계속해야 BB 의 블러프 3벳이 공짜가 아니다. 순수 블러프 올인은 BB 가 ${pct1(fourbetAlpha(m, sb))} 이상 접어야 바로 이득이다 — ${/A[2-5]s/.test(FOURBET[d][p]['0.5'] ?? '') ? '휠 에이스만 절반 섞고 나머지는 접는다' : '이 자리를 상대로 한 BB 3벳은 밸류가 두꺼워 블러프 올인을 넣지 않았다'}. 올인을 절반만 섞는 밸류 손의 나머지는 콜. 콜하면 SPR 이 약 ${sprAfter3betCall(m).toFixed(1)} 까지 낮아져 페어·수딧 브로드웨이 위주로 받는다.`,
+    note: `MDF ${pct1(mdfVsBb3bet(m, sb))} — 오픈한 손의 그 이상을 계속해야 BB 의 블러프 3벳이 공짜가 아니다. 순수 블러프 올인은 BB 가 ${pct1(fourbetAlpha(m, sb))} 이상 접어야 바로 이득이다 — ${/A[2-5]s/.test(FOURBET[d][p]['0.5'] ?? '') ? '휠 에이스만 절반 섞고 나머지는 접는다' : '블러프 올인은 섞지 않은 단순화 표다(밸류 올인만)'}. 올인을 절반만 섞는 밸류 손의 나머지는 콜. 콜하면 SPR 이 약 ${sprAfter3betCall(m).toFixed(1)} 까지 낮아져 페어·수딧 브로드웨이 위주로 받는다.`,
   };
 }
 

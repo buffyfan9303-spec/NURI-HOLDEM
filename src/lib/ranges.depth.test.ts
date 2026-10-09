@@ -202,7 +202,7 @@ for (let i = 0; i < 13; i++) for (let j = 0; j <= i; j++) {
 const DEPTH_DOMINANCE_EXCEPTIONS: Record<string, string[]> = {
   'co_vs_bb3bet@40': ['A5s', 'A4s'],
   'mp_vs_bb3bet@60': ['A5s'], 'lj_vs_bb3bet@60': ['A5s'], 'hj_vs_bb3bet@60': ['A5s', 'A4s'], 'co_vs_bb3bet@60': ['A5s', 'A4s'],
-  // 그 밖의 vs 3벳은 예외 0 — 얼리 40bb·UTG/UTG+1 60bb 는 휠 에이스 블러프 올인이 폴드보다 손해라(필요조건 검산) 넣지 않았고,
+  // 그 밖의 vs 3벳은 예외 0 — 40bb UTG~HJ · 60bb UTG/UTG+1 은 휠 에이스 블러프 올인을 섞지 않은 단순화 표이고,
   //   btn·sb 는 콜에 A6s~A9s 가 있어 블러프를 넘는 손이 없다.
   // 오픈·BB 수비는 예외 0 — 손 사다리가 지배 순서를 지킨다(ranges.depth.data.ts OPEN_LADDER · CALL_LADDER).
 };
@@ -312,18 +312,54 @@ describe('깊이 안 — 자리 관계', () => {
     return f / (f + c);
   };
 
-  it('🔴 [설계 규칙] MDF 밴드 — vs 3벳 continue ÷ 오픈이 얼리(UTG~LJ) [MDF−5, MDF+25] · 레이트(HJ~SB) [MDF−5, MDF+20]', () => {
-    // 위치별로 폭을 나눈 근거: 100bb 실측 얼리 37.5·34.2 > 레이트 vs BB 27.4~29.3. 하한 −5 는 순수 블러프 3벳이 바로 이득이 되지 않게 하는 완충.
+  it('🔴 [설계 규칙] MDF 밴드 — vs 3벳 continue ÷ 오픈이 얼리(UTG~LJ) [MDF, MDF+25] · 레이트(HJ~SB) [MDF, MDF+20]', () => {
+    // 하한은 MDF 그 자체다 — 노트가 '오픈한 손의 MDF 이상을 계속한다' 고 말하므로(2026-10-10 critical P2: 하한 MDF−5 가
+    //   40bb 8표 중 6표의 노트 모순을 통과시켰다). 상한 폭을 위치별로 나눈 근거: 100bb 실측 얼리 37.5·34.2 > 레이트 27.4~29.3.
     const bad: string[] = [];
     for (const d of [40, 60] as const) {
       for (const s of DEPTH_SCENARIOS[d].filter((x) => x.group === 'vs3bet')) {
         const mdf = mdfVsBb3bet(DEPTH_META[d], s.hero === 'SB') * 100;
         const up = EARLY_OPENERS.includes(s.hero) ? 25 : 20;
         const r = contPerOpen(d, s) * 100;
-        if (r < mdf - 5 || r > mdf + up) bad.push(`${s.id}: ${r.toFixed(1)} ∉ [${(mdf - 5).toFixed(1)}, ${(mdf + up).toFixed(1)}]`);
+        if (r < mdf || r > mdf + up) bad.push(`${s.id}: ${r.toFixed(1)} ∉ [${mdf.toFixed(1)}, ${(mdf + up).toFixed(1)}]`);
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it('🔴 노트가 말하는 계속 비율을 표가 지킨다 — 오픈 노트·vs 3벳 노트의 MDF % ≤ 그 자리 vs 3벳 표의 continue ÷ 오픈', () => {
+    // 오픈 노트 'BB 3벳 9bb 를 받으면 오픈한 손의 37.0% 이상을 계속한다' · vs 3벳 노트 'MDF 37.0% — 오픈한 손의 그 이상을 계속해야'.
+    // 문장의 숫자를 노트에서 직접 뽑는다 — 헬퍼 값이 아니라 **사용자가 읽는 문장**이 표와 모순되지 않는지 본다.
+    const bad: string[] = [];
+    let checked = 0;
+    for (const d of [40, 60] as const) {
+      for (const s of DEPTH_SCENARIOS[d].filter((x) => x.group === 'rfi9' || x.group === 'rfi6' || x.group === 'vs3bet')) {
+        const m = s.group === 'vs3bet' ? s.note!.match(/MDF (\d+\.\d)% — 오픈한 손의 그 이상을 계속/) : s.note!.match(/오픈한 손의 (\d+\.\d)% 이상을 계속한다/);
+        if (!m) { bad.push(`${s.id}: 계속 비율 문장 없음`); continue; }
+        const v3 = find(d, (x) => x.group === 'vs3bet' && x.hero === s.hero);
+        const r = Number((contPerOpen(d, v3) * 100).toFixed(1));
+        checked++;
+        if (r < Number(m[1])) bad.push(`${s.id}: 노트 ${m[1]}% 이상 · 표 ${r}%`);
+      }
+    }
+    expect(checked).toBe(2 * (8 + 5 + 8));
+    expect(bad).toEqual([]);
+  });
+
+  it('🔴 [설계 규칙] 포지션 — SB(포지션 없음) vs BB 3벳은 BTN(포지션 있음)보다 콜·계속이 좁고 4벳 비중은 같거나 높다', () => {
+    // 근거: 3벳 콜 뒤 SB 는 BB 보다 먼저 행동한다 — 같은 손의 실현이 BTN 보다 나빠 콜로 받는 폭이 줄고, 받을 손은 올인 쪽으로 기운다.
+    //   출발점인 100bb 표도 같은 방향이다(btn_vs_bb3bet 콜 10.3% > sb_vs_bb3bet 콜 9.0% — 아래에서 함께 단언).
+    //   2026-10-10 critical P1: 40·60bb 의 SB 표가 BTN 표의 복사본이라 SB 계속 비율이 더 높았다(60bb 44.6 > 39.8).
+    const callPct = (s: RangeScenario) => pct(s.actions.find((a) => a.key === 'call')!.spec);
+    const by100 = (id: string) => RANGE_SCENARIOS.find((s) => s.id === id)!;
+    expect(callPct(by100('sb_vs_bb3bet'))).toBeLessThan(callPct(by100('btn_vs_bb3bet')));
+    for (const d of [40, 60] as const) {
+      const btn = find(d, (s) => s.group === 'vs3bet' && s.hero === 'BTN');
+      const sb = find(d, (s) => s.group === 'vs3bet' && s.hero === 'SB');
+      expect(callPct(sb), `${d}bb 콜 SB < BTN`).toBeLessThan(callPct(btn));
+      expect(contPerOpen(d, sb), `${d}bb 계속÷오픈 SB < BTN`).toBeLessThan(contPerOpen(d, btn));
+      expect(fourbetShare(d, sb) + 1e-9, `${d}bb 4벳 비중 SB ≥ BTN`).toBeGreaterThanOrEqual(fourbetShare(d, btn));
+    }
   });
 
   describe('깊이 간', () => {
@@ -428,6 +464,27 @@ describe('정직 표기', () => {
   });
 });
 
+describe('계산 근거 자칭 금지', () => {
+  // 2026-10-10 critical P2: '필요조건 검산을 거쳤다'·'밸류가 두꺼워 블러프 올인을 넣지 않았다' 는 BB 응답을 현재 표에 고정한
+  //   경로 의존 값이었다(손을 빼면 BB 콜이 좁아져 같은 손이 다시 이득). 계산하지 않은 근거를 노트·주석에 쓰지 않는다.
+  const CLAIM = /검산|밸류가 두꺼워|폴드보다 손해|최선 응답/;
+  it('깊이 표의 label·desc·note 와 데이터 파일 소스에 계산 근거처럼 읽히는 문구가 없다', () => {
+    const bad: string[] = [];
+    for (const { s } of ALL_DEPTH) {
+      const hit = `${s.label} ${s.desc} ${s.note ?? ''}`.match(CLAIM);
+      if (hit) bad.push(`${s.id}: ${hit[0]}`);
+    }
+    const src = readFileSync(join(ROOT, 'src/lib/ranges.depth.data.ts'), 'utf-8');
+    src.split(/\r?\n/).forEach((l, i) => { const hit = l.match(CLAIM); if (hit) bad.push(`ranges.depth.data.ts:${i + 1}: ${hit[0]}`); });
+    expect(bad).toEqual([]);
+  });
+  it('검사기 자체 — 잡을 문구는 잡고 단순화 표기는 통과한다', () => {
+    expect('필요조건 검산을 거쳤다').toMatch(CLAIM);
+    expect('BB 3벳은 밸류가 두꺼워 블러프 올인을 넣지 않았다').toMatch(CLAIM);
+    expect('블러프 올인은 섞지 않은 단순화 표다').not.toMatch(CLAIM);
+  });
+});
+
 describe('격리 — 깊이 표는 레인지 차트 화면만 읽는다', () => {
   it('데이터 파일의 import 는 전부 type 전용이다(node 로 바로 읽을 수 있게)', () => {
     const src = readFileSync(join(ROOT, 'src/lib/ranges.depth.data.ts'), 'utf-8');
@@ -494,8 +551,8 @@ const WIDTHS: Record<string, number[]> = {
   'bb_vs_utg@25': [3.8,  25.9], 'bb_vs_utg1@25': [4.2,  25.5], 'bb_vs_mp@25': [5.1,  29.9], 'bb_vs_lj@25': [6,  29], 'bb_vs_hj@25': [7.4,  31.8], 'bb_vs_co@25': [10.1,  38.6], 'bb_vs_btn@25': [13.3,  44.3], 'bb_vs_sb@25': [16.3,  41.3],
   'rfi_utg9@40': [14.7], 'rfi_utg1@40': [15.8], 'rfi_mp9@40': [18.1], 'rfi_lj9@40': [20], 'rfi_hj9@40': [24.1], 'rfi_co9@40': [32.7], 'rfi_btn9@40': [48.5], 'rfi_sb9@40': [42.5],
   'bb_vs_utg@40': [3.2,  22.2], 'bb_vs_utg1@40': [3.9,  25.8], 'bb_vs_mp@40': [4.6,  25.1], 'bb_vs_lj@40': [4.9,  30.1], 'bb_vs_hj@40': [5.6,  33.6], 'bb_vs_co@40': [8,  35.4], 'bb_vs_btn@40': [10.5,  42.9], 'bb_vs_sb@40': [13,  40.3],
-  'utg_vs_bb3bet@40': [1.7,  3.4], 'utg1_vs_bb3bet@40': [1.9,  3.8], 'mp_vs_bb3bet@40': [1.9,  4.4], 'lj_vs_bb3bet@40': [2.3,  4.5], 'hj_vs_bb3bet@40': [2.8,  5.1], 'co_vs_bb3bet@40': [3.5,  9.8], 'btn_vs_bb3bet@40': [3.5,  14], 'sb_vs_bb3bet@40': [3.5,  14],
+  'utg_vs_bb3bet@40': [1.7,  4.1], 'utg1_vs_bb3bet@40': [1.9,  4.2], 'mp_vs_bb3bet@40': [2.1,  5.1], 'lj_vs_bb3bet@40': [2.3,  5.5], 'hj_vs_bb3bet@40': [2.8,  6.5], 'co_vs_bb3bet@40': [3.5,  9.8], 'btn_vs_bb3bet@40': [3.5,  15.6], 'sb_vs_bb3bet@40': [3.7,  12.3],
   'rfi_utg9@60': [15.8], 'rfi_utg1@60': [18.1], 'rfi_mp9@60': [18.9], 'rfi_lj9@60': [22.2], 'rfi_hj9@60': [26.3], 'rfi_co9@60': [32.7], 'rfi_btn9@60': [48.5], 'rfi_sb9@60': [45],
   'bb_vs_utg@60': [3.2,  18.8], 'bb_vs_utg1@60': [3.9,  21.6], 'bb_vs_mp@60': [4.6,  25.1], 'bb_vs_lj@60': [4.9,  24.8], 'bb_vs_hj@60': [5.6,  28.4], 'bb_vs_co@60': [8,  31.2], 'bb_vs_btn@60': [10.5,  34], 'bb_vs_sb@60': [13,  35.7],
-  'utg_vs_bb3bet@60': [1.7,  4.6], 'utg1_vs_bb3bet@60': [1.7,  5.2], 'mp_vs_bb3bet@60': [2,  5.3], 'lj_vs_bb3bet@60': [2,  6.3], 'hj_vs_bb3bet@60': [2.2,  7.5], 'co_vs_bb3bet@60': [2.2,  11.2], 'btn_vs_bb3bet@60': [2.2,  17.1], 'sb_vs_bb3bet@60': [2.2,  17.9],
+  'utg_vs_bb3bet@60': [1.7,  4.6], 'utg1_vs_bb3bet@60': [1.7,  5.2], 'mp_vs_bb3bet@60': [2,  5.3], 'lj_vs_bb3bet@60': [2,  6.3], 'hj_vs_bb3bet@60': [2.2,  7.5], 'co_vs_bb3bet@60': [2.2,  11.2], 'btn_vs_bb3bet@60': [2.2,  17.1], 'sb_vs_bb3bet@60': [2.4,  14.7],
 };
