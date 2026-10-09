@@ -4,7 +4,7 @@
 //      1LV 바인이 5만·0.5엔트리 대신 10만·1엔트리로 기록된다(손계산은 src/lib/posterDiscounts.test.ts).
 //   F2 직전 게임 프리필이 포스터 연동 장부의 빈 할인 칸에 **다른 포스터의 레벨 할인**을 채웠고, 프리필이 포스터 목록보다 먼저 오면
 //      오늘 포스터 자동 연동 자체를 건너뛰었다(도착 순서 의존).
-// 음성 대조: 수정 전 빌드(NURI/addon-carry-1009 0a67204e)에서 🔴 표시 건이 빨간불, 나머지(양성)는 초록 — 보고서 audit-open-1009/fix-pipe/report.md.
+// 음성 대조: 수정 전 빌드(origin/main bf86c7d8)에서 🔴 5건 + 새 동작 2건이 빨간불, '양성'(오늘 포스터 없음)만 초록 — 보고서 audit-open-1009/fix-pipe/report.md.
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_DAY, MOCK_VENUE, MOCK_UID, MOCK_VENUE_NAME } from './_mockOwner';
@@ -175,7 +175,8 @@ test('🔴 F1 1440 — 부스터데이를 골랐다가 깐부전으로 바꾸면
   expect(s.discounts, '앞 포스터의 할인이 남았다').toEqual(KKANBU_DISCOUNTS);
 });
 
-test('양성 1440 — 업주가 고친 할인 칸은 포스터를 바꿔도 덮지 않는다', async ({ page }) => {
+// 자동 채움의 한계 — 수정 전 빌드는 부스터데이 할인 칸 자체가 안 생겨 전제에서 빨갛다(양성 대조가 아니라 새 동작의 경계).
+test('F1 1440 — 업주가 고친 할인 칸은 포스터를 바꿔도 덮지 않는다', async ({ page }) => {
   test.setTimeout(120_000);
   const probe = await bootStart(page, { posters: [BOOSTER, KKANBU] });
   await page.getByRole('button', { name: '13:00 · 로티 부스터데이', exact: true }).click({ timeout: 15_000 });
