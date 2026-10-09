@@ -155,8 +155,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
       {/* 추정 구간(빅앤티 6~10bb · 뒤 3명+ — BTN·SB 는 정확, 2~5bb 는 2026-10-02 다인 균형)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
-      <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
+      <div className="flex flex-col items-center gap-0.5" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
+        {/* 기준 한 줄(A-012, 2026-10-09) — 항상 같은 한 줄이라 자리·스택·보기를 바꿔도 높이가 변하지 않는다. */}
+        <p className="text-2xs text-ink-muted whitespace-nowrap" data-testid="pushfold-basis">9인 대회 기준</p>
       </div>
       {hasData && isMultiwayUncapped(stack, k, true) && <MultiwayNotice className="-my-1" />}
       {hasData
