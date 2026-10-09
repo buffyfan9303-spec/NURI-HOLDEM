@@ -42,7 +42,7 @@ test('🔴 요청 중 \'다른 카드\' 는 시트를 닫지 못하고, 늦은 �
   await expect(page.getByText('1번 카드를 여시겠습니까?'), '요청 중에 시트가 닫혔다 — 늦은 결과를 볼 곳이 사라진다').toBeVisible();
 
   await release(0, 1);
-  await expect(page.getByText('지갑에 바로 들어갔습니다'), '서버가 확정한 결과가 화면에 안 나왔다').toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId('event-result-granted'), '서버가 확정한 결과가 화면에 안 나왔다').toBeVisible({ timeout: 5_000 });
 });
 
 test('🔴 요청 중 판을 닫아도 결과를 \'n번 카드 결과\' 로 알린다', async ({ page }) => {
@@ -66,5 +66,5 @@ test('🔴 \'찢기\' 더블 클릭 — open_event_card 는 1회만 나간다', 
   await page.waitForTimeout(300);
   expect(held.length, '찢기 더블 클릭이 카드 열기를 두 번 보냈다').toBe(1);
   await release(0, 2);
-  await expect(page.getByText('지갑에 바로 들어갔습니다')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId('event-result-granted')).toBeVisible({ timeout: 5_000 });
 });

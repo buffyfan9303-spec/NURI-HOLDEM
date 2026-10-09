@@ -4210,7 +4210,9 @@ export default function App() {
     //     내 매장에 들어가는 순간 좌우로 68px 씩 벌어지는 것만 보였다(오너 보고 "전체가 넓어져서 이질감").
     //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
     //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
-    <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle" style={storeUncap ? { maxWidth: 'none' } : undefined}>
+    // data-app-shell — 판 전환 막(src/lib/tabCover.ts 9차)이 붙는 자리. 이 래퍼(relative z-1)가 쌓임 맥락이라 막이 여기 있어야
+    //   하단바(z-50)·헤더 아래에 깔린다(body 에 붙이면 셸 전체 위로 올라가 누른 탭까지 흐렸다 — 2026-10-09 P2-1).
+    <div data-app-shell="" className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle" style={storeUncap ? { maxWidth: 'none' } : undefined}>
       {/* 전면 오버레이 안의 사업자 푸터도 약관·문의를 열 수 있게 — 콜백 공급(BusinessFooter.tsx FooterActionsContext) */}
       <FooterActionsContext.Provider value={footerActions}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}

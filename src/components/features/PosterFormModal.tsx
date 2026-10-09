@@ -1066,22 +1066,28 @@ function PromotionEditor({ items, onChange, buyIn }: {
                   <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} maxLength={40}
                     placeholder="내용 (예: 첫 방문 50% 할인)" className="input flex-1 min-w-0 text-sm" />
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="shrink-0 text-2xs text-ink-muted">참가비 할인</span>
-                  <div className="relative w-20 shrink-0">
+                  {/* F-03(2026-10-09) 실측 — PC 크롬은 number 스핀 버튼(≈16px)을 글자 공간 안에 늘 잡아 둔다(호버 전에도).
+                      레벨 칸 w-16(64px)·pr-6 은 글자 공간 26px 이라 16 이 '1', 60 이 '6', placeholder '자동' 이 '지' 로 잘렸고,
+                      할인액 칸 w-20(80px) 도 '12.5' 가 '12.' 로 잘렸다. 두 칸 모두 88px(글자 공간 50px):
+                      e2e 실측(1440·15px): 레벨 '60'+스핀 34.2px(여유 15.8) · '자동'+스핀 42px(여유 8) · 할인 '12.5'+스핀 44px(여유 6). 터치(16px·스핀 없음)는 더 넉넉하다.
+                      회귀 게이트: e2e/open-fix-store-1009.spec.ts F-03. */}
+                  <div className="relative w-[5.5rem] shrink-0">
                     <input type="number" inputMode="decimal" step="0.1" min="0" aria-label={`프로모션 ${i + 1} 할인액(만원)`}
                       value={won ? wonToMan(won) : ''} onChange={(e) => retype(i, { discountWon: manToWon(Math.max(0, parseFloat(e.target.value) || 0)) })}
                       placeholder="없음" aria-invalid={over}
                       className={['input w-full pr-6 text-sm tabular-nums', over ? 'border-danger text-danger-light' : ''].join(' ')} />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
                   </div>
-                  <div className="relative w-16 shrink-0">
+                  <div className="relative w-[5.5rem] shrink-0">
                     <input type="number" inputMode="numeric" min="0" max="60" aria-label={`프로모션 ${i + 1} 자동 적용 레벨`}
                       value={p.level || ''} onChange={(e) => retype(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })}
                       placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
                     <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs font-bold text-ink-muted">LV</span>
                   </div>
-                  <p className="min-w-0 flex-1 break-keep text-2xs leading-tight text-ink-muted">
+                  {/* 칸을 88px 로 넓힌 만큼 설명이 좁아진다 — 8.5rem 아래로 좁아지면(390) 다섯 줄 기둥이 되는 대신 다음 줄 전폭으로 내려간다(flex-wrap). */}
+                  <p className="min-w-[8.5rem] flex-1 break-keep text-2xs leading-tight text-ink-muted">
                     {over
                       ? <b className="text-danger-light">참가비({wonToMan(buyIn)}만)보다 큽니다 — 참가비 이하로 적어 주세요.</b>
                       : won > 0

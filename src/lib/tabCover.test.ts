@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   tabPaneReady, isSettled, waitSettled, SUB_PANEL, OWN_SCROLL_SCOPES, TAB_COVER_WAIT_MAX_MS,
+  notePaneLeaving, handOffPane, FADE_FROM, FADE_MS, FADE_EASE,
 } from './tabCover';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -163,5 +164,105 @@ describe('④ App.tsx — 덮개는 없다 · 준비 표식은 남는다', () =>
     expect(m, 'LazyFallback 이 사라졌다 — isSettled 의 표식을 같이 고쳐라').not.toBeNull();
     expect(m![0]).toMatch(/pane-reserve/);
     expect(m![0]).toMatch(/aria-busy="true"/);
+  });
+});
+
+// 9차 PANE-FADE(2026-10-09 오너 "너무 딱딱하다") — 판 교체 뒤 판 밖 지면색 막 한 장이 0.55 에서 곧바로 걷힌다.
+//   프레임 순서(첫 rAF 정지값 → 둘째 rAF 에서 정적화 해제와 같이 걷기)·건너뛰기(첫 마운트·동작 줄이기·전면 판)·연타를 node 가짜 DOM 으로 잰다.
+//   화면 프레임(휘도·겹침)은 e2e/tab-instant-swap.spec.ts · pill-flash.spec.ts 가 잰다.
+describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
+  type El = { attrs: Map<string, string>; style: Record<string, string>; readonly isConnected: boolean;
+    setAttribute: (k: string, v: string) => void; animate: ReturnType<typeof vi.fn>; getAnimations: () => { cancel: () => void }[] };
+  let connected: Set<El>;
+  let created: El[];
+  let frames: FrameRequestCallback[];
+  let html: Map<string, string>;
+  let reduced: boolean;
+  /** 걷기 애니가 도는 중의 computed opacity(가짜 DOM 에는 애니가 없어 직접 넣는다). null 이면 인라인 값. */
+  let animOp: string | null;
+  const flush = () => { const f = frames; frames = []; f.forEach((cb) => cb(0)); };
+  beforeEach(() => {
+    connected = new Set(); created = []; frames = []; html = new Map(); reduced = false; animOp = null;
+    vi.stubGlobal('getComputedStyle', (e: El) => ({ opacity: animOp ?? e.style.opacity }));
+    const pane = { style: { display: '' }, getClientRects: () => ({ length: 1 }), getBoundingClientRect: () => ({ top: 60, bottom: 2000, left: 0, right: 390, width: 390 }) };
+    vi.stubGlobal('document', {
+      hidden: false,
+      documentElement: { setAttribute: (k: string) => html.set(k, ''), removeAttribute: (k: string) => html.delete(k), hasAttribute: (k: string) => html.has(k) },
+      body: { appendChild: (e: El) => connected.add(e) },
+      createElement: () => {
+        const e: El = { attrs: new Map(), style: {}, get isConnected() { return connected.has(e); },
+          setAttribute: (k, v) => e.attrs.set(k, v), animate: vi.fn(() => ({ onfinish: null, cancel: () => {} })), getAnimations: () => [] };
+        created.push(e); return e;
+      },
+      querySelectorAll: (sel: string) => (sel === '.tab-pane' ? [pane] : []),
+      querySelector: (sel: string) => (sel === '[data-stack-header]' ? { getBoundingClientRect: () => ({ bottom: 60 }) } : null),
+    });
+    vi.stubGlobal('window', { innerWidth: 390, innerHeight: 844, scrollY: 0, scrollTo: () => {},
+      setTimeout: () => 1, matchMedia: (q: string) => ({ matches: q.includes('reduce') ? reduced : false }) });
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frames.push(cb); return frames.length; });
+    vi.stubGlobal('clearTimeout', () => {});
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const fade = () => created.find((e) => e.attrs.has('data-pane-fade') && e.isConnected);
+
+  it('이동 — 첫 rAF(첫 페인트 전)에 정지값 FADE_FROM 으로 깔고, 둘째 rAF 에서 정적화 해제와 함께 FADE_MS 동안 0 으로 걷는다', () => {
+    notePaneLeaving('home', 'community');
+    expect(html.has('data-tab-swap')).toBe(true);
+    handOffPane();
+    expect(fade(), '클릭·커밋 시점에는 아직 막이 없다(옛 판을 먼저 흐리지 않는다)').toBeUndefined();
+    flush();
+    const el = fade()!;
+    expect(el, '첫 rAF 에 막이 깔린다').toBeDefined();
+    expect(el.style.display).toBe('block');
+    expect(Number(el.style.opacity)).toBe(FADE_FROM);
+    expect(FADE_FROM).toBeLessThanOrEqual(0.6);
+    expect(el.style.top).toBe('60px'); // 헤더 밑
+    expect(el.style.height).toBe(`${844 - 60}px`);
+    expect(el.attrs.get('aria-hidden')).toBe('true');
+    expect(el.style.cssText).toMatch(/pointer-events:none/);
+    expect(el.animate, '첫 프레임(스왑 프레임)에는 합성 애니가 없다 — 빠진 타일 방지').not.toHaveBeenCalled();
+    expect(html.has('data-tab-swap')).toBe(true);
+    flush();
+    expect(html.has('data-tab-swap')).toBe(false);
+    expect(el.animate).toHaveBeenCalledTimes(1);
+    expect(el.animate).toHaveBeenCalledWith([{ opacity: FADE_FROM }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -16 });
+    expect(el.style.opacity, '애니가 끝난 프레임에 정지값으로 되돌지 않는다').toBe('0');
+  });
+  it('첫 마운트(notePaneLeaving 없음) · 같은 탭 · 동작 줄이기 · 전면 판 열림에는 막을 깔지 않는다(8차 한 프레임 교체 그대로)', () => {
+    handOffPane(); flush(); flush();
+    expect(fade(), '첫 마운트').toBeUndefined();
+    notePaneLeaving('home', 'home'); handOffPane(); flush(); flush();
+    expect(fade(), '같은 탭').toBeUndefined();
+    reduced = true;
+    notePaneLeaving('home', 'live'); handOffPane(); flush(); flush();
+    expect(fade()?.style.display ?? 'none', '동작 줄이기').toBe('none');
+    reduced = false; html.set('data-overlay', '');
+    notePaneLeaving('live', 'home'); handOffPane(); flush(); flush();
+    expect(fade()?.style.display ?? 'none', '전면 판 열림').toBe('none');
+  });
+  it('연타 — 새 커밋이 이전 막을 버린다(이전 걷기는 시작되지 않고 마지막 이동만 한 번 걷는다)', () => {
+    notePaneLeaving('home', 'community'); handOffPane(); flush();
+    const el = fade()!;
+    notePaneLeaving('community', 'tools'); handOffPane();
+    flush(); // 첫 이동의 둘째 rAF + 둘째 이동의 첫 rAF
+    expect(el.animate, '버려진 이동의 걷기가 돌았다').not.toHaveBeenCalled();
+    expect(Number(el.style.opacity)).toBe(FADE_FROM);
+    flush();
+    expect(el.animate).toHaveBeenCalledTimes(1);
+  });
+  it('연타 — 걷히는 중인 막이 있으면 지금 값에서 이어 걷는다(0.55 로 다시 짙어지는 맥박 없음 · P3-2)', () => {
+    notePaneLeaving('home', 'community'); handOffPane(); flush(); flush();
+    const el = fade()!;
+    expect(el.animate).toHaveBeenCalledTimes(1);
+    animOp = '0.2'; // 첫 이동의 걷기가 0.2 까지 왔다
+    notePaneLeaving('community', 'tools'); handOffPane(); flush();
+    animOp = null;
+    expect(Number(el.style.opacity), '0.55 로 다시 깔렸다 — 탭마다 맥박').toBe(0.2);
+    flush();
+    expect(el.animate).toHaveBeenLastCalledWith([{ opacity: 0.2 }, { opacity: 0 }], { duration: FADE_MS, easing: FADE_EASE, delay: -16 });
+    // 걷기가 끝난 뒤의 다음 이동은 다시 FADE_FROM 부터
+    el.style.display = 'none';
+    notePaneLeaving('tools', 'home'); handOffPane(); flush();
+    expect(Number(el.style.opacity)).toBe(FADE_FROM);
   });
 });
