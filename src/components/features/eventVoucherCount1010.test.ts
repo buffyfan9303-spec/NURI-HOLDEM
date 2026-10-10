@@ -8,11 +8,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { EventVoucherQty } from './EventPage';
 
 const html = (v: unknown) => renderToStaticMarkup(createElement(EventVoucherQty, { voucherByTier: v as Record<string, number> }));
-/** 등수 li 하나의 글자만 뽑는다(태그 제거). */
+/** 등수 li 하나에서 등수 라벨 span 과 수량 span 의 글자를 그대로 뽑는다(태그를 걷어내지 않고 span 본문만 매칭). */
 const row = (h: string, t: number) => {
-  const m = h.match(new RegExp(`<li[^>]*data-testid="event-voucher-qty-${t}"[^>]*>([\\s\\S]*?)</li>`));
-  expect(m, `${t}등 칸이 없다`).not.toBeNull();
-  return m![1].replace(/<[^>]+>/g, '');
+  const li = h.split('<li').find((c) => c.includes(`data-testid="event-voucher-qty-${t}"`));
+  expect(li, `${t}등 칸이 없다`).toBeDefined();
+  const label = li!.match(/<span class="shrink-0 font-bold[^"]*">([^<]*)<\/span>/);
+  const qty = li!.match(/<span class="min-w-0[^"]*">([^<]*)<\/span>/);
+  expect(label, `${t}등 라벨 span 이 없다`).not.toBeNull();
+  expect(qty, `${t}등 수량 span 이 없다`).not.toBeNull();
+  return label![1] + qty![1];
 };
 
 describe('EventVoucherQty · 등수별 매장 이용권 수량', () => {
@@ -53,8 +57,8 @@ describe('EventVoucherQty · 등수별 매장 이용권 수량', () => {
 
   it('확률·금액·현금 표현이 렌더에 없다 — 개수만', () => {
     const h = html({ '1': 3, '2': 2, '3': 1, '4': 5, none: 40 });
-    const text = h.replace(/<[^>]+>/g, '');
-    expect(text).not.toMatch(/%|확률|당첨률|\d\s*원|₩|현금|환전|수익|양도|꽝/);
+    // 마크업 전체(속성 포함)에서 직접 본다 — 태그를 걷어내지 않는다.
+    expect(h).not.toMatch(/%|확률|당첨률|\d\s*원|₩|현금|환전|수익|양도|꽝/);
     // 'none'(꽝) 칸은 그리지 않는다
     expect(h).not.toMatch(/event-voucher-qty-none/);
     expect(h.match(/<li\b/g)).toHaveLength(4);
