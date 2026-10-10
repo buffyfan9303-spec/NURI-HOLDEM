@@ -990,6 +990,10 @@ video {
   /* 빈 상태 카드 — 같은 세로 면 + 아이콘 뒤(위 가운데)만 옅은 황동 원. 흐린 글자 5.9 이상. */
   .surface-empty { background-image: radial-gradient(60% 50% at 50% 0%, rgb(var(--hero-shine) / 0.10), transparent), linear-gradient(180deg, rgb(var(--surface-mid)) 0%, rgb(var(--surface-low)) 100%); }
   html.light .surface-empty { background-image: radial-gradient(60% 50% at 50% 0%, rgb(var(--accent-300) / 0.06), transparent), linear-gradient(180deg, #FFFFFF 0%, #F6F8FC 100%); }
+  /* 강조 블록의 크기를 바꾸지 않고 윗변을 구분한다. */
+  .surface-grad, .surface-empty { box-shadow: inset 0 1px 0 rgb(var(--hero-shine) / 0.08); }
+  html.light .surface-grad, html.light .surface-empty { box-shadow: none; }
+  @media (prefers-contrast: more), (forced-colors: active) { .surface-grad, .surface-empty { box-shadow: none; } }
   /* 섹션 머리 밑줄 — 1px 선이 왼쪽에서 오른쪽으로 옅어진다(선이라 글자 대비와 무관). border-bottom 폭은 호출부 그대로(레이아웃 0). */
   .line-fade { border-image: linear-gradient(90deg, rgb(var(--border-strong) / 0.55), transparent 80%) 1; }
 
@@ -1144,9 +1148,10 @@ video {
        강도: 하단 최심점 ΔL* 2.12 / 100 (기준 ≤3) — 인접 단색과 붙여 봐도 띠가 보이지 않는 하한.
        색은 --card-shadow 와 같은 배경 hue 편향(순검정 금지 — 플럼이 회색으로 죽는다). */
     /* 2026-10-05 4안: 위쪽에 약한 블루(배너 시작색) — 가이드 §6 '페이지 지면은 약한 상단 블루 그라데이션만'. 아래 침강은 종전대로.
-       위쪽 최대 합성색에서도 메타 글(#A8BAD2) 대비 8 이상이라 종전의 '위를 밝히면 AA 미달' 제약(아우라 블룸 시절)은 해당 없다. */
+       위쪽 최대 합성색에서도 메타 글(#A8BAD2) 대비 8 이상이라 종전의 '위를 밝히면 AA 미달' 제약(아우라 블룸 시절)은 해당 없다.
+       카드와 바탕이 겹쳐 보이지 않도록 다크 그라데이션 강도를 낮춘다. */
     --grad-surface: linear-gradient(180deg,
-      rgb(var(--hero-start) / 0.55) 0%, rgb(var(--hero-start) / 0) 32%, rgb(0 0 0 / 0) 40%, rgb(0 0 0 / 0.35) 100%);
+      rgb(var(--hero-start) / 0.20) 0%, rgb(var(--hero-start) / 0) 20%, rgb(0 0 0 / 0) 40%, rgb(0 0 0 / 0.12) 100%);
 
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
        그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */

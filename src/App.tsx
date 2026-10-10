@@ -769,7 +769,7 @@ const TabBar = memo(function TabBar({
             {/* 밑줄 측정 대상 = 라벨 캡슐(px-2.5 py-1, data-pill-active) — 셀 전체가 아니라 라벨을 감싸는 폭.
                 underline 모드가 좌우 8px 씩 안쪽으로 그리므로 밑줄 ≈ 아이콘+라벨 폭(옛 ::after 의 좌우 8px 안쪽 인셋과 같다)
                 누름 반응 = 캡슐 배경 틴트(즉시 · 크기 변화 0 — 전역 프레스 scale 은 끈 자리라 이것이 손끝 반응을 맡는다) */}
-            <span data-pill-active={isActive || undefined} className="relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full transition-colors duration-(--dur-fast) group-hover:bg-surface-high/50 group-active:bg-accent-300/10 group-active:duration-0">
+            <span data-pill-active={isActive || undefined} className="relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full transition-colors duration-(--dur-fast) group-hover:bg-surface-high/30 group-active:bg-accent-300/10 group-active:duration-0">
               <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
               {/* 굵은 폭 예약은 ::after(대체 글 '') — DOM 사본을 두면 textContent·복사가 "라이브라이브" 로 겹친다. */}
               <span data-label={label} className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 after:font-bold after:content-[attr(data-label)_/_'']">
