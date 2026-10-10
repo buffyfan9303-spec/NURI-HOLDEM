@@ -207,16 +207,37 @@ test('A 일시정지를 누르면 마우스를 치워도 계속 서 있고, 다�
   await nextChange(page, frozen, 7_500);
 });
 
+/** 지금 화면에 **정착한** 장의 이름(슬라이드 aria-label) — 스무스 스크롤 중간이면 null.
+ *  번호(카운터 'n번째')로 재면 안 된다: 늦게 온 이벤트가 live 로 판정되면 homeCarouselPlan 이 이벤트를 앞으로 옮기고,
+ *  브라우저 스냅 재정렬이 보던 장을 붙잡아 **같은 장의 번호만** 바뀐다(CI 38065914971 샤드3: 'NURI HOLDEM' 그대로, 2번째→3번째). */
+const shownSlide = (page: Page) => page.getByTestId('home-banner-viewport').evaluate((vp: HTMLElement) => {
+  const cards = [...(vp.firstElementChild as HTMLElement).children] as HTMLElement[];
+  const half = cards.length / 2; // 원본 세트 + 복제 세트(복제는 aria-label 이 없다)
+  const left = vp.getBoundingClientRect().left;
+  let at = 0, gap = Infinity;
+  cards.forEach((c, i) => { const d = Math.abs(c.getBoundingClientRect().left - left); if (d < gap) { gap = d; at = i; } });
+  return gap < 1 ? cards[at % half].getAttribute('aria-label') : null;
+});
+
 test('A 일시정지 중에도 이전/다음 화살표는 동작하지만 자동으로 돌지는 않는다', async ({ page }) => {
   await page.goto('/');
   await expect(counter(page)).toBeVisible({ timeout: 20_000 });
+  // 이벤트 슬라이드가 '불러오는 중'(aria-busy)이면 응답 뒤 자리가 바뀐다 — 화살표 스무스 스크롤 도중에 바뀌면 이동 목표가 엉뚱한 장이 된다.
+  await expect(page.getByTestId('home-banner-viewport').locator('[aria-busy]')).toHaveCount(0, { timeout: 15_000 });
   await pauseBtn(page).evaluate((b: HTMLElement) => b.click());
-  const before = await label(page);
+  await expect(pauseBtn(page)).toHaveAttribute('aria-pressed', 'true');
+  const before = await shownSlide(page);
+  expect(before, '시작 장이 정착해 있지 않다').not.toBeNull();
   await page.getByRole('button', { name: '다음 배너' }).evaluate((b: HTMLElement) => b.click());
-  await nextChange(page, before, 3_000);
-  const after = await label(page);
-  await page.waitForTimeout(5_800);
-  expect(await label(page), '화살표를 누르자 일시정지가 풀렸다').toBe(after);
+  await expect.poll(async () => { const s = await shownSlide(page); return s !== null && s !== before; }, { timeout: 3_000, intervals: [100] }).toBe(true);
+  const after = await shownSlide(page); // poll 과 별개의 읽기라 null 일 수 있다 — null===null 거짓 PASS 방지
+  expect(after, '화살표 뒤 정착한 장을 다시 읽지 못했다').not.toBeNull();
+  expect(after, '화살표를 눌렀는데 장이 그대로다').not.toBe(before);
+  await page.waitForTimeout(5_800); // 자동 넘김 한 주기(5초)보다 길게
+  await expect(pauseBtn(page), '화살표를 누르자 일시정지 버튼이 풀렸다').toHaveAttribute('aria-pressed', 'true');
+  const end = await shownSlide(page);
+  expect(end, '5.8초 뒤 정착한 장을 읽지 못했다').not.toBeNull();
+  expect(end, '일시정지인데 화살표 뒤 정착한 장에서 다른 장으로 넘어갔다').toBe(after);
 });
 
 test.describe('모바일 390 — 읽는 중 표식(손가락 수)', () => {
