@@ -119,7 +119,9 @@ test('🔴 로고가 있으면 판 머리·홈 슬라이드·목록에 그려지
   }
 
   // 목록 — 첫 줄의 선물 타일 자리
-  await page.getByTestId('home-quick-event').click();
+  // 2026-10-10 홈 퀵 '이벤트' 칸이 '커뮤니티' 가 됐다 — 캠페인이 있으면 모바일 홈 슬라이드는 보드 직행이라 목록 진입은 PC GNB '이벤트' 다.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator('[data-stack-tabbar]').getByRole('tab', { name: '이벤트', exact: true }).click();
   const item = page.locator('[data-testid="event-list-page"] [data-testid="event-list-item"]').first();
   await expect(item).toBeVisible({ timeout: 15_000 });
   await expect(item.locator(LOGO), '이벤트 목록 줄에 매장 로고가 없다').toBeVisible();

@@ -2598,6 +2598,14 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
     transition-duration: 0.06s;
   }
 }
+/* PC 상단 대메뉴(GNB) — 하단바와 같은 이유로 누름 축소·감광을 끈다(PC-MOTION-1010, 2026-10-10 오너 "GTO 글자/폭 커짐").
+   전역 button:active 의 scale(.97)·opacity .8 이 누른 라벨에 걸렸다가 0.2s 에 걸쳐 되돌아오면서 활성 굵기 전환과 겹쳐 '글자가 커진다' 로 보였다.
+   data-no-press(App TabBar)는 전환만 빼고 :active 값은 남기므로(전역 :active 셀렉터는 button 에 탈출구가 없다) 여기서 값까지 고정한다.
+   반응은 SlidingPill 밑줄 이동·색 전환이 맡는다. 특이도 (0,4,1) > 전역 (0,2,1) — 순서도 전역 뒤. */
+[data-stack-tabbar] button[role='tab']:active:not(:disabled) {
+  transform: none;
+  opacity: 1;
+}
 @media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
   /* 필/아이콘 전환만 죽인다 — 색 대비·aria-current·focus-visible 은 그대로 둔다("움직임을
      줄여라"이지 "선택 표시를 지워라"가 아니다). nav 자체의 자동숨김 transform 은 기능 동작이라

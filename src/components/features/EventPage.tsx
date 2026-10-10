@@ -266,7 +266,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
             ))}
           </div>
 
-          <HowItWorks />
+          <HowItWorks voucherByTier={board.voucherByTier} />
         </div>
       )}
       {/* 법정 상시 고지 — 이 판(fixed inset-0 z-55)이 App 문서 끝 푸터를 덮는다(2026-09-29 D1).
@@ -588,8 +588,35 @@ function TearSheet({ card, phase, result, busy, onOpen, onClose }: {
 // ── 참여 안내(최하단) ─────────────────────────────────────────────────────────
 // 2026-10-09 오너 결정(§28): 예전엔 여기에 등급별 이용권 장수·당첨 확률 표가 있었다. 확률로 이용권을 주는 모양이라
 // 환금성 프레이밍에 걸려 손님 화면에서 뺐다(감사 LEGAL-F1). 지급 로직·데이터·관리자/업주 설정은 그대로다.
-// 이 자리는 숫자 없이 "어떻게 참여하나" 만 말한다. `oddsRows`(api/events)는 관리자·집계가 쓸 수 있게 남겨 둔다.
-function HowItWorks() {
+// 이 자리는 "어떻게 참여하나" 와, 2026-10-10 오너 지시("이벤트 등수마다 매장이용권 몇개인지 명시")에 따른
+// **등수별 매장 이용권 수량(개수만)** 을 말한다. 확률·당첨률·금액·현금가치는 여전히 싣지 않는다.
+// `oddsRows`(api/events)는 확률·누락→0 기본값이 섞여 있어 쓰지 않는다 — 관리자·집계 몫으로 남겨 둔다.
+
+/** 등수별 "매장 이용권 N개". 값은 board.voucherByTier 의 **실제 값**만 쓴다 —
+ *  안전한 정수 && >= 0 이면 N(0 도 저장된 값이면 그대로), 없거나 잘못된 값(음수·소수·NaN·문자열)이면 '수량 안내 미등록'(가짜 0 금지). */
+export function EventVoucherQty({ voucherByTier }: { voucherByTier: EventBoard['voucherByTier'] | null | undefined }) {
+  return (
+    <ul data-testid="event-voucher-qty" className="mt-2.5 grid grid-cols-2 gap-1.5">
+      {Object.keys(TIER_META).map(Number).sort((a, b) => a - b).map((t) => {
+        const m = TIER_META[t];
+        const raw: unknown = voucherByTier?.[String(t)];
+        const known = typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0;
+        return (
+          <li key={t} data-testid={`event-voucher-qty-${t}`}
+            className="flex items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5 text-2xs">
+            <span aria-hidden className={['h-1.5 w-1.5 shrink-0 rounded-full', m.dot].join(' ')} />
+            <span className={['shrink-0 font-bold', m.text].join(' ')}>{m.label}</span>
+            <span className={['min-w-0 whitespace-nowrap font-semibold', known ? 'text-ink-primary' : 'text-ink-muted'].join(' ')}>
+              {known ? `매장 이용권 ${raw}개` : '수량 안내 미등록'}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function HowItWorks({ voucherByTier }: { voucherByTier: EventBoard['voucherByTier'] }) {
   return (
     <section data-testid="event-guide" className="mt-6 rounded-aura border card-aura p-3.5">
       <div className="flex items-center gap-2 border-b border-border-subtle pb-2">
@@ -601,6 +628,7 @@ function HowItWorks() {
       <p className="mt-2 text-2xs text-ink-secondary break-keep">
         <b className="text-ink-primary">출석 QR</b>을 찍으면 카드 1장 — 하루 1회예요. 카드를 모으면 매장 혜택을 받을 수 있어요(자세한 내용은 매장 안내).
       </p>
+      <EventVoucherQty voucherByTier={voucherByTier} />
       <ul className="mt-2.5 space-y-1 text-2xs leading-relaxed text-ink-muted">
         <li>· 참여권은 매장 출석 QR 1회당 1장 지급되며, 별도의 구매나 비용이 필요하지 않습니다.</li>
         <li>· 각 카드의 결과는 시작 전에 정해져 서버에 저장됩니다. 카드를 여는 시점에 바꾸지 않습니다.</li>

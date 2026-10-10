@@ -178,9 +178,9 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     // 오너 2026-10-08 "블러 처리되며 이동, 뒤에 살짝 네모칸" — 떠나는 판이 새 판 위에서 0.999→0 으로 걷히는 ~300ms 동안 두 판이 겹쳐 보였다.
     const fn = (name: string) => { const i = tc.indexOf(`export function ${name}(`); expect(i, `${name} 정의가 없다`).toBeGreaterThan(0); const rest = tc.slice(i); return rest.slice(0, rest.search(/\n}\r?\n/)); };
     // 9차 — 스왑 정적화 해제와 막 걷기는 **같은 콜백**(새 판 첫 프레임 다음)이다. 커밋 프레임에 걷기를 시작하면 빠진 타일(6차 원인).
-    expect(fn('handOffPane'), '메인 탭 — 새 판 첫 프레임 다음 프레임에 정적화 해제 + 막 걷기').toMatch(/requestAnimationFrame\(\(\) => \{ releaseSwap\(\); fadeOut\(\); \}\)/);
+    expect(fn('handOffPane'), '메인 탭 — 새 판 첫 프레임 다음 프레임에 정적화 해제 + 막 걷기').toMatch(/requestAnimationFrame\(\(\) => \{ releaseSwap\(gen\); fadeOut\(\); \}\)/);
     expect(fn('handOffPane'), '메인 탭 — 막은 첫 rAF(첫 페인트 전)에 깔고 둘째 rAF 에서 걷는다').toMatch(/requestAnimationFrame\(\(\) => \{\s*if \(armed\) fadeOut = coverAt\(/);
-    expect(fn('handOffSubPanel'), '하위 탭 — 커밋 뒤 첫 프레임 다음 정적화 해제 + 막 걷기').toMatch(/afterFirstFrame\(\(\) => \{ releaseSwap\(\); fadeOut\(\); \}\)/);
+    expect(fn('handOffSubPanel'), '하위 탭 — 커밋 뒤 첫 프레임 다음 정적화 해제 + 막 걷기').toMatch(/afterFirstFrame\(\(\) => \{ releaseSwap\(gen\); fadeOut\(\); \}\)/);
     expect(tc, '떠나는 판 복제본이 돌아왔다').not.toMatch(/cloneNode\(|data-pane-leaving/);
     const cssCode = read('src/index.css').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(cssCode, 'index.css 에 떠나는 판 규칙([data-pane-leaving])이 돌아왔다').not.toMatch(/data-pane-leaving/);
@@ -216,6 +216,7 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
   });
   /** 탭 레일을 그리지만 goSubTab 을 쓰지 않는 파일 — 판이 아니라 카드 안 입력·차트·정렬만 바꾼다(또는 부품 자신). */
   const NOT_SUBTAB: Record<string, string> = {
+    'src/App.tsx': 'PC 상단 대메뉴(GNB) 밑줄 — 메인 탭 레일이다. 판 교체 입구는 (b) 의 commitTab 한 곳이고(notePaneLeaving·handOffPane), SlidingPill 이 판 교체 중 FLIP 을 미룬다(PC-MOTION-1010)',
     'src/components/atoms/SegmentedTabs.tsx': '부품 — 입구는 쓰는 쪽이 부른다',
     'src/components/atoms/UnderlineTabs.tsx': '부품 — 입구는 쓰는 쪽이 부른다',
     'src/components/atoms/SlidingPill.tsx': '부품(인디케이터)',

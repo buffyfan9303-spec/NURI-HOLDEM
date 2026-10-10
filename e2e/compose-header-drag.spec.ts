@@ -50,6 +50,8 @@ async function boot(page: Page, baseURL: string | undefined, theme: 'dark' | 'li
     if (req.method() !== 'GET') return route.fulfill({ status: 201, body: '' });
     return json(route, []);
   });
+  // 2026-10-10 커뮤니티 기본 섹션이 게시판이 됐다 — ⑤(한 칸 전 = 홀덤펍)가 재는 뒤로가기 겹을 위해 진입 섹션을 홀덤펍으로 명시한다(외부 지정 신호).
+  await page.addInitScript(() => { try { sessionStorage.setItem('nuri:community-section', 'venues'); } catch { /* noop */ } });
   await page.goto('/?tab=community');
   await expect(page.locator('html'), '테마 클래스가 안 붙었다').toHaveClass(theme === 'light' ? /\blight\b/ : /\bdark\b/);
   const bar = page.locator('[data-community-secbar]');

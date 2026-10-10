@@ -90,14 +90,14 @@ interface CommunityTabProps {
   active?: boolean;
 }
 
-// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 (사용 빈도순 진열)
+// 커뮤니티 섹션 — 게시판 / 홀덤펍 / 실시간 / 랭킹 / 장터 / 딜러 (오너 2026-10-10: 1 게시판 · 2 홀덤펍 · 3 실시간, 처음 들어오면 게시판)
 // 2026-09-10 오너 지시: 업주 전용 커뮤니티('매장') **전량 폐기**. 업주에게만 7번째 탭이 붙어
 //   --tab-cols(=5+장터) 계산과 어긋나 레일이 넘쳤고, 그 상태에서 알약이 첫 칸으로 튀었다.
 //   이제 최대 6칸이라 계산과 정확히 맞는다. 서버 데이터·API(getOwnerPosts 등)는 남겨 둔다.
 // (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
-let lastCommunitySection: Section = 'venues';
+let lastCommunitySection: Section = 'board';
 // 글쓰기 FAB 가 달라붙은 자리에서 이만큼 올라가면 '떠났다' — '맨 위로'(높이·자리 포함 윗변 ≈ 탭바 위 9rem)보다 충분히 위.
 const FAB_RISEN_PX = 120;
 // 위 기준에 더하는 '앞서보기' — FAB 가 다가올 때만, 방금 프레임 스크롤 거리 × 이 값. scroll 이벤트·렌더가 한두 프레임 늦는 것을 덮는다.
@@ -107,7 +107,7 @@ const FAB_LEAD_FRAMES = 2;
 const FAB_HYST_PX = 8;
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
-const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
+const SEC_ORDER: Section[] = ['board', 'venues', 'live', 'rank', 'market', 'dealer'];
 // 새로고침하면 보던 섹션으로(오너 2026-10-07 "커뮤니티-게시판에서 새로고침을 하면 홈으로 넘어가" · lib/reloadTab). 첫 렌더 값이라 알약이 미끄러지지 않는다.
 const SEC_KEY = 'nuri:reload:community-sec';
 //   ⚠ 이 줄은 모듈이 처음 실릴 때(커뮤니티를 처음 열 때) 돈다 — 새로고침 직전 탭이 커뮤니티일 때만 쓴다(lib/reloadTab BOOT_TAB · P3-3).
@@ -493,8 +493,8 @@ function CommunityTab({
                 하단 메인 탭바와 같은 문법이고, 활성 탭은 정의상 1개라 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다.
                 (ring-aura-glow 는 쓰지 않는다 — 카드 후광이고 이 화면엔 이미 유료광고 카드의 강조가 있다) */}
             <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[9px] pill-active" />
-          <SectionTab id="venues" active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab id="board" active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
+          <SectionTab id="venues" active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab id="live" active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
           <SectionTab id="rank" active={shownSec === 'rank'}   label="순위"   onClick={() => setSection('rank')} />
           {marketSlot && <SectionTab id="market" active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}

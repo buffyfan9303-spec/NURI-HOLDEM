@@ -22,6 +22,7 @@
 // · 리사이즈·폰트 로드로 배치가 변하면 재측정(ResizeObserver)
 // · 대상이 없으면(활성 없음) 조용히 숨김 — 렌더 트리를 어지럽히지 않는다
 import { useLayoutEffect, useRef, useState } from 'react';
+import { springEasing } from '../../lib/spring';
 
 interface Props {
   /** 버튼들의 공통 부모(position:relative 필수). 생략하면 이 스팬의 부모를 자동 사용 —
@@ -33,9 +34,14 @@ interface Props {
   className?: string;
   /** underline 모드: 버튼 하단에 붙는 밑줄(높이 고정) */
   underline?: boolean;
+  /** 스프링 안착(감쇠 0.8 — 약 1.4% 넘쳤다 선다). PC 대메뉴만 쓴다 — 하위 레일 12곳은 '출발점~도착점 밖으로 안 샌다'(pill-press)가 잠겨 있다. */
+  spring?: boolean;
 }
 
-export default function SlidingPill({ containerRef, activeKey, className = '', underline = false }: Props) {
+/** 스프링 이징 지원(CSS linear()) — 없으면(구형 Safari) 종전 곡선. 모듈 1회 판정. */
+const LINEAR_EASE = typeof CSS !== 'undefined' && CSS.supports?.('transition-timing-function', 'linear(0, 1)');
+
+export default function SlidingPill({ containerRef, activeKey, className = '', underline = false, spring = false }: Props) {
   const pillRef = useRef<HTMLSpanElement>(null);
   const firstRef = useRef(true);
   const prevRect = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -116,21 +122,34 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
         pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
         return;
       }
+      // 스프링 밑줄은 지금 그려진 상자(연타면 비행 중간 — tabCover holdSwap 이 동결 전에 세워 둔 행렬)에서 출발한다. 그 밖은 종전대로 직전 목표.
+      let from = prev;
+      if (spring) {
+        const m = new DOMMatrixReadOnly(getComputedStyle(pill).transform);
+        from = { x: m.e, y: m.f, w: pill.offsetWidth * m.a, h: pill.offsetHeight * m.d };
+        if (pill.getAnimations().some((a) => (a as CSSTransition).transitionProperty === 'transform')) {
+          pill.style.transition = 'none';
+          pill.style.transform = m.toString();
+        }
+      }
       const flip = () => {
         pending?.();
         pill.style.width = `${r.w}px`;
         pill.style.height = `${r.h}px`;
         // Invert: 새 크기의 알약을 '이전 시각 박스'로 되돌려 놓고(transform-origin 0 0 전제)
-        const sx = r.w > 0 ? prev.w / r.w : 1;
-        const sy = r.h > 0 ? prev.h / r.h : 1;
+        const sx = r.w > 0 ? from.w / r.w : 1;
+        const sy = r.h > 0 ? from.h / r.h : 1;
         pill.style.transition = 'none';
-        pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
+        pill.style.transform = `translate(${from.x}px, ${from.y}px) scale(${sx}, ${sy})`;
         void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
         // Play: transform 만 전환
         // 2026-10-08 오너 "소메뉴 이동이 너무 느리다" — 판이 한 프레임에 바뀐 뒤(#218) 알약만 늦게 따라왔다.
         //   종전 --ease-move(양끝 감속)·.22s 는 첫 60ms 가 거의 정지라 누른 뒤 60ms 출발·226ms 도착이었다(review-218 P3-1).
         //   출발이 빠른 감속 곡선(--ease-out-ui)·170ms 로 — 알약만 바꾸고 공용 토큰(--ease-move·--dur-base)은 그대로 둔다.
-        pill.style.transition = 'transform 170ms var(--ease-out-ui), opacity var(--dur-fast) var(--ease)';
+        const sp = spring && LINEAR_EASE ? springEasing(Math.hypot(r.x - from.x, r.y - from.y), { damping: 0.8, response: 0.22 }) : null;
+        pill.style.transition = sp
+          ? `transform ${sp.duration}ms ${sp.easing}, opacity var(--dur-fast) var(--ease)`
+          : 'transform 170ms var(--ease-out-ui), opacity var(--dur-fast) var(--ease)';
         pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
       };
       // 판 교체 중(html[data-tab-swap] — src/lib/tabCover.ts 6·7차)이면 FLIP 전체(크기·Invert·Play)를 새 판 첫 프레임이 나간 **뒤로** 미룬다.
@@ -205,7 +224,8 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // ⚠ 'running' 만 보면 새는다 — 커밋 직후 첫 rAF 에서 CSS 트랜지션은 아직 **'pending'** 이다
       //   (시작 시각이 아직 안 정해졌다). 그 한 프레임에 verify 가 '어긋났다' 고 판정해
       //   firstRef=true → measure 로 방금 건 FLIP 을 죽였다(실측: 10ms anims=1 → 19ms dur=0s 순간이동).
-      if (pending || pill.getAnimations().some((a) => a.playState === 'running')) return;
+      // 판 교체 동안 tabCover holdSwap 이 세운 밑줄([data-swap-pinned])도 비행 중이다 — releaseSwap 이 목표로 다시 띄운다(SAMEKEY-1010).
+      if (pending || pill.hasAttribute('data-swap-pinned') || pill.getAnimations().some((a) => a.playState === 'running')) return;
       const t = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!t) return;
       const tr = t.getBoundingClientRect();
@@ -279,7 +299,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       [...timers, ...lateTimers].forEach(clearTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey, underline]);
+  }, [activeKey, underline, spring]);
 
   // strict 재측정 트리거(폰트 늦은 로드 등 드문 케이스) — 필요 시 호출부가 key 로 강제
   void force;
@@ -291,6 +311,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // VT 스코프 안에서 이 알약에 자기 view-transition-name 을 붙이기 위한 표식(index.css).
       // 정지된 탭바 스냅샷 안에 있으면 FLIP 이동이 가려지므로 VT 가 알약만 따로 보간하게 한다.
       data-sliding-pill
+      data-swap-pin={spring || undefined}
       // origin-top-left: FLIP scale 보정의 수학이 좌상단 원점을 전제로 한다
       className={['pointer-events-none absolute left-0 top-0 z-0 origin-top-left opacity-0 will-change-transform', className].join(' ')}
     />

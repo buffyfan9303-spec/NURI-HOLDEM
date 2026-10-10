@@ -13,7 +13,7 @@ const HOME = readFileSync(join(dir, 'HomeTab.tsx'), 'utf8');
 const PC = readFileSync(join(dir, 'PosterCarousel.tsx'), 'utf8');
 
 describe('배너 제어 — 별도 줄이 아니라 프레임 안', () => {
-  const ctrl = PC.slice(PC.indexOf('data-testid="home-banner-dots"') - 200, PC.indexOf('data-testid="home-banner-dots"') + 2200);
+  const ctrl = PC.slice(PC.indexOf('data-testid="home-banner-dots"') - 200, PC.indexOf('data-testid="home-banner-dots"') + 3600);
   it('제어 묶음이 프레임(relative) 안의 absolute 다 — 배너 밑에 줄을 다시 만들지 않는다', () => {
     expect(PC).toMatch(/poster-frame relative/);
     expect(ctrl).toMatch(/absolute inset-x-0 bottom-0[^"]*" data-testid="home-banner-dots"/);
@@ -282,14 +282,14 @@ describe('빠른 카드 두 개', () => {
     expect(q).not.toMatch(/min-h-\[1\.15rem\]|QR 출석 매일 1회\s*<\/p>|\{quickEventDesc\}/);
     expect(q).not.toMatch(/justify-between/);
   });
-  it('이벤트 조회 실패 안내는 행동 줄로 옮겨 남는다', () => {
-    expect(HOME).toMatch(/const quickEventFailed = eventLoaded && eventFailed && eventShown !== 'banner';/);
-    expect(HOME).toMatch(/\{quickEventFailed \? '불러오기 실패 · 다시' : eventShown === 'menu' \? '진행 중 이벤트 없음' : '이벤트 보기'\}/);
-  });
-  it('진행 이벤트가 없으면 행동 줄이 흐린 글자로 사실을 말한다(2026-09-25) — 진입 버튼은 그대로', () => {
-    // 2026-10-05 오너: 이벤트 진입(누를 수 있음)은 황동 — 금색은 순위·성취 전용(종전 단언: 금색).
-    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-accent-300'/);
-    expect(HOME).toMatch(/<button type="button" onClick=\{\(\) => onEvent\(\)\} data-testid="home-quick-event"/);
+  it('오른쪽 칸은 커뮤니티다(2026-10-10) — 이름만이 아니라 목적지도 커뮤니티 탭(onOpenCommunity), 이벤트 콜백이 아니다', () => {
+    const q = HOME.slice(HOME.indexOf('data-testid="home-quick"'), HOME.indexOf('── 지금 등록 가능'));
+    expect(q).toMatch(/<button type="button" onClick=\{onOpenCommunity\} data-testid="home-quick-community"/);
+    expect(q).toMatch(/<\/span>[\s\S]*커뮤니티\s*<\/span>/);
+    // 이 칸 안에서 이벤트를 열면 이름과 동작이 어긋난다
+    const btn = q.slice(q.indexOf('data-testid="home-quick-community"'));
+    expect(btn.slice(0, btn.indexOf('</button>'))).not.toMatch(/onEvent|이벤트/);
+    expect(q).not.toMatch(/data-testid="home-quick-event"/);
   });
 });
 

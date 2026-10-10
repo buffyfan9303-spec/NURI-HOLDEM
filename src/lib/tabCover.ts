@@ -423,18 +423,51 @@ let swapTimer = 0;
  *  (전역 button 프레스의 opacity·transform 0.2s 복귀가 스왑 프레임에 돈다). */
 const FREEZE = 'nav[aria-label="하단 내비게이션"], [data-stack-header], [data-stack-tabbar], .scroll-top-fab';
 
-function releaseSwap(): void {
+/** holdSwap 이 세운 비행 중 밑줄 — 세우기 전 inline 전환·목표값과 세운 값. releaseSwap 이 그 목표로 다시 띄운다(SAMEKEY-1010). */
+const pinned = new Map<HTMLElement, { transition: string; before: [string, string][]; at: [string, string][] }>();
+
+/** holdSwap 세대 — 새 hold 마다 올라간다. 예약된 해제(rAF·타이머)는 자기 세대를 들고 있어 새 hold 가 시작된 뒤에는 아무것도 건드리지 않는다(STALE-RELEASE). */
+let swapGen = 0;
+
+/** gen 없이 부르면 강제 해제(연타·같은 탭 복귀) — 예약된 옛 해제도 함께 무효로 만든다. */
+function releaseSwap(gen?: number): void {
+  if (gen !== undefined && gen !== swapGen) return;
+  swapGen++;
   if (swapTimer) { clearTimeout(swapTimer); swapTimer = 0; }
   document.documentElement.removeAttribute('data-tab-swap');
   document.querySelectorAll('[data-swap-freeze]').forEach((e) => e.removeAttribute('data-swap-freeze'));
+  // 세운 밑줄을 세우기 전 목표로 다시 띄운다 — 같은 대메뉴 안 하위 탭(activeKey 불변)은 SlidingPill 이펙트가 안 돌아 아무도 안 풀었고,
+  //   자기교정 verify 가 '어긋남' 으로 보고 목표로 순간이동시켰다(실측 103px/1프레임). 세운 값이 그대로일 때만 — 그사이 SlidingPill 이
+  //   다시 썼으면(재측정·리사이즈) 그쪽이 주인이다. 대메뉴 이동은 이어서 SlidingPill flip 이 지금 자리에서 새 목표로 덮는다.
+  pinned.forEach((p, el) => {
+    el.removeAttribute('data-swap-pinned');
+    if (!el.isConnected || el.style.transition !== 'none' || p.at.some(([k, v]) => el.style.getPropertyValue(k) !== v)) return;
+    el.style.transition = p.transition;
+    p.before.forEach(([k, v]) => el.style.setProperty(k, v));
+  });
+  pinned.clear();
 }
 /** 스왑 프레임 정적화를 켠다 — 커밋이 끝내 안 와도 SWAP_GUARD_MS 뒤엔 푼다(onGuard 로 기다리던 것도 버린다). */
-function holdSwap(onGuard?: () => void, press?: Element | null): void {
+function holdSwap(onGuard?: () => void, press?: Element | null): number {
+  const gen = ++swapGen;
+  // 비행 중인 [data-swap-pin](PC 대메뉴 스프링 밑줄)은 동결 표식보다 먼저 지금 그려진 행렬에 세운다 — 동결이 전환을 취소하면 목표로 튄다(RAPID-1010).
+  document.querySelectorAll<HTMLElement>('[data-swap-pin]').forEach((el) => {
+    const props = (el.getAnimations?.() ?? []).map((a) => (a as CSSTransition).transitionProperty).filter(Boolean);
+    if (!props.length) return;
+    const cs = getComputedStyle(el);
+    const now = props.map((p) => [p, cs.getPropertyValue(p)] as [string, string]);
+    if (!pinned.has(el)) pinned.set(el, { transition: el.style.transition, before: props.map((p) => [p, el.style.getPropertyValue(p)]), at: now });
+    el.style.transition = 'none';
+    now.forEach(([p, v]) => el.style.setProperty(p, v));
+    pinned.get(el)!.at = now.map(([p]) => [p, el.style.getPropertyValue(p)]);
+    el.setAttribute('data-swap-pinned', '');
+  });
   document.documentElement.setAttribute('data-tab-swap', '');
   document.querySelectorAll(FREEZE).forEach((e) => e.setAttribute('data-swap-freeze', ''));
   press?.setAttribute('data-swap-freeze', '');
   if (swapTimer) clearTimeout(swapTimer);
-  swapTimer = window.setTimeout(() => { swapTimer = 0; onGuard?.(); releaseSwap(); }, SWAP_GUARD_MS);
+  swapTimer = window.setTimeout(() => { if (gen !== swapGen) return; swapTimer = 0; onGuard?.(); releaseSwap(gen); }, SWAP_GUARD_MS);
+  return gen;
 }
 const afterFirstFrame = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
 
@@ -461,11 +494,12 @@ export function handOffPane(): void {
   if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
   const armed = mainArmed;
   mainArmed = false;
+  const gen = swapGen; // 이 이동의 hold(notePaneLeaving) 세대 — 둘째 rAF 에서 그사이 새 hold 가 시작됐으면 풀지 않는다
   if (armed) fadeGen++; // 연타 — 아직 걷기를 시작 안 한 이전 막은 지금 버린다(다음 rAF 에서 이 이동의 막이 덮는다)
   let fadeOut = () => {};
   requestAnimationFrame(() => {
     if (armed) fadeOut = coverAt(mainRect(), '45', 'rgb(var(--surface-base))', hostFor(null));
-    requestAnimationFrame(() => { releaseSwap(); fadeOut(); });
+    requestAnimationFrame(() => { releaseSwap(gen); fadeOut(); });
   });
 }
 
@@ -537,8 +571,8 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   const t = target instanceof Element ? target : null;
   const inEvent = !!(globalThis as { event?: Event }).event;
   const press = t?.closest('button, a, [role="button"], [role="tab"]') ?? null;
-  holdSwap(cancel, press);
-  if (!root) { afterFirstFrame(releaseSwap); return; }
+  const gen = holdSwap(cancel, press);
+  if (!root) { afterFirstFrame(() => releaseSwap(gen)); return; }
   const key0 = shownPanes(root);
   const keyed = key0 !== '';
   const rail = sp!.rail;
@@ -551,7 +585,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   pending = cancel;
   atCommit = hook;
   // ② 식별자 없는 판 — 이벤트 태스크가 끝날 때까지 커밋(판 변화)이 없었으면 판 교체가 없던 것이다.
-  if (!keyed && inEvent) afterEventTask(() => { if (alive) { flush(); cancel(); releaseSwap(); } });
+  if (!keyed && inEvent) afterEventTask(() => { if (alive) { flush(); cancel(); releaseSwap(gen); } });
   mo = new MutationObserver((recs) => {
     if (!alive) return;
     if (keyed) { if (!paneSwapped()) return; } // 커밋 전 떠나는 판의 변화(늦은 데이터·실시간)는 전환이 아니다
@@ -559,7 +593,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
     flush(); // P2 스크롤 — 커밋과 같은 순간(첫 페인트 전)
     cancel();
     const fadeOut = coverAt(subRect(sp!, root, press), zFor(root), bgFor(root), hostFor(root)); // 9차 — 커밋 순간 막(P2 스크롤 뒤 자리 · 누른 줄 제외)
-    afterFirstFrame(() => { releaseSwap(); fadeOut(); });
+    afterFirstFrame(() => { releaseSwap(gen); fadeOut(); });
   });
   mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });
   if (root.parentElement) mo.observe(root.parentElement, { childList: true });

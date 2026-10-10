@@ -14,10 +14,11 @@
 //     추천 카드 또는 상세에서 원본 비율로 볼 수 있게 한다"). 같은 대회·같은 `onSelect` 목적지가
 //     HomeTab 의 '추천 대회' 가로 레일로 옮겨 갔다 — **사라진 진입점은 없다**.
 //
-//  ③ **자동 넘김을 쓰지 않는다**(§6-2: "자동 넘김은 기본 사용하지 않는다"). 3.2초 인터벌 + rAF 트윈
-//     (EASE/STEP_MS/tweenTo/pause)이 통째로 빠졌다. 읽는 중 글자가 도망가지 않고, reduced-motion
-//     분기·탭 비활성 분기·상호작용 정지 타이머가 **존재할 이유 자체가 없어진다**.
-//     수동 스와이프·휠·드래그·스냅·양방향 무한 랩은 그대로다(2배 복제 + scrollLeft ±half).
+//  ③ **자동 넘김은 2026-09-13 에 뺐다가 2026-10-10 오너 지시로 5초 간격으로 되살렸다.**
+//     예전(3.2초 인터벌 + rAF 트윈)은 읽는 중 글자가 도망가고 탭 비활성에도 돌았다. 지금은 UA 스무스 스크롤(go) 한 번뿐이고
+//     **읽는 중에는 서지 않는다**: 마우스 올림·키보드 포커스·터치 중, 탭 숨김(document.hidden), 화면 밖(keep-alive display:none 포함),
+//     1장일 때는 타이머 자체를 만들지 않는다(autoAdvanceActive). 조작(점·화살표·터치 뗌)하면 5초를 처음부터 다시 센다.
+//     reduced-motion 이면 go() 가 즉시 이동한다. 수동 스와이프·휠·드래그·스냅·양방향 무한 랩은 그대로다(2배 복제 + scrollLeft ±half).
 //
 //  ④ **PC 512px 중앙 캡 제거.** 캡은 ①의 비율 때문에 생긴 것이었다(풀폭 PC = 500px 배너).
 //     높이가 값으로 고정된 지금은 필요 없고, `(hover:hover)+(pointer:fine)` 미디어가 **모바일 폭에서도**
@@ -27,9 +28,10 @@
 // 유지: 카드 폭 = 스크롤러 clientWidth(w-full) 불변식 — 랩·스냅·스텝 경계가 전부 여기에 걸려 있다.
 //       트랙에 gap 을 넣거나 카드마다 폭을 달리하면 정착 위치가 깨진다. 여백은 **트랙 바깥**에 둔다.
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Icon from '../atoms/Icon';
 import { thumbUrl } from '../../lib/imageUrl';
+import { autoAdvanceActive, createAutoAdvance, createHolds } from './posterAutoAdvance';
 import { BRAND_SLIDE_TITLES, type BrandSlideKey, type HomeCarouselItem } from '../../lib/homeCarousel';
 
 export type BannerAction = 'tools' | 'explore' | 'nurimind';
@@ -97,6 +99,11 @@ export interface EventSlide {
   onClick: () => void;
 }
 
+const subscribeVisibility = (cb: () => void) => {
+  document.addEventListener('visibilitychange', cb);
+  return () => document.removeEventListener('visibilitychange', cb);
+};
+
 type Slide = {
   key: string; alt: string;
   /** 없으면 클릭 목적지가 없는 슬라이드다 — 버튼이 아니라 그림으로 그린다(죽은 버튼 금지). */
@@ -141,6 +148,14 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
   /** 점·화살표가 건 스무스 스크롤의 목표 scrollLeft — 도착 전엔 랩하지 않는다(아래 onScroll). */
   const navRef = useRef<number | null>(null);
   const [idx, setIdx] = useState(0);
+  // 자동 넘김 조건 — 보이는지(탭·화면)·읽는 중인지(올림·포커스·터치). kick 은 사용자 조작 때마다 올라 타이머를 5초 처음부터 다시 세게 한다.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(true);
+  const docHidden = useSyncExternalStore(subscribeVisibility, () => document.hidden, () => false);
+  const [held, setHeld] = useState(false);
+  /** 사용자가 일시정지를 눌렀나 — held(잠깐)와 달리 다시 누를 때까지 계속 선다(WCAG 2.2.2). 탭을 오가도(keep-alive) 유지된다. */
+  const [paused, setPaused] = useState(false);
+  const [kick, setKick] = useState(0);
   // §7.1-9: 데이터가 늦게 도착해 슬라이드 수가 변하면 현재 인덱스를 유효 범위로 맞춘다(점 표시·aria-current 가 없는 장을 가리키지 않게).
   useEffect(() => { if (idx >= n) setIdx(Math.max(0, n - 1)); }, [n, idx]);
   /** 사용자가 캐러셀을 한 번이라도 움직였나(스와이프·휠·점·화살표). */
@@ -230,7 +245,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
   }, [multi, n]);
 
   /** 점·화살표 이동 — UA 스무스 스크롤에 맡긴다(자체 트윈 없음 → 관성과 싸우지 않는다). */
-  const go = useCallback((delta: number) => {
+  const go = useCallback((delta: number, auto = false) => {
     const vp = vpRef.current;
     if (!vp) return;
     const w = vp.clientWidth;
@@ -244,7 +259,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
     if (delta < 0 && from <= 0 && half > w) { vp.scrollLeft = half; from = half; }
     // 앞선 이동이 아직 복제 세트 깊숙이(랩 임계 너머) 있으면 같은 픽셀의 원본 쪽으로 옮기고 시작한다(끝을 넘어 클램프되지 않게).
     else if (half > w && from >= half + w) { from -= half; vp.scrollLeft = from; }
-    touchedRef.current = true;
+    if (!auto) touchedRef.current = true; // 자동 스텝은 '손댄 것'이 아니다 — 늦게 온 배너의 첫 장 되돌림(위 layout effect)을 막지 않는다
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const left = from + delta * w;
     navRef.current = reduced || !delta ? null : left; // 제자리(delta 0)는 스크롤 이벤트가 안 나 가드가 남는다
@@ -258,6 +273,62 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
     const cur = ((Math.round(vp.scrollLeft / w) % n) + n) % n;
     go(i - cur);
   }, [go, n]);
+
+  // ── 자동 넘김(5초) ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const vp = vpRef.current;
+    let io: IntersectionObserver | undefined;
+    // keep-alive 로 숨은 탭(display:none)은 교차 없음으로 읽힌다 — 그때 타이머가 돌면 보이지 않는 배너가 혼자 넘어간다.
+    if (vp && typeof IntersectionObserver !== 'undefined') {
+      io = new IntersectionObserver((es) => { const e = es[es.length - 1]; if (e) setInView(e.isIntersecting); });
+      io.observe(vp);
+    }
+    return () => io?.disconnect();
+  }, [multi]);
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el || !multi) return;
+    const holds = createHolds((h) => { setHeld(h); if (!h) setKick((k) => k + 1); }); // 풀리면 5초를 처음부터 다시 센다
+    const onEnter = (e: PointerEvent) => { if (e.pointerType === 'mouse') holds.set('hover', true); };
+    const onLeave = (e: PointerEvent) => { if (e.pointerType === 'mouse') holds.set('hover', false); };
+    // 마우스·터치로 버튼을 눌러 생긴 포커스는 읽는 중이 아니다 — 키보드 포커스(:focus-visible)만 멈춘다.
+    const isKb = (t: Element) => { try { return t.matches(':focus-visible'); } catch { return true; /* 미지원 → 멈춤 */ } };
+    const onFocusIn = (e: FocusEvent) => { if (isKb(e.target as Element)) holds.set('focus', true); };
+    const onFocusOut = () => holds.set('focus', false);
+    const onTouch = (e: TouchEvent) => holds.touches(e.touches.length); // 손가락 수 — 하나만 떼도 아직 만지는 중이다
+    el.addEventListener('pointerenter', onEnter);
+    el.addEventListener('pointerleave', onLeave);
+    el.addEventListener('focusin', onFocusIn);
+    el.addEventListener('focusout', onFocusOut);
+    el.addEventListener('touchstart', onTouch, { passive: true });
+    el.addEventListener('touchend', onTouch, { passive: true });
+    el.addEventListener('touchcancel', onTouch, { passive: true });
+    // 1장→2장 늦은 도착 — 이미 올려져 있거나 키보드 포커스가 안에 있으면 새 pointerenter·focusin 이 안 온다. 지금 상태로 시작한다.
+    //   hover 는 진짜 마우스(hover:hover·fine)일 때만 — 터치 기기의 끈끈한 :hover 가 타이머를 가두지 않게.
+    const a = document.activeElement;
+    if (a && el.contains(a) && isKb(a)) holds.set('focus', true);
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches && el.matches(':hover')) holds.set('hover', true);
+    return () => {
+      el.removeEventListener('pointerenter', onEnter);
+      el.removeEventListener('pointerleave', onLeave);
+      el.removeEventListener('focusin', onFocusIn);
+      el.removeEventListener('focusout', onFocusOut);
+      el.removeEventListener('touchstart', onTouch);
+      el.removeEventListener('touchend', onTouch);
+      el.removeEventListener('touchcancel', onTouch);
+      holds.clear(); // 리스너가 걷힐 때 서 있던 표식을 같이 내린다 — 안 내리면 포커스 버튼이 사라진 뒤 영영 멈춰 있다
+    };
+  }, [multi]);
+  const autoOn = autoAdvanceActive({ count: n, docHidden, inView, held, paused });
+  useEffect(() => {
+    if (!autoOn) return;
+    const t = createAutoAdvance(() => go(1, true));
+    t.start();
+    return t.stop;
+  }, [autoOn, kick, go]);
+  /** 점·화살표 클릭 — 이동 뒤 자동 넘김 5초를 처음부터 다시 센다. */
+  const goManual = useCallback((delta: number) => { go(delta); setKick((k) => k + 1); }, [go]);
+  const goToManual = useCallback((i: number) => { goTo(i); setKick((k) => k + 1); }, [goTo]);
 
   const card = (s: Slide, i: number, dup: boolean) => {
     const b = s.brand;
@@ -398,7 +469,7 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
             선이 두 줄 그어져 '띠'로 읽혔다. 높이 154 → 152(테두리 2px) — 셸도 같이 바꿨다. md~ 카드 모양은 그대로.
           🔴 2026-09-25 오너 "위아래 살짝 블러로 일체감 / 아우라 LED" → 같은 날 "흐림으로 통일": 모든 폭에서
             위아래 8px 페더(mask). mask 는 테두리 상자 밖을 잘라 md~ 카드의 접촉 그림자도 위아래로는 보이지 않는다. */}
-      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none mask-[linear-gradient(to_bottom,transparent,#000_8px,#000_calc(100%-8px),transparent)] md:mx-page-x md:rounded-aura lg:mx-0">
+      <div ref={frameRef} className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none mask-[linear-gradient(to_bottom,transparent,#000_8px,#000_calc(100%-8px),transparent)] md:mx-page-x md:rounded-aura lg:mx-0">
         <div
           ref={vpRef}
           data-testid="home-banner-viewport"
@@ -440,7 +511,18 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 · bg-black/65: 가장 밝은 관리자 그림(흰색) 위에서도 합성 rgb(89) → 흰 글자 7.0:1 · 흰 90% 6.0:1(AA 4.5 이상, 계산).
                 · 화살표는 z-10 으로 알약 위에 그린다(아이콘이 알약에 덮이지 않게), 칩은 pointer-events-none(누름은 화살표가 받는다). */}
             <div className="pointer-events-auto relative flex h-[44px] items-center">
-              <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
+              {/* 자동 넘김 일시정지/재생 — 눌러 둔 동안은 계속 선다(마우스·포커스·터치 정지와 별개). 알약 배경은 버튼 안 24px 원이 스스로 그린다. */}
+              <button type="button" data-testid="home-banner-pause" onClick={() => setPaused((p) => !p)}
+                aria-label="배너 자동 넘김 일시정지" aria-pressed={paused}
+                className="relative z-10 flex h-[44px] w-[40px] items-center justify-center text-white focus-visible:outline-white! focus-visible:outline-offset-[-6px]">
+                <span aria-hidden className="flex h-[24px] w-[24px] items-center justify-center rounded-full bg-black/65 backdrop-blur-xs">
+                  {/* 인라인 SVG — 아이콘 팩의 play/pause 는 '나중' 묶음이라 첫 화면 파일이 쓰면 계약(iconsCore)에 걸린다 */}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden>
+                    {paused ? <path d="M2.6 1.2 8.7 5 2.6 8.8Z" /> : <><rect x="1.6" y="1" width="2.4" height="8" rx=".6" /><rect x="6" y="1" width="2.4" height="8" rx=".6" /></>}
+                  </svg>
+                </span>
+              </button>
+              <button type="button" onClick={() => goManual(-1)} aria-label="이전 배너"
                 className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-left" size={13} aria-hidden />
               </button>
@@ -449,11 +531,11 @@ export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide
                 {idx + 1}<span className="mx-[3px] font-medium text-white/90">/</span><span className="font-medium text-white/90">{n}</span>
               </span>
               {slides.map((s, i) => (
-                <button key={s.key} type="button" onClick={() => goTo(i)}
+                <button key={s.key} type="button" onClick={() => goToManual(i)}
                   aria-label={`${i + 1}번째 배너`} aria-current={i === idx ? 'true' : undefined}
                   className="hidden" />
               ))}
-              <button type="button" onClick={() => go(1)} aria-label="다음 배너"
+              <button type="button" onClick={() => goManual(1)} aria-label="다음 배너"
                 className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white focus-visible:outline-white! focus-visible:outline-offset-[-10px]">
                 <Icon name="chevron-right" size={13} aria-hidden />
               </button>
