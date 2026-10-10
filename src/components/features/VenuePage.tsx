@@ -881,7 +881,8 @@ function HeroSection({
       {onSlideTap && (
         <button
           type="button"
-          onClick={() => onSlideTap(slides[safeIdx])}
+          // WebKit에서도 뷰어가 정확한 열기 버튼을 기억하도록 포커스를 먼저 지정한다.
+          onClick={(e) => { e.currentTarget.focus({ preventScroll: true }); onSlideTap(slides[safeIdx]); }}
           aria-label={`${venue.name} 배너 · 자세히 보기`} data-hero-cover
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />

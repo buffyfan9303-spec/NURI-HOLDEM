@@ -180,6 +180,35 @@ test.describe('E 매장 사진 확대 (PC)', () => {
     await expect(viewer).toHaveCount(0, { timeout: 5_000 });
     await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute('data-hero-cover'))).toBe(true);
   });
+
+  // WebKit 은 마우스 클릭이 button 에 포커스를 주지 않는다 → 뷰어가 opener 로 부모의 '뒤로 가기'를 저장해, 닫으면 초점이 배너가 아니라 뒤로 가기로 갔다.
+  // 같은 조건을 Chromium 에서 만든다: 부모 '뒤로 가기'에 초점을 두고, mousedown 기본 동작(포커스 이동)만 한 번 막는다. 클릭·핸들러·열기/닫기는 실제 그대로다.
+  for (const [name, close] of [
+    ['Esc', (page: Page) => page.keyboard.press('Escape')],
+    ['닫기 버튼 클릭', (page: Page) => page.getByRole('dialog', { name: /확대 보기/ }).getByRole('button', { name: '닫기', exact: true }).click()],
+  ] as const) {
+    test(`WebKit 마우스(클릭이 포커스를 안 줌) — 배너 확대를 ${name} 으로 닫으면 초점이 그 배너로 돌아오고 매장 화면·스크롤은 그대로`, async ({ page }) => {
+      await page.goto(`/?venue=${ROTI}`);
+      const hero = page.locator('[data-hero-cover]');
+      await expect(hero).toBeVisible({ timeout: 25_000 });
+      const back = page.getByRole('button', { name: '뒤로 가기', exact: true });
+      await back.focus();
+      await expect(back, '전제: 부모 뒤로 가기에 초점이 있어야 한다').toBeFocused();
+      const scrolls = () => page.evaluate(() => { const out = [Math.round(scrollY)]; for (let n = document.querySelector<HTMLElement>('[data-hero-cover]'); n; n = n.parentElement) if (n.scrollHeight > n.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(n).overflowY)) out.push(Math.round(n.scrollTop)); return out; });
+      const before = await scrolls();
+      const heroNode = (await hero.elementHandle())!; // 열기 전의 그 노드
+      await page.evaluate(() => document.addEventListener('mousedown', (e) => e.preventDefault(), { capture: true, once: true }));
+      await hero.click();
+      const viewer = page.getByRole('dialog', { name: /확대 보기/ });
+      await expect(viewer, '사진 확대 뷰어가 안 열렸다').toBeVisible({ timeout: 10_000 });
+      await close(page);
+      await expect(viewer, '뷰어가 안 닫혔다').toHaveCount(0, { timeout: 5_000 });
+      await expect(hero, '뷰어를 닫았더니 매장 화면까지 닫혔다').toBeVisible();
+      await expect(back, '초점이 배너가 아니라 부모의 뒤로 가기로 돌아갔다').not.toBeFocused();
+      await expect.poll(() => page.evaluate((n) => document.activeElement === n, heroNode), { message: '초점이 원래 배너 노드로 돌아오지 않았다' }).toBe(true);
+      expect(await scrolls(), '닫은 뒤 스크롤 위치가 바뀌었다').toEqual(before);
+    });
+  }
 });
 
 // ── 배너 자동 넘김 — 영구 일시정지 + 읽는 중 표식의 수명(2026-10-10 Codex 지적: WCAG 2.2.2 · 비동기 다중 hold) ────────────────────
