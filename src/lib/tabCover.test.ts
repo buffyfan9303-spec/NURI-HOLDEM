@@ -266,3 +266,151 @@ describe('⑤ 9차 PANE-FADE — 막 순서·건너뛰기·연타', () => {
     expect(Number(el.style.opacity)).toBe(FADE_FROM);
   });
 });
+
+// RAPID-1010 — 비행 중인 PC 스프링 밑줄([data-swap-pin])은 동결 표식이 붙기 **전에** 그려진 행렬(scale 포함)에 선다. 순서가 뒤집히면 동결이 전환을 취소해 목표로 튄다.
+describe('⑥ RAPID-1010 — holdSwap 이 동결 전에 비행 중 밑줄을 세운다', () => {
+  const M = 'matrix(0.856, 0, 0, 1, 565.257, 34)';
+  type Pill = { style: Record<string, string>; isConnected: boolean; attrs: Set<string>; getAnimations: () => { transitionProperty: string }[];
+    setAttribute: (k: string) => void; removeAttribute: (k: string) => void };
+  let pill: Pill;
+  let seenAtFreeze: Record<string, string> | null;
+  beforeEach(() => {
+    seenAtFreeze = null;
+    const style: Record<string, string> = { transition: 'transform 300ms linear(0, 1)', transform: 'translate(741px, 34px)' };
+    Object.defineProperty(style, 'setProperty', { value: (k: string, v: string) => { style[k] = v; } });
+    Object.defineProperty(style, 'getPropertyValue', { value: (k: string) => style[k] ?? '' });
+    const attrs = new Set<string>();
+    pill = { style, isConnected: true, attrs, getAnimations: () => (style.transition === 'none' ? [] : [{ transitionProperty: 'transform' }]),
+      setAttribute: (k) => { attrs.add(k); }, removeAttribute: (k) => { attrs.delete(k); } };
+    const bar = { setAttribute: (k: string) => { if (k === 'data-swap-freeze') seenAtFreeze = { ...pill.style }; } };
+    vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: (k: string) => (k === 'transform' ? M : '') }));
+    vi.stubGlobal('document', {
+      documentElement: { setAttribute: () => {}, removeAttribute: () => {}, hasAttribute: () => false },
+      querySelectorAll: (sel: string) => (sel === '[data-swap-pin]' ? [pill] : sel.includes('[data-stack-tabbar]') ? [bar] : []),
+    });
+    vi.stubGlobal('window', { setTimeout: () => 1, scrollY: 0, scrollTo: () => {} });
+    vi.stubGlobal('clearTimeout', () => {});
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('비행 중 — 동결 표식 순간에 이미 transition none · transform = 그려진 행렬', () => {
+    notePaneLeaving('home', 'calendar');
+    expect(seenAtFreeze, 'GNB 에 동결 표식이 안 붙었다 — 시나리오가 공허하다').not.toBeNull();
+    expect(seenAtFreeze).toEqual({ transition: 'none', transform: M });
+  });
+  it('정지 중(전환 없음) — 손대지 않는다(다른 소비처·첫 배치 그대로)', () => {
+    pill.getAnimations = () => [];
+    notePaneLeaving('home', 'calendar');
+    expect(pill.style).toEqual({ transition: 'transform 300ms linear(0, 1)', transform: 'translate(741px, 34px)' });
+  });
+  // SAMEKEY-1010 — 같은 대메뉴 안 하위 탭(activeKey 불변)은 SlidingPill 이펙트가 안 돈다. 해제가 세운 밑줄을 세우기 전 목표로 다시 띄워야 한다
+  //   (안 그러면 verify 가 순간이동 — e2e/pc-shell-motion-1010 · artifacts/motion/2026-10-10/polish/samekey 실측 103px/1프레임).
+  const release = () => notePaneLeaving('community', 'community'); // from === to → releaseSwap
+  it('해제 — 세운 그대로면 세우기 전 전환·목표로 되돌린다(지금 행렬에서 목표로 이어 간다) · 표식도 걷힌다', () => {
+    notePaneLeaving('home', 'community');
+    expect(pill.attrs.has('data-swap-pinned')).toBe(true);
+    release();
+    expect(pill.style).toEqual({ transition: 'transform 300ms linear(0, 1)', transform: 'translate(741px, 34px)' });
+    expect(pill.attrs.has('data-swap-pinned')).toBe(false);
+  });
+  it('중첩 hold — 두 번째 hold 가 세운 값을 원래 목표로 덮어쓰지 않는다', () => {
+    notePaneLeaving('home', 'community');
+    notePaneLeaving('community', 'tools');
+    release();
+    expect(pill.style.transform).toBe('translate(741px, 34px)');
+  });
+  it('세운 동안 SlidingPill 이 다시 썼으면(재측정) 해제는 손대지 않는다 · 떨어져 나간 요소도', () => {
+    notePaneLeaving('home', 'community');
+    pill.style.transform = 'translate(900px, 34px)';
+    release();
+    expect(pill.style).toEqual({ transition: 'none', transform: 'translate(900px, 34px)' });
+    pill.style.transition = 'transform 300ms linear(0, 1)';
+    notePaneLeaving('home', 'community');
+    pill.isConnected = false;
+    release();
+    expect(pill.style.transition).toBe('none');
+  });
+});
+
+// STALE-RELEASE — 이전 이동(A→B)의 둘째 rAF 가 늦게 돌 때, 그사이 시작한 새 이동(B→C)의 hold·밑줄 세움을 풀면 안 된다.
+//   해제는 세대(swapGen) 표를 들고 있어, 새 hold 가 세대를 올린 뒤에는 옛 해제가 아무것도 건드리지 않는다.
+describe('⑦ STALE-RELEASE — 옛 이동의 지연된 해제는 새 hold 를 풀지 않는다', () => {
+  const M = 'matrix(0.856, 0, 0, 1, 565.257, 34)';
+  let frames: FrameRequestCallback[];
+  let html: Map<string, string>;
+  let barAttrs: Set<string>;
+  let pillStyle: Record<string, string>;
+  let pillAttrs: Set<string>;
+  let timers: { fn: () => void; id: number }[];
+  let cleared: Set<number>;
+  const flushOne = () => { const f = frames; frames = []; f.forEach((cb) => cb(0)); };
+  beforeEach(() => {
+    frames = []; html = new Map(); barAttrs = new Set(); pillAttrs = new Set(); timers = []; cleared = new Set();
+    pillStyle = { transition: 'transform 300ms linear(0, 1)', transform: 'translate(741px, 34px)' };
+    Object.defineProperty(pillStyle, 'setProperty', { value: (k: string, v: string) => { pillStyle[k] = v; } });
+    Object.defineProperty(pillStyle, 'getPropertyValue', { value: (k: string) => pillStyle[k] ?? '' });
+    const pill = { style: pillStyle, isConnected: true,
+      getAnimations: () => (pillStyle.transition === 'none' ? [] : [{ transitionProperty: 'transform' }]),
+      setAttribute: (k: string) => { pillAttrs.add(k); }, removeAttribute: (k: string) => { pillAttrs.delete(k); } };
+    const bar = { setAttribute: (k: string) => { barAttrs.add(k); }, removeAttribute: (k: string) => { barAttrs.delete(k); } };
+    const pane = { style: { display: '' }, getClientRects: () => ({ length: 1 }), getBoundingClientRect: () => ({ top: 60, bottom: 2000, left: 0, right: 390, width: 390 }) };
+    vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: (k: string) => (k === 'transform' ? M : ''), opacity: '0' }));
+    vi.stubGlobal('document', {
+      hidden: false,
+      documentElement: { setAttribute: (k: string) => html.set(k, ''), removeAttribute: (k: string) => html.delete(k), hasAttribute: (k: string) => html.has(k) },
+      body: { appendChild: () => {} },
+      createElement: () => ({ style: {}, setAttribute: () => {}, animate: () => ({ onfinish: null, cancel: () => {} }), getAnimations: () => [], isConnected: false }),
+      querySelectorAll: (sel: string) => (sel === '[data-swap-pin]' ? [pill] : sel.includes('[data-stack-tabbar]') ? [bar] : sel === '.tab-pane' ? [pane] : sel === '[data-swap-freeze]' ? (barAttrs.has('data-swap-freeze') ? [bar] : []) : []),
+      querySelector: (sel: string) => (sel === '[data-stack-header]' ? { getBoundingClientRect: () => ({ bottom: 60 }) } : null),
+    });
+    vi.stubGlobal('window', { innerWidth: 390, innerHeight: 844, scrollY: 0, scrollTo: () => {},
+      setTimeout: (fn: () => void) => { timers.push({ fn, id: timers.length + 1 }); return timers.length; },
+      matchMedia: () => ({ matches: false }) });
+    vi.stubGlobal('clearTimeout', (id: number) => { cleared.add(id); });
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frames.push(cb); return frames.length; });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('A→B 의 둘째 rAF 만 돌아도, 그사이 시작한 B→C 의 정적화·세운 밑줄은 그대로다 — 새 이동의 둘째 rAF 에서 풀린다', () => {
+    notePaneLeaving('home', 'community'); handOffPane();
+    flushOne(); // A→B 첫 rAF → 둘째 rAF 예약
+    notePaneLeaving('community', 'tools'); // 새 hold · 새 세움(밑줄은 이미 세워져 있어 그대로)
+    expect(html.has('data-tab-swap')).toBe(true);
+    flushOne(); // 옛 둘째 rAF 만 돈다(새 이동의 handOffPane 은 아직 안 불렸다)
+    expect(html.has('data-tab-swap'), '옛 해제가 새 정적화를 풀었다').toBe(true);
+    expect(barAttrs.has('data-swap-freeze'), '옛 해제가 크롬 동결을 풀었다').toBe(true);
+    expect(pillAttrs.has('data-swap-pinned') && pillStyle.transition === 'none', '옛 해제가 세운 밑줄을 풀었다').toBe(true);
+    handOffPane();
+    flushOne(); flushOne(); // B→C 의 첫·둘째 rAF
+    expect(html.has('data-tab-swap')).toBe(false);
+    expect(barAttrs.has('data-swap-freeze')).toBe(false);
+    expect(pillStyle).toEqual({ transition: 'transform 300ms linear(0, 1)', transform: 'translate(741px, 34px)' });
+  });
+  it('강제 해제(같은 탭으로 돌아옴)도 세대를 올린다 — 이미 예약된 옛 해제가 나중에 새 hold 를 풀지 않는다', () => {
+    notePaneLeaving('home', 'community'); handOffPane();
+    flushOne();
+    notePaneLeaving('community', 'community'); // 강제 해제
+    notePaneLeaving('community', 'tools'); // 새 hold
+    flushOne(); // 옛 둘째 rAF
+    expect(html.has('data-tab-swap')).toBe(true);
+  });
+  it('안전망 타이머 — 옛 hold 의 타이머는 새 hold 가 지우고, 세대가 다르면 풀지 않는다', () => {
+    notePaneLeaving('home', 'community');
+    const stale = timers[0];
+    notePaneLeaving('community', 'tools');
+    expect(cleared.has(stale.id)).toBe(true);
+    stale.fn(); // 지워지지 않고 늦게 불린 가정
+    expect(html.has('data-tab-swap')).toBe(true);
+    timers[1].fn(); // 현재 hold 의 안전망은 푼다
+    expect(html.has('data-tab-swap')).toBe(false);
+  });
+  it('옛 안전망이 늦게 불려도 현재 타이머 id 를 지우지 않는다 — 정상 해제가 현재 타이머를 clearTimeout 한다', () => {
+    notePaneLeaving('home', 'community');
+    const stale = timers[0];
+    notePaneLeaving('community', 'tools'); handOffPane();
+    const current = timers[1];
+    stale.fn(); // 옛 안전망이 늦게 — 세대가 달라 아무것도 건드리지 않아야 한다(swapTimer 포함)
+    flushOne(); flushOne(); // 현재 이동의 정상 해제(둘째 rAF)
+    expect(html.has('data-tab-swap')).toBe(false);
+    expect(cleared.has(current.id), '옛 콜백이 현재 타이머 id 를 지워 정상 해제가 clearTimeout 을 못 불렀다').toBe(true);
+  });
+});

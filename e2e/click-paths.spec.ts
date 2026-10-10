@@ -1,7 +1,7 @@
 import { test, expect } from './_fixtures';
 // `_fixtures` 는 test·expect·READ_ONLY_RPCS·isAllowedRequest 만 export 한다 — 타입은 원본에서 받는다.
 import { type Page } from '@playwright/test';
-import { mockEvent } from './_mocks';
+import { mockEvent, mockEventBoard } from './_mocks';
 
 // 클릭 경로 감사 — "눌렀을 때 **의도한 화면**으로 가는가"(오너 지시 2026-09-06).
 //
@@ -90,12 +90,21 @@ test('이벤트 새로고침 — 같은 판으로 돌아온다(홈으로 떨어�
     '새로고침했더니 이벤트 판이 사라졌다 — ?event 가 주소에 남지 않는다').toBeVisible({ timeout: 15_000 });
 });
 
-test('이벤트 페이지 — 이용권 장수·당첨 확률은 손님 화면에 없고 참여 안내가 최하단에 있다 (§28)', async ({ page }) => {
+test('이벤트 페이지 — 당첨 확률·이용권 장수는 손님 화면에 없고 등수별 "매장 이용권 N개"만 · 참여 안내가 최하단에 있다 (§28)', async ({ page }) => {
+  // 이번 실행의 실제 보드 응답(mockEvent 목)을 모은다 — 기대 수량을 소스 문자열이 아니라 응답 값에서 뽑는다(e2e/requests-1010.spec.ts B 와 같은 방식).
+  const boards: { voucherByTier?: Record<string, unknown> }[] = [];
+  page.on('response', async (r) => {
+    if (!/\/rest\/v1\/rpc\/event_board/.test(r.url()) || !r.ok()) return;
+    try { const b = await r.json(); if (b && typeof b === 'object') boards.push(b); } catch { /* 본문 없음 */ }
+  });
   await page.goto('/?event=1');
   const dlg = page.getByRole('dialog', { name: '이벤트' });
   await expect(dlg).toBeVisible({ timeout: 15_000 });
 
   // 오너 결정(2026-10-09): 확률로 이용권을 주는 모양(§28)이라 표·장수·확률을 뺐다. 지급 로직은 그대로다.
+  // ⚠ 2026-10-10 오너 최신 지시("이벤트 등수마다 매장이용권 몇개인지 명시")가 그중 **등수별 수량 금지만** 대체했다 —
+  //   허용은 참여 안내 안의 `event-voucher-qty-<등수>` 칸 "N등 매장 이용권 N개"(또는 "수량 안내 미등록") 뿐이다.
+  //   확률·%·확률 표·금액/현금 표현 금지는 그대로다(src/components/features/eventOddsHidden.contract.test.ts 와 같은 경계).
   // ⚠ 다이얼로그가 보이는 시점은 아직 로딩 스켈레톤일 수 있다 — 안내 구역이 뜰 때까지 기다린 뒤에야 '없음' 이 의미가 있다
   //   (기다리지 않으면 아직 아무것도 안 그려서 '없다' 가 거짓 통과한다).
   const guide = dlg.getByTestId('event-guide');
@@ -105,9 +114,25 @@ test('이벤트 페이지 — 이용권 장수·당첨 확률은 손님 화면�
   await expect(guide).toContainText('매장 안내');
 
   await expect(dlg.locator('table'), '확률 표가 다시 나타났다').toHaveCount(0);
+  // 등수별 수량 — 칸마다 응답의 voucherByTier[등수] 로 기대 문구를 만든다(목: 1·2·3등 3·2·1개, 4등 값 없음 → 미등록).
+  const board = boards.filter((b) => b.voucherByTier && typeof b.voucherByTier === 'object').at(-1);
+  expect(board, '이벤트 보드 응답을 못 잡았다 — 응답→화면 대조가 공허하다').toBeTruthy();
+  expect(board!.voucherByTier, 'mockEvent 목이 아닌 보드가 왔다').toEqual(mockEventBoard().voucherByTier);
+  const rows = guide.getByTestId(/^event-voucher-qty-\d+$/);
+  const tierIds = await rows.evaluateAll((els) => els.map((e) => (e.getAttribute('data-testid') ?? '').replace('event-voucher-qty-', '')));
+  expect(tierIds, '등수 칸이 1~4등이 아니다').toEqual(['1', '2', '3', '4']);
+  const texts = (await rows.allInnerTexts()).map((s) => s.replace(/\s+/g, ' ').trim());
+  const expected = tierIds.map((t) => { const v = board!.voucherByTier![t]; return `${t}등 ${typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? `매장 이용권 ${v}개` : '수량 안내 미등록'}`; });
+  expect(texts, `보드 voucherByTier=${JSON.stringify(board!.voucherByTier)}`).toEqual(expected);
+
   const text = await dlg.innerText();
-  expect(text, "손님 화면에 '이용권' 글자가 있다").not.toContain('이용권');
+  // '이용권' 글자는 위 수량 칸에만 — 다른 곳(결과·카드 타일·장수 "이용권 N장")에 다시 생기면 잡는다.
+  expect((text.match(/이용권/g) ?? []).length, "수량 칸 밖에 '이용권' 글자가 있다")
+    .toBe(texts.filter((t) => t.includes('매장 이용권')).length);
+  expect(text, "손님 화면에 이용권 '장수'가 있다").not.toMatch(/이용권\s*\d+\s*장/);
   expect(text, "손님 화면에 '확률' 글자가 있다").not.toContain('확률');
+  // 금액·현금 프레이밍은 참여 안내 안에서 본다(대화상자 전체에는 법정 고지 '도박·환전·사행행위와도 무관' 문구가 있다).
+  expect(await guide.innerText(), '참여 안내에 확률·금액·현금 표현이 있다').not.toMatch(/%|확률|당첨률|\d\s*원|₩|현금|환전|수익|양도/);
   expect(text, '손님 화면에 당첨 확률 숫자(예: 3.33%)가 있다').not.toMatch(/\d+(?:\.\d+)?\s*%/);
 
   // '최하단' — 안내가 카드판보다 아래에 있어야 한다

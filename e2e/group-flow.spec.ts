@@ -158,6 +158,7 @@ for (const vp of [{ name: 'mobile-390', width: 390, height: 844 }, { name: 'pc-1
     test('그룹 만들기 → 승인 대기 안내(🔴②)', async ({ page }) => {
       const { calls } = await bootGroups(page);
       await page.goto('/?tab=community');
+      await page.getByTestId('sec-tab-venues').click(); // 2026-10-10 기본 섹션이 게시판 — 그룹·매장 카드는 홀덤펍에 있다
       const create = page.getByRole('button', { name: '+ 그룹 만들기' });
       await expect(create).toBeVisible({ timeout: 20_000 });
       await create.click();
@@ -183,6 +184,7 @@ for (const vp of [{ name: 'mobile-390', width: 390, height: 844 }, { name: 'pc-1
       const { calls } = await bootGroups(page);
       page.on('dialog', (d) => d.accept());
       await page.goto('/?tab=community');
+      await page.getByTestId('sec-tab-venues').click(); // 2026-10-10 기본 섹션이 게시판 — 그룹·매장 카드는 홀덤펍에 있다
       const card = page.getByTestId('venue-card').filter({ hasText: '새벽 홀덤 동호회' });
       await expect(card).toBeVisible({ timeout: 20_000 });
       await card.click();
@@ -238,6 +240,7 @@ for (const vp of [{ name: 'mobile-390', width: 390, height: 844 }, { name: 'pc-1
     test('운영 화면: 가입 승인 · 갤러리 업로드는 community_images', async ({ page }) => {
       const { calls, uploads } = await bootGroups(page);
       await page.goto('/?tab=community');
+      await page.getByTestId('sec-tab-venues').click(); // 2026-10-10 기본 섹션이 게시판 — 그룹·매장 카드는 홀덤펍에 있다
       const card = page.getByTestId('venue-card').filter({ hasText: '검증 딜러팀' });
       await expect(card).toBeVisible({ timeout: 20_000 });
       await card.click();

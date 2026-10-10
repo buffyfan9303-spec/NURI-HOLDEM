@@ -36,6 +36,7 @@ import { myVisitedVenues } from '../../api/vouchers';
 import { scheduleStatus } from '../../lib/scheduleStatus';
 import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
+import ImageLightbox from '../atoms/ImageLightbox';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, onRankingNamePrefChange,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts, redactForCache,
@@ -140,6 +141,8 @@ export default function VenuePage({
   const [myAct, setMyAct] = useState<{ streak: number; visits: number } | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [qrScanOpen, setQrScanOpen] = useState(false);
+  /** 매장 배너 사진 확대 뷰어 — 어느 대회의 포스터도 아닌 사진(매장 대표·커버)을 탭했을 때 그 사진을 그대로 보여 준다. */
+  const [heroViewer, setHeroViewer] = useState<string | null>(null);
   useEffect(() => {
     setMyAct(null);
     if (!user || !venue?.id) return;
@@ -225,12 +228,14 @@ export default function VenuePage({
    * 같은 값으로 들어 있다. 그래서 사진 하나가 곧 대회 하나를 가리킨다.
    * 같은 포스터를 여러 회차가 쓰는 경우가 있어(로티 1000GTD 는 5회차가 공유) **가장 임박한
    * 진행 예정 회차**를 고른다 — 지난 회차로 보내면 유저가 '끝난 대회'를 보게 된다.
-   * 매칭이 없으면(로고 사진 등) 아무 일도 하지 않는다 — 없는 곳으로 보내는 것보다 낫다.
+   * 매칭되는 대회가 없는 사진(매장 커버·로고 등)은 없는 대회로 보내지 않고, 그 **사진 자체**를 확대 뷰어로 연다
+   * (2026-10-10 — 로티아레나 배너는 커버 사진이라 탭해도 아무 일도 없었다). 사진 URL 은 이미 있는 값 그대로다.
    */
   const openScheduleByPoster = useCallback((src: string) => {
-    if (!src || !onSelectSchedule) return;
+    if (!src) return;
     const same = venueSchedules.filter((s) => s.posterUrl === src);
-    if (same.length === 0) return;
+    if (same.length === 0) { setHeroViewer(src); return; }
+    if (!onSelectSchedule) return;
     const now = Date.now();
     const upcoming = same
       .filter((s) => new Date(`${s.date}T${s.startTime || '00:00'}`).getTime() >= now)
@@ -684,6 +689,7 @@ export default function VenuePage({
         {/* 법정 상시 고지 — 이 판(fixed inset-0)이 App 문서 끝 푸터를 덮는다. `?venue=` 딥링크로 첫 화면이 되기도 한다(2026-09-29 D1). */}
         <BusinessFooter overlay />
       </div>
+      {heroViewer && <ImageLightbox src={heroViewer} alt={`${venue.name} 사진`} onClose={() => setHeroViewer(null)} />}
     </div>
   );
 }
@@ -876,7 +882,7 @@ function HeroSection({
         <button
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
-          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`} data-hero-cover
+          aria-label={`${venue.name} 배너 · 자세히 보기`} data-hero-cover
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         />
       )}

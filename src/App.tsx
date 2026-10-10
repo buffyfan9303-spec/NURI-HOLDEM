@@ -33,6 +33,7 @@ const ledgerMod = () => import('./api/ledger');
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
+import SlidingPill from './components/atoms/SlidingPill';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
@@ -718,13 +719,20 @@ const TabBar = memo(function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isDesktop = useIsDesktop();
 
-  // 활성 표시 = '활성 버튼에 직접 붙는' 밑줄(오너 지시 2026-08-28 재차: "확실하게 해결").
-  // ⚠ 왜 측정 방식(SlidingPill)을 버렸나: 이 GNB 는 View Transition 으로 탭을 바꾸는데,
-  //   VT 캡처 중 레이아웃을 읽으면 offsetLeft 가 0/구값으로 잡혀 밑줄이 '맨 왼쪽으로' 튄다.
-  //   재측정·검증을 세 겹으로 쌓아도 캡처 타이밍은 브라우저 소관이라 완전히 못 막는다.
-  //   활성 요소 자신에게 붙는 밑줄은 좌표 계산이 아예 없어 어긋날 수가 없다(구조적 해결).
-  //   대가로 '미끄러짐'을 잃지만, 오정렬 없는 확실함이 우선이라는 오너 판단.
+  // 활성 표시 = 공용 SlidingPill 밑줄(underline 모드)이 활성 라벨 캡슐로 미끄러진다.
+  // 🔵 PC-MOTION-1010(2026-10-10 오너 "PC 대메뉴 뚝뚝 · GTO 글자/폭 커짐") — 2026-08-28 의 '활성 버튼 ::after 정지 밑줄' 을 되돌렸다.
+  //   그때 측정 방식을 버린 이유는 View Transition 캡처 중 offsetLeft 가 0/구값으로 읽혀 밑줄이 맨 왼쪽으로 튄 것이었는데,
+  //   VT 는 앱 전체에서 걷혔고(transitionDevices.contract (a) — 호출 0), SlidingPill 은 그 뒤 offsetParent 사슬 측정(09-10)과
+  //   판 교체 중 FLIP 연기(html[data-tab-swap] — 새 판 첫 프레임 뒤에 170ms 미끄러짐)를 갖췄다. 모바일 하단바·하위 탭 12곳과 같은 장치다.
+  //   실측(CPU 1·1440, 변경 전): 메인 탭 8회 이동의 프레임 간격 최대 17ms — PC 의 '뚝뚝' 은 끊김이 아니라 밑줄이 순간이동하고
+  //   본문이 한 프레임에 바뀌는 **연속 동작의 부재**였다(artifacts/motion/2026-10-10/before/lean-pc1440-cpu1.json).
+  // 라벨 폭 고정 — 활성 굵기(700)와 비활성(500)이 다르면 라틴 글자(GTO)만 폭이 0.82px 달라져 가운데 정렬된 GNB 전체가
+  //   GTO 를 드나들 때마다 0.41px 씩 옆으로 밀렸다(한글은 굵기별 폭이 같아 안 밀린다 — 변경 전 측정 nav 좌표).
+  //   굵은 판 글자를 같은 칸에 보이지 않게 겹쳐 칸 폭을 항상 굵은 폭으로 잡는다(aria-hidden — 접근 이름·클릭 대상은 그대로).
+  // data-no-press — 전역 프레스(scale .97 → 0.2s 복귀)를 GNB 탭에서는 끈다. 누른 라벨이 0.2초 동안 커지며 돌아오는 것이 굵어짐과 겹쳐
+  //   '글자가 커진다' 로 보였다(모바일 하단바도 같은 이유로 버튼 transform 을 끈다 — index.css 하단 대메뉴 규칙). 색 전환은 transition-colors 가 맡는다.
   return (
     <div
       ref={containerRef}
@@ -732,6 +740,10 @@ const TabBar = memo(function TabBar({
       // 모바일은 하단 탭바(MobileTabBar)가 내비 담당 — 상단 GNB는 PC(lg+) 전용
       className="sticky top-header-h z-40 bg-surface-base relative hidden lg:flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
+      {/* mt-1 — underline 모드는 대상 아래끝 −2px 에 놓는다. 옛 ::after(-bottom-1·h-0.5 = 캡슐 아래 +2px)와 같은 높이가 되게 4px 내린다.
+          PC(lg+)에서만 마운트한다 — 모바일에서 이 GNB 는 hidden 인데 밑줄의 감시자(RO·MO·IO·검증 rAF)는 탭을 옮길 때마다 깨어나
+          숨은 상자를 재고 있었다. 하단바(MobileTabBar)가 PC 에서 스크롤 콜백을 건너뛰는 것(isDesktop)과 같은 분리다. */}
+      {isDesktop && <SlidingPill containerRef={containerRef} activeKey={active} underline spring className="mt-1 rounded-full bg-accent-300" />}
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
         return (
@@ -740,33 +752,29 @@ const TabBar = memo(function TabBar({
             type="button"
             role="tab"
             aria-selected={isActive}
+            data-no-press=""
             onClick={() => onChange(id)}
             className={[
               // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
               // 총 높이 40px 유지: 버튼 py-1.5(12) + 캡슐 py-1(8) + 라벨 20 — 밑줄 시절과 동일(CLS 0).
-              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-(--dur-fast) focus:outline-hidden touch-manipulation rounded-t-input',
+              'group flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-(--dur-fast) focus:outline-hidden touch-manipulation rounded-t-input',
               // 폰트 굵기는 조건부로만 — 기본 font-medium 을 같이 두면 CSS 출력 순서상 font-bold 를 이겨
               // 활성 굵기가 500에 머문다(헤드리스 실측으로 확인). 굵기 변화로 라벨 폭이 바뀌어도
               // SlidingPill 은 렌더 후 재측정이라 밑줄은 어긋나지 않는다.
               isActive ? 'text-ink-primary font-bold' : 'font-medium text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            {/* 밑줄 측정 대상 = 라벨 캡슐(px-2.5 py-1) — 셀 전체가 아니라 라벨을 감싸는 폭.
-                underline 모드가 좌우 8px 씩 안쪽으로 그리므로 밑줄 ≈ 아이콘+라벨 폭 */}
-            <span
-              className={[
-                'relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1',
-                // 밑줄: 활성 캡슐 자신의 ::after — 위치 계산 0, 어긋남 불가.
-                // inset‑x‑2 로 라벨 좌우 8px 안쪽(구 underline 모드와 같은 인셋).
-                isActive
-                  ? "after:absolute after:inset-x-2 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-accent-300 after:content-['']"
-                  : '',
-              ].join(' ')}
-            >
+            {/* 밑줄 측정 대상 = 라벨 캡슐(px-2.5 py-1, data-pill-active) — 셀 전체가 아니라 라벨을 감싸는 폭.
+                underline 모드가 좌우 8px 씩 안쪽으로 그리므로 밑줄 ≈ 아이콘+라벨 폭(옛 ::after 의 좌우 8px 안쪽 인셋과 같다)
+                누름 반응 = 캡슐 배경 틴트(즉시 · 크기 변화 0 — 전역 프레스 scale 은 끈 자리라 이것이 손끝 반응을 맡는다) */}
+            <span data-pill-active={isActive || undefined} className="relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full transition-colors duration-(--dur-fast) group-hover:bg-surface-high/50 group-active:bg-accent-300/10 group-active:duration-0">
               <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
-              {label}
+              {/* 굵은 폭 예약은 ::after(대체 글 '') — DOM 사본을 두면 textContent·복사가 "라이브라이브" 로 겹친다. */}
+              <span data-label={label} className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 after:font-bold after:content-[attr(data-label)_/_'']">
+                <span className="col-start-1 row-start-1">{label}</span>
+              </span>
             </span>
           </button>
         );
@@ -4208,6 +4216,12 @@ export default function App() {
   }, [voucherWalletOpen]);
   const handleMeOpenMarket = useCallback(() => goCommunitySection('market'), [goCommunitySection]);
   const handleMeOpenRanking = useCallback(() => goCommunitySection('rank'), [goCommunitySection]);
+  // 홈 퀵 '커뮤니티'(오너 2026-10-10) — 마지막에 보던 섹션이 아니라 늘 게시판으로. 같은 섹션 신호, '내 정보' 왕복은 없다.
+  const openCommunityBoard = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'board' }));
+    try { sessionStorage.setItem('nuri:community-section', 'board'); } catch { /* noop */ }
+    changeTab('community');
+  }, [changeTab]);
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
@@ -4422,6 +4436,7 @@ export default function App() {
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
             onLive={() => changeTab('live')}
+            onOpenCommunity={openCommunityBoard}
             /* startTransition: 청크가 아직이면 **이전 화면을 유지**한다 — 위 commitTab 의 첫 방문 처리와 같은 이유다.
                이게 없으면 Suspense 가 폴백(불투명 스피너)을 커밋하고, 리액트는 한 번 띄운 폴백을
                **최소 ~300ms 유지**한다(폴백이 번쩍이는 걸 막으려는 스로틀). 그래서 청크를 미리 받아 둬도

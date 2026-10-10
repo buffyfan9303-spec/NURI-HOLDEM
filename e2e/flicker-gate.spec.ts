@@ -48,7 +48,8 @@ function transitions(mobile: boolean): Step[] {
     //   2프레임 동안 화면 휘도 197→104 로 떨어졌다 돌아온다. 디자인 판단(스크림을 시트와 같은 곡선으로)은 home-team 몫이라 여기서 빨갛게 하지 않는다.
     { id: '일정 상세 열기', tap: { sel: '[data-testid="home-schedule"] [role="button"]' }, kind: 'modal' }, { id: '일정 상세 닫기', tap: CLOSE, kind: 'modal' },
     { id: '이용권 시트 열기', tap: { sel: '[data-testid="home-quick-checkin"]' }, kind: 'modal' }, { id: '이용권 시트 닫기', tap: CLOSE, kind: 'modal' },
-    { id: '이벤트 열기', tap: { sel: '[data-testid="home-quick-event"]' }, kind: 'modal' }, { id: '이벤트 닫기', tap: CLOSE, kind: 'modal' },
+    // 2026-10-10 홈 오른쪽 퀵 칸이 '이벤트' → '커뮤니티'(탭 이동). 이벤트 판 개폐는 motion-unify·event-* 스펙이 캐러셀 슬라이드로 연다.
+    { id: '커뮤니티 바로가기', tap: { sel: '[data-testid="home-quick-community"]' } }, { id: '바로가기→홈', tap: tab('홈') },
     { id: '내 정보 열기', pre: ME_MENU, tap: ME_ITEM, kind: 'modal' }, { id: '내 정보 닫기→홈', tap: CLOSE, kind: 'modal' },
     { id: '테마 전환', tap: { sel: '[aria-label$="모드로 전환"]' } }, { id: '테마 복귀', tap: { sel: '[aria-label$="모드로 전환"]' } },
   );
@@ -176,6 +177,9 @@ test.describe('MISSING-TILES — 스크롤한 판에서 메인 탭 이동(모바
     for (const pass of [1, 2]) {
       for (const label of MENUS) {
         const id = `p${pass}→${label}`;
+        // 2026-10-10 커뮤니티 기본 섹션이 게시판(운영 공개 글 몇 건 — 150px 스크롤이 안 된다)이 됐다. 이 게이트의 전제(스크롤된 출발 판)를 위해
+        //   커뮤니티 출발 판은 종전과 같은 긴 홀덤펍 목록으로 둔다(페이지 안 click — Playwright 자동 스크롤이 측정을 오염시키지 않게).
+        if (label === 'GTO') { await page.evaluate(() => document.querySelector<HTMLElement>('[data-testid="sec-tab-venues"]')?.click()); await page.waitForTimeout(800); }
         // 출발 판 끝까지 → 150px 위로(문서 끝에 붙으면 하단바가 자동으로 숨는다 — 올려야 돌아온다).
         await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight - innerHeight, behavior: 'instant' as ScrollBehavior }));
         await page.waitForTimeout(300);

@@ -303,7 +303,8 @@ test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시�
   expectOneOpen(await sampleOpen(page, '.fixed.inset-0[class~="z-55"][role=dialog]', () => press(page, '[data-testid="home-schedule"] [role="button"]', { mobile: true })), '일정 상세');
   await back();
   // 이벤트 목록
-  expectOneOpen(await sampleOpen(page, '[data-testid="event-list-page"]', () => press(page, '[data-testid="home-quick-event"]', { mobile: true })), '이벤트 목록');
+  // 2026-10-10 홈 퀵 '이벤트' 칸이 '커뮤니티' 가 됐다 — 모바일 홈의 이벤트 진입은 캐러셀의 이벤트 슬라이드(사이트 슬라이드 또는 ?event= 배너)이고 이벤트 판이 열린다.
+  expectOneOpen(await sampleOpen(page, '[role=dialog][aria-label="이벤트"]', () => press(page, '[data-testid="home-event-banner"], [data-testid="home-event-menu"], [data-testid="home-banner-viewport"] [aria-label*="이벤트"]', { mobile: true })), '이벤트 판');
   await back();
   // 내 정보 — 열기 + 닫기(페이드)
   const me = '.fixed.inset-0.bg-surface-base[class~="z-60"]';

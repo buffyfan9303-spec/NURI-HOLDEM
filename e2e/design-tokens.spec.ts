@@ -50,18 +50,37 @@ test.describe('전역 토큰 — 규칙이 실제로 걸려 있는가', () => {
   });
 
   test('🔴 버튼 전환 속성에 transform 이 살아 있다 — 눌림 반응이 애니메이션된다', async ({ page }) => {
-    const broken = await page.evaluate(() => {
+    // ⚠ 2026-10-10 PC-MOTION-1010: PC 상단 대메뉴(GNB, `[data-stack-tabbar]` 의 role=tab)는 **의도적으로** 누름 축소를 껐다
+    //   (index.css `[data-stack-tabbar] button[role='tab']:active` · App TabBar `data-no-press`) — 라벨이 커지며 돌아오는 결함 때문이다.
+    //   그래서 일반 프레스 계약은 GNB 를 뺀 버튼에서 재고, GNB 는 아래 테스트가 '전환에 transform 없음'을 따로 잠근다.
+    //   (모바일 프로젝트에서도 GNB 는 DOM 에 있어 첫 버튼들로 잡혔다 — '첫 60개' 표본이 GNB 7칸으로 시작했다.)
+    const { broken, scanned, visible } = await page.evaluate(() => {
       const out: { text: string; prop: string }[] = [];
-      for (const el of [...document.querySelectorAll('button')].slice(0, 60)) {
+      const els = [...document.querySelectorAll('button')].filter((el) => !el.closest('[data-stack-tabbar]')).slice(0, 60);
+      for (const el of els) {
         const p = getComputedStyle(el).transitionProperty;
         if (!p.includes('transform') && !p.includes('all')) {
           out.push({ text: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 24), prop: p.slice(0, 70) });
         }
       }
-      return out;
+      return { broken: out, scanned: els.length, visible: els.filter((el) => el.getBoundingClientRect().width > 0).length };
     });
+    // 잴 것이 실제로 있었는지 먼저 — 빈 표본은 통과가 아니다
+    expect(scanned, '잴 일반 버튼이 없다').toBeGreaterThanOrEqual(10);
+    expect(visible, '보이는 일반 버튼이 없다 — 숨은 DOM 만 쟀다').toBeGreaterThanOrEqual(5);
     expect(broken, `transition-property 에 transform 이 없다 = :active 눌림이 안 움직인다:\n${JSON.stringify(broken, null, 1)}`)
       .toEqual([]);
+  });
+
+  test('PC 상단 대메뉴(GNB) 탭은 의도적으로 누름 전환이 없다 — data-no-press · transition 에 transform 없음', async ({ page }) => {
+    const tabs = await page.locator('[data-stack-tabbar] button[role="tab"]').evaluateAll((els) => els.map((el) => ({
+      text: (el.textContent || '').trim().slice(0, 12),
+      noPress: el.hasAttribute('data-no-press'),
+      prop: getComputedStyle(el).transitionProperty,
+    })));
+    expect(tabs.length, 'GNB 탭을 못 찾았다(빈 측정)').toBeGreaterThanOrEqual(5);
+    expect(tabs.filter((t) => !t.noPress || /transform|\ball\b/.test(t.prop)),
+      'GNB 탭에 누름 전환이 되살아났다 — 전역 프레스가 라벨을 줄였다 키운다(pc-shell-motion-1010 ③)').toEqual([]);
   });
 
   test('보조·메타 텍스트가 다크 모드에서 AA(4.5:1) 를 넘는다', async ({ page }) => {

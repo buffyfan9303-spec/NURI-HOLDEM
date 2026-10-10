@@ -145,7 +145,7 @@ const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, eventMenuVisible = true, onInternalLink,
-  venueById, onOpenVoucher,
+  venueById, onOpenVoucher, onOpenCommunity,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
@@ -153,6 +153,8 @@ export default function HomeTab({
   /** 출석 체크 퀵액션 — 헤더 [이용권·출석] 과 **같은 시트**를 연다(App 이 로그인 여부까지 판단한다).
    *  같은 목적지에 서로 다른 경로를 새로 만들지 않는다 — 헤더 진입점은 그대로 둔다(오너: 헤더는 유지). */
   onOpenVoucher?: () => void;
+  /** 오른쪽 퀵액션 '커뮤니티' — 커뮤니티 탭(게시판 기본)으로 간다(2026-10-10). App 이 `changeTab('community')` 를 넘긴다. */
+  onOpenCommunity?: () => void;
   // 🔴 2026-09-22 요구 C — 목록 카드의 하트를 걷어내면서 `favVenueIds`·`onToggleFavorite` prop 도 뺐다.
   //   홈은 이제 즐겨찾기 상태를 알 필요가 없다. 즐겨찾기 **시스템 자체**(`useFavoriteVenues`·`venue_follows`·
   //   캘린더 찜 필터·라이브 진행 게임 줄의 단골 표시)는 그대로다.
@@ -175,7 +177,7 @@ export default function HomeTab({
   /** 노출관리 스위치 — 캐러셀의 이벤트 슬라이드/브랜드 슬라이드. 기본은 둘 다 켜기. */
   showEventSlide?: boolean;
   showBrandSlides?: boolean;
-  /** 관리자 '사이트 이벤트 메뉴 표시'(app_settings.event_menu_visible). false 면 이벤트 **진입점**을 숨긴다.
+  /** 관리자 '사이트 이벤트 메뉴 표시'(app_settings.event_menu_visible). (2026-10-10: 오른쪽 퀵 칸은 커뮤니티가 됐고, 이 스위치는 아래 퀵 영역의 모바일 '이벤트 목록' 지름길만 가린다.)
    *  ⚠ 진행 중인 캠페인과 `?event=` 딥링크는 그대로 산다 — 메뉴만 숨기는 스위치다(settings.ts §8-2). */
   eventMenuVisible?: boolean;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
@@ -475,13 +477,8 @@ export default function HomeTab({
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, logo: event?.brand?.imageUrl, onClick: () => onEvent() };
   }, [eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
-  /** 🔴 2026-09-24 오너: "빠른 카드 두 개의 세부 설명 줄은 삭제하고 세로 폭을 살짝 줄여라" — 설명 줄(종전 quickEventDesc)이 빠졌다.
-   *  그 줄이 말하던 사실 중 **사라지면 안 되는 것**의 새 자리:
-   *   · 조회 실패 → 이 칸의 행동 줄이 '불러오기 실패 · 다시' 로 바뀐다(아래). 전체 문구('이벤트 정보를 불러오지 못했어요 · 눌러서 다시')는
-   *     배너의 이벤트 슬라이드(eventMenuSubtitle)에 그대로 있다.
-   *   · 참여권 보유 장수 → 옆 '이용권 · 출석' 칸 제목 줄의 '참여권 N' 배지와 배너 이벤트 슬라이드('참여권 N장 · 남은 카드 M장')가 말한다.
-   *   · 시작 전·소진·종료·없음 → 배너 이벤트 슬라이드(eventMenuSubtitle)가 그대로 말한다. */
-  const quickEventFailed = eventLoaded && eventFailed && eventShown !== 'banner';
+  // 2026-10-10: 오른쪽 퀵 칸이 '이벤트' → '커뮤니티' 가 되면서 이 칸의 이벤트 상태 문구(quickEventFailed 등)는 사라졌다.
+  //   이벤트 상태(조회 실패·참여권·시작 전·소진·종료·없음)는 캐러셀 이벤트 슬라이드(eventMenuSubtitle)가 그대로 말한다.
 
   useEffect(() => {
     if (!eventLoaded || !esm) return;
@@ -623,7 +620,7 @@ export default function HomeTab({
           {/* 이벤트 메뉴 스위치가 꺼져 있으면 칸이 하나다 — 2열 격자에 빈 칸을 남기지 않는다. */}
           {/* 2026-09-24 리드 지적(PC 1440 빠른 카드 ~570px 에 제목+행동 줄만) — md~ 는 칸을 20rem 으로 묶고(왼쪽 정렬)
               행동 줄을 제목 **옆 같은 줄**로 올린다. 모바일은 종전 두 줄 그대로. */}
-          <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))] lg:grid-cols-2' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)] lg:grid-cols-1'}>
+          <div className={onOpenCommunity ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))] lg:grid-cols-2' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)] lg:grid-cols-1'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
               className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
@@ -655,31 +652,35 @@ export default function HomeTab({
               </span>
             </button>
 
-            {eventMenuVisible && (
-            <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
+            {/* 🔴 2026-10-10 오너 — 오른쪽 칸을 '이벤트' → '커뮤니티' 로. **이름만 바꾼 게 아니라 목적지도 바꿨다**(onOpenCommunity → 커뮤니티 탭).
+                이벤트 진입은 캐러셀 이벤트 슬라이드·헤더에 그대로 있다. 이 칸은 이벤트 스위치(event_menu_visible)와 무관하다.
+                콜백이 없으면(셸이 아직 안 넘김) 죽은 버튼을 만들지 않으려고 칸을 그리지 않는다. */}
+            {onOpenCommunity && (
+            <button type="button" onClick={onOpenCommunity} data-testid="home-quick-community"
               data-aura data-aura-level="micro" data-aura-variant="amber"
               className="surface-grad group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
-                  {/* 2026-09-19 오너: "제휴 혜택 - 이벤트로 이름 변경". 목적지(onEvent)는 그대로다 —
-                      이 칸은 처음부터 이벤트로 갔고, '제휴 혜택' 이라는 이름만 그 사실을 가리고 있었다. */}
-                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />이벤트
+                  <Icon name="comment" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />커뮤니티
                 </span>
-                {/* 2026-09-18 오너: "옆에 카드 30은 제거" — 남은 카드 수 배지를 뺐다.
-                    같은 정보를 쓰는 다른 자리(캐러셀 이벤트 슬라이드)는 그대로다 — 오너가 지목한 것은 이 칸이다. */}
               </span>
-              {/* 2026-09-24 오너 — 설명 줄을 뺐다(위 quickEventFailed 주석: 그 줄의 사실이 어디로 갔나). */}
               <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 lg:mt-1 lg:border-l-0 lg:border-t lg:pl-0 lg:pt-1">
-                {/* 🔴 2026-09-25 오너 결정 — 진행 이벤트가 없는데 '이벤트 보기' 가 강조색으로 남아 있었다. 그 갈래(menu)에선
-                    흐린 '진행 중 이벤트 없음' 으로 **사실을 말한다**. 진입은 그대로다(누르면 이벤트 판 — 지난 이벤트·시작 전 안내가 거기 있다).
-                    응답 전(pending)·참여 가능(banner)은 종전 '이벤트 보기'. 실패는 '불러오기 실패 · 다시 시도' 가 먼저다. */}
-                <span data-testid="home-quick-event-action" className={['min-w-0 text-2xs font-bold', eventShown === 'menu' && !quickEventFailed ? 'text-ink-muted' : 'text-accent-300'].join(' ')}>{quickEventFailed ? '불러오기 실패 · 다시' : eventShown === 'menu' ? '진행 중 이벤트 없음' : '이벤트 보기'}</span>
+                <span data-testid="home-quick-community-action" className="min-w-0 text-2xs font-bold text-accent-300">게시판 보기</span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
             )}
           </div>
+          {/* 2026-10-10 F — 퀵 칸이 이벤트 → 커뮤니티로 바뀌며 **모바일에서만** 이벤트 목록으로 가는 길이 사라졌다
+              (PC 는 GNB 가 있고, 캐러셀 이벤트 슬라이드는 관리자 스위치·중복 제거로 빠질 수 있다). 새 패널 대신
+              이 퀵 영역 안에 한 줄 지름길을 둔다 — 목적지는 슬라이드·구 퀵 칸과 같은 onEvent()(인자 없음 = 목록). */}
+          {eventMenuVisible && (
+            <button type="button" onClick={() => onEvent()} data-testid="home-event-list-entry"
+              className="mt-1 flex w-full items-center justify-end gap-0.5 whitespace-nowrap py-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary lg:hidden">
+              <Icon name="gift" size={13} className="mr-1 text-accent-300" />이벤트 목록 <Icon name="chevron-right" size={13} />
+            </button>
+          )}
         </section>
 
         </div>
