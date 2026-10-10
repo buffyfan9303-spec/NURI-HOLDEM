@@ -133,8 +133,13 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
   test('⑤ 커뮤니티 390', async ({ page }) => {
     await mockAll(page);
     await open(page, 390, 'tab=community');
+    // 처음 섹션은 게시판(오너 2026-10-10)이다 — 매장 머리줄('전체' | N개 | 정렬 안내, items-baseline)은 홀덤펍에 있어 직접 연다.
+    const venuesTab = page.locator('[data-community-secbar]').getByTestId('sec-tab-venues');
+    await venuesTab.click();
+    await expect(venuesTab, '홀덤펍이 열리지 않았다').toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-sec="venues"] h2', { hasText: /^전체$/ }).filter({ visible: true }), "홀덤펍 머리줄 '전체' 가 안 그려졌다").toHaveCount(1, { timeout: 15_000 });
     await page.waitForTimeout(1500);
-    const rows = await check(page, [{ kind: 'F2', title: /전체|매장|홀덤/ }]);
+    const rows = await check(page, [{ kind: 'F2', title: /^전체$/ }]);
     expect(rows.length, '커뮤니티 머리줄이 잡혀야 한다').toBeGreaterThan(0);
   });
 
@@ -158,11 +163,27 @@ test.describe('제목 줄 정렬 — 제목 글자와 오른쪽 액션·옆 글�
 
   for (const w of [390, 1440]) {
     test(`⑧ 내 매장 ${w} — 공용 SectionHeader 제목 | 액션`, async ({ page }) => {
-      await bootOwner(page, { viewport: { width: w, height: w > 1000 ? 900 : 844 }, goto: false });
+      // 일정(schedules)은 '조회 성공·0건'으로 고정한다 — 목이 없으면 가짜 인증으로 실제 조회가 나가 실패 상태가 생길 수 있어 '게임 목록을(를) 불러오지 못했어요'
+      //   오류 카드(모바일 2줄 span)가 정상 화면에 끼어든다(실패 상태 자체는 store-dashboard-schedules-error-1009 가 잰다).
+      let scheduleGets = 0;
+      await bootOwner(page, {
+        viewport: { width: w, height: w > 1000 ? 900 : 844 }, goto: false,
+        extra: async (p) => {
+          await p.route(/\/rest\/v1\/schedules\?/, (r) => {
+            if (r.request().method() !== 'GET') return r.fallback();
+            scheduleGets += 1;
+            return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+          });
+        },
+      });
       await page.goto('/?tab=my-store');
       await dismissOverlays(page);
       await expect(page.locator('main header h2:visible').first()).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(1500);
+      // 정상 조회가 실제로 끝났고(목 응답을 받았고) 오류 카드가 없는 화면에서 잰다 — 오류 화면을 정렬 결함으로 오판하지 않게.
+      expect(scheduleGets, '일정 조회(schedules GET)가 한 번도 나가지 않았다 — 목이 안 걸렸다').toBeGreaterThan(0);
+      await expect(page.getByText('게임 목록을(를) 불러오지 못했어요', { exact: false })).toHaveCount(0);
+      await expect(page.getByText('대회 일정을 불러오지 못했어요')).toHaveCount(0);
       // 모바일은 '오늘 장부 요약' 머리줄 + 새로고침(⟳) 이 꼭 잡혀야 한다. PC 는 대시보드 머리줄(매장명 + 새로고침).
       await check(page, [{ kind: 'F1', title: w < 1024 ? /오늘 장부 요약/ : /테스트 홀덤펍/ }]);
 

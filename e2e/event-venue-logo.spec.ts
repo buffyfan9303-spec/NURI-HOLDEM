@@ -33,6 +33,14 @@ async function setup(page: Page) {
   await page.route(/\/rest\/v1\/event_campaigns\?/, (r) => j(r, mockEventCampaigns().map((x) => ({ ...x, v: state.brand }))));
   await page.route(/\/rest\/v1\/rpc\/event_board/, (r) => j(r, mockEventBoard(12)));
   await page.route(/\/rest\/v1\/home_banners\?/, (r) => j(r, []));   // 운영 배너가 ?event= 로 이벤트 슬라이드를 대신하지 않게
+  // 킬스위치(identity_voucher_enabled)를 고정한다 — 목이 없으면 운영 값을 읽는다. 첫 로드는 미러(localStorage)가 비어 기본 '꺼짐'으로
+  //   킬스위치 안내(event-killswitch-notice, ~77px)를 그렸다가 운영 'on' 이 오면 지워 카드판·참여 안내를 77px 끌어올린다(layout-shift 0.0543).
+  //   그 응답이 기준선 로드와 로고 로드 중 어디서 도착하느냐가 타이밍에 달려, 로고와 무관하게 ② 의 shift 비교가 뒤집혔다
+  //   (2026-10-11 진단: CPU 12배 6회 중 1회 기준선 0 · 로고 0.0543, 출처 노드 = event-guide·카드판뿐 — artifacts/motion/2026-10-10/codeql-fix/ci-regression/diag-*).
+  //   서버 응답과 미러를 같은 값으로 두면 어느 로드도 안내를 넣었다 빼지 않는다. shift 기준(board0.ls + 1e-4)은 그대로다.
+  await page.addInitScript(() => { try { localStorage.setItem('nuri:identity-gate', 'on'); } catch { /* 저장소 차단 */ } });
+  await page.route(/\/rest\/v1\/app_settings\?.*key=eq\.identity_voucher_enabled/, (r) =>
+    j(r, (r.request().headers()['accept'] ?? '').includes('pgrst.object') ? { value: 'on' } : [{ value: 'on' }]));
   // 로고 그림을 600ms 늦게 — '자리 먼저, 그림 나중' 사이에 움직이는 것이 있으면 아래 좌표·shift 단언이 잡는다.
   await page.route((u) => u.pathname.startsWith('/venues/roti-arena'), async (r) => { await new Promise((res) => setTimeout(res, 600)); return r.continue(); });
   await page.route((u) => u.pathname.startsWith('/venues/__e2e-missing-logo'), (r) => r.fulfill({ status: 404, body: '' }));
@@ -84,6 +92,7 @@ test('🔴 로고가 있으면 판 머리·홈 슬라이드·목록에 그려지
   await page.waitForTimeout(800);
   const board0 = await boardGeo(page);
   expect(board0.slotTag, '기준선인데 로고 칸이 선물 타일이 아니다').toBe('SPAN');
+  await expect(page.locator('[data-testid="event-killswitch-notice"]'), '킬스위치 고정이 안 먹었다 — 안내가 shift 비교를 흔든다').toHaveCount(0);
 
   // 로고 있음
   state.brand = ROTI;

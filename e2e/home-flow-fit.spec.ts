@@ -194,7 +194,11 @@ const measure = (page: Page) => page.evaluate(() => {
   };
   // 2026-09-18 추천 대회 레일 삭제 — 그 자리를 **퀵액션 2칸**이 대신 지킨다.
   //   이 파일의 요지(잘림·최소 글자 크기)는 대상만 바뀔 뿐 그대로 재야 한다.
-  const railCards = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] button')];
+  // 2026-10-10 F — 퀵 영역 안에 모바일 전용 '이벤트 목록' 한 줄 지름길(home-event-list-entry, lg:hidden)이 더해졌다.
+  //   그건 카드가 아니다 — 카드는 이름으로 짚고(이용권·출석 / 커뮤니티), 지름길은 따로 센다. `home-quick button` 전체를 세면 3이 된다.
+  const railCards = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] :is([data-testid="home-quick-checkin"], [data-testid="home-quick-community"])')];
+  const quickButtons = home.querySelectorAll('[data-testid="home-quick"] button').length;
+  const eventLinks = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] [data-testid="home-event-list-entry"]')];
   const smallest = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] span')]
     .map((e) => parseFloat(getComputedStyle(e).fontSize))
     .filter((n) => Number.isFinite(n) && n > 0);
@@ -206,6 +210,11 @@ const measure = (page: Page) => page.evaluate(() => {
     banner: box('[data-testid="home-banner-viewport"]'),
     dots: !!home.querySelector('[data-testid="home-banner-dots"]'),
     railCount: railCards.length,
+    railIds: railCards.map((c) => c.dataset.testid),
+    quickButtons,
+    eventLinkCount: eventLinks.length,
+    eventLinkShown: eventLinks.some((e) => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0),
+    eventLinkText: eventLinks.map((e) => (e.textContent || '').trim()).join('|'),
     railCardW: railCards.map((c) => Math.round(c.getBoundingClientRect().width * 10) / 10),
     railCardH: railCards.map((c) => Math.round(c.getBoundingClientRect().height * 10) / 10),
     railMinFont: smallest.length ? Math.min(...smallest) : 0,
@@ -274,7 +283,13 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
           expect(r, '홈 판이 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').not.toBeNull();
           expect(r!.today, '오늘 안내가 없다').not.toBeNull();
           expect(r!.banner, '배너가 없다').not.toBeNull();
-          expect(r!.railCount, '퀵액션 칸이 2개가 아니다 — 출석 체크·제휴 혜택 두 칸은 항상 있어야 한다').toBe(2);
+          expect(r!.railIds, '퀵액션 카드가 이용권·출석 / 커뮤니티 두 칸이 아니다').toEqual(['home-quick-checkin', 'home-quick-community']);
+          expect(r!.railCount, '퀵액션 칸이 2개가 아니다 — 이용권·출석 / 커뮤니티 두 칸은 항상 있어야 한다').toBe(2);
+          // 이벤트 목록 지름길 — 카드와 별개로 정확히 하나, 모바일 폭(< lg 1024)에서만 보인다(PC 는 GNB '이벤트').
+          expect(r!.eventLinkCount, '퀵 영역에 이벤트 목록 지름길이 하나가 아니다').toBe(1);
+          expect(r!.eventLinkText, '지름길 문구가 바뀌었다').toBe('이벤트 목록');
+          expect(r!.eventLinkShown, `이벤트 목록 지름길 표시가 폭 ${w} 에서 틀렸다(< 1024 에서만 보여야 한다)`).toBe(w < 1024);
+          expect(r!.quickButtons, '퀵 영역에 카드 2칸·지름길 1줄 말고 다른 버튼이 생겼다').toBe(3);
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] today=${r!.today!.h} banner=${r!.banner!.w}×${r!.banner!.h} quickW=${r!.railCardW[0]} quickH=${r!.railCardH.join(',')} minFont=${r!.railMinFont}`);
 
           expect(r!.hiddenScroll, `레일 밖에 숨은 가로 스크롤이 있다:\n${r!.hiddenScroll.join('\n')}`).toEqual([]);

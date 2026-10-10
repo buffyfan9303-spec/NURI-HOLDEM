@@ -56,6 +56,7 @@ async function boot(page: Page, baseURL: string | undefined) {
   await expect(page.getByText(TITLE).filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
 }
 
+const boardPost = (page: Page) => page.getByText(TITLE).filter({ visible: true }).first();
 const sheet = (page: Page) => page.getByRole('dialog', { name: '글쓰기' });
 const titleBox = (page: Page) => sheet(page).getByPlaceholder('제목을 입력하세요');
 const writeBtn = (page: Page) => page.getByRole('button', { name: /글쓰기$/ }).filter({ visible: true }).first();
@@ -78,6 +79,7 @@ test.describe('글쓰기 — 작성 중 닫기 확인', () => {
     await page.keyboard.press('Escape');
     await expect(sheet(page), '빈 창이 ESC 로 안 닫혔다').toHaveCount(0);
     expect(asked, '빈 창인데 확인을 물었다').toEqual([]);
+    await expect(boardPost(page), '빈 창을 닫았는데 게시판이 사라졌다').toBeVisible();
 
     // ② 두 번째 열기(청크가 이미 있는 경로) · 제목 입력
     await open(page);
@@ -103,8 +105,14 @@ test.describe('글쓰기 — 작성 중 닫기 확인', () => {
     await page.keyboard.press('Escape');
     await expect(sheet(page), '확인했는데 안 닫혔다').toHaveCount(0);
     expect(asked).toEqual([ASK]);
+    // 처음 섹션이 게시판이라(오너 2026-10-10) 글쓰기 시트 말고 쌓인 섹션 겹이 없다 — 닫은 뒤에도 게시판이 그대로 서 있고,
+    // 다음 뒤로가기는 앱의 탭 겹(커뮤니티 → 홈)을 소비한다(src/App.tsx 탭 이력). 앱 밖으로 나가거나 시트 칸이 남아 있으면 실패한다.
+    await expect(page.locator('[data-community-secbar]'), '확인해서 닫은 뒤 커뮤니티 바가 사라졌다').toBeVisible();
+    await expect(boardPost(page), '확인해서 닫은 뒤 게시판이 사라졌다').toBeVisible();
     await page.goBack();
-    await expect(page.locator('[data-community-secbar]'), '닫은 뒤 뒤로가기가 앱 밖/엉뚱한 곳으로 나갔다').toBeVisible();
+    await expect(page.locator('.tab-pane[data-tab="home"]'), '닫은 뒤 뒤로가기가 홈으로 가지 않았다(앱 밖/엉뚱한 곳)').toBeVisible();
+    await expect(page.locator('[data-community-secbar]'), '홈으로 갔는데 커뮤니티 바가 남아 있다').toBeHidden();
+    expect(new URL(page.url()).origin, '뒤로가기가 앱 밖으로 나갔다').toBe(new URL(baseURL!).origin);
   });
 
   test('그립을 끌어 던져도 먼저 묻고, 취소하면 제자리로 돌아온다(화면 밖에 굳지 않는다)', async ({ page, baseURL }) => {

@@ -20,6 +20,7 @@ import { ANON_KEY, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 import { Cast, RECORDER, center, press, FLAT_STD, type Finder } from './_flicker';
 import { normalizedCut } from './_cutNorm';
+import { mockVenues } from './_mocks';
 
 /** 떠나는 판의 퇴장 페이드(WAAPI)가 시작된 시각을 window.__fade(performance.now)에 쌓는다 — 컷 판정의 기준 시각(e2e/_cutNorm.ts). 읽기만 한다. */
 function installFadeSpy() {
@@ -94,7 +95,9 @@ const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
 const TAB = (label: string): Finder => ({ sel: 'nav[aria-label="하단 내비게이션"] button', text: label, exact: true });
 const NAV = 'nav[aria-label="하단 내비게이션"]';
 
-async function boot(page: Page, scheme: 'dark' | 'light') {
+/** withVenues — ①②③ 은 커뮤니티가 '출발 판'일 때도 스크롤돼야 한다. 처음 섹션이 게시판이 된 뒤(오너 2026-10-10) 목킹 환경의 게시판은 한 화면이라
+ *  매장 12곳을 목킹하고 `enterVenues` 로 홀덤펍을 직접 연다(④ 는 종전대로 운영 데이터). */
+async function boot(page: Page, scheme: 'dark' | 'light', withVenues = false) {
   await page.route(/supabase\.co\/rest\/v1\//, (r) => r.continue({ headers: { ...r.request().headers(), authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY } }));
   await page.addInitScript((sch) => { try { localStorage.setItem('nuri-theme', sch); } catch { /* 차단 환경 */ } }, scheme);
   await page.addInitScript(RECORDER);
@@ -111,6 +114,7 @@ async function boot(page: Page, scheme: 'dark' | 'light') {
   });
   await stubLogin(page);
   await mockSchedules(page);
+  if (withVenues) await mockVenues(page, 12);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await page.goto('/');
@@ -130,6 +134,17 @@ async function scrollOrigin(page: Page, id: string) {
   expect(pre.nav === 'none' || /matrix\(1, 0, 0, 1, 0, 0\)/.test(pre.nav), `${id}: 하단바가 숨어 있다(${pre.nav})`).toBe(true);
 }
 
+/** 커뮤니티에 도착한 뒤 '홀덤펍' 섹션을 실제 손가락으로 연다 — 목 매장 12곳이 긴 판을 만든다(이미 열려 있으면 그대로). */
+async function enterVenues(page: Page, cdp: CDPSession, id: string) {
+  const tabSel = '[data-community-secbar] [data-testid="sec-tab-venues"]';
+  const hit = await center(page, { sel: tabSel });
+  expect(hit, `${id}: 커뮤니티 '홀덤펍' 칸을 못 찾았다`).not.toBeNull();
+  if ((await page.locator(tabSel).getAttribute('aria-pressed')) !== 'true') await press(page, cdp, hit!.x, hit!.y, true);
+  await expect(page.locator(tabSel), `${id}: 홀덤펍이 열리지 않았다`).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('E2E 목 매장 11', { exact: true }).filter({ visible: true }).first(), `${id}: 목 매장 목록이 안 그려졌다`).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(700);
+}
+
 async function tapTab(page: Page, cdp: CDPSession, label: string, id: string) {
   const hit = await center(page, TAB(label));
   expect(hit, `${id}: 하단바 '${label}' 버튼을 못 찾았다`).not.toBeNull();
@@ -142,7 +157,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
 
   // ① 라이트 — 다크와 같은 판정(flicker-gate MISSING-TILES). 지면이 밝아 빠진 타일은 '흰 판' 이지만 기전은 같다(B1 라이트 3프레임 실측).
   test('① 라이트 — 새 판 타일이 빠진 프레임 0 · 본문이 평평한 프레임 0', async ({ page }) => {
-    const cdp = await boot(page, 'light');
+    const cdp = await boot(page, 'light', true);
     const cast = new Cast(cdp);
     await cdp.send('Tracing.start', { categories: 'cc,benchmark,blink.user_timing', transferMode: 'ReturnAsStream' });
     const flatRows: string[] = [];
@@ -163,6 +178,8 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
         const frames = await cast.stop();
         const flat = frames.filter((f) => f.bStd !== undefined && f.bStd < FLAT_STD);
         if (flat.length) flatRows.push(`${id} ${flat.length}프레임(bL ${flat.map((f) => (f.bL ?? 0).toFixed(0)).join(',')})`);
+        // 측정 창(탭 +1100ms)이 끝난 뒤에 연다 — 홀덤펍 전환 프레임이 탭 표식 구간에 섞이지 않는다.
+        if (label === '커뮤니티') await enterVenues(page, cdp, id);
         await page.waitForTimeout(400);
       }
     }
@@ -189,7 +206,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
   //   샘플: 누른 뒤 +20/+60/+120/+200/+400ms 에 본문 중앙 elementFromPoint. 그리고 커뮤니티로 옮긴 직후(+80ms) 하위 탭을 실제로 눌러
   //   캡처 단계 click 의 target 이 커뮤니티 판 안이었는지 본다(마크업 무관 — 어떤 하위 탭이 활성인지는 묻지 않는다).
   test('② 다크 — 떠나는 판이 서 있는 동안에도 입력은 새 판에 닿는다 · 판/복제본은 걷힌다', async ({ page }) => {
-    const cdp = await boot(page, 'dark');
+    const cdp = await boot(page, 'dark', true);
     const bad: string[] = [];
     let leavingSeen = 0;
     const sample = (tab: string, d: number) => page.evaluate(([tab, d, nav]) => {
@@ -219,6 +236,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
       if (stuck) bad.push(`${id} 정착 뒤에도 남았다: ${stuck}`);
       const swap = await page.evaluate(() => document.documentElement.hasAttribute('data-tab-swap'));
       if (swap) bad.push(`${id} html[data-tab-swap] 이 풀리지 않았다(상시 크롬 전환이 영원히 꺼진다)`);
+      if (label === '커뮤니티') await enterVenues(page, cdp, id); // 정착 검사가 끝난 뒤 — 다음 출발 판(커뮤니티)이 스크롤되게
     }
     // 실제 입력 — 홈 → 커뮤니티 누르고 80ms 뒤 하위 탭 바의 마지막 버튼을 누른다(그때 떠나는 판이 위에 서 있다).
     await scrollOrigin(page, 'functional');
@@ -239,7 +257,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
 
   // ③ 연타 · 동작 줄이기 — 퇴장이 끊겨도 판·복제본·data-tab-swap 이 남지 않는다(남으면 이후 모든 탭 전환의 크롬 전환이 죽는다).
   test('③ 연타·동작 줄이기 뒤에도 떠나는 판·복제본·스왑 표식이 남지 않는다', async ({ page }) => {
-    const cdp = await boot(page, 'dark');
+    const cdp = await boot(page, 'dark', true);
     const left: string[] = [];
     const check = async (id: string) => {
       await page.waitForTimeout(1500);
@@ -267,6 +285,7 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     await page.waitForTimeout(40);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await check('연타');
+    await enterVenues(page, cdp, '연타'); // 도착한 커뮤니티를 홀덤펍으로 — 아래 동작 줄이기의 출발 판이 스크롤되게
     // 같은 탭 되돌림 — 홈 → 커뮤니티(이미 커뮤니티) 연타
     await tapTab(page, cdp, '홈', '되돌림'); await page.waitForTimeout(30); await tapTab(page, cdp, '커뮤니티', '되돌림');
     await check('되돌림');
